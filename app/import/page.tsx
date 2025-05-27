@@ -42,9 +42,12 @@ function ImportPageContent() {
   useEffect(() => {
     const checkTestEnvironment = async () => {
       try {
-        // Verificar localStorage primeiro (para resposta UI rápida)
-        const testFlag = localStorage.getItem('isTestEnvironment') === 'true';
-        setIsTestEnvironment(testFlag);
+        // Verificar se estamos no cliente antes de acessar localStorage
+        if (typeof window !== 'undefined') {
+          // Verificar localStorage primeiro (para resposta UI rápida)
+          const testFlag = localStorage.getItem('isTestEnvironment') === 'true';
+          setIsTestEnvironment(testFlag);
+        }
         
         // Confirmar com a API
         const response = await fetch('/api/test-environment');
@@ -52,11 +55,13 @@ function ImportPageContent() {
           const data = await response.json();
           setIsTestEnvironment(data.active);
           
-          // Atualizar localStorage baseado na resposta real
-          if (data.active) {
-            localStorage.setItem('isTestEnvironment', 'true');
-          } else {
-            localStorage.removeItem('isTestEnvironment');
+          // Atualizar localStorage baseado na resposta real (apenas no cliente)
+          if (typeof window !== 'undefined') {
+            if (data.active) {
+              localStorage.setItem('isTestEnvironment', 'true');
+            } else {
+              localStorage.removeItem('isTestEnvironment');
+            }
           }
         }
       } catch (error) {
