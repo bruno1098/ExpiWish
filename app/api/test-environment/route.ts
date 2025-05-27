@@ -159,7 +159,12 @@ async function getTestEnvironmentStatus() {
 // Limpar ambiente de teste
 async function clearTestEnvironment() {
   try {
-    const results = {
+    const results: {
+      deletedHotels: number;
+      deletedAnalyses: number;
+      deletedUsers: number;
+      errors: string[];
+    } = {
       deletedHotels: 0,
       deletedAnalyses: 0,
       deletedUsers: 0,
