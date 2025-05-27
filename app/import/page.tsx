@@ -26,6 +26,15 @@ const DELAY_BETWEEN_BATCHES = 50;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
+// Função para gerar ID único
+const generateUniqueId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback para ambientes que não suportam crypto.randomUUID
+  return 'id-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now().toString(36);
+};
+
 function ImportPageContent() {
   const { toast } = useToast()
   const [progress, setProgress] = useState(0)
@@ -38,13 +47,20 @@ function ImportPageContent() {
   const [chosenHotelOption, setChosenHotelOption] = useState<'account' | 'file' | null>(null);
   const [acceptedFiles, setAcceptedFiles] = useState<File[]>([]);
   const [isTestEnvironment, setIsTestEnvironment] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Garantir que o componente só renderize no cliente
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
+    if (!mounted) return;
+    
     const checkTestEnvironment = async () => {
       try {
-        // Verificar se estamos no cliente antes de acessar localStorage
+        // Verificar localStorage apenas no cliente
         if (typeof window !== 'undefined') {
-          // Verificar localStorage primeiro (para resposta UI rápida)
           const testFlag = localStorage.getItem('isTestEnvironment') === 'true';
           setIsTestEnvironment(testFlag);
         }
@@ -55,7 +71,7 @@ function ImportPageContent() {
           const data = await response.json();
           setIsTestEnvironment(data.active);
           
-          // Atualizar localStorage baseado na resposta real (apenas no cliente)
+          // Atualizar localStorage apenas no cliente
           if (typeof window !== 'undefined') {
             if (data.active) {
               localStorage.setItem('isTestEnvironment', 'true');
@@ -70,13 +86,21 @@ function ImportPageContent() {
     };
     
     checkTestEnvironment();
-  }, []);
+  }, [mounted]);
+
+  // Não renderizar até estar montado no cliente
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   const onDrop = async (files: File[]) => {
     if (files.length === 0) return;
-    setAcceptedFiles(files); // Guardar os arquivos para uso posterior
+    setAcceptedFiles(files);
 
-    // Verificar se o usuário está autenticado e tem dados do hotel
     if (!userData || !userData.hotelId) {
       toast({
         title: "Erro de Autenticação",
@@ -86,7 +110,6 @@ function ImportPageContent() {
       return;
     }
 
-    // Configurar estado para detecção
     setDetectingHotels(true);
     setImporting(false);
     setProgress(0);
@@ -98,30 +121,24 @@ function ImportPageContent() {
       const file = files[0];
       const extension = file.name.split('.').pop()?.toLowerCase();
       
-      // Usar o nome do hotel do usuário autenticado
       const hotelName = userData.hotelName;
 
-      // Detectar hotéis no arquivo
       if (extension === 'xlsx') {
         const buffer = await file.arrayBuffer();
         const workbook = read(buffer);
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         
-        // Lendo todas as células do XLSX para detectar hotéis
         const range = utils.decode_range(worksheet['!ref'] || 'A1');
         const hotelsDetected = new Set<string>();
         
-        // Começando da linha 2 (índice 1) para pular o cabeçalho
-        for (let row = 1; row <= Math.min(range.e.r, 50); row++) { // Limitar a 50 linhas para detecção rápida
-          // Verificar coluna C (índice 2) para o nome do hotel
-          const hotelFromFile = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v; // Coluna C - Hotel/Fonte
+        for (let row = 1; row <= Math.min(range.e.r, 50); row++) {
+          const hotelFromFile = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
           
           if (hotelFromFile && typeof hotelFromFile === 'string' && hotelFromFile.trim() !== '') {
             hotelsDetected.add(hotelFromFile.trim());
           }
         }
         
-        // Sempre adicionar pelo menos um hotel (mesmo que fictício) para forçar a interface de escolha
         if (hotelsDetected.size === 0) {
           hotelsDetected.add("Hotel do arquivo (não especificado)");
         }
@@ -132,10 +149,7 @@ function ImportPageContent() {
         const text = await file.text();
         const result = Papa.parse(text, { header: true });
         
-        // Detectar hotéis no CSV
         const hotelsDetected = new Set<string>();
-        
-        // Limitar a um máximo de 50 linhas para detecção rápida
         const rowsToCheck = result.data.slice(0, 50);
         
         for (const row of rowsToCheck) {
@@ -154,7 +168,6 @@ function ImportPageContent() {
           }
         }
         
-        // Sempre adicionar pelo menos um hotel (mesmo que fictício) para forçar a interface de escolha
         if (hotelsDetected.size === 0) {
           hotelsDetected.add("Hotel do arquivo (não especificado)");
         }
@@ -162,7 +175,6 @@ function ImportPageContent() {
         setHotelsInFile(Array.from(hotelsDetected));
       }
 
-      // Agora aguardar a escolha do usuário
       setDetectingHotels(false);
       
     } catch (error: any) {
@@ -184,7 +196,6 @@ function ImportPageContent() {
       let data: any[] = [];
       const extension = file.name.split('.').pop()?.toLowerCase();
       
-      // Usar o nome do hotel do usuário autenticado
       const hotelName = userData?.hotelName || '';
       const hotelId = userData?.hotelId || '';
 
@@ -193,80 +204,51 @@ function ImportPageContent() {
         const workbook = read(buffer);
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         
-        // Lendo todas as células do XLSX
         const range = utils.decode_range(worksheet['!ref'] || 'A1');
         const rows = [];
         
-        // Começando da linha 2 (índice 1) para pular o cabeçalho
         for (let row = 1; row <= range.e.r; row++) {
-          // CORRIGIDO: Coluna C como fonte/hotel, ajustando indices
-          const fonte = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;    // Coluna C - Fonte/Hotel
-          const idioma = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;   // Coluna D - Idioma
-          const pontuacao = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v; // Coluna E - Pontuação
-          const url = worksheet[utils.encode_cell({ r: row, c: 5 })]?.v;      // Coluna F - URL
-          const autor = worksheet[utils.encode_cell({ r: row, c: 6 })]?.v;    // Coluna G - Autor
-          const titulo = worksheet[utils.encode_cell({ r: row, c: 7 })]?.v;   // Coluna H - Título
-          const texto = worksheet[utils.encode_cell({ r: row, c: 9 })]?.v;    // Coluna J - Texto
-          const apartamento = worksheet[utils.encode_cell({ r: row, c: 11 })]?.v; // Coluna L - Apartamento (índice 11)
+          const fonte = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
+          const idioma = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
+          const pontuacao = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v;
+          const texto = worksheet[utils.encode_cell({ r: row, c: 5 })]?.v;
+          const url = worksheet[utils.encode_cell({ r: row, c: 6 })]?.v;
+          const autor = worksheet[utils.encode_cell({ r: row, c: 7 })]?.v;
+          const titulo = worksheet[utils.encode_cell({ r: row, c: 8 })]?.v;
+          const apartamento = worksheet[utils.encode_cell({ r: row, c: 9 })]?.v;
           
-          if (texto) { // Só adiciona se tiver texto no comentário
+          if (texto && typeof texto === 'string' && texto.trim() !== '') {
             rows.push({
-              nomeHotel: hotelOption === 'account' ? hotelName : (fonte || hotelName),
-              hotelOriginal: fonte || hotelName, // Guardar referência
-              fonte,
-              idioma,
-              pontuacao,
-              url,
-              autor,
-              titulo,
-              texto,
-              apartamento // Adicionando o campo de apartamento
+              fonte: fonte || '',
+              idioma: idioma || '',
+              pontuacao: pontuacao || 0,
+              texto: texto.trim(),
+              url: url || '',
+              autor: autor || '',
+              titulo: titulo || '',
+              apartamento: apartamento || ''
             });
           }
         }
         
-        data = rows;
-      } else if (extension === 'csv') {
-        const text = await file.text();
-        const result = Papa.parse(text, { header: true });
-        
-        data = (result.data as Record<string, any>[])
-          .filter(row => row && typeof row === 'object')
-          .map(row => {
-            // Acesso seguro às propriedades usando indexação
-            const rowObj = row as Record<string, any>;
-            const hotelFromFile = 
-              rowObj['fonte'] || 
-              rowObj['hotel'] || 
-              rowObj['Hotel'] || 
-              rowObj['nomeHotel'];
-              
-            // Capturar o campo de apartamento de várias possíveis nomenclaturas
-            const apartamento = 
-              rowObj['apartamento'] || 
-              rowObj['Apartamento'] || 
-              rowObj['APARTAMENTO'] || 
-              rowObj['ap'] || 
-              rowObj['AP'];
-              
-            return {
-              ...rowObj,
-              hotelOriginal: hotelFromFile || hotelName, // Guardar referência
-              nomeHotel: hotelOption === 'account' ? hotelName : (hotelFromFile || hotelName),
-              apartamento: apartamento // Salvar o campo de apartamento
-            };
-          });
+        data = rows.map((row) => {
+          const hotelFromFile = row.fonte;
+          const apartamento = row.apartamento;
+          
+          return {
+            ...row,
+            nomeHotel: hotelOption === 'account' ? hotelName : (hotelFromFile || hotelName),
+            apartamento: apartamento
+          };
+        });
       }
       
-      // O restante do código de processamento permanece o mesmo
       console.log("Dados lidos do arquivo:", data);
       
-      // Função para processar dados em chunks e lotes
       const processDataInChunks = async (data: any[]): Promise<Feedback[]> => {
         const result: Feedback[] = [];
         const MAX_CONCURRENT_BATCHES = 3;
         
-        // Dividir os dados em chunks
         const chunks = [];
         for (let i = 0; i < data.length; i += BATCH_SIZE * MAX_CONCURRENT_BATCHES) {
           chunks.push(data.slice(i, i + BATCH_SIZE * MAX_CONCURRENT_BATCHES));
@@ -275,13 +257,11 @@ function ImportPageContent() {
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
           
-          // Dividir cada chunk em lotes
           const batches = [];
           for (let j = 0; j < chunk.length; j += BATCH_SIZE) {
             batches.push(chunk.slice(j, j + BATCH_SIZE));
           }
           
-          // Processar lotes em paralelo
           const batchPromises = batches.map(async (batch) => {
             const batchResults = await Promise.all(
               batch.map(async (row) => {
@@ -291,7 +271,7 @@ function ImportPageContent() {
                   const analysis = await analyzeWithGPT(row.texto);
                   
                   const feedback: Feedback = {
-                    id: crypto.randomUUID(),
+                    id: generateUniqueId(),
                     date: new Date().toISOString(),
                     comment: row.texto,
                     rating: analysis.rating,
@@ -335,16 +315,13 @@ function ImportPageContent() {
             return batchResults.filter((item): item is Feedback => item !== null);
           });
           
-          // Aguardar todos os lotes do chunk atual
           const results = await Promise.all(batchPromises);
           for (const batchResult of results) {
             result.push(...batchResult);
           }
           
-          // Atualizar progresso
           setProgress((result.length / data.length) * 100);
           
-          // Pequeno delay entre chunks
           if (i < chunks.length - 1) {
             await delay(DELAY_BETWEEN_BATCHES);
           }
@@ -353,36 +330,30 @@ function ImportPageContent() {
         return result;
       };
 
-      // Processar os dados
       const processedData = await processDataInChunks(data);
 
-      // Salvar no armazenamento local
       storeFeedbacks(processedData);
       
-      // Preparar dados para análise
       const analysisData: any = {
         totalFeedbacks: processedData.length,
         averageRating: processedData.reduce((acc, item) => acc + item.rating, 0) / processedData.length,
         positiveSentiment: Math.round((processedData.filter(item => item.sentiment === 'positive').length / processedData.length) * 100),
-        responseRate: 0, // Pode ser calculado se tiver essa informação
+        responseRate: 0,
         hotelDistribution: processHotelDistribution(processedData),
         sourceDistribution: processSourceDistribution(processedData),
         languageDistribution: processLanguageDistribution(processedData),
         ratingDistribution: processRatingDistribution(processedData),
         sectorDistribution: processSectorDistribution(processedData),
         keywordDistribution: processKeywordDistribution(processedData),
-        sentimentTrend: [], // Pode ser calculado se tiver datas
-        recentFeedbacks: processedData.slice(0, 5), // Últimos 5 feedbacks
+        sentimentTrend: [],
+        recentFeedbacks: processedData.slice(0, 5),
         problemDistribution: processProblemDistribution(processedData),
         apartamentoDistribution: processApartamentoDistribution(processedData)
       };
       
-      // Verificar se estamos em ambiente de teste
       if (isTestEnvironment) {
-        // Marcar dados como pertencentes ao ambiente de teste
         analysisData.isTestEnvironment = true;
         
-        // Se estiver em ambiente de teste e for opção de "conta", use o primeiro hotel de teste
         if (hotelOption === 'account') {
           try {
             const testEnvResponse = await fetch('/api/test-environment');
@@ -400,10 +371,9 @@ function ImportPageContent() {
         }
       }
       
-      // Salvar no Firestore incluindo as informações do hotel atual
       try {
         const analysisId = await saveAnalysis({
-          hotelId: hotelId, // ID do hotel do usuário autenticado
+          hotelId: hotelId,
           hotelName: hotelName,
           data: processedData,
           analysis: analysisData,
@@ -415,7 +385,6 @@ function ImportPageContent() {
           description: "Os dados foram salvos com sucesso e podem ser acessados no histórico.",
         });
         
-        // Redirecionar para a página de análise
         router.push(`/analysis`);
       } catch (error) {
         console.error("Erro ao salvar no Firestore:", error);
@@ -452,15 +421,12 @@ function ImportPageContent() {
       'text/csv': ['.csv'],
     },
     disabled: importing,
-    multiple: false,
   });
 
-  // Funções para processar distribuições (funções auxiliares)
   const processHotelDistribution = (data: Feedback[]) => {
     const hotelCounts: Record<string, number> = {};
     
     data.forEach(feedback => {
-      // Usar nomeHotel que já foi configurado conforme a escolha do usuário
       const hotel = feedback.hotel;
       if (hotel) {
         hotelCounts[hotel] = (hotelCounts[hotel] || 0) + 1;
@@ -468,137 +434,133 @@ function ImportPageContent() {
     });
     
     return Object.entries(hotelCounts)
-      .map(([hotel, count]) => ({ label: hotel, value: count }))
+      .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
   };
 
   const processSourceDistribution = (data: Feedback[]) => {
     return Object.entries(
       data.reduce((acc, item) => {
-        const source = item.source || 'Outro';
-        if (!acc[source]) acc[source] = 0;
-        acc[source]++;
+        if (item.source) {
+          if (!acc[item.source]) acc[item.source] = 0;
+          acc[item.source]++;
+        }
         return acc;
       }, {} as Record<string, number>)
-    ).map(([label, value]) => ({ label, value }));
+    )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([label, value]) => ({ label, value }));
   };
 
   const processLanguageDistribution = (data: Feedback[]) => {
     return Object.entries(
       data.reduce((acc, item) => {
-        const language = item.language || 'Outro';
-        if (!acc[language]) acc[language] = 0;
-        acc[language]++;
+        if (item.language) {
+          if (!acc[item.language]) acc[item.language] = 0;
+          acc[item.language]++;
+        }
         return acc;
       }, {} as Record<string, number>)
-    ).map(([label, value]) => ({ label, value }));
+    )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([label, value]) => ({ label, value }));
   };
 
   const processRatingDistribution = (data: Feedback[]) => {
     const ratings = [1, 2, 3, 4, 5];
     return ratings.map(rating => ({
-      label: rating.toString(),
-      value: data.filter(item => item.rating === rating).length
+      rating,
+      count: data.filter(item => item.rating === rating).length
     }));
   };
 
   const processSectorDistribution = (data: Feedback[]) => {
     const sectorMap: Record<string, string> = {
       "atendimento": "Atendimento",
-      "recepção": "Recepção",
       "limpeza": "Limpeza",
-      "quarto": "Acomodações",
-      "banheiro": "Acomodações",
-      "café": "Alimentos e Bebidas",
-      "restaurante": "Alimentos e Bebidas",
-      "comida": "Alimentos e Bebidas",
-      "bebida": "Alimentos e Bebidas",
-      "refeição": "Alimentos e Bebidas",
+      "conforto": "Conforto",
       "localização": "Localização",
-      "piscina": "Lazer",
-      "spa": "Lazer",
-      "wifi": "Tecnologia",
-      "internet": "Tecnologia",
-      "estacionamento": "Infraestrutura",
-      "barulho": "Conforto",
-      "ruído": "Conforto",
-      "preço": "Valor",
-      "custo": "Valor",
-      "roubo": "Segurança",
-      "segurança": "Segurança"
+      "alimentação": "Alimentação",
+      "infraestrutura": "Infraestrutura",
+      "serviços": "Serviços",
+      "preço": "Preço",
+      "quarto": "Quarto",
+      "banheiro": "Banheiro",
+      "piscina": "Piscina",
+      "café da manhã": "Café da Manhã",
+      "internet": "Internet",
+      "estacionamento": "Estacionamento",
+      "academia": "Academia",
+      "spa": "Spa",
+      "entretenimento": "Entretenimento",
+      "segurança": "Segurança",
+      "acessibilidade": "Acessibilidade",
+      "sustentabilidade": "Sustentabilidade"
     };
-
+    
     return Object.entries(
       data.reduce((acc, item) => {
-        let found = false;
-        
         if (item.sector) {
-          const sectorKey = Object.keys(sectorMap).find(key => 
-            item.sector.toLowerCase().includes(key)
-          );
+          let sector = item.sector.toLowerCase();
+          let mappedSector = sectorMap[sector] || item.sector;
           
-          if (sectorKey) {
-            const mappedSector = sectorMap[sectorKey];
-            if (!acc[mappedSector]) acc[mappedSector] = 0;
-            acc[mappedSector]++;
-            found = true;
+          for (const [key, value] of Object.entries(sectorMap)) {
+            if (sector.includes(key)) {
+              mappedSector = value;
+              break;
+            }
           }
+          
+          if (!acc[mappedSector]) acc[mappedSector] = 0;
+          acc[mappedSector]++;
         }
-        
-        if (!found) {
-          if (!acc["Outros"]) acc["Outros"] = 0;
-          acc["Outros"]++;
-        }
-        
         return acc;
       }, {} as Record<string, number>)
-    ).map(([label, value]) => ({ label, value }));
+    )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([label, value]) => ({ label, value }));
   };
 
   const processKeywordDistribution = (data: Feedback[]) => {
-    // Primeiro, extrair todas as palavras-chave
-    const allKeywords = data
-      .filter(item => item.keyword)
-      .flatMap(item => item.keyword.split(',').map(k => k.trim()))
-      .filter(k => k.length > 1); // Filtrar palavras vazias
+    const keywordCounts: Record<string, number> = {};
     
-    // Contar a frequência de cada palavra-chave
-    const keywordCounts = allKeywords.reduce((acc, keyword) => {
-      if (!acc[keyword.toLowerCase()]) {
-        acc[keyword.toLowerCase()] = 0;
+    data.forEach(feedback => {
+      const keyword = feedback.keyword;
+      if (keyword) {
+        keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
       }
-      acc[keyword.toLowerCase()]++;
-      return acc;
-    }, {} as Record<string, number>);
+    });
     
-    // Classificar por frequência e limitar aos 10 maiores
     return Object.entries(keywordCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([label, value]) => ({ 
-        label: label.charAt(0).toUpperCase() + label.slice(1), 
-        value 
-      }));
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 10);
   };
 
   const processProblemDistribution = (data: Feedback[]) => {
-    // Agrupar problemas semelhantes
     const problemMap: Record<string, string> = {
-      "atraso": "Atrasos",
-      "espera": "Tempo de Espera",
-      "demora": "Tempo de Espera",
-      "sujo": "Limpeza",
-      "suja": "Limpeza",
-      "limpeza": "Limpeza",
-      "barulho": "Ruído",
       "ruído": "Ruído",
-      "barulhento": "Ruído",
-      "frio": "Temperatura",
-      "quente": "Temperatura",
-      "ar-condicionado": "Equipamentos",
-      "defeito": "Manutenção",
-      "quebrado": "Manutenção",
-      "preço": "Preço Alto",
+      "barulho": "Ruído",
+      "música": "Ruído",
+      "som": "Ruído",
+      "sujo": "Limpeza",
+      "limpo": "Limpeza",
+      "limpeza": "Limpeza",
+      "higiene": "Limpeza",
+      "cama": "Conforto",
+      "travesseiro": "Conforto",
+      "colchão": "Conforto",
+      "ar-condicionado": "Conforto",
+      "temperatura": "Conforto",
+      "frio": "Conforto",
+      "calor": "Conforto",
+      "pequeno": "Espaço",
+      "apertado": "Espaço",
+      "espaçoso": "Espaço",
+      "grande": "Espaço",
       "caro": "Preço Alto",
       "atendimento": "Atendimento",
       "grosseiro": "Atendimento",
@@ -616,7 +578,6 @@ function ImportPageContent() {
         if (item.problem) {
           let matched = false;
           
-          // Verificar se o problema corresponde a um dos grupos predefinidos
           for (const [key, group] of Object.entries(problemMap)) {
             if (item.problem.toLowerCase().includes(key)) {
               if (!acc[group]) acc[group] = 0;
@@ -626,7 +587,6 @@ function ImportPageContent() {
             }
           }
           
-          // Se não corresponder a nenhum grupo, adicionar como "Outros"
           if (!matched) {
             if (!acc["Outros"]) acc["Outros"] = 0;
             acc["Outros"]++;
@@ -665,7 +625,6 @@ function ImportPageContent() {
         </p>
       </div>
       
-      {/* Interface de escolha de hotel (mostrada após detecção) */}
       {!importing && !detectingHotels && hotelsInFile.length > 0 && chosenHotelOption === null && (
         <Card className="p-6 my-6">
           <h3 className="text-xl font-bold mb-4">Seleção de Hotel</h3>
@@ -719,7 +678,6 @@ function ImportPageContent() {
         </Card>
       )}
       
-      {/* Área de drop zone (modificar a existente) */}
       {!importing && !detectingHotels && chosenHotelOption === null && hotelsInFile.length === 0 && (
         <Card 
           {...getRootProps()}
@@ -745,8 +703,7 @@ function ImportPageContent() {
         </Card>
       )}
       
-      {/* Progresso de importação e resto do componente... */}
-      {!importing && !complete ? (
+      {importing && !complete && (
         <div className="space-y-4 w-full max-w-md">
           <div className="space-y-2">
             <h3 className="text-xl font-semibold">Processando Importação</h3>
@@ -757,35 +714,24 @@ function ImportPageContent() {
           <Progress value={progress} className="h-2" />
           <p className="text-sm font-medium">{Math.round(progress)}%</p>
         </div>
-      ) : (
+      )}
+
+      {complete && (
         <div className="flex flex-col items-center justify-center p-12 text-center">
-          {complete ? (
-            <div className="space-y-4">
-              <div className="mx-auto w-fit rounded-full bg-green-100 p-3">
-                <CheckCircle2 className="h-8 w-8 text-green-600" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold">Importação Concluída</h3>
-                <p className="text-sm text-muted-foreground">
-                  Todos os dados foram importados e analisados com sucesso.
-                </p>
-              </div>
-              <Button onClick={() => router.push("/analysis")}>
-                Ver Análise
-              </Button>
+          <div className="space-y-4">
+            <div className="mx-auto w-fit rounded-full bg-green-100 p-3">
+              <CheckCircle2 className="h-8 w-8 text-green-600" />
             </div>
-          ) : (
-            <div className="space-y-4 w-full max-w-md">
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold">Processando Importação</h3>
-                <p className="text-sm text-muted-foreground">
-                  Estamos analisando seus dados. Isso pode levar alguns minutos dependendo do tamanho do arquivo.
-                </p>
-              </div>
-              <Progress value={progress} className="h-2" />
-              <p className="text-sm font-medium">{Math.round(progress)}%</p>
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold">Importação Concluída</h3>
+              <p className="text-sm text-muted-foreground">
+                Todos os dados foram importados e analisados com sucesso.
+              </p>
+            </div>
+            <Button onClick={() => router.push("/analysis")}>
+              Ver Análise
+            </Button>
           </div>
-          )}
         </div>
       )}
     </div>
