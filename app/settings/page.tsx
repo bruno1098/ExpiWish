@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
-import {  getApiKey } from "@/lib/openai"
+import { getApiKey } from "@/lib/openai-client"
 import SharedDashboardLayout from "../shared-layout"
 
 export default function SettingsPage() {

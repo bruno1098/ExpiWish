@@ -1,36 +1,5 @@
-import OpenAI from "openai";
-
-// Este arquivo será usado apenas no servidor (API routes)
-export function createOpenAIInstance(apiKey: string) {
-  return new OpenAI({
-    apiKey: apiKey
-  });
-}
-
 export function getApiKey() {
   return typeof window !== 'undefined' ? localStorage.getItem("openai-api-key") : null;
-}
-
-let openaiInstance: OpenAI | null = null;
-
-// Função para atualizar a instância do OpenAI
-const updateOpenAIInstance = () => {
-  const apiKey = typeof window !== 'undefined' ? localStorage.getItem("openai-api-key") : null;
-  
-  if (apiKey) {
-    openaiInstance = new OpenAI({
-      apiKey: apiKey,
-      dangerouslyAllowBrowser: true
-    });
-  } else {
-    openaiInstance = null;
-  }
-}
-
-// Atualizar quando a API key mudar
-if (typeof window !== 'undefined') {
-  window.addEventListener('apiKeyChanged', updateOpenAIInstance);
-  updateOpenAIInstance(); // Inicializar na primeira vez
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -38,13 +7,10 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const MAX_RETRIES = 15;
 const BASE_DELAY = 1000; // 1 segundo
 
-// Definir interface para função com cache
-interface AnalyzeWithGPTFunction {
-  (texto: string, useFineTuned?: boolean, retryCount?: number): Promise<{ rating: number; keyword: string; sector: string; problem: string }>;
-  cache?: Map<string, { rating: number; keyword: string; sector: string; problem: string }>;
-}
+// Cache global para análises
+const analysisCache = new Map<string, { rating: number; keyword: string; sector: string; problem: string }>();
 
-export const analyzeWithGPT: AnalyzeWithGPTFunction = async function(
+export async function analyzeWithGPT(
   texto: string,
   useFineTuned = false,
   retryCount = 0
@@ -58,13 +24,9 @@ export const analyzeWithGPT: AnalyzeWithGPTFunction = async function(
   }
 
   // Usar o sistema de cache para melhorar desempenho
-  if (!analyzeWithGPT.cache) {
-    analyzeWithGPT.cache = new Map();
-  }
-
   const cacheKey = texto.trim().toLowerCase().slice(0, 100);
-  if (analyzeWithGPT.cache.has(cacheKey)) {
-    return analyzeWithGPT.cache.get(cacheKey)!;
+  if (analysisCache.has(cacheKey)) {
+    return analysisCache.get(cacheKey)!;
   }
 
   if (!texto || texto.trim() === '') {
@@ -132,7 +94,7 @@ export const analyzeWithGPT: AnalyzeWithGPTFunction = async function(
     };
 
     // Armazenar no cache
-    analyzeWithGPT.cache.set(cacheKey, finalResult);
+    analysisCache.set(cacheKey, finalResult);
 
     return finalResult;
 
@@ -148,7 +110,14 @@ export const analyzeWithGPT: AnalyzeWithGPTFunction = async function(
     
     throw error;
   }
-};
+}
 
-// Inicializar o cache
-analyzeWithGPT.cache = new Map();
+// Função para limpar o cache se necessário
+export function clearAnalysisCache() {
+  analysisCache.clear();
+}
+
+// Função para obter o tamanho do cache
+export function getCacheSize() {
+  return analysisCache.size;
+} 

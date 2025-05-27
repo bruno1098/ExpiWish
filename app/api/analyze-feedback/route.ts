@@ -106,7 +106,7 @@ Lista de PROBLEMAS PADRONIZADOS (use APENAS estes termos):
 - Sem problemas (SOMENTE quando não há críticas)
 
 REGRAS ESTRITAS:
-1. NUNCA use "Sem problemas" como SETOR - este termo é exclusivo para a coluna de PROBLEMAS.
+1. NUNCA use "Sem problemas" como um SETOR - este termo é exclusivo para a coluna de PROBLEMAS.
 2. NUNCA repita o mesmo setor mais de uma vez em um comentário.
 3. Para cada palavra-chave, associe EXATAMENTE UM setor e UM problema correspondente.
 4. Se o comentário for positivo sobre um aspecto, use "Sem problemas" APENAS na coluna de PROBLEMAS.
@@ -139,31 +139,9 @@ LEMBRE-SE:
     const rating = parseInt(sentimentResponse.choices[0].message.content?.trim() || "3");
     const response = sectorResponse.choices[0].message.content?.trim() || "Não identificado, Não identificado, Não identificado";
 
-    // Processar a resposta
-    const parts = response.split(',').map(part => part.trim());
-    let keywords = "Não identificado";
-    let sectors = "Não identificado";
-    let problems = "Não identificado";
-
-    if (parts.length >= 3) {
-      keywords = parts[0];
-      sectors = parts[1];
-      problems = parts[2];
-      
-      const keywordList = keywords.split(';').map(k => k.trim()).filter(k => k);
-      const sectorList = sectors.split(';').map(s => s.trim()).filter(s => s);
-      const problemList = problems.split(';').map(p => p.trim()).filter(p => p);
-      
-      keywords = keywordList[0] || "Não identificado";
-      sectors = sectorList[0] || "Não identificado";
-      problems = problemList[0] || "Não identificado";
-    }
-
     return NextResponse.json({
       rating,
-      keyword: keywords,
-      sector: sectors,
-      problem: problems
+      response
     });
 
   } catch (error: any) {

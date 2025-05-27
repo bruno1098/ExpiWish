@@ -10,6 +10,7 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     appDir: true,
+    serverComponentsExternalPackages: ['openai']
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -21,9 +22,6 @@ const nextConfig = {
       };
     }
     return config;
-  },
-  experimental: {
-    serverComponentsExternalPackages: ['openai']
   }
 };
 
