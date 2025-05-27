@@ -6,8 +6,6 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Upload, FileType, CheckCircle2 } from "lucide-react"
-import { read, utils } from "xlsx"
-import Papa from "papaparse"
 import { storeFeedbacks } from "@/lib/feedback"
 import { analyzeWithGPT } from "@/lib/openai-client"
 import { useToast } from "@/components/ui/use-toast"
@@ -124,6 +122,8 @@ function ImportPageContent() {
       const hotelName = userData.hotelName;
 
       if (extension === 'xlsx') {
+        // Importação dinâmica do XLSX
+        const { read, utils } = await import('xlsx');
         const buffer = await file.arrayBuffer();
         const workbook = read(buffer);
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -146,6 +146,8 @@ function ImportPageContent() {
         setHotelsInFile(Array.from(hotelsDetected));
         
       } else if (extension === 'csv') {
+        // Importação dinâmica do Papa Parse
+        const Papa = (await import('papaparse')).default;
         const text = await file.text();
         const result = Papa.parse(text, { header: true });
         
@@ -200,6 +202,8 @@ function ImportPageContent() {
       const hotelId = userData?.hotelId || '';
 
       if (extension === 'xlsx') {
+        // Importação dinâmica do XLSX
+        const { read, utils } = await import('xlsx');
         const buffer = await file.arrayBuffer();
         const workbook = read(buffer);
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -241,6 +245,21 @@ function ImportPageContent() {
             apartamento: apartamento
           };
         });
+      } else if (extension === 'csv') {
+        // Importação dinâmica do Papa Parse
+        const Papa = (await import('papaparse')).default;
+        const text = await file.text();
+        const result = Papa.parse(text, { header: true });
+        
+        data = (result.data as any[])
+          .filter(row => row && typeof row === 'object' && row.texto)
+          .map(row => {
+            const hotelFromFile = row.fonte || row.hotel || row.Hotel || row.HOTEL || row.nomeHotel;
+            return {
+              ...row,
+              nomeHotel: hotelOption === 'account' ? hotelName : (hotelFromFile || hotelName)
+            };
+          });
       }
       
       console.log("Dados lidos do arquivo:", data);
