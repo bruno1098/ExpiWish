@@ -1,0 +1,557 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { useState } from "react"
+
+interface ProblemsDashboardProps {
+  feedbacks: Array<{
+    problem: string;
+    sector: string;
+    sentiment: string;
+    rating: number;
+    keyword: string;
+  }>;
+  onProblemClick?: (problem: string) => void;
+}
+
+// Cores para diferentes setores
+const SECTOR_COLORS: Record<string, string> = {
+  'A&B': '#3B82F6',
+  'Governança': '#EF4444',
+  'Manutenção': '#F97316',
+  'Lazer': '#10B981',
+  'TI': '#8B5CF6',
+  'Operações': '#FBBF24',
+  'Produto': '#6366F1',
+  'Marketing': '#EC4899',
+  'Comercial': '#06B6D4'
+};
+
+// Função para obter cor com base no setor
+const getSectorColor = (sector: string) => {
+  return SECTOR_COLORS[sector as keyof typeof SECTOR_COLORS] || '#6B7280';
+};
+
+// Adicionar lista de problemas padronizados
+const PROBLEMAS_PADRONIZADOS = [
+  "Quarto pequeno",
+  "Quarto desconfortável",
+  "Café limitado",
+  "Poucas opções",
+  "Atendimento ruim",
+  "Atendimento lento",
+  "Wi-Fi instável",
+  "Equipamentos antigos",
+  "Limpeza inadequada",
+  "Barulho excessivo",
+  "Preço alto",
+  "Manutenção precária",
+  "Poucas atividades",
+  "Falta estrutura",
+  "Localização ruim",
+  "Ar-condicionado ruim",
+  "TV com problemas",
+  "Banheiro pequeno",
+  "Check-in demorado",
+  "Estacionamento lotado",
+  "Estacionamento pago",
+  "Abordagem comercial indesejada",
+  "Distância da estrutura",
+  "Poucas opções de jantar"
+];
+
+export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboardProps) {
+  // Filtra feedbacks com problemas reais (exclui "Sem problemas")
+  const problemFeedbacks = feedbacks.filter(f => {
+    return f.problem && 
+           !f.problem.includes("Sem problemas") && 
+           f.problem !== "Não identificado" &&
+           f.problem !== "Não analisado";
+  });
+
+  // Processa todos os problemas, incluindo múltiplos por feedback
+  const processedProblems = problemFeedbacks.flatMap(feedback => {
+    const problems = feedback.problem.split(';').map(p => p.trim());
+    const keywords = feedback.keyword.split(';').map(k => k.trim());
+    const sectors = feedback.sector.split(';').map(s => s.trim());
+    
+    return problems.map((problem, index) => {
+      if (problem === "Sem problemas" || problem === "Não identificado" || problem === "Não analisado") {
+        return null;
+      }
+      
+      // Verificar se o problema está na lista de problemas padronizados
+      // Se não estiver, tentar encontrar o mais próximo
+      let normalizedProblem = problem;
+      if (!PROBLEMAS_PADRONIZADOS.includes(problem)) {
+        // Tentar encontrar um problema padronizado similar
+        const similarProblem = PROBLEMAS_PADRONIZADOS.find(p => 
+          problem.toLowerCase().includes(p.toLowerCase())
+        );
+        if (similarProblem) {
+          normalizedProblem = similarProblem;
+        }
+      }
+      
+      return {
+        problem: normalizedProblem,
+        keyword: keywords[index] || keywords[0] || "Não identificado",
+        sector: sectors[index] || sectors[0] || "Não identificado"
+      };
+    }).filter(Boolean) as Array<{
+      problem: string;
+      keyword: string;
+      sector: string;
+    }>;
+  });
+
+  // Conta ocorrências de cada problema
+  const problemCounts = processedProblems.reduce((acc, item) => {
+    if (item) {
+      const key = `${item.keyword}: ${item.problem}`;
+      acc[key] = {
+        count: (acc[key]?.count || 0) + 1,
+        sector: item.sector,
+        keyword: item.keyword,
+        problem: item.problem
+      };
+    }
+    return acc;
+  }, {} as Record<string, { count: number, sector: string, keyword: string, problem: string }>);
+
+  // Prepara dados para o gráfico e tabela
+  const problemTableData = Object.entries(problemCounts)
+    .map(([key, data]) => ({ 
+      key,
+      problem: data.problem,
+      keyword: data.keyword,
+      sector: data.sector,
+      count: data.count 
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // Agrupa problemas por setor
+  const problemsBySector = processedProblems.reduce((acc, item) => {
+    if (item) {
+      const sector = item.sector;
+      if (!acc[sector]) {
+        acc[sector] = { total: 0, problems: {} };
+      }
+      acc[sector].total += 1;
+      acc[sector].problems[item.problem] = (acc[sector].problems[item.problem] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, { total: number; problems: Record<string, number> }>);
+
+  // Prepara dados para o gráfico de setores
+  const sectorData = Object.entries(problemsBySector).map(([sector, data]) => ({
+    sector,
+    count: data.total,
+  })).sort((a, b) => b.count - a.count);
+
+  // Agrupa problemas por palavra-chave
+  const problemsByKeyword = processedProblems.reduce((acc, item) => {
+    if (item) {
+      const keyword = item.keyword;
+      if (!acc[keyword]) {
+        acc[keyword] = { total: 0, problems: {} };
+      }
+      acc[keyword].total += 1;
+      acc[keyword].problems[item.problem] = (acc[keyword].problems[item.problem] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, { total: number; problems: Record<string, number> }>);
+
+  // Prepara dados para o gráfico de palavras-chave
+  const keywordData = Object.entries(problemsByKeyword).map(([keyword, data]) => ({
+    keyword,
+    count: data.total,
+  })).sort((a, b) => b.count - a.count);
+
+  // Função para renderizar o tooltip personalizado
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white p-3 border rounded shadow-md">
+          <p className="font-medium">{data.keyword}</p>
+          <p className="text-sm">{data.problem}</p>
+          <p className="text-sm text-gray-500">Setor: {data.sector}</p>
+          <p className="font-medium">Ocorrências: {data.count}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Adicionar estado para o filtro de busca
+  const [searchFilter, setSearchFilter] = useState("");
+
+  return (
+    <Card className="col-span-full">
+      <CardHeader>
+        <CardTitle>Análise Detalhada de Problemas</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card className="p-4">
+            <div className="text-sm font-medium text-gray-500">Total de Feedbacks</div>
+            <div className="text-2xl font-bold mt-1">{feedbacks.length}</div>
+          </Card>
+          
+          <Card className="p-4">
+            <div className="text-sm font-medium text-gray-500">Feedbacks com Problemas</div>
+            <div className="text-2xl font-bold mt-1">{problemFeedbacks.length}</div>
+            <div className="text-xs text-gray-500 mt-1">
+              ({((problemFeedbacks.length / feedbacks.length) * 100).toFixed(1)}% do total)
+            </div>
+          </Card>
+          
+          <Card className="p-4">
+            <div className="text-sm font-medium text-gray-500">Problemas Únicos</div>
+            <div className="text-2xl font-bold mt-1">{problemTableData.length}</div>
+          </Card>
+          
+          <Card className="p-4">
+            <div className="text-sm font-medium text-gray-500">Setores Afetados</div>
+            <div className="text-2xl font-bold mt-1">{sectorData.length}</div>
+          </Card>
+        </div>
+        <Tabs defaultValue="problems" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="problems">Problemas</TabsTrigger>
+            <TabsTrigger value="sectors">Setores</TabsTrigger>
+            <TabsTrigger value="keywords">Palavras-chave</TabsTrigger>
+          </TabsList>
+          
+          {/* Tab de Problemas */}
+          <TabsContent value="problems" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Todos os Problemas Reportados</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <Input
+                    placeholder="Buscar problemas..."
+                    value={searchFilter}
+                    onChange={(e) => setSearchFilter(e.target.value)}
+                    className="max-w-sm"
+                  />
+                </div>
+                <div className="h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      data={problemTableData
+                        .filter(item => 
+                          searchFilter === "" || 
+                          item.problem.toLowerCase().includes(searchFilter.toLowerCase()) ||
+                          item.keyword.toLowerCase().includes(searchFilter.toLowerCase()) ||
+                          item.sector.toLowerCase().includes(searchFilter.toLowerCase())
+                        )
+                        .sort((a, b) => b.count - a.count)}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
+                      layout="vertical"
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis 
+                        type="category"
+                        dataKey="problem"
+                        width={200}
+                        tick={({ x, y, payload }) => {
+                          const item = problemTableData
+                            .filter(p => 
+                              searchFilter === "" || 
+                              p.problem.toLowerCase().includes(searchFilter.toLowerCase())
+                            )
+                            .find(p => p.problem === payload.value);
+                          const color = item ? getSectorColor(item.sector) : '#6B7280';
+                          
+                          return (
+                            <text 
+                              x={x} 
+                              y={y} 
+                              dy={4} 
+                              fill={color} 
+                              fontSize={12} 
+                              textAnchor="end"
+                            >
+                              {payload.value}
+                            </text>
+                          );
+                        }}
+                      />
+                      <Tooltip content={CustomTooltip} />
+                      <Bar 
+                        dataKey="count" 
+                        radius={[0, 4, 4, 0]}
+                        barSize={20}
+                      >
+                        {problemTableData
+                          .filter(item => 
+                            searchFilter === "" || 
+                            item.problem.toLowerCase().includes(searchFilter.toLowerCase())
+                          )
+                          .map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={getSectorColor(entry.sector)} 
+                            />
+                          ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Tabela Detalhada */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Lista Detalhada de Problemas</CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Problema</TableHead>
+                        <TableHead>Palavra-chave</TableHead>
+                        <TableHead>Setor</TableHead>
+                        <TableHead className="text-right">Ocorrências</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {problemTableData
+                        .filter(item => 
+                          searchFilter === "" || 
+                          item.problem.toLowerCase().includes(searchFilter.toLowerCase()) ||
+                          item.keyword.toLowerCase().includes(searchFilter.toLowerCase()) ||
+                          item.sector.toLowerCase().includes(searchFilter.toLowerCase())
+                        )
+                        .map((item) => (
+                          <TableRow key={item.key}>
+                            <TableCell>
+                              <Badge 
+                                style={{ 
+                                  backgroundColor: `${getSectorColor(item.sector)}20`,
+                                  color: getSectorColor(item.sector),
+                                  borderColor: getSectorColor(item.sector)
+                                }}
+                              >
+                                {item.problem}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{item.keyword}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {item.sector}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{item.count}</TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+              
+              {/* Gráfico de Pizza - Top 5 Problemas */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Top 5 Problemas</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={problemTableData.slice(0, 5)}
+                          dataKey="count"
+                          nameKey="problem"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        >
+                          {problemTableData.slice(0, 5).map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={getSectorColor(entry.sector)} 
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          {/* Tab de Setores */}
+          <TabsContent value="sectors">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Gráfico de Pizza - Distribuição por Setor */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Problemas por Setor</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={sectorData}
+                          dataKey="count"
+                          nameKey="sector"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        >
+                          {sectorData.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={getSectorColor(entry.sector)} 
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Tabela de Setores */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Detalhamento por Setor</CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Setor</TableHead>
+                        <TableHead className="text-right">Problemas</TableHead>
+                        <TableHead className="text-right">%</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sectorData.map((item) => (
+                        <TableRow key={item.sector}>
+                          <TableCell>
+                            <Badge 
+                              style={{ 
+                                backgroundColor: `${getSectorColor(item.sector)}20`,
+                                color: getSectorColor(item.sector),
+                                borderColor: getSectorColor(item.sector)
+                              }}
+                            >
+                              {item.sector}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{item.count}</TableCell>
+                          <TableCell className="text-right">
+                            {((item.count / processedProblems.length) * 100).toFixed(1)}%
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          {/* Tab de Palavras-chave */}
+          <TabsContent value="keywords">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Gráfico de Barras - Palavras-chave */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Problemas por Palavra-chave</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[400px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart 
+                        data={keywordData}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
+                        layout="vertical"
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis 
+                          type="category"
+                          dataKey="keyword"
+                          width={150}
+                        />
+                        <Tooltip />
+                        <Bar 
+                          dataKey="count" 
+                          radius={[0, 4, 4, 0]}
+                          barSize={20}
+                          fill="#8884d8"
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Tabela de Palavras-chave */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Detalhamento por Palavra-chave</CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Palavra-chave</TableHead>
+                        <TableHead className="text-right">Problemas</TableHead>
+                        <TableHead className="text-right">%</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {keywordData.map((item) => (
+                        <TableRow key={item.keyword}>
+                          <TableCell>{item.keyword}</TableCell>
+                          <TableCell className="text-right">{item.count}</TableCell>
+                          <TableCell className="text-right">
+                            {((item.count / processedProblems.length) * 100).toFixed(1)}%
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+} 

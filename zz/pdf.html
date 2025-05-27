@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pós Tech - Boas-Vindas</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #000000;
+      color: #ffffff;
+      line-height: 1.6;
+    }
+
+    header {
+      background-color: #000000;
+      padding: 30px 20px;
+      text-align: center;
+      border-bottom: 3px solid #e50051;
+    }
+
+    header img {
+      max-height: 50px;
+    }
+
+    main {
+      padding: 40px 20px;
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h2 {
+      color: #ffffff;
+      background-color: #111;
+      border-left: 6px solid #e50051;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 20px;
+      margin-top: 50px;
+    }
+
+    section {
+      background-color: #1a1a1a;
+      padding: 24px;
+      border-left: 4px solid #e50051;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+      margin-top: 15px;
+    }
+
+    strong {
+      color: #e50051;
+    }
+
+    ul {
+      padding-left: 20px;
+    }
+
+    .highlight {
+      font-weight: bold;
+      color: #ffffff;
+    }
+
+    /* Estilos do contador - Versão minimalista */
+    .contador-elegante {
+      background-color: #111;
+      border-radius: 16px;
+      padding: 30px;
+      margin: 40px auto;
+      max-width: 700px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .contador-elegante::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(to bottom, #e50051, #00d15b);
+      border-radius: 4px;
+    }
+    
+    .titulo-contador {
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-align: center;
+      margin-bottom: 30px;
+      font-weight: 600;
+      color: #fff;
+    }
+    
+    .unidades-tempo {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 40px;
+    }
+    
+    .tempo-unidade {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 80px;
+    }
+    
+    .tempo-valor {
+      font-size: 32px;
+      font-weight: 300;
+      color: #fff;
+      margin: 0;
+      padding: 10px 0;
+      position: relative;
+    }
+    
+    .tempo-valor::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 30px;
+      height: 2px;
+      background-color: #e50051;
+      border-radius: 2px;
+    }
+    
+    .tempo-label {
+      font-size: 12px;
+      color: #888;
+      margin-top: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .progresso-wrapper {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      margin: 0 auto 30px;
+    }
+    
+    .circulo-barra {
+      fill: transparent;
+      stroke: #222;
+      stroke-width: 8;
+    }
+    
+    .circulo-progresso {
+      fill: transparent;
+      stroke: #00d15b;
+      stroke-width: 8;
+      stroke-linecap: round;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      transition: stroke-dashoffset 0.5s ease;
+      filter: drop-shadow(0 0 5px rgba(0, 209, 91, 0.5));
+    }
+    
+    .progresso-info {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      width: 100%;
+    }
+    
+    .porcentagem-texto {
+      font-size: 36px;
+      font-weight: 300;
+      color: #00d15b;
+      margin: 0;
+      line-height: 1;
+    }
+    
+    .dias-texto {
+      font-size: 14px;
+      color: #aaa;
+      margin-top: 5px;
+    }
+    
+    .texto-motivacional {
+      text-align: center;
+      padding: 15px 20px;
+      margin-top: 20px;
+      background-color: rgba(0, 209, 91, 0.05);
+      border-radius: 10px;
+      font-weight: 300;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .texto-motivacional::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background-color: #00d15b;
+      border-radius: 4px;
+    }
+    
+    .pulse-animation {
+      animation: pulse 5s infinite;
+    }
+    
+    /* Estilos para as partículas */
+    .particulas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+      overflow: hidden;
+    }
+    
+    .particula {
+      position: absolute;
+      background-color: rgba(0, 209, 91, 0.7);
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%);
+    }
+    
+    @keyframes animar-particula {
+      0% {
+        transform: translate(0, 0) scale(1);
+        opacity: 0.7;
+      }
+      100% {
+        transform: translate(var(--tx), var(--ty)) scale(0);
+        opacity: 0;
+      }
+    }
+    
+    .ponta-progresso {
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      background-color: #00d15b;
+      border-radius: 50%;
+      filter: drop-shadow(0 0 5px rgba(0, 209, 91, 0.8));
+      z-index: 10;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+    }
+    
+    .rastro {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background-color: rgba(0, 209, 91, 0.6);
+      border-radius: 50%;
+      opacity: 0;
+      z-index: 9;
+    }
+    
+    @keyframes rastro-animar {
+      0% {
+        opacity: 0.6;
+        transform: scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(0);
+      }
+    }
+    
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 209, 91, 0.1); }
+      50% { box-shadow: 0 0 0 15px rgba(0, 209, 91, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 209, 91, 0); }
+    }
+    
+    @media (max-width: 600px) {
+      .unidades-tempo {
+        flex-wrap: wrap;
+      }
+      
+      .progresso-wrapper {
+        width: 180px;
+        height: 180px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <img src="https://on.fiap.com.br/theme/fiap/postech/pos-tech.png" alt="Logo Pós Tech" />
+  </header>
+
+  <main>
+    <!-- Contador Minimalista Elegante -->
+    <div class="contador-elegante">
+      <h3 class="titulo-contador">Jornada em Progresso</h3>
+      
+      <div class="unidades-tempo">
+        <div class="tempo-unidade">
+          <p class="tempo-valor" id="dias">00</p>
+          <p class="tempo-label">Dias</p>
+        </div>
+        <div class="tempo-unidade">
+          <p class="tempo-valor" id="horas">00</p>
+          <p class="tempo-label">Horas</p>
+        </div>
+        <div class="tempo-unidade">
+          <p class="tempo-valor" id="minutos">00</p>
+          <p class="tempo-label">Minutos</p>
+        </div>
+        <div class="tempo-unidade">
+          <p class="tempo-valor" id="segundos">00</p>
+          <p class="tempo-label">Segundos</p>
+        </div>
+      </div>
+      
+      <div class="progresso-wrapper">
+        <svg width="220" height="220" viewBox="0 0 220 220">
+          <circle class="circulo-barra" cx="110" cy="110" r="90"></circle>
+          <circle class="circulo-progresso" cx="110" cy="110" r="90" id="barra-progresso"></circle>
+        </svg>
+        <div class="progresso-info">
+          <p class="porcentagem-texto" id="porcentagem">0%</p>
+          <p class="dias-texto" id="dias-texto">dias restantes</p>
+        </div>
+        <div class="particulas-container" id="particulas-container"></div>
+        <div class="ponta-progresso" id="ponta-progresso"></div>
+      </div>
+      
+      <div class="texto-motivacional pulse-animation" id="mensagem">
+        Sua jornada está avançando! Continue dedicado!
+      </div>
+    </div>
+
+    <h2>📘 Boas-Vindas</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Garantir que o aluno tenha uma experiência inicial clara e acolhedora.</p>
+      <p><strong>Mensagem:</strong><br>
+      👋 Olá, [Nome do Aluno]!<br><br>
+      Seja muito bem-vindo à <strong>Pós Tech!</strong> 🚀<br>
+      Agora você faz parte do <strong>maior ecossistema de ensino tech do Brasil</strong> 🇧🇷💻<br><br>
+      Em breve começa a sua jornada em uma <strong>pós-graduação Tech Intensive</strong>, 100% digital e hands-on, com <strong>professores incríveis da FIAP e da Alura</strong> 🎓💼<br><br>
+      <span class="highlight">✨ Bem-vindo à jornada! Estamos animados por ter você com a gente! ✨</span>
+      </p>
+    </section>
+
+    <h2>📅 Lembrete de Aula Inaugural</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Preparar o aluno para o início do curso.</p>
+      <p>A contagem regressiva começou!<br>
+      📚 Sua aula inaugural é em <strong>7 dias!</strong><br>
+      🎯 Prepare-se para transformar seu futuro com conhecimento e inovação.<br>
+      🚀 A jornada está prestes a começar!</p>
+    </section>
+
+    <h2>👥 Informativo para Montar Grupo</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Incentivar a colaboração entre colegas.</p>
+      <p>📢 A <strong>Fase 1</strong> já está disponível na plataforma!<br>
+      💬 Organize seu grupo de estudos pelo <strong>Discord</strong> e comece trocando conhecimento!</p>
+    </section>
+
+    <h2>📝 Lembrete sobre a Entrega do Tech Challenge</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Reforçar o prazo do desafio.</p>
+      <p>🚨 Ei! O prazo de entrega do <strong>Tech Challenge</strong> está chegando!<br>
+      📝 Fique de olho na plataforma e capriche — <strong>mostre tudo que aprendeu!</strong><br>
+      🚀 Estamos na torcida por você!</p>
+    </section>
+
+    <h2>🔓 Liberação de Fase</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Informar a liberação de novas fases.</p>
+      <p>🔓 <strong>Fase [X] liberada!</strong><br>
+      Convoque seu grupo pela ferramenta de grupos na Plataforma e bora continuar a jornada! 🚀💻</p>
+      <ul>
+        <li>🔓 <strong>Fase 2 liberada!</strong> Convoque seu grupo e continue a jornada!</li>
+        <li>🔓 <strong>Fase 3 liberada!</strong> Convoque seu grupo e continue a jornada!</li>
+        <li>🔓 <strong>Fase 4 liberada!</strong> Convoque seu grupo e continue a jornada!</li>
+        <li>🔓 <strong>Fase 5 liberada!</strong> Convoque seu grupo e continue a jornada!</li>
+      </ul>
+    </section>
+
+    <h2>🎯 Motivacional para a Fase Final (Fase 5)</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Reforçar a importância do progresso na reta final.</p>
+      <p>Parabéns por ter chegado até aqui! 🚀<br>
+      Você está na <strong>Fase 5 da jornada</strong> — isso significa que falta pouco pra concluir essa etapa incrível de aprendizado.<br><br>
+      Agora é hora de <strong>manter o foco</strong>, <strong>reunir seu grupo</strong> e dar o seu melhor! 💪<br>
+      Se pintar alguma dúvida, nossos tutores estão no <strong>Discord</strong> prontos pra te apoiar.<br>
+      <span class="highlight">Vamos juntos até o final!</span>
+      </p>
+    </section>
+
+    <h2>🗓️ Prova Presencial</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Notificar sobre o agendamento da prova presencial.</p>
+      <p>Atenção! O agendamento da <strong>prova presencial</strong> já está disponível na plataforma.<br>
+      Garanta sua vaga escolhendo o dia, local e horário que melhor se encaixa na sua rotina.<br>
+      🗓️ <strong>Agende o quanto antes!</strong><br>
+      Em caso de dúvidas, fale com um tutor no <strong>Discord</strong>.<br>
+      <span class="highlight">Boa sorte — estamos na torcida por você! 🍀</span></p>
+    </section>
+
+    <h2>⏰ Lembrete de Agendamento de Prova Presencial</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Reforçar a urgência do agendamento.</p>
+      <p>⏰ <strong>Lembrete de Agendamento – Prova Presencial</strong><br>
+      🚨 Este é o <strong>último mês</strong> para agendar sua prova presencial!<br>
+      Garanta sua vaga na plataforma o quanto antes!<br>
+      💬 Dúvidas? Fale com um tutor no <strong>Discord</strong>.<br>
+      <span class="highlight">Boa sorte — estamos torcendo por você! 🔥</span></p>
+    </section>
+
+    <h2>📩 Prova Substitutiva</h2>
+    <section>
+      <p><strong>Objetivo:</strong> Informar sobre a oportunidade de substituição.</p>
+      <p>💡 <strong>Não desanime – você tem uma nova chance!</strong><br>
+      Se você <strong>não alcançou a nota necessária</strong> no Tech Challenge, está tudo bem!<br>
+      Você poderá fazer uma <strong>prova substitutiva</strong> e seguir firme na jornada.<br><br>
+      📩 Para mais informações, entre em contato com nosso <strong>time de atendimento</strong>.<br>
+      <span class="highlight">Estamos aqui pra te apoiar. Você é capaz! 💪✨</span></p>
+    </section>
+  </main>
+
+  <script>
+    // Datas de início e final
+    const dataInicio = new Date('2023-05-01');
+    const dataFinal = new Date('2025-10-30');
+    const duracaoTotal = dataFinal - dataInicio;
+    
+    // Elementos do DOM
+    const diasElem = document.getElementById('dias');
+    const horasElem = document.getElementById('horas');
+    const minutosElem = document.getElementById('minutos');
+    const segundosElem = document.getElementById('segundos');
+    const barraProgresso = document.getElementById('barra-progresso');
+    const porcentagemElem = document.getElementById('porcentagem');
+    const diasTextoElem = document.getElementById('dias-texto');
+    const mensagemElem = document.getElementById('mensagem');
+    const particulasContainer = document.getElementById('particulas-container');
+    const pontaProgresso = document.getElementById('ponta-progresso');
+    
+    // Configuração do SVG do círculo de progresso
+    const raio = 90;
+    const circunferencia = 2 * Math.PI * raio;
+    barraProgresso.style.strokeDasharray = circunferencia;
+    barraProgresso.style.strokeDashoffset = circunferencia;
+    
+    // Mensagens motivacionais
+    const mensagens = [
+      "Sua jornada está avançando! Continue dedicado!",
+      "Cada dia é uma oportunidade para crescer!",
+      "Você está mais próximo do objetivo final!",
+      "Continue firme, o sucesso está chegando!",
+      "O conhecimento que você adquire hoje transformará seu futuro!",
+      "Persistência é o caminho para a excelência!",
+      "Você está construindo seu futuro a cada dia!"
+    ];
+    
+    // Função para atualizar o círculo de progresso
+    function setProgresso(porcentagem) {
+      const offset = circunferencia - (porcentagem / 100) * circunferencia;
+      barraProgresso.style.strokeDashoffset = offset;
+      
+      // Calcular a posição da ponta do progresso
+      const angulo = ((porcentagem / 100) * 360 - 90) * (Math.PI / 180);
+      const x = 110 + (raio * Math.cos(angulo));
+      const y = 110 + (raio * Math.sin(angulo));
+      
+      // Atualizar a posição da ponta de progresso
+      pontaProgresso.style.left = x + 'px';
+      pontaProgresso.style.top = y + 'px';
+      
+      // Criar rastros a cada atualização
+      criarRastro(x, y);
+      
+      // Criar partículas aleatoriamente
+      if (Math.random() > 0.7) {
+        criarParticula(x, y);
+      }
+    }
+    
+    // Função para criar um efeito de rastro
+    function criarRastro(x, y) {
+      const rastro = document.createElement('div');
+      rastro.className = 'rastro';
+      rastro.style.left = x + 'px';
+      rastro.style.top = y + 'px';
+      particulasContainer.appendChild(rastro);
+      
+      // Animar e remover o rastro
+      setTimeout(() => {
+        rastro.style.animation = 'rastro-animar 1s forwards';
+        setTimeout(() => {
+          particulasContainer.removeChild(rastro);
+        }, 1000);
+      }, 10);
+    }
+    
+    // Função para criar partículas
+    function criarParticula(x, y) {
+      const particula = document.createElement('div');
+      particula.className = 'particula';
+      
+      // Tamanho aleatório
+      const tamanho = Math.random() * 6 + 3;
+      particula.style.width = tamanho + 'px';
+      particula.style.height = tamanho + 'px';
+      
+      // Posição inicial
+      particula.style.left = x + 'px';
+      particula.style.top = y + 'px';
+      
+      // Direção aleatória
+      const angulo = Math.random() * 2 * Math.PI;
+      const distancia = Math.random() * 30 + 10;
+      const tx = Math.cos(angulo) * distancia;
+      const ty = Math.sin(angulo) * distancia;
+      
+      // Definir variáveis CSS personalizadas para a animação
+      particula.style.setProperty('--tx', tx + 'px');
+      particula.style.setProperty('--ty', ty + 'px');
+      
+      // Adicionar ao DOM
+      particulasContainer.appendChild(particula);
+      
+      // Iniciar animação após um pequeno delay
+      setTimeout(() => {
+        particula.style.animation = 'animar-particula 1.5s ease-out forwards';
+        
+        // Remover após a animação terminar
+        setTimeout(() => {
+          if (particulasContainer.contains(particula)) {
+            particulasContainer.removeChild(particula);
+          }
+        }, 1500);
+      }, 10);
+    }
+    
+    // Função principal para atualizar o contador
+    function atualizarContador() {
+      const agora = new Date();
+      const tempoRestante = dataFinal - agora;
+      
+      // Cálculo do tempo restante
+      const dias = Math.floor(tempoRestante / (1000 * 60 * 60 * 24));
+      const horas = Math.floor((tempoRestante % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutos = Math.floor((tempoRestante % (1000 * 60 * 60)) / (1000 * 60));
+      const segundos = Math.floor((tempoRestante % (1000 * 60)) / 1000);
+      
+      // Atualizar os elementos na interface
+      diasElem.textContent = dias < 10 ? '0' + dias : dias;
+      horasElem.textContent = horas < 10 ? '0' + horas : horas;
+      minutosElem.textContent = minutos < 10 ? '0' + minutos : minutos;
+      segundosElem.textContent = segundos < 10 ? '0' + segundos : segundos;
+      
+      // Calcular o progresso real
+      const tempoDecorrido = agora - dataInicio;
+      const porcentagemProgresso = Math.min(100, Math.floor((tempoDecorrido / duracaoTotal) * 100));
+      
+      // Atualizar a barra de progresso e texto
+      setProgresso(porcentagemProgresso);
+      porcentagemElem.textContent = porcentagemProgresso + '%';
+      diasTextoElem.textContent = dias + (dias === 1 ? ' dia restante' : ' dias restantes');
+      
+      // Definir cor com base na porcentagem de progresso
+      if (porcentagemProgresso > 75) {
+        barraProgresso.style.stroke = '#00d15b';
+        pontaProgresso.style.backgroundColor = '#00d15b';
+      } else if (porcentagemProgresso > 50) {
+        barraProgresso.style.stroke = '#5dd15b';
+        pontaProgresso.style.backgroundColor = '#5dd15b';
+      } else if (porcentagemProgresso > 25) {
+        barraProgresso.style.stroke = '#aad15b';
+        pontaProgresso.style.backgroundColor = '#aad15b';
+      } else {
+        barraProgresso.style.stroke = '#d1c15b';
+        pontaProgresso.style.backgroundColor = '#d1c15b';
+      }
+      
+      // Alternar mensagens aleatoriamente
+      if (segundos % 5 === 0) {
+        const indiceAleatorio = Math.floor(Math.random() * mensagens.length);
+        mensagemElem.textContent = mensagens[indiceAleatorio];
+      }
+    }
+    
+    // Iniciar o contador e atualizar a cada segundo
+    atualizarContador();
+    setInterval(atualizarContador, 1000);
+    
+    // Atualização mais frequente apenas para as partículas
+    // Isto dá a sensação de movimento contínuo
+    setInterval(() => {
+      const agora = new Date();
+      const tempoDecorrido = agora - dataInicio;
+      const porcentagemProgresso = Math.min(100, Math.floor((tempoDecorrido / duracaoTotal) * 100));
+      
+      // Calcular a posição da ponta do progresso
+      const angulo = ((porcentagemProgresso / 100) * 360 - 90) * (Math.PI / 180);
+      const x = 110 + (raio * Math.cos(angulo));
+      const y = 110 + (raio * Math.sin(angulo));
+      
+      if (Math.random() > 0.6) {
+        criarParticula(x, y);
+      }
+    }, 200);
+  </script>
+
+</body>
+</html>
+
+
+
+//deixar sem problemas, apenas algo vazio para nao poluir os dashboards
+//Treinar o fining tunnig para melhorar a análise
+//Ver com a juju sobre os hoteis na hora de importar os dados
+//Ver com a juju se tem que adicionar algum outro tipo de dashboard
+

@@ -1,0 +1,111 @@
+/* Este arquivo deve ser importado no app/layout.tsx */
+
+.dark .dark-card {
+  background-color: rgb(17, 24, 39); /* dark:bg-gray-900 */
+  border-color: rgb(31, 41, 55); /* dark:border-gray-800 */
+  border-width: 1px;
+}
+
+.dark .dark-chart {
+  background-color: rgb(17, 24, 39); /* dark:bg-gray-900 */
+  border-color: rgb(31, 41, 55); /* dark:border-gray-800 */
+  border-width: 1px;
+}
+
+.dark .recharts-cartesian-grid line,
+.dark .recharts-cartesian-axis line {
+  stroke: rgb(31, 41, 55); /* dark:border-gray-800 */
+}
+
+.dark .recharts-text {
+  fill: rgb(156, 163, 175); /* dark:text-gray-400 */
+}
+
+.dark-theme-bg {
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Estilo para as seções de análises - especialmente os cards de apartamentos */
+.dark .analysis-section h3 {
+  color: rgb(243, 244, 246); /* text-gray-100 */
+}
+
+.dark .apartment-card {
+  background-color: rgb(17, 24, 39); /* dark:bg-gray-900 */
+  border: 1px solid rgb(31, 41, 55); /* dark:border-gray-800 */
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  transition: all 0.2s;
+}
+
+.dark .apartment-card:hover {
+  border-color: rgb(55, 65, 81); /* dark:border-gray-700 */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Título do apartamento */
+.dark .apartment-card h4 {
+  color: rgb(243, 244, 246); /* text-gray-100 */
+  font-weight: 600;
+}
+
+/* Avaliação de estrelas */
+.dark .apartment-rating {
+  color: rgb(251, 191, 36); /* text-yellow-400 */
+  font-weight: 600;
+}
+
+/* Contagem de feedbacks */
+.dark .apartment-stats {
+  color: rgb(209, 213, 219); /* text-gray-300 */
+}
+
+/* Nome do hotel */
+.dark .apartment-hotel {
+  color: rgb(156, 163, 175); /* text-gray-400 */
+  font-size: 0.875rem;
+}
+
+/* Problemas específicos */
+.dark .apartment-problem {
+  background: rgba(220, 38, 38, 0.2); /* dark:bg-red-800/20 */
+  border: 1px solid rgba(220, 38, 38, 0.3); /* dark:border-red-800/30 */
+  color: rgb(248, 180, 180); /* dark:text-red-300 */
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dark .apartment-problem-secondary {
+  background: rgba(245, 158, 11, 0.2); /* dark:bg-amber-800/20 */
+  border: 1px solid rgba(245, 158, 11, 0.3); /* dark:border-amber-800/30 */
+  color: rgb(253, 230, 138); /* dark:text-amber-300 */
+}
+
+.dark .apartment-problem-tertiary {
+  background: rgba(59, 130, 246, 0.2); /* dark:bg-blue-800/20 */
+  border: 1px solid rgba(59, 130, 246, 0.3); /* dark:border-blue-800/30 */
+  color: rgb(191, 219, 254); /* dark:text-blue-300 */
+}
+
+.dark .sem-problemas {
+  background: rgba(5, 150, 105, 0.2); /* dark:bg-emerald-800/20 */
+  border: 1px solid rgba(5, 150, 105, 0.3); /* dark:border-emerald-800/30 */
+  color: rgb(110, 231, 183); /* dark:text-emerald-300 */
+}
+
+/* Botão de ação nos cards */
+.dark .apartment-action {
+  background-color: rgb(31, 41, 55); /* dark:bg-gray-800 */
+  color: rgb(209, 213, 219); /* dark:text-gray-300 */
+  border: 1px solid rgb(55, 65, 81); /* dark:border-gray-700 */
+  transition: all 0.2s;
+}
+
+.dark .apartment-action:hover {
+  background-color: rgb(55, 65, 81); /* dark:bg-gray-700 */
+  color: rgb(243, 244, 246); /* dark:text-gray-100 */
+} 
