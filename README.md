@@ -16,7 +16,7 @@ Uma plataforma inteligente que transforma comentários dispersos em inteligênci
 
 <p style="line-height: 1.7; font-size: 1.05rem; color: #374151;">
 
-O sistema permite que hotéis importem feedbacks de múltiplas fontes, como Booking.com, TripAdvisor ou formulários internos, oferecendo análises automatizadas avançadas. A IA processa os dados e classifica os comentários por setor como Alimentos & Bebidas, Governança, Manutenção, Lazer, TI e Operações além de detectar problemas específicos como “Wi-Fi instável”, “limpeza inadequada” ou “preço elevado”. Comentários são classificados com ratings contextuais de 1 a 5 estrelas, tudo isso sem intervenção manual.
+O sistema permite que hotéis importem feedbacks de múltiplas fontes, como Booking.com, TripAdvisor ou formulários internos, oferecendo análises automatizadas avançadas. A IA processa os dados e classifica os comentários por setor como Alimentos & Bebidas, Governança, Manutenção, Lazer, TI e Operações além de detectar problemas específicos como "Wi-Fi instável", "limpeza inadequada" ou "preço elevado". Comentários são classificados com ratings contextuais de 1 a 5 estrelas, tudo isso sem intervenção manual.
 
 A importação de dados é flexível, suportando arquivos CSV e XLSX, com leitura automática dos hotéis contidos nos arquivos e opções para renomear ou manter os nomes originais. O sistema é otimizado para o processamento em massa, sendo ideal para redes hoteleiras que recebem grandes volumes de feedbacks diariamente.
 
@@ -67,5 +67,29 @@ Para redes hoteleiras, a visão consolidada permite benchmarking entre proprieda
 <div align="center">
   <img src="https://media.giphy.com/media/xT9IgzoKnwFNmISR8I/giphy.gif" alt="Hotel Insight Demo" width="500"/>
 </div>
+
+---
+
+## Menu Lateral Responsivo
+
+O sistema possui um menu lateral que se adapta automaticamente ao conteúdo:
+
+### Funcionalidades
+- **Menu Expansível**: O menu pode ser recolhido/expandido clicando no botão de seta
+- **Transição Suave**: Quando o menu abre/fecha, o conteúdo principal se ajusta automaticamente
+- **Responsivo**: Em dispositivos móveis, o menu se torna um overlay
+- **Persistência**: O estado do menu é salvo no localStorage
+
+### Como Funciona
+1. Quando o menu é recolhido, a tela principal se expande para aproveitar o espaço
+2. Quando o menu é expandido, a tela principal diminui para dar espaço ao menu
+3. Todas as transições são suaves com duração de 300ms
+4. O estado é sincronizado entre componentes usando eventos customizados
+
+### Implementação Técnica
+- Usa variáveis CSS (`--sidebar-width`) para controlar a largura dinamicamente
+- Eventos customizados para sincronização entre componentes
+- Transições CSS com `ease-in-out` para suavidade
+- Sistema de fallback para garantir compatibilidade
 
 ---

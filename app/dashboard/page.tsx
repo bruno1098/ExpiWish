@@ -6,14 +6,14 @@ import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { useRouter } from 'next/navigation';
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { RequireAuth } from "@/lib/auth-context";
 import SharedDashboardLayout from "../shared-layout";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend, RadarChart, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis, Radar, AreaChart, Area, LabelList,
-  Sector
+  Sector, ScatterChart, Scatter, ZAxis
 } from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Feedback } from "@/types";
+import { Star } from "lucide-react";
 
 // Definir a interface AnalysisData
 interface AnalysisData {
@@ -66,6 +67,24 @@ interface CustomTooltipProps {
   label?: string;
   [key: string]: any;
 }
+
+// Componente de tooltip customizado para os gráficos
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-background/95 backdrop-blur-sm shadow-lg p-3 rounded-md border border-border">
+        {label && <p className="font-medium text-foreground mb-1">{label}</p>}
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-sm text-muted-foreground">
+            <span style={{ color: entry.color }}>{entry.name}: </span>
+            {entry.value}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
 function DashboardContent() {
   const { userData } = useAuth();
@@ -218,6 +237,8 @@ function DashboardContent() {
           return (feedback.language || '').trim().toLowerCase() === value.trim().toLowerCase();
         case 'sentiment':
           return (feedback.sentiment || '').trim().toLowerCase() === value.trim().toLowerCase();
+        case 'apartamento':
+          return String(feedback.apartamento) === value.replace('Apto ', '');
         default:
           return false;
       }
@@ -337,6 +358,112 @@ function DashboardContent() {
       .sort((a, b) => b.value - a.value);
   };
 
+  // Função para processar dados de apartamentos
+  const processApartamentoDistribution = () => {
+    if (!analysisData?.data) return [];
+    
+    const apartamentoMap = new Map<string, number>();
+    
+    analysisData.data.forEach((feedback: any) => {
+      if (feedback.apartamento !== null && feedback.apartamento !== undefined) {
+        const apartamentoStr = String(feedback.apartamento);
+        if (apartamentoStr.trim() !== '') {
+          apartamentoMap.set(apartamentoStr, (apartamentoMap.get(apartamentoStr) || 0) + 1);
+        }
+      }
+    });
+    
+    return Array.from(apartamentoMap.entries())
+      .map(([apartamento, count]) => ({ label: `Apto ${apartamento}`, value: count }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+  };
+
+  // Função para processar detalhes dos apartamentos
+  const processApartamentoDetails = () => {
+    if (!analysisData?.data) return [];
+
+    const apartamentoMap = new Map<string, {
+      count: number;
+      totalRating: number;
+      positiveCount: number;
+      problems: Map<string, number>;
+      ratings: number[];
+    }>();
+
+    analysisData.data.forEach((feedback: any) => {
+      if (feedback.apartamento !== null && feedback.apartamento !== undefined) {
+        const apartamentoStr = String(feedback.apartamento);
+        if (apartamentoStr.trim() === '') return;
+
+        if (!apartamentoMap.has(apartamentoStr)) {
+          apartamentoMap.set(apartamentoStr, {
+            count: 0,
+            totalRating: 0,
+            positiveCount: 0,
+            problems: new Map(),
+            ratings: [0, 0, 0, 0, 0]
+          });
+        }
+
+        const apartamentoStat = apartamentoMap.get(apartamentoStr)!;
+        apartamentoStat.count++;
+
+        if (feedback.rating) {
+          apartamentoStat.totalRating += feedback.rating;
+          if (feedback.rating >= 1 && feedback.rating <= 5) {
+            apartamentoStat.ratings[Math.floor(feedback.rating) - 1]++;
+          }
+        }
+
+        if (feedback.sentiment === 'positive') {
+          apartamentoStat.positiveCount++;
+        }
+
+        if (feedback.problem) {
+          const problems: string[] = feedback.problem.split(';')
+            .map((p: string) => p.trim())
+            .filter((p: string) => p);
+          
+          problems.forEach((problem: string) => {
+            apartamentoStat.problems.set(problem, (apartamentoStat.problems.get(problem) || 0) + 1);
+          });
+        }
+      }
+    });
+
+    return Array.from(apartamentoMap.entries()).map(([apartamento, stat]) => {
+      const averageRating = stat.count > 0 ? (stat.totalRating / stat.count) : 0;
+      const sentiment = stat.count > 0 ? Math.round((stat.positiveCount / stat.count) * 100) : 0;
+
+      const topProblems = Array.from(stat.problems.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([problem, count]) => ({ problem, count }));
+
+      return {
+        apartamento,
+        count: stat.count,
+        averageRating,
+        sentiment,
+        topProblems,
+        ratingDistribution: stat.ratings
+      };
+    }).sort((a, b) => b.count - a.count);
+  };
+
+  // Função para processar dados do scatter chart
+  const processApartamentoScatterData = () => {
+    const details = processApartamentoDetails();
+    return details.map(detail => ({
+      apartamento: detail.apartamento,
+      count: detail.count,
+      averageRating: detail.averageRating,
+      sentiment: detail.sentiment,
+      topProblems: detail.topProblems
+    }));
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -378,20 +505,28 @@ function DashboardContent() {
       </div>
       
       {/* Cards de Resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 transition-all duration-300">
+        <Card className="p-4 hover:shadow-md transition-shadow">
           <h3 className="text-sm font-medium text-muted-foreground">Total de Feedbacks</h3>
           <p className="text-2xl font-bold">{analysisData.analysis.totalFeedbacks}</p>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 hover:shadow-md transition-shadow">
           <h3 className="text-sm font-medium text-muted-foreground">Avaliação Média</h3>
-          <p className="text-2xl font-bold">{analysisData.analysis.averageRating.toFixed(1)} ⭐</p>
+          <p className="text-2xl font-bold">
+            <span className={
+              analysisData.analysis.averageRating >= 4 ? 'text-green-600 dark:text-green-400 font-bold' : 
+              analysisData.analysis.averageRating >= 3 ? 'text-yellow-600 dark:text-yellow-400 font-bold' : 
+              'text-red-600 dark:text-red-400 font-bold'
+            }>
+              {analysisData.analysis.averageRating.toFixed(1)} ⭐
+            </span>
+          </p>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 hover:shadow-md transition-shadow">
           <h3 className="text-sm font-medium text-muted-foreground">Sentimento Positivo</h3>
           <p className="text-2xl font-bold">{analysisData.analysis.positiveSentiment}%</p>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 hover:shadow-md transition-shadow">
           <h3 className="text-sm font-medium text-muted-foreground">Taxa de Resposta</h3>
           <p className="text-2xl font-bold">{analysisData.analysis.responseRate}%</p>
         </Card>
@@ -404,13 +539,14 @@ function DashboardContent() {
           <TabsTrigger value="problems">Problemas</TabsTrigger>
           <TabsTrigger value="sources">Fontes</TabsTrigger>
           <TabsTrigger value="languages">Fontes do Comentário</TabsTrigger>
+          <TabsTrigger value="apartamentos">Apartamentos</TabsTrigger>
         </TabsList>
 
         {/* Visão Geral */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 transition-all duration-300">
             {/* Distribuição de Avaliações */}
-            <Card className="p-4">
+            <Card className="p-4 hover:shadow-md transition-shadow">
               <h3 className="text-lg font-semibold mb-4">Distribuição de Avaliações</h3>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -433,7 +569,7 @@ function DashboardContent() {
             </Card>
 
             {/* Distribuição de Sentimentos */}
-            <Card className="p-4">
+            <Card className="p-4 hover:shadow-md transition-shadow">
               <h3 className="text-lg font-semibold mb-4">Distribuição de Sentimentos</h3>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -556,6 +692,205 @@ function DashboardContent() {
             </div>
           </Card>
         </TabsContent>
+
+        {/* Apartamentos */}
+        <TabsContent value="apartamentos" className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 transition-all duration-300">
+            {/* Distribuição por apartamento */}
+            <Card className="p-4 hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold mb-4">Distribuição por Apartamentos</h3>
+              <div className="h-[400px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={processApartamentoDistribution().slice(0, 15)}
+                    layout="vertical"
+                    margin={{ top: 10, right: 30, left: 60, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" />
+                    <YAxis 
+                      dataKey="label" 
+                      type="category" 
+                      width={60} 
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar
+                      name="Quantidade de Feedbacks"
+                      dataKey="value"
+                      fill="#8884d8"
+                      onClick={(_, index) => {
+                        const item = processApartamentoDistribution()[index];
+                        handleChartClick({ name: item.label.replace('Apto ', '') }, 'apartamento');
+                      }}
+                    >
+                      {processApartamentoDistribution().slice(0, 15).map(
+                        (entry: { label: string; value: number }, index: number) => (
+                          <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                        )
+                      )}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            {/* Mapa de calor de avaliações */}
+            <Card className="p-4 hover:shadow-md transition-shadow">
+              <h3 className="text-lg font-semibold mb-4">Avaliação vs Sentimento por Apartamento</h3>
+              <div className="h-[400px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart
+                    margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      type="number" 
+                      dataKey="count" 
+                      name="Quantidade" 
+                      domain={['dataMin', 'dataMax']}
+                      label={{ value: 'Quantidade de Feedbacks', position: 'bottom', offset: 0 }}
+                    />
+                    <YAxis 
+                      type="number" 
+                      dataKey="averageRating" 
+                      name="Avaliação" 
+                      domain={[0, 5]} 
+                      label={{ value: 'Avaliação Média', angle: -90, position: 'insideLeft' }}
+                    />
+                    <ZAxis 
+                      type="number" 
+                      dataKey="sentiment" 
+                      range={[50, 400]} 
+                      name="Sentimento Positivo"
+                    />
+                    <Tooltip 
+                      cursor={{ strokeDasharray: '3 3' }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-background/95 backdrop-blur-sm shadow-lg p-3 rounded-md border border-border">
+                              <p className="font-bold text-foreground">Apartamento {data.apartamento}</p>
+                              <p className="text-sm text-muted-foreground">Feedbacks: {data.count}</p>
+                              <p className="text-sm text-muted-foreground">Avaliação: {data.averageRating.toFixed(1)} ★</p>
+                              <p className="text-sm text-muted-foreground">Sentimento: {data.sentiment}%</p>
+                              {data.topProblems && data.topProblems.length > 0 && (
+                                <p className="text-sm text-muted-foreground">Problema principal: {data.topProblems[0].problem}</p>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Scatter 
+                      name="Apartamentos" 
+                      data={processApartamentoScatterData()} 
+                      fill="#8884d8"
+                      onClick={(data) => handleChartClick({name: data.apartamento}, 'apartamento')}
+                    >
+                      {processApartamentoScatterData().map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.averageRating >= 4 ? '#4CAF50' : entry.averageRating >= 3 ? '#FFC107' : '#F44336'}
+                        />
+                      ))}
+                    </Scatter>
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center mt-2 space-x-4 text-xs">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-[#4CAF50] rounded-full mr-1"></div>
+                  <span>Avaliação Excelente (4+ estrelas)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-[#FFC107] rounded-full mr-1"></div>
+                  <span>Avaliação Boa (3+ estrelas)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-[#F44336] rounded-full mr-1"></div>
+                  <span>Avaliação Baixa (&lt;3 estrelas)</span>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Tabela detalhada de apartamentos */}
+          <Card className="p-4">
+            <h3 className="text-lg font-semibold mb-4">Análise Detalhada por Apartamento</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="py-2 px-3 bg-muted border-b text-left">Apartamento</th>
+                    <th className="py-2 px-3 bg-muted border-b text-center">Feedbacks</th>
+                    <th className="py-2 px-3 bg-muted border-b text-center">Avaliação</th>
+                    <th className="py-2 px-3 bg-muted border-b text-center">Sentimento</th>
+                    <th className="py-2 px-3 bg-muted border-b text-left">Problemas Principais</th>
+                    <th className="py-2 px-3 bg-muted border-b text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processApartamentoDetails().slice(0, 20).map((ap, index) => (
+                    <tr key={index} className={index % 2 === 0 ? "bg-muted/20" : ""}>
+                      <td className="py-2 px-3 border-b font-medium">
+                        {ap.apartamento}
+                      </td>
+                      <td className="py-2 px-3 border-b text-center">
+                        {ap.count}
+                      </td>
+                      <td className="py-2 px-3 border-b text-center">
+                        <div className="flex items-center justify-center">
+                          <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                          <span className={
+                            ap.averageRating >= 4 ? 'text-green-600 dark:text-green-400 font-bold' : 
+                            ap.averageRating >= 3 ? 'text-yellow-600 dark:text-yellow-400 font-bold' : 
+                            'text-red-600 dark:text-red-400 font-bold'
+                          }>
+                            {ap.averageRating.toFixed(1)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3 border-b text-center">
+                        <div className="flex justify-center">
+                          <Badge variant={ap.sentiment >= 70 ? "default" : ap.sentiment >= 50 ? "outline" : "destructive"}>
+                            {ap.sentiment}%
+                          </Badge>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3 border-b">
+                        <div className="flex flex-wrap gap-1">
+                          {ap.topProblems.map((problem, idx) => (
+                            <Badge key={idx} variant="outline" className={
+                              idx === 0 ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-300 dark:border-red-800" : 
+                              idx === 1 ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-800" : 
+                              "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-800"
+                            }>
+                              {problem.problem} ({problem.count})
+                            </Badge>
+                          ))}
+                          {ap.topProblems.length === 0 && (
+                            <span className="text-green-600 dark:text-green-400 text-sm">Sem problemas registrados</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 px-3 border-b text-center">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleChartClick({name: ap.apartamento}, 'apartamento')}
+                        >
+                          Ver Feedbacks
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Feedbacks Recentes */}
@@ -578,7 +913,7 @@ function DashboardContent() {
                 <p className="text-sm">{feedback.comment}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {feedback.keyword.split(';').map((keyword: string, idx: number) => (
-                    <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                    <span key={idx} className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 rounded-full text-xs">
                       {keyword.trim()}
                     </span>
                   ))}
@@ -613,7 +948,7 @@ function DashboardContent() {
                 <p className="text-sm">{feedback.comment}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {feedback.keyword.split(';').map((keyword: string, idx: number) => (
-                    <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                    <span key={idx} className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 rounded-full text-xs">
                       {keyword.trim()}
                     </span>
                   ))}
@@ -623,9 +958,13 @@ function DashboardContent() {
                     <p className="text-sm font-medium">Problemas identificados:</p>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {feedback.problem.split(';').map((problem: string, idx: number) => (
-                        <span key={idx} className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">
+                        <Badge key={idx} variant="outline" className={
+                          idx === 0 ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-200 dark:border-red-800" : 
+                          idx === 1 ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-200 dark:border-yellow-800" : 
+                          "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-800"
+                        }>
                           {problem.trim()}
-                        </span>
+                        </Badge>
                       ))}
                     </div>
                   </div>

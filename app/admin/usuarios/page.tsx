@@ -171,52 +171,69 @@ function UserManagementContent() {
     }
 
     // Registrar o usuário
-    (async () => {
-      try {
-        // Usar o email original fornecido pelo usuário 
-        await registerUser(
-          newUserEmail,  
-          newUserPassword, 
-          newUserHotelId, 
-          selectedHotel.name,
-          newUserName,
-          'admin'  // Criando como admin para evitar problemas
-        );
-        
+    try {
+      setIsLoading(true);
+      
+      // Usar o email original fornecido pelo usuário 
+      const result = await registerUser(
+        newUserEmail,  
+        newUserPassword, 
+        newUserHotelId, 
+        selectedHotel.name,
+        newUserName,
+        newUserRole
+      );
+      
+      // Mostrar mensagem de sucesso com informações de acesso
+      toast({
+        title: "✅ Usuário criado com sucesso!",
+        description: (
+          <div className="space-y-2">
+            <p><strong>Nome:</strong> {newUserName || 'Não informado'}</p>
+            <p><strong>Email:</strong> {newUserEmail}</p>
+            <p><strong>Senha:</strong> {newUserPassword}</p>
+            <p><strong>Hotel:</strong> {selectedHotel.name}</p>
+            <p><strong>Função:</strong> {newUserRole === 'admin' ? 'Administrador' : 'Colaborador'}</p>
+          </div>
+        ),
+        duration: 10000, // 10 segundos para dar tempo de ler
+      });
+      
+      // Fechar o diálogo 
+      setOpenDialog(false);
+      
+      // Limpar o formulário
+      setNewUserName("");
+      setNewUserEmail("");
+      setNewUserPassword("");
+      setNewUserConfirmPassword("");
+      setNewUserHotelId("");
+      setNewUserRole('staff');
+      
+      // Recarregar a lista de usuários
+      const usersData = await getAllUsers();
+      setUsers(usersData);
+      
+    } catch (error: any) {
+      console.error("Erro ao criar usuário:", error);
+      
+      // Tratamento específico para email já em uso
+      if (error.message && error.message.includes("auth/email-already-in-use")) {
         toast({
-          title: "Usuário criado com sucesso",
-          description: `O usuário ${newUserName || newUserEmail} foi criado.`
+          title: "Email já cadastrado",
+          description: "Este email já está em uso por outro usuário. Por favor, use um email diferente.",
+          variant: "destructive"
         });
-        
-        // Fechar o diálogo 
-        setOpenDialog(false);
-        
-        // Limpar o formulário
-        setNewUserName("");
-        setNewUserEmail("");
-        setNewUserPassword("");
-        setNewUserConfirmPassword("");
-        setNewUserHotelId("");
-        setNewUserRole('staff');
-      } catch (error: any) {
-        console.error("Erro ao criar usuário:", error);
-        
-        // Tratamento específico para email já em uso
-        if (error.message && error.message.includes("auth/email-already-in-use")) {
-          toast({
-            title: "Email já cadastrado",
-            description: "Este email já está em uso por outro usuário. Por favor, use um email diferente.",
-            variant: "destructive"
-          });
-        } else {
-          toast({
-            title: "Erro ao criar usuário",
-            description: error.message || "Falha ao criar usuário.",
-            variant: "destructive"
-          });
-        }
+      } else {
+        toast({
+          title: "Erro ao criar usuário",
+          description: error.message || "Falha ao criar usuário.",
+          variant: "destructive"
+        });
       }
-    })();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChangeRole = async (userId: string, newRole: 'admin' | 'staff') => {
@@ -245,9 +262,9 @@ function UserManagementContent() {
   };
 
   const getRoleName = (role: string) => {
-    switch(role) {
+    switch (role) {
       case 'admin': return 'Administrador';
-      case 'staff': return 'Funcionário';
+      case 'staff': return 'Colaborador';
       default: return role;
     }
   };
@@ -344,16 +361,13 @@ function UserManagementContent() {
               
               <div className="space-y-2">
                 <Label htmlFor="role">Função</Label>
-                <Select
-                  value={newUserRole}
-                  onValueChange={(value: any) => setNewUserRole(value)}
-                >
+                <Select value={newUserRole} onValueChange={(value: 'admin' | 'staff') => setNewUserRole(value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma função" />
+                    <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administrador</SelectItem>
-                    <SelectItem value="staff">Funcionário</SelectItem>
+                    <SelectItem value="staff">Colaborador</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -411,12 +425,21 @@ function UserManagementContent() {
                           newUserHotelId, 
                           selectedHotel.name,
                           newUserName,
-                          'admin'  // Criando como admin para evitar problemas
+                          newUserRole
                         );
                         
                         toast({
-                          title: "Usuário criado com sucesso",
-                          description: `O usuário ${newUserName || newUserEmail} foi criado.`
+                          title: "✅ Usuário criado com sucesso!",
+                          description: (
+                            <div className="space-y-2">
+                              <p><strong>Nome:</strong> {newUserName || 'Não informado'}</p>
+                              <p><strong>Email:</strong> {newUserEmail}</p>
+                              <p><strong>Senha:</strong> {newUserPassword}</p>
+                              <p><strong>Hotel:</strong> {selectedHotel.name}</p>
+                              <p><strong>Função:</strong> {newUserRole === 'admin' ? 'Administrador' : 'Colaborador'}</p>
+                            </div>
+                          ),
+                          duration: 10000, // 10 segundos para dar tempo de ler
                         });
                         
                         // Fechar o diálogo 
@@ -429,6 +452,10 @@ function UserManagementContent() {
                         setNewUserConfirmPassword("");
                         setNewUserHotelId("");
                         setNewUserRole('staff');
+                        
+                        // Recarregar a lista de usuários
+                        const usersData = await getAllUsers();
+                        setUsers(usersData);
                       } catch (error: any) {
                         console.error("Erro ao criar usuário:", error);
                         
@@ -499,7 +526,7 @@ function UserManagementContent() {
                           onClick={() => handleChangeRole(user.uid, 'staff')}
                           disabled={user.role === 'staff'}
                         >
-                          Tornar Funcionário
+                          Tornar Colaborador
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

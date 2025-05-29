@@ -6,7 +6,8 @@
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
-  --sidebar-width: 288px; /* 72 pixels */
+  --sidebar-width: 288px;
+  --sidebar-collapsed-width: 80px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -108,8 +109,54 @@
   animation: gradient 3s linear infinite;
 }
 
-[data-sidebar-collapsed="true"] {
-  --sidebar-width: 80px; /* 20 pixels */
+/* Classes para responsividade da sidebar */
+.sidebar-expanded {
+  --sidebar-width: 288px;
+}
+
+.sidebar-collapsed {
+  --sidebar-width: 80px;
+}
+
+/* Transições suaves para o conteúdo principal */
+.main-content {
+  margin-left: var(--sidebar-width);
+  transition: margin-left 0.3s ease-in-out;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+  }
+}
+
+/* Melhorias para o layout responsivo */
+.dashboard-container {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  transition: all 0.3s ease-in-out;
+}
+
+@media (min-width: 640px) {
+  .dashboard-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-container {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .dashboard-container {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 /* Estilos para o modo escuro - semelhante à tela de login */

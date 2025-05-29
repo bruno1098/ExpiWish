@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
+import { Toaster as SonnerToaster } from 'sonner';
 import { AuthProvider } from '@/lib/auth-context';
 import './dark-theme.css'
 
@@ -21,17 +22,24 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-        <AuthProvider>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-                {children}
-          <Toaster />
+          <AuthProvider>
+            {children}
+            <SonnerToaster 
+              position="top-right" 
+              richColors 
+              theme="system"
+              expand={true}
+              duration={4000}
+              closeButton
+            />
+          </AuthProvider>
         </ThemeProvider>
-        </AuthProvider>
       </body>
     </html>
   );

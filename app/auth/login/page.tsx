@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser, getCurrentUserData } from "@/lib/auth-service";
+import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { Lock, User, ShieldCheck, Building2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -16,7 +17,29 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-  const { toast } = useToast();
+  const { isAuthenticated, userData, loading: authLoading } = useAuth();
+
+  // Redirecionar se já estiver logado
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && userData) {
+      const redirectPath = userData.role === 'admin' ? '/admin' : '/dashboard';
+      router.replace(redirectPath);
+    }
+  }, [isAuthenticated, userData, authLoading, router]);
+
+  // Mostrar loading enquanto verifica autenticação
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Não renderizar a página de login se usuário já estiver logado
+  if (isAuthenticated) {
+    return null;
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,10 +54,7 @@ export default function LoginPage() {
       // Obter dados do usuário para verificar função
       const userData = await getCurrentUserData();
 
-      toast({
-        title: "Login realizado com sucesso",
-        description: "Você foi autenticado com sucesso."
-      });
+      toast.success("Login realizado com sucesso");
 
       // Redirecionar com base na função do usuário
       setTimeout(() => {
@@ -47,11 +67,7 @@ export default function LoginPage() {
     } catch (error: any) {
       console.error("Erro ao fazer login:", error);
       setError(error.message || "Falha ao fazer login. Verifique suas credenciais.");
-      toast({
-        title: "Erro ao fazer login",
-        description: error.message || "Falha ao fazer login. Verifique suas credenciais.",
-        variant: "destructive"
-      });
+      toast.error(error.message || "Falha ao fazer login. Verifique suas credenciais.");
     } finally {
       setLoading(false);
     }

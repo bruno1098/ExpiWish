@@ -111,7 +111,25 @@ interface ApartamentoDetail {
 }
 
 // Cores para gráficos
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7300'];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+// Componente de tooltip customizado para os gráficos
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-background/95 backdrop-blur-sm shadow-lg p-3 rounded-md border border-border">
+        {label && <p className="font-medium text-foreground mb-1">{label}</p>}
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-sm text-muted-foreground">
+            <span style={{ color: entry.color }}>{entry.name}: </span>
+            {entry.value}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
 // Componente principal
 function AdminDashboardContent() {
@@ -807,7 +825,7 @@ function AdminDashboardContent() {
   // Effect para carregar dados
   useEffect(() => {
     fetchData();
-  }, [selectedHotel, dateRange]);
+  }, [dateRange]); // Removido selectedHotel daqui
 
   // Calcular totais
   const totalFeedbacks = analysisData?.data.length || 0;
@@ -1006,7 +1024,7 @@ function AdminDashboardContent() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="label" />
                       <YAxis />
-                      <RechartsTooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                       <Bar
                         dataKey="value"
                         name="Quantidade"
@@ -1036,7 +1054,7 @@ function AdminDashboardContent() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis type="number" />
                       <YAxis dataKey="label" type="category" width={90} />
-                      <RechartsTooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                       <Bar 
                         dataKey="value" 
                         name="Quantidade" 
@@ -1075,7 +1093,7 @@ function AdminDashboardContent() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <RechartsTooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -1157,7 +1175,7 @@ function AdminDashboardContent() {
                     <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
                     <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" domain={[0, 5]} />
                     <YAxis yAxisId="sentiment" orientation="right" stroke="#ff7300" hide />
-                    <RechartsTooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Legend />
                     <Bar yAxisId="left" dataKey="feedbacks" name="Total de Feedbacks" fill="#8884d8" onClick={(data) => handleChartClick({label: data.name}, 'hotel')} />
                     <Line yAxisId="right" type="monotone" dataKey="rating" name="Avaliação Média" stroke="#82ca9d" />
@@ -1358,7 +1376,7 @@ function AdminDashboardContent() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis type="number" />
                       <YAxis dataKey="label" type="category" width={110} />
-                      <RechartsTooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                       <Bar 
                         dataKey="value" 
                         name="Quantidade" 
@@ -1394,7 +1412,7 @@ function AdminDashboardContent() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <RechartsTooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                       <Legend
                         formatter={(value, entry, index) => {
                           return value.length > 20 ? value.substring(0, 20) + '...' : value;
@@ -1513,7 +1531,7 @@ function AdminDashboardContent() {
                         ))}
                       </Pie>
                       <Legend />
-                      <RechartsTooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -1536,7 +1554,7 @@ function AdminDashboardContent() {
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis domain={[0, 5]} />
-                      <RechartsTooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                       <Bar dataKey="rating" name="Avaliação Média" fill="#8884d8" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -1565,7 +1583,7 @@ function AdminDashboardContent() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
-                    <RechartsTooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Legend />
                     <Area type="monotone" dataKey="Google" stackId="1" stroke="#8884d8" fill="#8884d8" />
                     <Area type="monotone" dataKey="TripAdvisor" stackId="1" stroke="#82ca9d" fill="#82ca9d" />
@@ -1606,7 +1624,7 @@ function AdminDashboardContent() {
                           type="category" 
                           width={60} 
                         />
-                        <RechartsTooltip />
+                        <RechartsTooltip content={<CustomTooltip />} />
                         <Bar
                           name="Quantidade de Feedbacks"
                           dataKey="value"

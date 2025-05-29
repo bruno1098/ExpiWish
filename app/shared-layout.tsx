@@ -19,6 +19,7 @@ export default function SharedDashboardLayout({
   const [showMobileSidebar, setShowMobileSidebar] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   
   // Detectar tema escuro e evitar problemas de hidratação
   useEffect(() => {
@@ -30,6 +31,10 @@ export default function SharedDashboardLayout({
       document.documentElement.classList.contains('dark');
     
     setIsDarkMode(isDark)
+
+    // Verificar estado inicial da sidebar
+    const storedState = localStorage.getItem('sidebarCollapsed')
+    setSidebarCollapsed(storedState === 'true')
     
     // Ouvir mudanças no tema
     const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -46,12 +51,47 @@ export default function SharedDashboardLayout({
     });
     
     observer.observe(document.documentElement, { attributes: true });
+
+    // Ouvir mudanças no localStorage da sidebar
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'sidebarCollapsed' && e.newValue !== null) {
+        setSidebarCollapsed(e.newValue === 'true')
+      }
+    }
+
+    // Ouvir evento customizado da sidebar
+    const handleSidebarToggle = (e: CustomEvent) => {
+      setSidebarCollapsed(e.detail.collapsed)
+    }
+
+    // Função para verificar mudanças no localStorage
+    const checkSidebarState = () => {
+      const newState = localStorage.getItem('sidebarCollapsed')
+      setSidebarCollapsed(newState === 'true')
+    }
+
+    // Verificar mudanças a cada 100ms (para capturar atualizações rápidas)
+    const interval = setInterval(checkSidebarState, 100)
+
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('sidebarToggle', handleSidebarToggle as EventListener)
     
     return () => {
       darkModeMediaQuery.removeEventListener('change', darkModeChangeHandler);
       observer.disconnect();
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('sidebarToggle', handleSidebarToggle as EventListener)
+      clearInterval(interval)
     };
   }, []);
+
+  // Aplicar variável CSS baseada no estado da sidebar
+  useEffect(() => {
+    if (isMounted) {
+      const sidebarWidth = sidebarCollapsed ? '80px' : '288px'
+      document.documentElement.style.setProperty('--sidebar-width', sidebarWidth)
+    }
+  }, [sidebarCollapsed, isMounted])
 
   // Conteúdo principal que vai dentro ou fora do layout escuro
   const MainContent = () => (
@@ -78,7 +118,7 @@ export default function SharedDashboardLayout({
           </div>
         )}
         
-        <main className="md:pl-[var(--sidebar-width,288px)] transition-all duration-300">
+        <main className="md:ml-[var(--sidebar-width,288px)] transition-all duration-300 ease-in-out">
           {/* Banner do ambiente de teste */}
           {isMounted && <TestEnvironmentBanner />}
           
@@ -95,7 +135,7 @@ export default function SharedDashboardLayout({
             )}
           </Header>
         
-        <div className="p-4 md:p-6">
+        <div className="p-4 md:p-6 transition-all duration-300 ease-in-out">
           {children}
         </div>
         </main>

@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth-context"
 import { Button } from "./ui/button"
 import { logoutUser } from "@/lib/auth-service"
 import { useRouter } from "next/navigation"
-import { useToast } from "./ui/use-toast"
+import { toast } from "sonner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,21 +21,17 @@ import { ReactNode } from "react"
 export default function Header({ children }: { children?: ReactNode }) {
   const { userData } = useAuth()
   const router = useRouter()
-  const { toast } = useToast()
 
   const handleLogout = async () => {
     try {
       await logoutUser()
-      toast({
-        title: "Logout realizado",
+      toast.success("Logout realizado", {
         description: "Você foi desconectado com sucesso."
       })
       router.push("/auth/login")
     } catch (error: any) {
-      toast({
-        title: "Erro ao sair",
-        description: error.message || "Ocorreu um erro ao fazer logout",
-        variant: "destructive"
+      toast.error("Erro ao sair", {
+        description: error.message || "Ocorreu um erro ao fazer logout"
       })
     }
   }

@@ -41,11 +41,14 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// Importação dinâmica do componente principal com loading
-const ImportPageContent = dynamic(() => import('./ImportPageContent'), {
-  ssr: false,
-  loading: () => <LoadingSpinner />
-});
+// Importação dinâmica simplificada
+const ImportPageContent = dynamic(
+  () => import('./ImportPageContent'),
+  { 
+    ssr: false,
+    loading: () => <LoadingSpinner />
+  }
+);
 
 export default function ImportPage() {
   const [mounted, setMounted] = useState(false);
@@ -58,5 +61,9 @@ export default function ImportPage() {
     return <LoadingSpinner />;
   }
 
-  return <ImportPageContent />;
+  return (
+    <RequireAuth>
+      <ImportPageContent />
+    </RequireAuth>
+  );
 }

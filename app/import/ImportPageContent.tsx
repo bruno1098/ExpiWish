@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useDropzone } from "react-dropzone"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Upload, FileType, CheckCircle2 } from "lucide-react"
+import { Upload, FileType, CheckCircle2, FolderOpen } from "lucide-react"
 import { storeFeedbacks } from "@/lib/feedback"
 import { analyzeWithGPT } from "@/lib/openai-client"
 import { useToast } from "@/components/ui/use-toast"
@@ -43,6 +43,14 @@ function ImportPageContent() {
   const [chosenHotelOption, setChosenHotelOption] = useState<'account' | 'file' | null>(null);
   const [acceptedFiles, setAcceptedFiles] = useState<File[]>([]);
   const [isTestEnvironment, setIsTestEnvironment] = useState(false);
+  
+  // Estados para o controle do modelo
+  const [useFineTuned, setUseFineTuned] = useState(false);
+  const [useNormalMode, setUseNormalMode] = useState(true);
+  const [lastProgressToast, setLastProgressToast] = useState(0);
+
+  // Ref para o input file
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const checkTestEnvironment = async () => {
@@ -167,7 +175,13 @@ function ImportPageContent() {
   const processFileWithOption = async (file: File, hotelOption: 'account' | 'file') => {
     setImporting(true);
     setProgress(0);
+    setLastProgressToast(0);
     
+    toast({
+      title: "Iniciando Análise Inteligente",
+      description: `Processando arquivo com modelo ${useFineTuned ? 'otimizado' : 'padrão'}. Aguarde...`,
+    });
+
     try {
       let data: any[] = [];
       const extension = file.name.split('.').pop()?.toLowerCase();
@@ -185,17 +199,25 @@ function ImportPageContent() {
         const rows = [];
         
         for (let row = 1; row <= range.e.r; row++) {
+          const nomeHotel = worksheet[utils.encode_cell({ r: row, c: 1 })]?.v;
           const fonte = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
           const idioma = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
           const pontuacao = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v;
-          const texto = worksheet[utils.encode_cell({ r: row, c: 5 })]?.v;
-          const url = worksheet[utils.encode_cell({ r: row, c: 6 })]?.v;
-          const autor = worksheet[utils.encode_cell({ r: row, c: 7 })]?.v;
-          const titulo = worksheet[utils.encode_cell({ r: row, c: 8 })]?.v;
-          const apartamento = worksheet[utils.encode_cell({ r: row, c: 9 })]?.v;
+          const url = worksheet[utils.encode_cell({ r: row, c: 5 })]?.v;
+          const autor = worksheet[utils.encode_cell({ r: row, c: 6 })]?.v;
+          const titulo = worksheet[utils.encode_cell({ r: row, c: 7 })]?.v;
+          const texto = worksheet[utils.encode_cell({ r: row, c: 9 })]?.v;
+          const apartamento = worksheet[utils.encode_cell({ r: row, c: 11 })]?.v;
           
-          if (texto && typeof texto === 'string' && texto.trim() !== '') {
+          if (texto && 
+              typeof texto === 'string' && 
+              texto.trim() !== '' && 
+              texto.trim().length > 5 && 
+              !/^\d+$/.test(texto.trim()) &&
+              !/^[^\w\s]+$/.test(texto.trim())) {
+            
             rows.push({
+              nomeHotel: nomeHotel || '',
               fonte: fonte || '',
               idioma: idioma || '',
               pontuacao: pontuacao || 0,
@@ -209,7 +231,7 @@ function ImportPageContent() {
         }
         
         data = rows.map((row) => {
-          const hotelFromFile = row.fonte;
+          const hotelFromFile = row.nomeHotel || row.fonte;
           
           return {
             ...row,
@@ -222,31 +244,57 @@ function ImportPageContent() {
         const result = Papa.parse(text, { header: true });
         
         data = (result.data as any[])
-          .filter(row => row && typeof row === 'object' && row.texto)
+          .filter(row => {
+            return row && 
+                   typeof row === 'object' && 
+                   row.texto && 
+                   typeof row.texto === 'string' &&
+                   row.texto.trim().length > 5 &&
+                   !/^\d+$/.test(row.texto.trim()) &&
+                   !/^[^\w\s]+$/.test(row.texto.trim());
+          })
           .map(row => {
             const hotelFromFile = row.fonte || row.hotel || row.Hotel || row.HOTEL || row.nomeHotel;
             return {
               ...row,
+              texto: row.texto.trim(),
               nomeHotel: hotelOption === 'account' ? hotelName : (hotelFromFile || hotelName)
             };
           });
       }
       
-      console.log("Dados lidos do arquivo:", data);
+      console.log("✅ Dados válidos lidos do arquivo:", data.length);
+      console.log("📝 Primeiros 3 textos da COLUNA J:", data.slice(0, 3).map(d => `"${d.texto.substring(0, 100)}..."`));
+      
+      if (data.length === 0) {
+        toast({
+          title: "Nenhum Texto Válido Encontrado",
+          description: "Verifique se a coluna J contém os feedbacks em texto.",
+          variant: "destructive",
+        } as ToastProps);
+        return;
+      }
       
       const processDataInChunks = async (data: any[]): Promise<Feedback[]> => {
         const result: Feedback[] = [];
-        const MAX_CONCURRENT_BATCHES = 3;
-        
+        const chunkSize = 500;
         const chunks = [];
-        for (let i = 0; i < data.length; i += BATCH_SIZE * MAX_CONCURRENT_BATCHES) {
-          chunks.push(data.slice(i, i + BATCH_SIZE * MAX_CONCURRENT_BATCHES));
-        }
         
+        for (let i = 0; i < data.length; i += chunkSize) {
+          chunks.push(data.slice(i, i + chunkSize));
+        }
+
+        if (useFineTuned) {
+          console.log("🚀 INICIANDO ANÁLISE COM FINE-TUNING (GPT-4o)");
+          console.log("Model ID: ft:gpt-4o-2024-08-06:pessoal:treino3:B5DXUVXY");
+        } else {
+          console.log("📝 INICIANDO ANÁLISE COM MODO NORMAL (GPT-3.5-turbo)");
+        }
+
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
+          const batches: any[][] = [];
           
-          const batches = [];
           for (let j = 0; j < chunk.length; j += BATCH_SIZE) {
             batches.push(chunk.slice(j, j + BATCH_SIZE));
           }
@@ -257,7 +305,12 @@ function ImportPageContent() {
                 if (!row.texto) return null;
                 
                 try {
-                  const analysis = await analyzeWithGPT(row.texto);
+                  const modelType = useFineTuned ? "Fine-tuned (GPT-4o)" : "Normal (GPT-3.5)";
+                  console.log(`🔄 Analisando: "${row.texto.substring(0, 50)}..." com ${modelType}`);
+
+                  const analysis = await analyzeWithGPT(row.texto, useFineTuned);
+                  
+                  console.log(`✅ Resultado: Rating=${analysis.rating}, Problem="${analysis.problem || 'VAZIO'}"`);
                   
                   const feedback: Feedback = {
                     id: generateUniqueId(),
@@ -268,7 +321,7 @@ function ImportPageContent() {
                     keyword: analysis.keyword,
                     sector: analysis.sector,
                     problem: analysis.problem,
-                    hotel: hotelOption === 'account' ? userData?.hotelName || '' : (row.fonte || ''),
+                    hotel: hotelOption === 'account' ? userData?.hotelName || '' : (row.nomeHotel || row.fonte || ''),
                     source: row.fonte || '',
                     language: row.idioma || '',
                     score: row.pontuacao || undefined,
@@ -280,19 +333,19 @@ function ImportPageContent() {
                   
                   return feedback;
                 } catch (error: any) {
-                  console.error("Erro ao processar linha:", error);
+                  console.error(`❌ Erro ao processar: "${row.texto.substring(0, 30)}..."`, error);
                   if (error.message.includes('exceeded your current quota')) {
                     toast({
-                      title: "Limite de API Atingido",
-                      description: "Seu limite de uso da API foi atingido. Verifique suas configurações de faturamento.",
+                      title: "Limite de Uso Atingido",
+                      description: "Limite de análises atingido. Verifique suas configurações.",
                       variant: "destructive",
                     } as ToastProps);
                     throw error;
                   }
                   if (error.message.includes('API Key')) {
                     toast({
-                      title: "Erro na Análise",
-                      description: "Configure a API Key nas Configurações para usar a análise avançada.",
+                      title: "Erro de Configuração",
+                      description: "Configure a chave de API nas Configurações para usar a análise inteligente.",
                       variant: "destructive",
                     } as ToastProps);
                   }
@@ -309,13 +362,35 @@ function ImportPageContent() {
             result.push(...batchResult);
           }
           
-          setProgress((result.length / data.length) * 100);
+          const currentProgress = (result.length / data.length) * 100;
+          setProgress(currentProgress);
+          
+          if (currentProgress >= 25 && lastProgressToast < 25) {
+            setLastProgressToast(25);
+            toast({
+              title: "Análise em Progresso",
+              description: "25% concluído. A IA está processando os feedbacks...",
+            });
+          } else if (currentProgress >= 50 && lastProgressToast < 50) {
+            setLastProgressToast(50);
+            toast({
+              title: "Análise em Progresso",
+              description: "50% concluído. Metade dos dados já foram analisados!",
+            });
+          } else if (currentProgress >= 75 && lastProgressToast < 75) {
+            setLastProgressToast(75);
+            toast({
+              title: "Quase Finalizado",
+              description: "75% concluído. Processando os últimos feedbacks...",
+            });
+          }
           
           if (i < chunks.length - 1) {
             await delay(DELAY_BETWEEN_BATCHES);
           }
         }
-        
+
+        console.log(`🎉 ANÁLISE FINALIZADA! ${result.length} feedbacks processados`);
         return result;
       };
 
@@ -323,6 +398,11 @@ function ImportPageContent() {
 
       storeFeedbacks(processedData);
       
+      toast({
+        title: "Análise Inteligente Concluída",
+        description: `${processedData.length} feedbacks analisados com sucesso usando ${useFineTuned ? 'modelo otimizado' : 'modelo padrão'}.`,
+      });
+
       const analysisData: any = {
         totalFeedbacks: processedData.length,
         averageRating: processedData.reduce((acc, item) => acc + item.rating, 0) / processedData.length,
@@ -370,8 +450,8 @@ function ImportPageContent() {
         });
         
         toast({
-          title: "Dados Salvos no Firebase",
-          description: "Os dados foram salvos com sucesso e podem ser acessados no histórico.",
+          title: "Dados Salvos com Sucesso",
+          description: "Análise completa salva e disponível no painel de controle.",
         });
         
         router.push(`/analysis`);
@@ -379,7 +459,7 @@ function ImportPageContent() {
         console.error("Erro ao salvar no Firestore:", error);
         toast({
           title: "Erro ao Salvar",
-          description: "Não foi possível salvar os dados no Firebase. Tente novamente.",
+          description: "Análise concluída, mas houve erro ao salvar. Tente novamente.",
           variant: "destructive",
         } as ToastProps);
       }
@@ -388,19 +468,45 @@ function ImportPageContent() {
       setComplete(true);
       
       toast({
-        title: "Importação Concluída",
-        description: `${processedData.length} feedbacks analisados e importados com sucesso.`,
+        title: "Importação Finalizada",
+        description: "Todos os dados foram processados e estão prontos para análise!",
       });
     } catch (error: any) {
       console.error("Erro durante a importação:", error);
       toast({
         title: "Erro na Importação",
-        description: error.message || "Ocorreu um erro durante a importação dos dados.",
+        description: "Houve um problema durante o processamento. Verifique o arquivo e tente novamente.",
         variant: "destructive",
       } as ToastProps);
     } finally {
       setImporting(false);
     }
+  };
+
+  const resetImportState = () => {
+    setAcceptedFiles([]);
+    setHotelsInFile([]);
+    setChosenHotelOption(null);
+    setDetectingHotels(false);
+    setImporting(false);
+    setComplete(false);
+    setProgress(0);
+    setLastProgressToast(0);
+  };
+
+  const openFileSelector = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      const fileArray = Array.from(files);
+      onDrop(fileArray);
+    }
+    event.target.value = '';
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -409,7 +515,10 @@ function ImportPageContent() {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'text/csv': ['.csv'],
     },
-    disabled: importing,
+    disabled: importing || detectingHotels,
+    multiple: false,
+    noClick: true,
+    noKeyboard: true
   });
 
   const processHotelDistribution = (data: Feedback[]) => {
@@ -605,15 +714,147 @@ function ImportPageContent() {
       .sort((a, b) => b.value - a.value);
   };
 
+  const handleModeChange = (mode: 'normal' | 'fineTuned') => {
+    if (mode === 'normal') {
+      setUseNormalMode(true);
+      setUseFineTuned(false);
+      console.log("🔄 Modo alterado para: NORMAL (GPT-3.5-turbo)");
+      
+      toast({
+        title: "Modelo Padrão Selecionado",
+        description: "Análise com modelo padrão ativada. Processamento eficiente e econômico.",
+      });
+      
+    } else {
+      setUseNormalMode(false);
+      setUseFineTuned(true);
+      console.log("🔄 Modo alterado para: FINE-TUNED (GPT-4o)");
+      
+      toast({
+        title: "Modelo Otimizado Selecionado",
+        description: "Análise com modelo otimizado ativada. Maior precisão e qualidade nos resultados.",
+      });
+    }
+  };
+
   return (
     <SharedDashboardLayout>
       <div className="p-6 space-y-8">
         <div className="flex flex-col gap-2">
           <h2 className="text-3xl font-bold">Importar Feedbacks</h2>
           <p className="text-muted-foreground">
-            Arraste e solte arquivos CSV ou XLSX contendo feedbacks para começar a análise.
+            Arraste e solte arquivos CSV ou XLSX contendo feedbacks para análise inteligente.
           </p>
         </div>
+        
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Configuração da Análise Inteligente</h3>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-3">
+              <input
+                type="radio"
+                id="normal-mode"
+                name="ai-mode"
+                checked={useNormalMode}
+                onChange={() => handleModeChange('normal')}
+                className="h-4 w-4"
+                disabled={importing || detectingHotels}
+              />
+              <label htmlFor="normal-mode" className="flex flex-col">
+                <span className="font-medium">Usar modo padrão</span>
+                <span className="text-sm text-muted-foreground">Análise eficiente e econômica</span>
+              </label>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              <input
+                type="radio"
+                id="optimized-mode"
+                name="ai-mode"
+                checked={useFineTuned}
+                onChange={() => handleModeChange('fineTuned')}
+                className="h-4 w-4"
+                disabled={importing || detectingHotels}
+              />
+              <label htmlFor="optimized-mode" className="flex flex-col">
+                <span className="font-medium">Usar modelo otimizado (Consome mais recursos)</span>
+                <span className="text-sm text-muted-foreground">Análise de maior precisão e qualidade</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-4 p-3 bg-muted rounded-lg">
+            <p className="text-sm">
+              <strong>Modo atual:</strong> {useFineTuned ? "Modelo Otimizado" : "Modelo Padrão"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {useFineTuned 
+                ? "Maior precisão na categorização e análise de sentimentos" 
+                : "Processamento rápido e eficiente para grandes volumes"
+              }
+            </p>
+          </div>
+        </Card>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,.xlsx"
+          onChange={handleFileInput}
+          style={{ display: 'none' }}
+          disabled={importing || detectingHotels}
+        />
+
+        {!importing && !complete && (
+          <Card 
+            {...getRootProps()}
+            className={cn(
+              "border-2 border-dashed rounded-lg p-12 transition",
+              isDragActive && "border-primary bg-muted/50",
+              (detectingHotels) && "opacity-50"
+            )}
+          >
+            <div className="flex flex-col items-center justify-center text-center">
+              <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">
+                {isDragActive 
+                  ? "Solte o arquivo aqui..." 
+                  : detectingHotels 
+                  ? "Analisando arquivo..."
+                  : "Importar Arquivo de Feedbacks"
+                }
+              </h3>
+              <p className="text-muted-foreground mb-6 max-w-sm">
+                {detectingHotels 
+                  ? "Processando informações do arquivo..."
+                  : "Arraste e solte um arquivo aqui ou clique no botão abaixo para selecionar"
+                }
+              </p>
+              
+              {!detectingHotels && (
+                <div className="space-y-4">
+                  <Button 
+                    onClick={openFileSelector}
+                    disabled={importing || detectingHotels}
+                    className="flex items-center gap-2"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    Selecionar Arquivo
+                  </Button>
+                  
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <FileType className="h-4 w-4" />
+                    <span>Formatos suportados: CSV, XLSX</span>
+                  </div>
+                </div>
+              )}
+              
+              {detectingHotels && (
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+              )}
+            </div>
+          </Card>
+        )}
         
         {!importing && !detectingHotels && hotelsInFile.length > 0 && chosenHotelOption === null && (
           <Card className="p-6 my-6">
@@ -630,6 +871,10 @@ function ImportPageContent() {
               <button 
                 onClick={() => {
                   setChosenHotelOption('account');
+                  toast({
+                    title: "Hotel da Conta Selecionado",
+                    description: `Todos os dados serão atribuídos a ${userData?.hotelName}`,
+                  });
                   if (acceptedFiles.length > 0) {
                     processFileWithOption(acceptedFiles[0], 'account');
                   }
@@ -644,6 +889,10 @@ function ImportPageContent() {
               <button 
                 onClick={() => {
                   setChosenHotelOption('file');
+                  toast({
+                    title: "Hotéis do Arquivo Selecionados",
+                    description: "Mantendo os nomes de hotéis conforme estão no arquivo",
+                  });
                   if (acceptedFiles.length > 0) {
                     processFileWithOption(acceptedFiles[0], 'file');
                   }
@@ -658,51 +907,17 @@ function ImportPageContent() {
           </Card>
         )}
         
-        {detectingHotels && (
-          <Card className="p-6 my-6">
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
-              <p className="text-lg">Analisando arquivo...</p>
-              <p className="text-sm text-muted-foreground">Detectando hotéis e preparando para importação</p>
-            </div>
-          </Card>
-        )}
-        
-        {!importing && !detectingHotels && chosenHotelOption === null && hotelsInFile.length === 0 && (
-          <Card 
-            {...getRootProps()}
-            className={cn(
-              "border-2 border-dashed rounded-lg p-12 hover:bg-muted/50 transition cursor-pointer",
-              isDragActive && "border-primary bg-muted/50"
-            )}
-          >
-            <input {...getInputProps()} />
-            <div className="flex flex-col items-center justify-center text-center">
-              <Upload className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">
-                {isDragActive ? "Solte o arquivo aqui..." : "Arraste e solte um arquivo"}
-            </h3>
-              <p className="text-muted-foreground mb-4 max-w-xs">
-                Arraste um arquivo CSV ou XLSX, ou clique para selecionar manualmente.
-              </p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FileType className="h-4 w-4" />
-                <span>CSV, XLSX</span>
-              </div>
-            </div>
-          </Card>
-        )}
-        
         {importing && !complete && (
           <div className="space-y-4 w-full max-w-md">
             <div className="space-y-2">
-              <h3 className="text-xl font-semibold">Processando Importação</h3>
+              <h3 className="text-xl font-semibold">Processando com IA</h3>
               <p className="text-sm text-muted-foreground">
-                Estamos analisando seus dados. Isso pode levar alguns minutos dependendo do tamanho do arquivo.
+                Analisando feedbacks com {useFineTuned ? 'modelo otimizado' : 'modelo padrão'}. 
+                Aguarde enquanto processamos seus dados...
               </p>
             </div>
             <Progress value={progress} className="h-2" />
-            <p className="text-sm font-medium">{Math.round(progress)}%</p>
+            <p className="text-sm font-medium">{Math.round(progress)}% concluído</p>
           </div>
         )}
 
@@ -718,9 +933,14 @@ function ImportPageContent() {
                   Todos os dados foram importados e analisados com sucesso.
                 </p>
               </div>
-              <Button onClick={() => router.push("/analysis")}>
-                Ver Análise
-              </Button>
+              <div className="flex gap-4">
+                <Button onClick={() => router.push("/analysis")}>
+                  Ver Análise
+                </Button>
+                <Button variant="outline" onClick={resetImportState}>
+                  Importar Novo Arquivo
+                </Button>
+              </div>
             </div>
           </div>
         )}

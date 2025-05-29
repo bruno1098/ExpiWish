@@ -30,7 +30,7 @@ function Sidebar() {
   const { userData } = useAuth()
   const isAdmin = userData?.role === 'admin'
 
-  // Rotas para funcionários
+  // Rotas para colaboradores
   const staffRoutes = [
   {
     label: "Dashboard",
@@ -119,18 +119,22 @@ function Sidebar() {
   useEffect(() => {
     if (isClient) {
       localStorage.setItem('sidebarCollapsed', String(collapsed))
+      // Disparar evento customizado para notificar mudança
+      window.dispatchEvent(new CustomEvent('sidebarToggle', { 
+        detail: { collapsed } 
+      }))
     }
   }, [collapsed, isClient])
 
   return (
     <div className={cn(
-      "h-full bg-[#111827] text-white transition-all duration-300 flex flex-col relative",
+      "h-full bg-[#111827] text-white transition-all duration-300 ease-in-out flex flex-col relative",
       collapsed ? "w-20" : "w-72"
     )}>
       <div className="absolute right-0 top-5 transform translate-x-1/2 z-50">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center justify-center h-8 w-8 rounded-full bg-primary text-white shadow-md hover:bg-primary/90 transition"
+          className="flex items-center justify-center h-8 w-8 rounded-full bg-primary text-white shadow-md hover:bg-primary/90 transition-all duration-200"
         >
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
@@ -139,15 +143,17 @@ function Sidebar() {
       <div className="space-y-4 py-4 flex flex-col h-full">
       <div className="px-3 py-2 flex-1">
           <Link href={isAdmin ? "/admin" : "/dashboard"} className={cn(
-            "flex items-center mb-14",
+            "flex items-center mb-14 transition-all duration-200 ease-in-out",
             collapsed ? "justify-center pl-0" : "pl-3"
           )}>
-          <MessageSquare className="h-8 w-8 text-primary" />
+          <MessageSquare className="h-8 w-8 text-primary transition-all duration-200 ease-in-out" />
             {!collapsed && (
-          <AnimatedText
-            text="expi"
-            className="text-2xl font-bold ml-2"
-          />
+          <div className="transition-all duration-200 ease-in-out">
+            <AnimatedText
+              text="expi"
+              className="text-2xl font-bold ml-2"
+            />
+          </div>
             )}
         </Link>
           
@@ -157,7 +163,7 @@ function Sidebar() {
               key={route.href}
               href={route.href}
               className={cn(
-                  "text-sm group flex p-3 justify-start font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-lg transition",
+                  "text-sm group flex p-3 justify-start font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200 ease-in-out",
                 pathname === route.href
                   ? "text-white bg-white/10"
                     : "text-zinc-400",
@@ -166,15 +172,19 @@ function Sidebar() {
                 title={collapsed ? route.label : undefined}
             >
                 <div className={cn(
-                  "flex items-center",
+                  "flex items-center transition-all duration-200 ease-in-out",
                   collapsed ? "flex-col" : "flex-1"
                 )}>
                   <route.icon className={cn(
-                    "h-5 w-5",
+                    "h-5 w-5 transition-all duration-200 ease-in-out",
                     collapsed ? "mb-1" : "mr-3",
                     route.color
                   )} />
-                  {!collapsed && route.label}
+                  {!collapsed && (
+                    <span className="transition-opacity duration-200 ease-in-out">
+                      {route.label}
+                    </span>
+                  )}
               </div>
             </Link>
           ))}
