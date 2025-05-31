@@ -54,6 +54,17 @@ export default function LoginPage() {
       // Obter dados do usuário para verificar função
       const userData = await getCurrentUserData();
 
+      // Verificar se deve trocar senha
+      if (userData?.mustChangePassword) {
+        toast.success("Login autorizado! Você será redirecionado para alterar sua senha.");
+        
+        // Redirecionar para página de troca de senha obrigatória
+        setTimeout(() => {
+          router.push("/auth/change-password?required=true");
+        }, 1000);
+        return;
+      }
+
       toast.success("Login realizado com sucesso");
 
       // Redirecionar com base na função do usuário
@@ -66,6 +77,27 @@ export default function LoginPage() {
       }, 500);
     } catch (error: any) {
       console.error("Erro ao fazer login:", error);
+      
+      // Verificar se é redirecionamento para senha temporária
+      if (error.message === "TEMP_PASSWORD_REDIRECT") {
+        toast.success("Senha temporária detectada! Você será redirecionado para alterar sua senha.");
+        // Redirecionar para página de troca de senha
+        setTimeout(() => {
+          router.push(`/auth/change-password?email=${encodeURIComponent(email)}&temporary=true`);
+        }, 1000);
+        return;
+      }
+      
+      // Verificar se contém o código de redirecionamento mesmo que tenha outras palavras
+      if (error.message && error.message.includes("TEMP_PASSWORD_REDIRECT")) {
+        toast.success("Senha temporária detectada! Você será redirecionado para alterar sua senha.");
+        // Redirecionar para página de troca de senha
+        setTimeout(() => {
+          router.push(`/auth/change-password?email=${encodeURIComponent(email)}&temporary=true`);
+        }, 1000);
+        return;
+      }
+      
       setError(error.message || "Falha ao fazer login. Verifique suas credenciais.");
       toast.error(error.message || "Falha ao fazer login. Verifique suas credenciais.");
     } finally {

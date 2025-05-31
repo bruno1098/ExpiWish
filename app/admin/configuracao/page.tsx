@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { RequireAdmin } from "@/lib/auth-context";
+import { updateUserPassword } from "@/lib/auth-service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,8 +35,9 @@ import {
   DialogTrigger,
   DialogClose
 } from "@/components/ui/dialog";
-import { AlertCircle, Check, Loader2, HotelIcon, Database, RefreshCw, User, Hotel, Plus, MessageSquare } from "lucide-react";
+import { AlertCircle, Check, Loader2, HotelIcon, Database, RefreshCw, User, Hotel, Plus, MessageSquare, Activity } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import Link from 'next/link';
 
 // Lista predefinida de hotéis para exibição
 const PREDEFINED_HOTELS = [
@@ -64,11 +66,18 @@ interface HotelData {
 
 function ConfigPage() {
   const { toast } = useToast();
+  const { userData } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [hotels, setHotels] = useState<HotelData[]>([]);
   const [isHotelsLoading, setIsHotelsLoading] = useState(false);
+  
+  // Estados para alteração de senha
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   
   // Estados para o formulário de novo hotel
   const [newHotel, setNewHotel] = useState({
@@ -350,6 +359,73 @@ function ConfigPage() {
     }
   };
 
+  const handleChangePassword = async () => {
+    // Validações
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Todos os campos são obrigatórios.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Senhas não coincidem",
+        description: "A nova senha e a confirmação devem ser iguais.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Senha muito curta",
+        description: "A senha deve ter pelo menos 6 caracteres.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      await updateUserPassword(currentPassword, newPassword);
+      
+      toast({
+        title: "✅ Senha alterada com sucesso",
+        description: "Sua senha foi atualizada."
+      });
+
+      // Limpar campos
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+    } catch (error: any) {
+      console.error("Erro ao alterar senha:", error);
+      
+      let errorMessage = error.message || "Falha ao alterar senha.";
+      
+      if (error.message?.includes("wrong-password") || error.message?.includes("Senha atual incorreta")) {
+        errorMessage = "Senha atual incorreta. Verifique e tente novamente.";
+      } else if (error.message?.includes("weak-password")) {
+        errorMessage = "A nova senha deve ter pelo menos 6 caracteres.";
+      } else if (error.message?.includes("requires-recent-login")) {
+        errorMessage = "Por segurança, faça login novamente antes de alterar a senha.";
+      }
+      
+      toast({
+        title: "❌ Erro ao alterar senha",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-10 space-y-6">
       <h1 className="text-3xl font-bold">Configuração do Sistema</h1>
@@ -359,6 +435,8 @@ function ConfigPage() {
           <TabsTrigger value="hotels">Hotéis</TabsTrigger>
           <TabsTrigger value="system">Sistema</TabsTrigger>
           <TabsTrigger value="data">Dados</TabsTrigger>
+          <TabsTrigger value="audit">Logs</TabsTrigger>
+          <TabsTrigger value="profile">Perfil</TabsTrigger>
         </TabsList>
         
         {/* Aba de Hotéis */}
@@ -926,6 +1004,175 @@ function ConfigPage() {
                   </div>
                 </>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Aba de Logs */}
+        <TabsContent value="audit" className="space-y-4">
+          <h2 className="text-2xl font-semibold">Logs do Sistema</h2>
+          
+          {/* Aviso de desenvolvimento */}
+          <Card className="border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-orange-800 dark:text-orange-300">
+                <AlertCircle className="h-5 w-5" />
+                Funcionalidade em Desenvolvimento
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-orange-700 dark:text-orange-400">
+                <p className="mb-3">
+                  <strong>⚠️ Esta funcionalidade está temporariamente indisponível.</strong>
+                </p>
+                <p className="text-sm mb-2">
+                  O sistema de logs está sendo desenvolvido e implementado. Em breve você poderá:
+                </p>
+                <ul className="text-sm space-y-1 ml-4 list-disc">
+                  <li>Visualizar logs de ações dos usuários</li>
+                  <li>Monitorar acessos e atividades</li>
+                  <li>Filtrar logs por período, usuário e tipo de ação</li>
+                  <li>Exportar relatórios de auditoria</li>
+                </ul>
+                <p className="text-xs mt-3 text-orange-600 dark:text-orange-500">
+                  Esta funcionalidade será liberada em uma próxima atualização do sistema.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Aba de Perfil */}
+        <TabsContent value="profile" className="space-y-4">
+          <h2 className="text-2xl font-semibold">Perfil do Usuário</h2>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Informações do Usuário</CardTitle>
+              <CardDescription>
+                Dados da sua conta atual.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right font-medium">Nome:</Label>
+                  <div className="col-span-3">
+                    <span className="text-sm">{userData?.name || "Não informado"}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right font-medium">Email:</Label>
+                  <div className="col-span-3">
+                    <span className="text-sm">{userData?.email}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right font-medium">Hotel:</Label>
+                  <div className="col-span-3">
+                    <span className="text-sm">{userData?.hotelName}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right font-medium">Função:</Label>
+                  <div className="col-span-3">
+                    <span className="text-sm">{userData?.role === 'admin' ? 'Administrador' : 'Colaborador'}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Alterar Senha</CardTitle>
+              <CardDescription>
+                Para sua segurança, insira sua senha atual para definir uma nova senha.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="currentPassword" className="text-right">
+                    Senha Atual <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="currentPassword"
+                    type="password"
+                    className="col-span-3"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Digite sua senha atual"
+                    disabled={isChangingPassword}
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="newPassword" className="text-right">
+                    Nova Senha <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    className="col-span-3"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                    disabled={isChangingPassword}
+                    minLength={6}
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="confirmPassword" className="text-right">
+                    Confirmar Nova Senha <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    className="col-span-3"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Digite novamente sua nova senha"
+                    disabled={isChangingPassword}
+                    minLength={6}
+                  />
+                </div>
+              </div>
+              
+              {/* Feedback visual */}
+              {newPassword && newPassword.length < 6 && (
+                <div className="text-sm text-red-600 mb-4">
+                  ⚠️ A senha deve ter pelo menos 6 caracteres
+                </div>
+              )}
+              
+              {confirmPassword && newPassword !== confirmPassword && (
+                <div className="text-sm text-red-600 mb-4">
+                  ⚠️ As senhas não coincidem
+                </div>
+              )}
+              
+              {newPassword && confirmPassword && newPassword === confirmPassword && newPassword.length >= 6 && (
+                <div className="text-sm text-green-600 mb-4">
+                  ✅ Senhas coincidem
+                </div>
+              )}
+              
+              <Button 
+                onClick={handleChangePassword}
+                disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword || newPassword.length < 6}
+              >
+                {isChangingPassword ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Alterando...
+                  </>
+                ) : (
+                  <>
+                    <User className="mr-2 h-4 w-4" />
+                    Alterar Senha
+                  </>
+                )}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

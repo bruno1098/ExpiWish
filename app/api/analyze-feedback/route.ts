@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       apiKey: apiKey
     });
 
-    const model = useFineTuned ? "gpt-4o-mini" : "gpt-3.5-turbo";
+    const model = useFineTuned ? "ft:gpt-4o-mini-2024-07-18:personal:tuning-feliz:BccF8SYv" : "gpt-3.5-turbo";
 
     const sentimentPrompt = useFineTuned 
       ? `Avalie este comentário de hotel: "${texto}"`
@@ -72,7 +72,7 @@ Lista de PALAVRAS-CHAVE e SETORES (associação obrigatória):
 | A&B - Serviço              | A&B                      |
 | A&B - Variedade            | A&B                      |
 | A&B - Preço                | A&B                      |
-| Academia                    | Lazer                    |
+| Academia                   | Lazer                    |
 | Limpeza - Quarto           | Governança               |
 | Limpeza - Banheiro         | Governança               |
 | Limpeza - Áreas sociais    | Governança               |

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
-import { getCurrentUserData } from "./auth-service";
+import { getCurrentUserData, updateUserLastAccess, markFirstAccess } from "./auth-service";
 import { useRouter } from "next/navigation";
 
 // Interface para dados do usuário
@@ -15,6 +15,11 @@ export interface UserData {
   hotelName: string;
   role: 'admin' | 'staff';
   name?: string;
+  firstAccess?: any;
+  firstAccessTimestamp?: number;
+  lastAccess?: any;
+  lastAccessTimestamp?: number;
+  mustChangePassword?: boolean;
 }
 
 interface AuthContextType {
@@ -47,9 +52,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(authUser);
       
       if (authUser) {
+        // Buscar dados do usuário
         const userDataResult = await getCurrentUserData();
         console.log("Dados do usuário obtidos:", userDataResult);
         setUserData(userDataResult);
+        
+        // Registrar primeiro acesso se for a primeira vez
+        await markFirstAccess(authUser.uid);
+        
+        // Atualizar último acesso
+        await updateUserLastAccess(authUser.uid);
       } else {
         setUserData(null);
       }

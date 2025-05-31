@@ -19,7 +19,9 @@ import {
   Menu,
   Users,
   Shield,
-  RefreshCw
+  RefreshCw,
+  Activity,
+  UserCheck
 } from "lucide-react"
 import { AnimatedText } from "./animated-text"
 
