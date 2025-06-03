@@ -11,7 +11,17 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['openai', 'firebase-admin']
   },
-  webpack: (config, { isServer }) => {
+  // Configurações para resolver problemas de chunk loading no Vercel
+  swcMinify: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production",
+  },
+  // Otimizações para deployment
+  poweredByHeader: false,
+  generateBuildId: async () => {
+    return 'build-' + Date.now()
+  },
+  webpack: (config, { isServer, dev }) => {
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -37,6 +47,29 @@ const nextConfig = {
         fullySpecified: false,
       },
     });
+
+    // Otimizações para produção
+    if (!dev && !isServer) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            default: {
+              minChunks: 1,
+              priority: -20,
+              reuseExistingChunk: true,
+            },
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              priority: -10,
+              chunks: 'all',
+            },
+          },
+        },
+      };
+    }
 
     return config;
   }

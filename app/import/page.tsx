@@ -34,16 +34,29 @@ const generateUniqueId = () => {
   return 'id-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now().toString(36);
 };
 
-// Componente loading simples
+// Componente loading melhorado
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-screen">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+  <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="text-center space-y-4">
+      <div className="relative">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+        <div className="absolute inset-0 animate-pulse rounded-full h-16 w-16 border-2 border-blue-200"></div>
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+          Carregando Análise Inteligente
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Preparando ferramentas de IA...
+        </p>
+      </div>
+    </div>
   </div>
 );
 
-// Importação dinâmica simplificada
+// Importação dinâmica otimizada para produção
 const ImportPageContent = dynamic(
-  () => import('./ImportPageContent'),
+  () => import('./ImportPageContent').then((mod) => ({ default: mod.default })),
   { 
     ssr: false,
     loading: () => <LoadingSpinner />
@@ -54,7 +67,12 @@ export default function ImportPage() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    // Garantir hidratação adequada
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   if (!mounted) {
