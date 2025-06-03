@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useDropzone } from "react-dropzone"
+
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle, Timer } from "lucide-react"
+import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle, Timer, X } from "lucide-react"
 import { storeFeedbacks } from "@/lib/feedback"
 import { analyzeWithGPT } from "@/lib/openai-client"
 import { useToast } from "@/components/ui/use-toast"
@@ -219,6 +219,11 @@ function ImportPageContent() {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [errorCount, setErrorCount] = useState(0);
+  const [isCancelled, setIsCancelled] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // AbortController para cancelar requisições em andamento
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Ref para o input file
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -250,6 +255,28 @@ function ImportPageContent() {
     };
     
     checkTestEnvironment();
+
+    // Event listeners globais SIMPLIFICADOS - apenas prevenir comportamento padrão
+    const preventDefaultDrop = (e: DragEvent) => {
+      const target = e.target as Element;
+      const isInDropzone = target?.closest('[data-dropzone="true"]');
+      
+      // Apenas prevenir fora da dropzone
+      if (!isInDropzone) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    // Adicionar apenas os listeners essenciais
+    document.addEventListener('dragover', preventDefaultDrop, false);
+    document.addEventListener('drop', preventDefaultDrop, false);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('dragover', preventDefaultDrop, false);
+      document.removeEventListener('drop', preventDefaultDrop, false);
+    };
   }, []);
 
   // Hook para calcular tempo estimado
@@ -283,7 +310,6 @@ function ImportPageContent() {
       return;
     }
 
-    // Remover toda a lógica de detecção de hotéis e processar o arquivo diretamente
     processFileWithAccountHotel(files[0]);
   };
 
@@ -295,6 +321,11 @@ function ImportPageContent() {
     setCurrentStep("Lendo arquivo...");
     setRetryCount(0);
     setErrorCount(0);
+    setIsCancelled(false);
+    setIsProcessing(true);
+    
+    // Criar novo AbortController para esta análise
+    abortControllerRef.current = new AbortController();
     
     toast({
       title: "Iniciando Análise Inteligente",
@@ -460,6 +491,11 @@ function ImportPageContent() {
         const processBatchParallel = async (batch: any[]): Promise<Feedback[]> => {
           const batchResults: Feedback[] = [];
           
+          // Verificar cancelamento antes de processar
+          if (isCancelled) {
+            throw new Error('Análise cancelada pelo usuário');
+          }
+          
           // Dividir o batch em grupos menores para processamento paralelo
           const groups = [];
           for (let i = 0; i < batch.length; i += concurrentRequests) {
@@ -467,13 +503,27 @@ function ImportPageContent() {
           }
           
           for (const group of groups) {
+            // Verificar cancelamento a cada grupo
+            if (isCancelled) {
+              throw new Error('Análise cancelada pelo usuário');
+            }
             // Processar cada grupo em paralelo
             const promises = group.map(async (row, index) => {
+              // Verificar cancelamento antes de processar cada item
+              if (isCancelled || abortControllerRef.current?.signal.aborted) {
+                throw new Error('Análise cancelada pelo usuário');
+              }
+              
               // Pequeno delay escalonado para evitar sobrecarga
               await delay(index * requestDelay);
               
               try {
                 const analysisResult = await retryWithBackoff(async () => {
+                  // Verificar cancelamento antes de fazer a requisição
+                  if (isCancelled || abortControllerRef.current?.signal.aborted) {
+                    throw new Error('Análise cancelada pelo usuário');
+                  }
+                  
                   const response = await fetch('/api/analyze-feedback', {
                     method: 'POST',
                     headers: {
@@ -483,6 +533,7 @@ function ImportPageContent() {
                       texto: row.texto,
                       apiKey: apiKey,
                     }),
+                    signal: abortControllerRef.current?.signal, // Adicionar signal para cancelamento
                   });
 
                   if (!response.ok) {
@@ -527,6 +578,11 @@ function ImportPageContent() {
                 } as Feedback;
                   
               } catch (error: any) {
+                // Se for cancelamento, propagar o erro
+                if (error.message.includes('cancelada') || error.name === 'AbortError') {
+                  throw error;
+                }
+                
                 console.error(`Erro ao processar feedback após todas as tentativas:`, error);
                 
                 return {
@@ -552,8 +608,17 @@ function ImportPageContent() {
             });
             
             // Aguardar todas as requisições do grupo terminarem
-            const groupResults = await Promise.all(promises);
-            batchResults.push(...groupResults);
+            try {
+              const groupResults = await Promise.all(promises);
+              batchResults.push(...groupResults);
+            } catch (error: any) {
+              // Se alguma promessa foi cancelada, parar imediatamente
+              if (error.message.includes('cancelada') || error.name === 'AbortError') {
+                throw error;
+              }
+              // Se for outro erro, continuar com os resultados parciais
+              throw error;
+            }
             
             // Atualizar progresso
             const currentProcessed = result.length + batchResults.length;
@@ -566,6 +631,11 @@ function ImportPageContent() {
         };
 
         for (let i = 0; i < chunks.length; i++) {
+          // Verificar se foi cancelado
+          if (isCancelled) {
+            throw new Error('Análise cancelada pelo usuário');
+          }
+          
           const chunk = chunks[i];
           
           setCurrentStep(`Analisando lote ${i + 1}/${chunks.length} (${chunk.length} itens) - ${Math.round(((i + 1) / chunks.length) * 100)}% dos lotes`);
@@ -573,6 +643,12 @@ function ImportPageContent() {
           // Processar chunk em paralelo
           const chunkResults = await processBatchParallel(chunk);
           result.push(...chunkResults);
+          
+          // Verificar novamente após processar o chunk
+          if (isCancelled) {
+            console.log('Processamento cancelado pelo usuário após chunk');
+            throw new Error('Análise cancelada pelo usuário');
+          }
           
           // Pausa otimizada entre chunks baseada no perfil
           if (i < chunks.length - 1) {
@@ -623,7 +699,6 @@ function ImportPageContent() {
       // Salvar dados no localStorage para a tela de análise
       localStorage.setItem('analysis-feedbacks', JSON.stringify(feedbacks));
       localStorage.setItem('analysis-data', JSON.stringify(analysisToSave));
-      console.log("Dados salvos no localStorage para análise");
 
       setProgress(100);
       setCurrentStep("Concluído!");
@@ -638,13 +713,31 @@ function ImportPageContent() {
 
     } catch (error: any) {
       console.error("Erro durante o processamento:", error);
-      toast({
-        title: "Erro no Processamento",
-        description: error.message,
-        variant: "destructive",
-      } as ToastProps);
+      
+      if (error.message.includes('cancelada') || error.name === 'AbortError') {
+        // Não mostrar toast de erro para cancelamentos
+        setCurrentStep("Análise cancelada com sucesso");
+        toast({
+          title: "Análise Interrompida",
+          description: "O processamento foi cancelado pelo usuário.",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Erro no Processamento",
+          description: error.message,
+          variant: "destructive",
+        } as ToastProps);
+      }
     } finally {
       setImporting(false);
+      setIsProcessing(false);
+      
+      // Limpar AbortController
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -654,6 +747,40 @@ function ImportPageContent() {
     setProgress(0);
     setComplete(false);
     setLastProgressToast(0);
+    setIsCancelled(false);
+    setIsProcessing(false);
+    
+    // Limpar o AbortController
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  };
+
+  const cancelAnalysis = () => {
+    setIsCancelled(true);
+    setIsProcessing(false);
+    setImporting(false);
+    setCurrentStep("Cancelando análise...");
+    
+    // Abortar todas as requisições HTTP em andamento
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    toast({
+      title: "Análise Cancelada",
+      description: "Cancelando todas as requisições em andamento...",
+      variant: "destructive",
+    });
+    
+    // Reset após um pequeno delay para mostrar o status
+    setTimeout(() => {
+      setCurrentStep("Análise cancelada pelo usuário");
+      setTimeout(() => {
+        resetImportState();
+      }, 1000);
+    }, 1000);
   };
 
   const openFileSelector = () => {
@@ -671,17 +798,129 @@ function ImportPageContent() {
     event.target.value = '';
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'text/csv': ['.csv'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
-    },
-    disabled: importing,
-    multiple: false,
-    noClick: true,
-    noKeyboard: true
-  });
+  // Estados para drag and drop nativo
+  const [isDragActive, setIsDragActive] = useState(false);
+
+  // Função para processar arquivos
+  const handleFileDrop = (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    
+    if (fileArray.length > 0) {
+      const file = fileArray[0];
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      
+      if (extension === 'csv' || extension === 'xlsx') {
+        toast({
+          title: "Arquivo detectado!",
+          description: `Processando ${file.name}`,
+        });
+        onDrop(fileArray);
+      } else {
+        toast({
+          title: "Arquivo não suportado",
+          description: `Arquivo ${file.name} não é suportado. Use CSV ou XLSX.`,
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  // Handlers para drag and drop nativo
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragActive(true);
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Verificar se realmente saiu da dropzone
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDragActive(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    e.dataTransfer.dropEffect = 'copy';
+    return false;
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDragActive(false);
+    
+    // Tentar obter arquivos via items primeiro
+    if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+      const fileArray: File[] = [];
+      
+      for (let i = 0; i < e.dataTransfer.items.length; i++) {
+        const item = e.dataTransfer.items[i];
+        
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) {
+            fileArray.push(file);
+          }
+        }
+      }
+      
+      if (fileArray.length > 0) {
+        handleFileDrop(fileArray);
+        return;
+      }
+    }
+    
+    // Fallback para files
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      const fileArray = Array.from(e.dataTransfer.files);
+      handleFileDrop(fileArray);
+      return;
+    }
+  };
+
+  const handleClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // Handler para paste (Ctrl+V)
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    
+    const items = e.clipboardData?.items;
+    if (items) {
+      const files: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) {
+            files.push(file);
+          }
+        }
+      }
+      
+      if (files.length > 0) {
+        handleFileDrop(files);
+      }
+    }
+  };
 
   const processHotelDistribution = (data: Feedback[]) => {
     const hotelCounts: Record<string, number> = {};
@@ -952,26 +1191,41 @@ function ImportPageContent() {
           </div>
         </div>
         
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv,.xlsx"
-          onChange={handleFileInput}
-          style={{ display: 'none' }}
-          disabled={importing}
-        />
+
 
         {!importing && !complete && (
           <div className="space-y-6">
-            <Card 
-              {...getRootProps()}
+            <div
               className={cn(
-                "border-2 border-dashed rounded-xl p-12 transition-all duration-300 hover:border-primary/50 hover:bg-muted/30 cursor-pointer",
+                "border-2 border-dashed rounded-xl p-12 transition-all duration-300 hover:border-primary/50 hover:bg-muted/30 cursor-pointer dropzone-area bg-card focus:ring-2 focus:ring-primary focus:border-primary",
                 isDragActive && "border-primary bg-primary/10 scale-105 shadow-lg",
                 importing && "opacity-50 cursor-not-allowed"
               )}
+              data-dropzone="true"
+              id="file-dropzone"
+              tabIndex={0}
+              style={{ outline: 'none', position: 'relative', zIndex: 10 }}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={handleClick}
+              onPaste={handlePaste}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleClick();
+                }
+              }}
             >
-              <input {...getInputProps()} />
+              <input 
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.xlsx"
+                onChange={handleFileInput}
+                style={{ display: 'none' }}
+                disabled={importing}
+              />
               <div className="flex flex-col items-center justify-center text-center space-y-6">
                 <div className={cn(
                   "relative p-6 rounded-full transition-all duration-300",
@@ -1011,22 +1265,16 @@ function ImportPageContent() {
                     <Brain className="h-4 w-4" />
                     <span>Análise com IA</span>
                   </div>
+                  <div className="w-1 h-1 bg-muted-foreground rounded-full"></div>
+                  <div className="flex items-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    <span>Drag & Drop</span>
+                  </div>
                 </div>
               </div>
-            </Card>
-            
-            <div className="text-center">
-              <p className="text-muted-foreground mb-4">ou</p>
-              <Button 
-                onClick={openFileSelector}
-                disabled={importing}
-                size="lg"
-                className="flex items-center gap-3 px-8 py-3 text-lg font-medium bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl"
-              >
-                <FolderOpen className="h-5 w-5" />
-                Selecionar Arquivo
-              </Button>
             </div>
+            
+
           </div>
         )}
         
@@ -1058,9 +1306,22 @@ function ImportPageContent() {
             <Card className="p-6 space-y-4">
               <div className="flex justify-between items-center">
                 <h4 className="text-lg font-semibold">Progresso da Análise</h4>
-                <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  {Math.round(progress)}%
-                </span>
+                <div className="flex items-center gap-4">
+                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    {Math.round(progress)}%
+                  </span>
+                  {isProcessing && !isCancelled && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={cancelAnalysis}
+                      className="flex items-center gap-2"
+                    >
+                      <X className="h-4 w-4" />
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
               </div>
               
               <AnimatedProgress value={progress} />
@@ -1069,6 +1330,23 @@ function ImportPageContent() {
                 <span>{currentStep}</span>
                 <span>{processedItems}/{totalItems} itens</span>
               </div>
+              
+              {isCancelled && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 text-red-600 animate-spin" />
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                  </div>
+                  <div>
+                    <span className="text-sm text-red-800 dark:text-red-200 font-medium">
+                      Cancelando análise...
+                    </span>
+                    <p className="text-xs text-red-600 dark:text-red-300 mt-1">
+                      Interrompendo requisições em andamento e limpando recursos.
+                    </p>
+                  </div>
+                </div>
+              )}
             </Card>
 
             {/* Estatísticas em Tempo Real */}
@@ -1086,12 +1364,22 @@ function ImportPageContent() {
 
             {/* Dicas durante o processamento */}
             <Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
-              <div className="flex items-center gap-3">
-                <Coffee className="h-5 w-5 text-blue-600" />
-                <div className="text-sm text-blue-800 dark:text-blue-200">
-                  <strong>Dica Profissional:</strong> Você pode minimizar esta aba e continuar trabalhando. 
-                  Nossa IA continuará processando em segundo plano.
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Coffee className="h-5 w-5 text-blue-600" />
+                  <div className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>Dica Profissional:</strong> Você pode minimizar esta aba e continuar trabalhando. 
+                    Nossa IA continuará processando em segundo plano.
+                  </div>
                 </div>
+                {isProcessing && !isCancelled && (
+                  <div className="flex items-center gap-3">
+                    <X className="h-5 w-5 text-blue-600" />
+                                         <div className="text-sm text-blue-800 dark:text-blue-200">
+                       <strong>Cancelamento:</strong> Você pode cancelar a análise a qualquer momento clicando no botão &quot;Cancelar&quot; acima.
+                     </div>
+                  </div>
+                )}
               </div>
             </Card>
           </div>
