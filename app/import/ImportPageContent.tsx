@@ -5,7 +5,17 @@ import { useState, useEffect, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle, Timer, X } from "lucide-react"
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle, Timer, X, Settings, Users } from "lucide-react"
 import { storeFeedbacks } from "@/lib/feedback"
 import { analyzeWithGPT } from "@/lib/openai-client"
 import { useToast } from "@/components/ui/use-toast"
@@ -228,6 +238,10 @@ function ImportPageContent() {
   // Ref para o input file
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Estados para o AlertDialog de API Key
+  const [showApiKeyAlert, setShowApiKeyAlert] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
   useEffect(() => {
     const checkTestEnvironment = async () => {
       try {
@@ -254,7 +268,20 @@ function ImportPageContent() {
       }
     };
     
+    const handleApiKeyChanged = () => {
+      // Se há um arquivo pendente e agora há uma API key, processar o arquivo
+      if (pendingFile && checkApiKey()) {
+        setShowApiKeyAlert(false);
+        const fileToProcess = pendingFile;
+        setPendingFile(null);
+        processFileWithAccountHotel(fileToProcess);
+      }
+    };
+    
     checkTestEnvironment();
+
+    // Listener para mudanças na API key
+    window.addEventListener('apiKeyChanged', handleApiKeyChanged);
 
     // Event listeners globais SIMPLIFICADOS - apenas prevenir comportamento padrão
     const preventDefaultDrop = (e: DragEvent) => {
@@ -276,8 +303,9 @@ function ImportPageContent() {
     return () => {
       document.removeEventListener('dragover', preventDefaultDrop, false);
       document.removeEventListener('drop', preventDefaultDrop, false);
+      window.removeEventListener('apiKeyChanged', handleApiKeyChanged);
     };
-  }, []);
+  }, [pendingFile]);
 
   // Hook para calcular tempo estimado
   useEffect(() => {
@@ -297,6 +325,12 @@ function ImportPageContent() {
     }
   }, [progress, importing, startTime]);
 
+  // Função para verificar se a API key está configurada
+  const checkApiKey = () => {
+    const apiKey = localStorage.getItem('openai-api-key');
+    return apiKey && apiKey.trim() !== '';
+  };
+
   const onDrop = async (files: File[]) => {
     if (files.length === 0) return;
     setAcceptedFiles(files);
@@ -310,7 +344,28 @@ function ImportPageContent() {
       return;
     }
 
+    // Verificar se a API key está configurada antes de processar
+    if (!checkApiKey()) {
+      setPendingFile(files[0]);
+      setShowApiKeyAlert(true);
+      return;
+    }
+
     processFileWithAccountHotel(files[0]);
+  };
+
+  // Funções para lidar com o AlertDialog de API Key
+  const handleGoToSettings = () => {
+    setShowApiKeyAlert(false);
+    setPendingFile(null);
+    router.push('/settings');
+  };
+
+
+
+  const handleCancelApiKeyAlert = () => {
+    setShowApiKeyAlert(false);
+    setPendingFile(null);
   };
 
   const processFileWithAccountHotel = async (file: File) => {
@@ -1431,6 +1486,39 @@ function ImportPageContent() {
           </Card>
         )}
       </div>
+
+      {/* AlertDialog para API Key não configurada */}
+      <AlertDialog open={showApiKeyAlert} onOpenChange={setShowApiKeyAlert}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600" />
+              Chave de API Necessária
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <p>
+                Para analisar feedbacks com inteligência artificial, é necessário configurar uma chave de API.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Você pode configurar sua própria chave nas Configurações ou, se não possuir uma chave, 
+                entre em contato com o administrador do sistema para obter acesso.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-3">
+            <AlertDialogCancel onClick={handleCancelApiKeyAlert} className="sm:order-1">
+              Cancelar
+            </AlertDialogCancel>
+            <Button
+              onClick={handleGoToSettings}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white sm:order-2"
+            >
+              <Settings className="h-4 w-4" />
+              Ir para Configurações
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SharedDashboardLayout>
   )
 }
