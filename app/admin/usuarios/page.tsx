@@ -748,8 +748,8 @@ function UserManagementContent() {
       </div>
       
       <Card className="p-4">
-        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-sm text-blue-800">
+        <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
             <strong>ℹ️ Funcionalidades disponíveis:</strong> <br/>
             • <strong>Excluir Usuário:</strong> Remove usuário permanentemente do sistema<br/>
             • <strong>Sincronizar Usuários:</strong> Limpa dados inconsistentes do sistema<br/>

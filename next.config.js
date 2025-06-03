@@ -9,8 +9,7 @@ const nextConfig = {
   },
   reactStrictMode: true,
   experimental: {
-    appDir: true,
-    serverComponentsExternalPackages: ['openai']
+    serverComponentsExternalPackages: ['openai', 'firebase-admin']
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
@@ -19,8 +18,26 @@ const nextConfig = {
         fs: false,
         net: false,
         tls: false,
+        crypto: false,
+        stream: false,
+        url: false,
+        zlib: false,
+        http: false,
+        https: false,
+        assert: false,
+        os: false,
+        path: false,
       };
     }
+    
+    // Configuração específica para Firebase
+    config.module.rules.push({
+      test: /\.m?js$/,
+      resolve: {
+        fullySpecified: false,
+      },
+    });
+
     return config;
   }
 };

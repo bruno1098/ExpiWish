@@ -82,6 +82,26 @@
     --chart-4: 262 83% 58%;
     --chart-5: 340 82% 52%;
   }
+  
+  * {
+    @apply border-border transition-colors duration-300;
+  }
+  
+  html {
+    transition: color-scheme 0.3s;
+  }
+  
+  html.dark {
+    color-scheme: dark;
+  }
+  
+  html.light {
+    color-scheme: light;
+  }
+  
+  body {
+    @apply bg-background text-foreground transition-colors duration-300;
+  }
 }
 
 @layer base {
@@ -223,4 +243,129 @@
 
 .dark .recharts-text {
   fill: hsl(215, 20%, 70%);
+}
+
+/* Estilos para recharts no modo escuro */
+.dark .recharts-cartesian-grid line,
+.dark .recharts-reference-line line {
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.dark .recharts-text {
+  fill: rgba(255, 255, 255, 0.7);
+}
+
+/* Animação shimmer para barra de progresso */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+}
+
+/* Animações para a página de import */
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes bounce-gentle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s infinite;
+}
+
+.animate-bounce-gentle {
+  animation: bounce-gentle 2s infinite;
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* Melhorias visuais para cards da página de import */
+.import-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+}
+
+.import-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dark .import-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Efeito de brilho para o botão principal */
+.button-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.button-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.button-glow:hover::before {
+  left: 100%;
+}
+
+/* Responsividade aprimorada */
+@media (max-width: 640px) {
+  .import-container {
+    padding: 1rem;
+  }
+  
+  .import-title {
+    font-size: 2rem;
+  }
+  
+  .import-stats {
+    grid-template-columns: 1fr;
+  }
 }

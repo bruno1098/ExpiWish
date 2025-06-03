@@ -21,12 +21,24 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const theme = localStorage.getItem('theme-preference') || 'light';
+                document.documentElement.classList.toggle('dark', theme === 'dark');
+              } catch (e) {}
+            `
+          }}
+        />
+      </head>
+      <body className={`${inter.className} transition-colors duration-300`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
+          defaultTheme="light"
+          enableSystem={false}
+          storageKey="theme-preference"
         >
           <AuthProvider>
             {children}

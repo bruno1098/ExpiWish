@@ -29,8 +29,8 @@ interface ProblemsDashboardProps {
   onProblemClick?: (problem: string) => void;
 }
 
-// Cores para diferentes setores
-const SECTOR_COLORS: Record<string, string> = {
+// Cores para diferentes departamentos
+const DEPARTMENT_COLORS: Record<string, string> = {
   'A&B': '#3B82F6',
   'Governança': '#EF4444',
   'Manutenção': '#F97316',
@@ -42,9 +42,9 @@ const SECTOR_COLORS: Record<string, string> = {
   'Comercial': '#06B6D4'
 };
 
-// Função para obter cor com base no setor
-const getSectorColor = (sector: string) => {
-  return SECTOR_COLORS[sector as keyof typeof SECTOR_COLORS] || '#6B7280';
+// Função para obter cor com base no departamento
+const getDepartmentColor = (department: string) => {
+  return DEPARTMENT_COLORS[department as keyof typeof DEPARTMENT_COLORS] || '#6B7280';
 };
 
 // Adicionar lista de problemas padronizados
@@ -76,8 +76,29 @@ const PROBLEMAS_PADRONIZADOS = [
 ];
 
 export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboardProps) {
+  // Função para filtrar feedbacks válidos (remove não identificados)
+  const filterValidFeedbacks = (feedbacks: any[]) => {
+    return feedbacks.filter(feedback => {
+      const keyword = feedback.keyword?.toLowerCase() || '';
+      const sector = feedback.sector?.toLowerCase() || '';
+      
+      const isNotIdentified = 
+        keyword.includes('não identificado') ||
+        keyword.includes('vazio') ||
+        keyword === '' ||
+        sector.includes('não identificado') ||
+        sector.includes('vazio') ||
+        sector === '';
+      
+      return !isNotIdentified;
+    });
+  };
+
+  // Usar apenas feedbacks válidos
+  const validFeedbacks = filterValidFeedbacks(feedbacks);
+  
   // Filtra feedbacks com problemas reais (exclui "Sem problemas")
-  const problemFeedbacks = feedbacks.filter(f => {
+  const problemFeedbacks = validFeedbacks.filter(f => {
     return f.problem && 
            !f.problem.includes("Sem problemas") && 
            f.problem !== "Não identificado" &&
@@ -86,11 +107,11 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
 
   // Processa todos os problemas, incluindo múltiplos por feedback
   const processedProblems = problemFeedbacks.flatMap(feedback => {
-    const problems = feedback.problem.split(';').map(p => p.trim());
-    const keywords = feedback.keyword.split(';').map(k => k.trim());
-    const sectors = feedback.sector.split(';').map(s => s.trim());
+    const problems = feedback.problem.split(';').map((p: string) => p.trim());
+    const keywords = feedback.keyword.split(';').map((k: string) => k.trim());
+    const sectors = feedback.sector.split(';').map((s: string) => s.trim());
     
-    return problems.map((problem, index) => {
+    return problems.map((problem: string, index: number) => {
       if (problem === "Sem problemas" || problem === "Não identificado" || problem === "Não analisado") {
         return null;
       }
@@ -145,22 +166,22 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
     }))
     .sort((a, b) => b.count - a.count);
 
-  // Agrupa problemas por setor
-  const problemsBySector = processedProblems.reduce((acc, item) => {
+  // Agrupa problemas por departamento
+  const problemsByDepartment = processedProblems.reduce((acc, item) => {
     if (item) {
-      const sector = item.sector;
-      if (!acc[sector]) {
-        acc[sector] = { total: 0, problems: {} };
+      const department = item.sector;
+      if (!acc[department]) {
+        acc[department] = { total: 0, problems: {} };
       }
-      acc[sector].total += 1;
-      acc[sector].problems[item.problem] = (acc[sector].problems[item.problem] || 0) + 1;
+      acc[department].total += 1;
+      acc[department].problems[item.problem] = (acc[department].problems[item.problem] || 0) + 1;
     }
     return acc;
   }, {} as Record<string, { total: number; problems: Record<string, number> }>);
 
-  // Prepara dados para o gráfico de setores
-  const sectorData = Object.entries(problemsBySector).map(([sector, data]) => ({
-    sector,
+  // Prepara dados para o gráfico de departamentos
+  const departmentData = Object.entries(problemsByDepartment).map(([department, data]) => ({
+    department,
     count: data.total,
   })).sort((a, b) => b.count - a.count);
 
@@ -191,7 +212,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
         <div className="bg-white p-3 border rounded shadow-md">
           <p className="font-medium">{data.keyword}</p>
           <p className="text-sm">{data.problem}</p>
-          <p className="text-sm text-gray-500">Setor: {data.sector}</p>
+          <p className="text-sm text-gray-500">Departamento: {data.sector}</p>
           <p className="font-medium">Ocorrências: {data.count}</p>
         </div>
       );
@@ -228,14 +249,14 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
           </Card>
           
           <Card className="p-4">
-            <div className="text-sm font-medium text-gray-500">Setores Afetados</div>
-            <div className="text-2xl font-bold mt-1">{sectorData.length}</div>
+            <div className="text-sm font-medium text-gray-500">Departamentos Afetados</div>
+            <div className="text-2xl font-bold mt-1">{departmentData.length}</div>
           </Card>
         </div>
         <Tabs defaultValue="problems" className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="problems">Problemas</TabsTrigger>
-            <TabsTrigger value="sectors">Setores</TabsTrigger>
+            <TabsTrigger value="sectors">Departamentos</TabsTrigger>
             <TabsTrigger value="keywords">Palavras-chave</TabsTrigger>
           </TabsList>
           
@@ -281,7 +302,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                               p.problem.toLowerCase().includes(searchFilter.toLowerCase())
                             )
                             .find(p => p.problem === payload.value);
-                          const color = item ? getSectorColor(item.sector) : '#6B7280';
+                          const color = item ? getDepartmentColor(item.sector) : '#6B7280';
                           
                           return (
                             <text 
@@ -311,7 +332,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                           .map((entry, index) => (
                             <Cell 
                               key={`cell-${index}`} 
-                              fill={getSectorColor(entry.sector)} 
+                              fill={getDepartmentColor(entry.sector)} 
                             />
                           ))}
                       </Bar>
@@ -333,7 +354,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                       <TableRow>
                         <TableHead>Problema</TableHead>
                         <TableHead>Palavra-chave</TableHead>
-                        <TableHead>Setor</TableHead>
+                        <TableHead>Departamento</TableHead>
                         <TableHead className="text-right">Ocorrências</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -350,9 +371,9 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                             <TableCell>
                               <Badge 
                                 style={{ 
-                                  backgroundColor: `${getSectorColor(item.sector)}20`,
-                                  color: getSectorColor(item.sector),
-                                  borderColor: getSectorColor(item.sector)
+                                  backgroundColor: `${getDepartmentColor(item.sector)}20`,
+                                  color: getDepartmentColor(item.sector),
+                                  borderColor: getDepartmentColor(item.sector)
                                 }}
                               >
                                 {item.problem}
@@ -393,7 +414,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                           {problemTableData.slice(0, 5).map((entry, index) => (
                             <Cell 
                               key={`cell-${index}`} 
-                              fill={getSectorColor(entry.sector)} 
+                              fill={getDepartmentColor(entry.sector)} 
                             />
                           ))}
                         </Pie>
@@ -407,31 +428,31 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
             </div>
           </TabsContent>
           
-          {/* Tab de Setores */}
+          {/* Tab de Departamentos */}
           <TabsContent value="sectors">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Gráfico de Pizza - Distribuição por Setor */}
+              {/* Gráfico de Pizza - Distribuição por Departamento */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Problemas por Setor</CardTitle>
+                  <CardTitle className="text-base">Problemas por Departamento</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={sectorData}
+                          data={departmentData}
                           dataKey="count"
-                          nameKey="sector"
+                          nameKey="department"
                           cx="50%"
                           cy="50%"
                           outerRadius={80}
                           label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                         >
-                          {sectorData.map((entry, index) => (
+                          {departmentData.map((entry, index) => (
                             <Cell 
                               key={`cell-${index}`} 
-                              fill={getSectorColor(entry.sector)} 
+                              fill={getDepartmentColor(entry.department)} 
                             />
                           ))}
                         </Pie>
@@ -443,32 +464,32 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                 </CardContent>
               </Card>
               
-              {/* Tabela de Setores */}
+              {/* Tabela de Departamentos */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Detalhamento por Setor</CardTitle>
+                  <CardTitle className="text-base">Detalhamento por Departamento</CardTitle>
                 </CardHeader>
                 <CardContent className="max-h-[400px] overflow-y-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Setor</TableHead>
+                        <TableHead>Departamento</TableHead>
                         <TableHead className="text-right">Problemas</TableHead>
                         <TableHead className="text-right">%</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sectorData.map((item) => (
-                        <TableRow key={item.sector}>
+                      {departmentData.map((item) => (
+                        <TableRow key={item.department}>
                           <TableCell>
                             <Badge 
                               style={{ 
-                                backgroundColor: `${getSectorColor(item.sector)}20`,
-                                color: getSectorColor(item.sector),
-                                borderColor: getSectorColor(item.sector)
+                                backgroundColor: `${getDepartmentColor(item.department)}20`,
+                                color: getDepartmentColor(item.department),
+                                borderColor: getDepartmentColor(item.department)
                               }}
                             >
-                              {item.sector}
+                              {item.department}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">{item.count}</TableCell>

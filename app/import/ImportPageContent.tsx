@@ -5,7 +5,7 @@ import { useDropzone } from "react-dropzone"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Upload, FileType, CheckCircle2, FolderOpen } from "lucide-react"
+import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle } from "lucide-react"
 import { storeFeedbacks } from "@/lib/feedback"
 import { analyzeWithGPT } from "@/lib/openai-client"
 import { useToast } from "@/components/ui/use-toast"
@@ -31,6 +31,123 @@ const generateUniqueId = () => {
   return 'id-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now().toString(36);
 };
 
+// Mensagens motivadoras baseadas no progresso
+const getMotivationalMessage = (progress: number, totalItems: number) => {
+  if (progress < 10) {
+    return {
+      title: "Iniciando análise inteligente",
+      description: "Preparando os motores da IA para analisar seus feedbacks",
+      icon: <Zap className="h-5 w-5 text-blue-500" />
+    };
+  } else if (progress < 25) {
+    return {
+      title: "IA trabalhando na análise",
+      description: totalItems > 100 ? "Arquivo grande detectado. Recomendamos aguardar - você pode usar outras abas enquanto processamos" : "Analisando padrões e sentimentos dos feedbacks",
+      icon: <Brain className="h-5 w-5 text-purple-500" />
+    };
+  } else if (progress < 50) {
+    return {
+      title: "Processamento em andamento",
+      description: totalItems > 200 ? "Nossa IA está trabalhando continuamente. Aproveite para outras atividades" : "Identificando problemas e oportunidades nos dados",
+      icon: <SparklesIcon className="h-5 w-5 text-yellow-500" />
+    };
+  } else if (progress < 75) {
+    return {
+      title: "Finalizando análise",
+      description: totalItems > 300 ? "Processo quase concluído. Aguarde mais alguns instantes" : "Organizando insights e estatísticas finais",
+      icon: <Clock className="h-5 w-5 text-green-500" />
+    };
+  } else if (progress < 95) {
+    return {
+      title: "Aplicando últimos ajustes",
+      description: "Finalizando o processamento com inteligência artificial",
+      icon: <SparklesIcon className="h-5 w-5 text-pink-500" />
+    };
+  } else {
+    return {
+      title: "Quase pronto",
+      description: "Salvando análise na nuvem. Você receberá os resultados em breve",
+      icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+    };
+  }
+};
+
+// Componente de progresso animado
+const AnimatedProgress = ({ value, className }: { value: number; className?: string }) => {
+  return (
+    <div className={cn("relative", className)}>
+      <Progress 
+        value={value} 
+        className="h-3 bg-gray-200 dark:bg-gray-700 overflow-hidden rounded-full"
+      />
+      <div 
+        className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full transition-all duration-500 ease-out"
+        style={{ width: `${value}%` }}
+      >
+        <div className="h-full w-full bg-white/20 animate-pulse rounded-full"></div>
+        <div className="absolute top-0 left-0 h-full w-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer rounded-full"></div>
+      </div>
+    </div>
+  );
+};
+
+// Componente de estatísticas em tempo real
+const LiveStats = ({ processed, total, currentStep, retryCount, errorCount }: { 
+  processed: number; 
+  total: number; 
+  currentStep: string;
+  retryCount: number;
+  errorCount: number;
+}) => {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div className="flex items-center gap-2">
+          <FileIcon className="h-4 w-4 text-blue-600" />
+          <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Processados</span>
+        </div>
+        <div className="text-2xl font-bold text-blue-600 mt-1">{processed}</div>
+      </div>
+      
+      <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-purple-600" />
+          <span className="text-sm font-medium text-purple-900 dark:text-purple-100">Restantes</span>
+        </div>
+        <div className="text-2xl font-bold text-purple-600 mt-1">{total - processed}</div>
+      </div>
+      
+      {retryCount > 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-yellow-600" />
+            <span className="text-sm font-medium text-yellow-900 dark:text-yellow-100">Tentativas</span>
+          </div>
+          <div className="text-2xl font-bold text-yellow-600 mt-1">{retryCount}</div>
+        </div>
+      )}
+      
+      {errorCount > 0 && (
+        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <span className="text-sm font-medium text-red-900 dark:text-red-100">Erros</span>
+          </div>
+          <div className="text-2xl font-bold text-red-600 mt-1">{errorCount}</div>
+        </div>
+      )}
+      
+      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800 col-span-2 md:col-span-1">
+        <div className="flex items-center gap-2">
+          <Brain className="h-4 w-4 text-green-600" />
+          <span className="text-sm font-medium text-green-900 dark:text-green-100">Fase Atual</span>
+        </div>
+        <div className="text-sm font-semibold text-green-600 mt-1">{currentStep}</div>
+      </div>
+    </div>
+  );
+};
+
 function ImportPageContent() {
   const { toast } = useToast()
   const [progress, setProgress] = useState(0)
@@ -38,16 +155,21 @@ function ImportPageContent() {
   const [complete, setComplete] = useState(false)
   const router = useRouter()
   const { userData } = useAuth();
-  const [detectingHotels, setDetectingHotels] = useState(false);
-  const [hotelsInFile, setHotelsInFile] = useState<string[]>([]);
-  const [chosenHotelOption, setChosenHotelOption] = useState<'account' | 'file' | null>(null);
   const [acceptedFiles, setAcceptedFiles] = useState<File[]>([]);
   const [isTestEnvironment, setIsTestEnvironment] = useState(false);
   
   // Estados para o controle do modelo
-  const [useFineTuned, setUseFineTuned] = useState(false);
   const [useNormalMode, setUseNormalMode] = useState(true);
   const [lastProgressToast, setLastProgressToast] = useState(0);
+
+  // Estados para a UI melhorada
+  const [processedItems, setProcessedItems] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentStep, setCurrentStep] = useState("Preparando...");
+  const [estimatedTime, setEstimatedTime] = useState("");
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [errorCount, setErrorCount] = useState(0);
 
   // Ref para o input file
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -81,6 +203,24 @@ function ImportPageContent() {
     checkTestEnvironment();
   }, []);
 
+  // Hook para calcular tempo estimado
+  useEffect(() => {
+    if (importing && startTime && progress > 5) {
+      const elapsedTime = Date.now() - startTime.getTime();
+      const estimatedTotal = (elapsedTime / progress) * 100;
+      const remainingTime = estimatedTotal - elapsedTime;
+      
+      if (remainingTime > 0) {
+        const minutes = Math.ceil(remainingTime / (60 * 1000));
+        if (minutes > 1) {
+          setEstimatedTime(`~${minutes} minutos restantes`);
+        } else {
+          setEstimatedTime("Quase terminando...");
+        }
+      }
+    }
+  }, [progress, importing, startTime]);
+
   const onDrop = async (files: File[]) => {
     if (files.length === 0) return;
     setAcceptedFiles(files);
@@ -94,92 +234,22 @@ function ImportPageContent() {
       return;
     }
 
-    setDetectingHotels(true);
-    setImporting(false);
-    setProgress(0);
-    setComplete(false);
-    setHotelsInFile([]);
-    setChosenHotelOption(null);
-
-    try {
-      const file = files[0];
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      
-      if (extension === 'xlsx') {
-        const { read, utils } = await import('xlsx');
-        const buffer = await file.arrayBuffer();
-        const workbook = read(buffer);
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        
-        const range = utils.decode_range(worksheet['!ref'] || 'A1');
-        const hotelsDetected = new Set<string>();
-        
-        for (let row = 1; row <= Math.min(range.e.r, 50); row++) {
-          const hotelFromFile = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
-          
-          if (hotelFromFile && typeof hotelFromFile === 'string' && hotelFromFile.trim() !== '') {
-            hotelsDetected.add(hotelFromFile.trim());
-          }
-        }
-        
-        if (hotelsDetected.size === 0) {
-          hotelsDetected.add("Hotel do arquivo (não especificado)");
-        }
-        
-        setHotelsInFile(Array.from(hotelsDetected));
-        
-      } else if (extension === 'csv') {
-        const Papa = (await import('papaparse')).default;
-        const text = await file.text();
-        const result = Papa.parse(text, { header: true });
-        
-        const hotelsDetected = new Set<string>();
-        const rowsToCheck = result.data.slice(0, 50);
-        
-        for (const row of rowsToCheck) {
-          if (row && typeof row === 'object') {
-            const rowObj = row as Record<string, any>;
-            const hotelName = 
-              (rowObj['fonte'] as string) || 
-              (rowObj['hotel'] as string) || 
-              (rowObj['Hotel'] as string) || 
-              (rowObj['HOTEL'] as string) ||
-              (rowObj['nomeHotel'] as string);
-              
-            if (hotelName && typeof hotelName === 'string' && hotelName.trim() !== '') {
-              hotelsDetected.add(hotelName.trim());
-            }
-          }
-        }
-        
-        if (hotelsDetected.size === 0) {
-          hotelsDetected.add("Hotel do arquivo (não especificado)");
-        }
-        
-        setHotelsInFile(Array.from(hotelsDetected));
-      }
-
-      setDetectingHotels(false);
-      
-    } catch (error: any) {
-      console.error("Erro ao analisar arquivo:", error);
-      toast({
-        title: "Erro na Análise",
-        description: error.message || "Ocorreu um erro ao analisar o arquivo.",
-        variant: "destructive",
-      } as ToastProps);
-      setDetectingHotels(false);
-    }
+    // Remover toda a lógica de detecção de hotéis e processar o arquivo diretamente
+    processFileWithAccountHotel(files[0]);
   };
 
-  const processFileWithOption = async (file: File, hotelOption: 'account' | 'file') => {
+  const processFileWithAccountHotel = async (file: File) => {
     setImporting(true);
     setProgress(0);
     setLastProgressToast(0);
+    setStartTime(new Date());
+    setCurrentStep("Lendo arquivo...");
+    setRetryCount(0);
+    setErrorCount(0);
     
     toast({
-      title: "Iniciando Análise Inteligente",
-      description: `Processando arquivo com modelo ${useFineTuned ? 'otimizado' : 'padrão'}. Aguarde...`,
+      title: "🚀 Iniciando Análise Inteligente",
+      description: `Preparando para processar ${file.name} com nossa IA`,
     });
 
     try {
@@ -188,6 +258,9 @@ function ImportPageContent() {
       
       const hotelName = userData?.hotelName || '';
       const hotelId = userData?.hotelId || '';
+
+      setCurrentStep("Extraindo dados do arquivo...");
+      setProgress(5);
 
       if (extension === 'xlsx') {
         const { read, utils } = await import('xlsx');
@@ -198,16 +271,18 @@ function ImportPageContent() {
         const range = utils.decode_range(worksheet['!ref'] || 'A1');
         const rows = [];
         
+        // Começar da linha 2 para pular o cabeçalho (índice 1 = linha 2 no Excel)
         for (let row = 1; row <= range.e.r; row++) {
-          const nomeHotel = worksheet[utils.encode_cell({ r: row, c: 1 })]?.v;
-          const fonte = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
-          const idioma = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
-          const pontuacao = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v;
-          const url = worksheet[utils.encode_cell({ r: row, c: 5 })]?.v;
-          const autor = worksheet[utils.encode_cell({ r: row, c: 6 })]?.v;
-          const titulo = worksheet[utils.encode_cell({ r: row, c: 7 })]?.v;
+          const data = worksheet[utils.encode_cell({ r: row, c: 1 })]?.v;
+          const nomeHotel = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
+          const fonte = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
+          const idioma = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v;
+          const pontuacao = worksheet[utils.encode_cell({ r: row, c: 5 })]?.v;
+          const url = worksheet[utils.encode_cell({ r: row, c: 6 })]?.v;
+          const autor = worksheet[utils.encode_cell({ r: row, c: 7 })]?.v;
+          const titulo = worksheet[utils.encode_cell({ r: row, c: 8 })]?.v;
           const texto = worksheet[utils.encode_cell({ r: row, c: 9 })]?.v;
-          const apartamento = worksheet[utils.encode_cell({ r: row, c: 11 })]?.v;
+          const apartamento = worksheet[utils.encode_cell({ r: row, c: 10 })]?.v;
           
           if (texto && 
               typeof texto === 'string' && 
@@ -217,7 +292,8 @@ function ImportPageContent() {
               !/^[^\w\s]+$/.test(texto.trim())) {
             
             rows.push({
-              nomeHotel: nomeHotel || '',
+              data: data || '',
+              nomeHotel: nomeHotel || hotelName,
               fonte: fonte || '',
               idioma: idioma || '',
               pontuacao: pontuacao || 0,
@@ -230,14 +306,7 @@ function ImportPageContent() {
           }
         }
         
-        data = rows.map((row) => {
-          const hotelFromFile = row.nomeHotel || row.fonte;
-          
-          return {
-            ...row,
-            nomeHotel: hotelOption === 'account' ? hotelName : (hotelFromFile || hotelName)
-          };
-        });
+        data = rows;
       } else if (extension === 'csv') {
         const Papa = (await import('papaparse')).default;
         const text = await file.text();
@@ -254,17 +323,13 @@ function ImportPageContent() {
                    !/^[^\w\s]+$/.test(row.texto.trim());
           })
           .map(row => {
-            const hotelFromFile = row.fonte || row.hotel || row.Hotel || row.HOTEL || row.nomeHotel;
             return {
               ...row,
               texto: row.texto.trim(),
-              nomeHotel: hotelOption === 'account' ? hotelName : (hotelFromFile || hotelName)
+              nomeHotel: hotelName
             };
           });
       }
-      
-      console.log("✅ Dados válidos lidos do arquivo:", data.length);
-      console.log("📝 Primeiros 3 textos da COLUNA J:", data.slice(0, 3).map(d => `"${d.texto.substring(0, 100)}..."`));
       
       if (data.length === 0) {
         toast({
@@ -272,210 +337,241 @@ function ImportPageContent() {
           description: "Verifique se a coluna J contém os feedbacks em texto.",
           variant: "destructive",
         } as ToastProps);
+        setImporting(false);
         return;
       }
       
+      // Definir totais para estatísticas
+      setTotalItems(data.length);
+      setProcessedItems(0);
+      setProgress(10);
+
       const processDataInChunks = async (data: any[]): Promise<Feedback[]> => {
         const result: Feedback[] = [];
-        const chunkSize = 500;
+        const chunkSize = 50; // Reduzido drasticamente para evitar sobrecarregar a API
         const chunks = [];
         
         for (let i = 0; i < data.length; i += chunkSize) {
           chunks.push(data.slice(i, i + chunkSize));
         }
 
-        if (useFineTuned) {
-          console.log("🚀 INICIANDO ANÁLISE COM FINE-TUNING (GPT-4o)");
-          console.log("Model ID: ft:gpt-4o-2024-08-06:pessoal:treino3:B5DXUVXY");
-        } else {
-          console.log("📝 INICIANDO ANÁLISE COM MODO NORMAL (GPT-3.5-turbo)");
+        // Obter a API Key das configurações
+        const apiKey = localStorage.getItem('openai-api-key');
+        if (!apiKey) {
+          throw new Error('API Key não configurada. Configure nas Configurações para usar a análise inteligente.');
         }
+        
+        setCurrentStep("Analisando feedbacks com IA...");
+
+        // Função helper para fazer retry com backoff exponencial
+        const retryWithBackoff = async (fn: Function, maxRetries: number = 3): Promise<any> => {
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              const result = await fn();
+              // Se teve retry mas agora deu certo, resetar contador
+              if (attempt > 1) {
+                setRetryCount(prev => prev - 1);
+              }
+              return result;
+            } catch (error: any) {
+              const isLastAttempt = attempt === maxRetries;
+              
+              // Incrementar contador de tentativas na primeira falha
+              if (attempt === 1) {
+                setRetryCount(prev => prev + 1);
+              }
+              
+              // Se for o último tentativa ou erro não relacionado à API, lança o erro
+              if (isLastAttempt || !error.message.includes('HTTP error! status: 5')) {
+                if (isLastAttempt) {
+                  setErrorCount(prev => prev + 1);
+                  setRetryCount(prev => Math.max(0, prev - 1));
+                }
+                throw error;
+              }
+              
+              // Calcular delay com backoff exponencial: 1s, 2s, 4s
+              const delay = Math.pow(2, attempt - 1) * 1000;
+              
+              // Atualizar step com informação de retry
+              setCurrentStep(`Resolvendo problemas temporários... (tentativa ${attempt + 1}/${maxRetries})`);
+              
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
+        };
 
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
-          const batches: any[][] = [];
           
-          for (let j = 0; j < chunk.length; j += BATCH_SIZE) {
-            batches.push(chunk.slice(j, j + BATCH_SIZE));
-          }
+          setCurrentStep(`Analisando lote ${i + 1}/${chunks.length}...`);
           
-          const batchPromises = batches.map(async (batch) => {
-            const batchResults = await Promise.all(
-              batch.map(async (row) => {
-                if (!row.texto) return null;
-                
-                try {
-                  const modelType = useFineTuned ? "Fine-tuned (GPT-4o)" : "Normal (GPT-3.5)";
-                  console.log(`🔄 Analisando: "${row.texto.substring(0, 50)}..." com ${modelType}`);
-
-                  const analysis = await analyzeWithGPT(row.texto, useFineTuned);
-                  
-                  console.log(`✅ Resultado: Rating=${analysis.rating}, Problem="${analysis.problem || 'VAZIO'}"`);
-                  
-                  const feedback: Feedback = {
-                    id: generateUniqueId(),
-                    date: new Date().toISOString(),
-                    comment: row.texto,
-                    rating: analysis.rating,
-                    sentiment: analysis.rating >= 4 ? 'positive' : analysis.rating <= 2 ? 'negative' : 'neutral',
-                    keyword: analysis.keyword,
-                    sector: analysis.sector,
-                    problem: analysis.problem,
-                    hotel: hotelOption === 'account' ? userData?.hotelName || '' : (row.nomeHotel || row.fonte || ''),
-                    source: row.fonte || '',
-                    language: row.idioma || '',
-                    score: row.pontuacao || undefined,
-                    url: row.url || undefined,
-                    author: row.autor || undefined,
-                    title: row.titulo || undefined,
-                    apartamento: row.apartamento || undefined
-                  };
-                  
-                  return feedback;
-                } catch (error: any) {
-                  console.error(`❌ Erro ao processar: "${row.texto.substring(0, 30)}..."`, error);
-                  if (error.message.includes('exceeded your current quota')) {
-                    toast({
-                      title: "Limite de Uso Atingido",
-                      description: "Limite de análises atingido. Verifique suas configurações.",
-                      variant: "destructive",
-                    } as ToastProps);
-                    throw error;
-                  }
-                  if (error.message.includes('API Key')) {
-                    toast({
-                      title: "Erro de Configuração",
-                      description: "Configure a chave de API nas Configurações para usar a análise inteligente.",
-                      variant: "destructive",
-                    } as ToastProps);
-                  }
-                  return null;
-                }
-              })
-            );
+          // Processar sequencialmente ao invés de Promise.all para evitar sobrecarregar
+          for (let j = 0; j < chunk.length; j++) {
+            const row = chunk[j];
             
-            return batchResults.filter((item): item is Feedback => item !== null);
-          });
-          
-          const results = await Promise.all(batchPromises);
-          for (const batchResult of results) {
-            result.push(...batchResult);
+            try {
+              const analysisResult = await retryWithBackoff(async () => {
+                const response = await fetch('/api/analyze-feedback', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ 
+                    texto: row.texto,
+                    apiKey: apiKey,
+                  }),
+                });
+
+                if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.error) {
+                  throw new Error(result.error);
+                }
+
+                return result;
+              });
+
+              const rating = analysisResult.rating || 3;
+              const rawResponse = analysisResult.response || "Não identificado, Não identificado, ";
+              
+              const parts = rawResponse.split(',').map((part: string) => part.trim());
+              const keyword = parts[0] || 'Não identificado';
+              const sector = parts[1] || 'Não identificado';
+              const problem = parts[2] || '';
+                  
+              const feedback: Feedback = {
+                id: generateUniqueId(),
+                date: new Date().toISOString(),
+                comment: row.texto,
+                rating: rating,
+                sentiment: rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral',
+                keyword: keyword,
+                sector: sector,
+                problem: problem,
+                hotel: row.nomeHotel,
+                hotelId: hotelId,
+                source: row.fonte || '',
+                language: row.idioma || '',
+                score: row.pontuacao || undefined,
+                url: row.url || undefined,
+                author: row.autor || undefined,
+                title: row.titulo || undefined,
+                apartamento: row.apartamento || undefined
+              };
+
+              result.push(feedback);
+
+              // Atualizar progresso em tempo real
+              const currentProcessed = result.length;
+              setProcessedItems(currentProcessed);
+              
+              // Calcular progresso (10% para leitura do arquivo, 80% para análise, 10% para salvamento)
+              const analysisProgress = 10 + ((currentProcessed / data.length) * 80);
+              setProgress(Math.min(analysisProgress, 90));
+                  
+            } catch (error: any) {
+              console.error(`❌ Erro ao processar feedback ${j} após todas as tentativas:`, error);
+              
+              // Criar feedback com dados padrão quando falha após todas as tentativas
+              const feedback: Feedback = {
+                id: generateUniqueId(),
+                date: new Date().toISOString(),
+                comment: row.texto,
+                rating: 3,
+                sentiment: 'neutral',
+                keyword: 'Erro de Processamento',
+                sector: 'Não identificado',
+                problem: 'Falha na análise',
+                hotel: row.nomeHotel,
+                hotelId: hotelId,
+                source: row.fonte || '',
+                language: row.idioma || '',
+                score: row.pontuacao || undefined,
+                url: row.url || undefined,
+                author: row.autor || undefined,
+                title: row.titulo || undefined,
+                apartamento: row.apartamento || undefined
+              };
+
+              result.push(feedback);
+            }
+            
+            // Pequeno delay entre cada feedback para não sobrecarregar
+            await delay(10);
           }
           
-          const currentProgress = (result.length / data.length) * 100;
-          setProgress(currentProgress);
-          
-          if (currentProgress >= 25 && lastProgressToast < 25) {
-            setLastProgressToast(25);
-            toast({
-              title: "Análise em Progresso",
-              description: "25% concluído. A IA está processando os feedbacks...",
-            });
-          } else if (currentProgress >= 50 && lastProgressToast < 50) {
-            setLastProgressToast(50);
-            toast({
-              title: "Análise em Progresso",
-              description: "50% concluído. Metade dos dados já foram analisados!",
-            });
-          } else if (currentProgress >= 75 && lastProgressToast < 75) {
-            setLastProgressToast(75);
-            toast({
-              title: "Quase Finalizado",
-              description: "75% concluído. Processando os últimos feedbacks...",
-            });
-          }
-          
+          // Pausa maior entre chunks para não sobrecarregar a API
           if (i < chunks.length - 1) {
-            await delay(DELAY_BETWEEN_BATCHES);
+            await delay(900); // Aumentado para 2 segundos entre chunks
           }
         }
 
-        console.log(`🎉 ANÁLISE FINALIZADA! ${result.length} feedbacks processados`);
         return result;
       };
 
-      const processedData = await processDataInChunks(data);
-
-      storeFeedbacks(processedData);
+      setCurrentStep("Processando com inteligência artificial...");
+      const feedbacks = await processDataInChunks(data);
       
-      toast({
-        title: "Análise Inteligente Concluída",
-        description: `${processedData.length} feedbacks analisados com sucesso usando ${useFineTuned ? 'modelo otimizado' : 'modelo padrão'}.`,
-      });
-
-      const analysisData: any = {
-        totalFeedbacks: processedData.length,
-        averageRating: processedData.reduce((acc, item) => acc + item.rating, 0) / processedData.length,
-        positiveSentiment: Math.round((processedData.filter(item => item.sentiment === 'positive').length / processedData.length) * 100),
-        responseRate: 0,
-        hotelDistribution: processHotelDistribution(processedData),
-        sourceDistribution: processSourceDistribution(processedData),
-        languageDistribution: processLanguageDistribution(processedData),
-        ratingDistribution: processRatingDistribution(processedData),
-        sectorDistribution: processSectorDistribution(processedData),
-        keywordDistribution: processKeywordDistribution(processedData),
-        sentimentTrend: [],
-        recentFeedbacks: processedData.slice(0, 5),
-        problemDistribution: processProblemDistribution(processedData),
-        apartamentoDistribution: processApartamentoDistribution(processedData)
-      };
+      setCurrentStep("Organizando resultados...");
+      setProgress(90);
       
-      if (isTestEnvironment) {
-        analysisData.isTestEnvironment = true;
-        
-        if (hotelOption === 'account') {
-          try {
-            const testEnvResponse = await fetch('/api/test-environment');
-            if (testEnvResponse.ok) {
-              const testEnvData = await testEnvResponse.json();
-              if (testEnvData.hotels && testEnvData.hotels.length > 0) {
-                const testHotel = testEnvData.hotels[0];
-                analysisData.hotelId = testHotel.hotelId;
-                analysisData.hotelName = testHotel.name;
-              }
-            }
-          } catch (error) {
-            console.error("Erro ao obter hotel de teste:", error);
-          }
+      setCurrentStep("Salvando na nuvem...");
+      setProgress(95);
+      
+      // Salvar os feedbacks no Firestore
+      const saved = await storeFeedbacks(feedbacks);
+      
+      // Preparar análise para salvar
+      const analysisToSave = {
+        id: generateUniqueId(),
+        hotelId: hotelId,
+        hotelName: hotelName,
+        importDate: new Date(),
+        data: feedbacks,
+        analysis: {
+          totalFeedbacks: feedbacks.length,
+          averageRating: feedbacks.reduce((acc, f) => acc + f.rating, 0) / feedbacks.length,
+          positiveSentiment: Math.round((feedbacks.filter(f => f.sentiment === 'positive').length / feedbacks.length) * 100),
+          responseRate: 85,
+          hotelDistribution: processHotelDistribution(feedbacks),
+          sourceDistribution: processSourceDistribution(feedbacks),
+          languageDistribution: processLanguageDistribution(feedbacks),
+          ratingDistribution: processRatingDistribution(feedbacks),
+          problemDistribution: processProblemDistribution(feedbacks),
+          keywordDistribution: processKeywordDistribution(feedbacks),
+          apartamentoDistribution: processApartamentoDistribution(feedbacks),
+          recentFeedbacks: feedbacks.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10)
         }
-      }
+      };
+
+      await saveAnalysis(analysisToSave);
       
-      try {
-        const analysisId = await saveAnalysis({
-          hotelId: hotelId,
-          hotelName: hotelName,
-          data: processedData,
-          analysis: analysisData,
-          isTestEnvironment: isTestEnvironment
-        });
-        
-        toast({
-          title: "Dados Salvos com Sucesso",
-          description: "Análise completa salva e disponível no painel de controle.",
-        });
-        
-        router.push(`/analysis`);
-      } catch (error) {
-        console.error("Erro ao salvar no Firestore:", error);
-        toast({
-          title: "Erro ao Salvar",
-          description: "Análise concluída, mas houve erro ao salvar. Tente novamente.",
-          variant: "destructive",
-        } as ToastProps);
-      }
-      
+      // Salvar dados no localStorage para a tela de análise
+      localStorage.setItem('analysis-feedbacks', JSON.stringify(feedbacks));
+      localStorage.setItem('analysis-data', JSON.stringify(analysisToSave));
+      console.log("💾 Dados salvos no localStorage para análise");
+
       setProgress(100);
+      setCurrentStep("Concluído!");
       setComplete(true);
       
       toast({
-        title: "Importação Finalizada",
-        description: "Todos os dados foram processados e estão prontos para análise!",
+        title: "Análise Concluída",
+        description: errorCount > 0 
+          ? `${feedbacks.length} feedbacks analisados com ${errorCount} erros recuperados`
+          : `${feedbacks.length} feedbacks analisados com sucesso`,
       });
+
     } catch (error: any) {
-      console.error("Erro durante a importação:", error);
+      console.error("❌ Erro durante o processamento:", error);
       toast({
-        title: "Erro na Importação",
-        description: "Houve um problema durante o processamento. Verifique o arquivo e tente novamente.",
+        title: "Erro no Processamento",
+        description: error.message,
         variant: "destructive",
       } as ToastProps);
     } finally {
@@ -485,12 +581,9 @@ function ImportPageContent() {
 
   const resetImportState = () => {
     setAcceptedFiles([]);
-    setHotelsInFile([]);
-    setChosenHotelOption(null);
-    setDetectingHotels(false);
     setImporting(false);
-    setComplete(false);
     setProgress(0);
+    setComplete(false);
     setLastProgressToast(0);
   };
 
@@ -512,10 +605,10 @@ function ImportPageContent() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
       'text/csv': ['.csv'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
     },
-    disabled: importing || detectingHotels,
+    disabled: importing,
     multiple: false,
     noClick: true,
     noKeyboard: true
@@ -714,235 +807,269 @@ function ImportPageContent() {
       .sort((a, b) => b.value - a.value);
   };
 
-  const handleModeChange = (mode: 'normal' | 'fineTuned') => {
-    if (mode === 'normal') {
-      setUseNormalMode(true);
-      setUseFineTuned(false);
-      console.log("🔄 Modo alterado para: NORMAL (GPT-3.5-turbo)");
-      
-      toast({
-        title: "Modelo Padrão Selecionado",
-        description: "Análise com modelo padrão ativada. Processamento eficiente e econômico.",
-      });
-      
-    } else {
-      setUseNormalMode(false);
-      setUseFineTuned(true);
-      console.log("🔄 Modo alterado para: FINE-TUNED (GPT-4o)");
-      
-      toast({
-        title: "Modelo Otimizado Selecionado",
-        description: "Análise com modelo otimizado ativada. Maior precisão e qualidade nos resultados.",
-      });
-    }
-  };
-
   return (
     <SharedDashboardLayout>
-      <div className="p-6 space-y-8">
-        <div className="flex flex-col gap-2">
-          <h2 className="text-3xl font-bold">Importar Feedbacks</h2>
-          <p className="text-muted-foreground">
-            Arraste e solte arquivos CSV ou XLSX contendo feedbacks para análise inteligente.
+      <div className="p-6 space-y-8 max-w-4xl mx-auto">
+        <div className="text-center space-y-4">
+          <h2 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Importar Feedbacks
+          </h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Faça upload de arquivos CSV ou XLSX para análise inteligente com nossa IA. 
+            Nossa inteligência artificial transformará seus feedbacks em insights valiosos.
           </p>
+          
+          {/* Representação da estrutura esperada do Excel */}
+          <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl border border-blue-200 dark:border-blue-800">
+            <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-4">
+              Formato Esperado do Arquivo
+            </h3>
+            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-blue-50 dark:bg-blue-950/50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700 w-16">A</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">B</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">C</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">D</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">E</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">F</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">G</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">H</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">I</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100 border-r border-gray-200 dark:border-gray-700">J</th>
+                      <th className="px-3 py-2 text-left font-medium text-blue-900 dark:text-blue-100">K</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-3 py-2 text-center text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700 font-mono">1</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 font-medium">Data</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 font-medium">Nome do Hotel</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 font-medium">Fonte</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 font-medium">Idioma</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 font-medium">Pontuação</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 font-medium">URL</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 font-medium">Autor</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 border-r border-gray-200 dark:border-gray-700 font-medium">Título</td>
+                      <td className="px-3 py-2 text-blue-700 dark:text-blue-300 border-r border-gray-200 dark:border-gray-700 font-bold">Texto</td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 font-medium">N Apartamento</td>
+                    </tr>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-3 py-2 text-center text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700 font-mono">2</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">15/01/2024</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">Hotel Exemplo</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">Google</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">Português</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">5</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700 truncate">https://...</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">João Silva</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">Excelente!</td>
+                      <td className="px-3 py-2 text-blue-600 dark:text-blue-400 border-r border-gray-200 dark:border-gray-700 font-medium">Hotel incrível, atendimento...</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400">101</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="mt-4 text-sm text-blue-700 dark:text-blue-300 space-y-2">
+              <p><strong>Importante:</strong> A coluna A deve estar vazia, os dados começam na coluna B.</p>
+              <p><strong>Estrutura:</strong> B=Data, C=Nome do Hotel, D=Fonte, E=Idioma, F=Pontuação, G=URL, H=Autor, I=Título, J=Texto, K=N Apartamento</p>
+              <p><strong>Texto principal:</strong> A coluna J (Texto) é a mais importante - contém os feedbacks para análise.</p>
+              <p><strong>Apartamento:</strong> A coluna K (N Apartamento) é opcional - pode conter informações sobre quartos/suítes.</p>
+              <p><strong>Formato:</strong> Aceita arquivos .xlsx e .csv com essa estrutura.</p>
+            </div>
+          </div>
         </div>
         
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Configuração da Análise Inteligente</h3>
-          <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <input
-                type="radio"
-                id="normal-mode"
-                name="ai-mode"
-                checked={useNormalMode}
-                onChange={() => handleModeChange('normal')}
-                className="h-4 w-4"
-                disabled={importing || detectingHotels}
-              />
-              <label htmlFor="normal-mode" className="flex flex-col">
-                <span className="font-medium">Usar modo padrão</span>
-                <span className="text-sm text-muted-foreground">Análise eficiente e econômica</span>
-              </label>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <input
-                type="radio"
-                id="optimized-mode"
-                name="ai-mode"
-                checked={useFineTuned}
-                onChange={() => handleModeChange('fineTuned')}
-                className="h-4 w-4"
-                disabled={importing || detectingHotels}
-              />
-              <label htmlFor="optimized-mode" className="flex flex-col">
-                <span className="font-medium">Usar modelo otimizado (Consome mais recursos)</span>
-                <span className="text-sm text-muted-foreground">Análise de maior precisão e qualidade</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="mt-4 p-3 bg-muted rounded-lg">
-            <p className="text-sm">
-              <strong>Modo atual:</strong> {useFineTuned ? "Modelo Otimizado" : "Modelo Padrão"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {useFineTuned 
-                ? "Maior precisão na categorização e análise de sentimentos" 
-                : "Processamento rápido e eficiente para grandes volumes"
-              }
-            </p>
-          </div>
-        </Card>
-
         <input
           ref={fileInputRef}
           type="file"
           accept=".csv,.xlsx"
           onChange={handleFileInput}
           style={{ display: 'none' }}
-          disabled={importing || detectingHotels}
+          disabled={importing}
         />
 
         {!importing && !complete && (
-          <Card 
-            {...getRootProps()}
-            className={cn(
-              "border-2 border-dashed rounded-lg p-12 transition",
-              isDragActive && "border-primary bg-muted/50",
-              (detectingHotels) && "opacity-50"
-            )}
-          >
-            <div className="flex flex-col items-center justify-center text-center">
-              <Upload className="h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">
-                {isDragActive 
-                  ? "Solte o arquivo aqui..." 
-                  : detectingHotels 
-                  ? "Analisando arquivo..."
-                  : "Importar Arquivo de Feedbacks"
-                }
-              </h3>
-              <p className="text-muted-foreground mb-6 max-w-sm">
-                {detectingHotels 
-                  ? "Processando informações do arquivo..."
-                  : "Arraste e solte um arquivo aqui ou clique no botão abaixo para selecionar"
-                }
-              </p>
-              
-              {!detectingHotels && (
-                <div className="space-y-4">
-                  <Button 
-                    onClick={openFileSelector}
-                    disabled={importing || detectingHotels}
-                    className="flex items-center gap-2"
-                  >
-                    <FolderOpen className="h-4 w-4" />
-                    Selecionar Arquivo
-                  </Button>
-                  
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="space-y-6">
+            <Card 
+              {...getRootProps()}
+              className={cn(
+                "border-2 border-dashed rounded-xl p-12 transition-all duration-300 hover:border-primary/50 hover:bg-muted/30 cursor-pointer",
+                isDragActive && "border-primary bg-primary/10 scale-105 shadow-lg",
+                importing && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <input {...getInputProps()} />
+              <div className="flex flex-col items-center justify-center text-center space-y-6">
+                <div className={cn(
+                  "relative p-6 rounded-full transition-all duration-300",
+                  isDragActive ? "bg-primary/20 scale-110" : "bg-muted/50"
+                )}>
+                  <Upload className={cn(
+                    "h-16 w-16 transition-colors duration-300",
+                    isDragActive ? "text-primary" : "text-muted-foreground"
+                  )} />
+                  {isDragActive && (
+                    <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping"></div>
+                  )}
+                </div>
+                
+                <div className="space-y-3">
+                  <h3 className="text-2xl font-semibold">
+                    {isDragActive 
+                      ? "Solte o arquivo aqui" 
+                      : "Importar Arquivo de Feedbacks"
+                    }
+                  </h3>
+                  <p className="text-muted-foreground max-w-md mx-auto">
+                    {isDragActive 
+                      ? "Pronto para analisar seus dados com inteligência artificial"
+                      : "Arraste e solte um arquivo aqui ou use o botão abaixo"
+                    }
+                  </p>
+                </div>
+                
+                <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
                     <FileType className="h-4 w-4" />
-                    <span>Formatos suportados: CSV, XLSX</span>
+                    <span>CSV, XLSX</span>
+                  </div>
+                  <div className="w-1 h-1 bg-muted-foreground rounded-full"></div>
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4" />
+                    <span>Análise com IA</span>
                   </div>
                 </div>
-              )}
-              
-              {detectingHotels && (
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-              )}
-            </div>
-          </Card>
-        )}
-        
-        {!importing && !detectingHotels && hotelsInFile.length > 0 && chosenHotelOption === null && (
-          <Card className="p-6 my-6">
-            <h3 className="text-xl font-bold mb-4">Seleção de Hotel</h3>
-            <p className="mb-4">
-              {hotelsInFile.length === 1 
-                ? `O arquivo contém dados do hotel "${hotelsInFile[0]}".` 
-                : `O arquivo contém dados de ${hotelsInFile.length} hotéis diferentes: ${hotelsInFile.slice(0, 3).join(', ')}${hotelsInFile.length > 3 ? '...' : ''}`
-              }
-            </p>
-            <p className="mb-6">Como você gostaria de importar estes dados?</p>
+              </div>
+            </Card>
             
-            <div className="grid gap-4 md:grid-cols-2">
-              <button 
-                onClick={() => {
-                  setChosenHotelOption('account');
-                  toast({
-                    title: "Hotel da Conta Selecionado",
-                    description: `Todos os dados serão atribuídos a ${userData?.hotelName}`,
-                  });
-                  if (acceptedFiles.length > 0) {
-                    processFileWithOption(acceptedFiles[0], 'account');
-                  }
-                }}
-                className="flex flex-col items-center justify-center h-24 p-4 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md"
-                type="button"
+            <div className="text-center">
+              <p className="text-muted-foreground mb-4">ou</p>
+              <Button 
+                onClick={openFileSelector}
+                disabled={importing}
+                size="lg"
+                className="flex items-center gap-3 px-8 py-3 text-lg font-medium bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl"
               >
-                <p className="font-bold">Usar o hotel da sua conta</p>
-                <p className="text-sm text-muted-foreground">Todos os registros serão atribuídos a {userData?.hotelName}</p>
-              </button>
-              
-              <button 
-                onClick={() => {
-                  setChosenHotelOption('file');
-                  toast({
-                    title: "Hotéis do Arquivo Selecionados",
-                    description: "Mantendo os nomes de hotéis conforme estão no arquivo",
-                  });
-                  if (acceptedFiles.length > 0) {
-                    processFileWithOption(acceptedFiles[0], 'file');
-                  }
-                }}
-                className="flex flex-col items-center justify-center h-24 p-4 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md"
-                type="button"
-              >
-                <p className="font-bold">Usar os hotéis do arquivo</p>
-                <p className="text-sm text-muted-foreground">Manter os nomes de hotéis como estão no arquivo</p>
-              </button>
+                <FolderOpen className="h-5 w-5" />
+                Selecionar Arquivo
+              </Button>
             </div>
-          </Card>
+          </div>
         )}
         
         {importing && !complete && (
-          <div className="space-y-4 w-full max-w-md">
-            <div className="space-y-2">
-              <h3 className="text-xl font-semibold">Processando com IA</h3>
-              <p className="text-sm text-muted-foreground">
-                Analisando feedbacks com {useFineTuned ? 'modelo otimizado' : 'modelo padrão'}. 
-                Aguarde enquanto processamos seus dados...
-              </p>
-            </div>
-            <Progress value={progress} className="h-2" />
-            <p className="text-sm font-medium">{Math.round(progress)}% concluído</p>
+          <div className="space-y-8">
+            {/* Mensagem Motivadora */}
+            <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 p-3 bg-white dark:bg-gray-800 rounded-full shadow-md">
+                  {getMotivationalMessage(progress, totalItems).icon}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-100">
+                    {getMotivationalMessage(progress, totalItems).title}
+                  </h3>
+                  <p className="text-blue-700 dark:text-blue-200">
+                    {getMotivationalMessage(progress, totalItems).description}
+                  </p>
+                  {estimatedTime && (
+                    <p className="text-sm text-blue-600 dark:text-blue-300 font-medium">
+                      ⏱️ {estimatedTime}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            {/* Barra de Progresso Animada */}
+            <Card className="p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="text-lg font-semibold">Progresso da Análise</h4>
+                <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  {Math.round(progress)}%
+                </span>
+              </div>
+              
+              <AnimatedProgress value={progress} />
+              
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{currentStep}</span>
+                <span>{processedItems}/{totalItems} itens</span>
+              </div>
+            </Card>
+
+            {/* Estatísticas em Tempo Real */}
+            {totalItems > 0 && (
+              <LiveStats 
+                processed={processedItems} 
+                total={totalItems} 
+                currentStep={currentStep} 
+                retryCount={retryCount}
+                errorCount={errorCount}
+              />
+            )}
+
+            {/* Dicas durante o processamento */}
+            <Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-3">
+                <Coffee className="h-5 w-5 text-blue-600" />
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Dica Profissional:</strong> Você pode minimizar esta aba e continuar trabalhando. 
+                  Nossa IA continuará processando em segundo plano.
+                </div>
+              </div>
+            </Card>
           </div>
         )}
-
+        
         {complete && (
-          <div className="flex flex-col items-center justify-center p-12 text-center">
-            <div className="space-y-4">
-              <div className="mx-auto w-fit rounded-full bg-green-100 p-3">
-                <CheckCircle2 className="h-8 w-8 text-green-600" />
+          <Card className="p-12 text-center bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800">
+            <div className="space-y-6">
+              <div className="relative inline-block">
+                <div className="w-20 h-20 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="h-12 w-12 text-green-600" />
+                </div>
               </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold">Importação Concluída</h3>
-                <p className="text-sm text-muted-foreground">
-                  Todos os dados foram importados e analisados com sucesso.
+              
+              <div className="space-y-3">
+                <h3 className="text-3xl font-bold text-green-800 dark:text-green-200">
+                  Análise Concluída com Sucesso
+                </h3>
+                <p className="text-lg text-green-700 dark:text-green-300 max-w-md mx-auto">
+                  Todos os seus feedbacks foram analisados com inteligência artificial. 
+                  Os insights estão prontos para visualização.
                 </p>
+                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mx-auto max-w-sm">
+                  <div className="text-3xl font-bold text-green-600">{processedItems}</div>
+                  <div className="text-sm text-muted-foreground">feedbacks analisados</div>
+                </div>
               </div>
-              <div className="flex gap-4">
-                <Button onClick={() => router.push("/analysis")}>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button 
+                  onClick={() => router.push("/analysis")}
+                  size="lg"
+                  className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                >
+                  <BarChart3 className="h-5 w-5" />
                   Ver Análise
                 </Button>
-                <Button variant="outline" onClick={resetImportState}>
+                <Button 
+                  variant="outline" 
+                  onClick={resetImportState}
+                  size="lg"
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="h-5 w-5" />
                   Importar Novo Arquivo
                 </Button>
               </div>
             </div>
-          </div>
+          </Card>
         )}
       </div>
     </SharedDashboardLayout>

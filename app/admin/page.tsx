@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { getAllAnalyses } from "@/lib/firestore-service";
 import { RequireAdmin } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,13 +30,17 @@ import { DatePicker } from "@/components/ui/date-picker";
 import {
   Star,
   TrendingUp,
-  MessageSquare,
-  Hotel,
+  TrendingDown,
+  Eye,
   RefreshCw,
   Loader2,
   ChevronDown,
   ChevronRight,
-  XCircle
+  XCircle,
+  MessageSquare,
+  Hotel,
+  Building2,
+  Filter
 } from "lucide-react";
 import {
   BarChart,
@@ -53,6 +58,7 @@ import {
   Area,
   ComposedChart,
   Line,
+  LineChart,
   ScatterChart,
   Scatter,
   ZAxis
@@ -71,6 +77,7 @@ interface AnalysisData {
     ratingDistribution: Array<{label: string; value: number}>;
     problemDistribution: Array<{label: string; value: number}>;
     hotelDistribution: Array<{label: string; value: number}>;
+    sourceDistribution: Array<{label: string; value: number}>;
     languageDistribution: Array<{label: string; value: number}>;
     keywordDistribution: Array<{label: string; value: number}>;
     apartamentoDistribution: Array<{name: string; value: number}>;
@@ -131,6 +138,64 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// Componente para renderizar gráficos no modal
+const renderChart = (chartType: string, data: any[], onChartClick: (item: any, type: string) => void, type: string) => {
+  if (chartType === 'bar') {
+    return (
+      <BarChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="label" />
+        <YAxis />
+        <RechartsTooltip />
+        <Bar 
+          dataKey="value" 
+          fill="#8884d8"
+          onClick={(_, index) => {
+            const item = data[index];
+            onChartClick(item, type);
+          }}
+        />
+      </BarChart>
+    );
+  }
+  
+  if (chartType === 'pie') {
+    return (
+      <PieChart>
+        <Pie
+          data={data}
+          cx="50%"
+          cy="50%"
+          labelLine={true}
+          label={({ name, value, percent }: any) => `${name}: ${value} (${(percent * 100).toFixed(1)}%)`}
+          outerRadius={150}
+          fill="#8884d8"
+          dataKey="value"
+          nameKey={data[0]?.name ? 'name' : 'label'}
+          onClick={(dataItem, index) => {
+            const item = data[index];
+            onChartClick(item, type);
+          }}
+        >
+          {data.map((_: any, index: number) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Pie>
+        <RechartsTooltip />
+        <Legend />
+      </PieChart>
+    );
+  }
+  
+  // Fallback - retorna um gráfico vazio
+  return (
+    <BarChart data={[]}>
+      <XAxis />
+      <YAxis />
+    </BarChart>
+  );
+};
+
 // Componente principal
 function AdminDashboardContent() {
   const router = useRouter();
@@ -149,38 +214,137 @@ function AdminDashboardContent() {
     end: null
   });
 
+  // Estados para filtros globais
+  const [hiddenRatings, setHiddenRatings] = useState<number[]>([]);
+  const [sentimentFilter, setSentimentFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [languageFilter, setLanguageFilter] = useState<string>('all');
+  const [apartmentFilter, setApartmentFilter] = useState<string>('all');
+  const [globalFilteredData, setGlobalFilteredData] = useState<any[]>([]);
+
   // Estados para modal de detalhes
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedDetail, setSelectedDetail] = useState<any>(null);
   const [selectedFeedbacks, setSelectedFeedbacks] = useState<any[]>([]);
 
+  // Estados para o painel lateral interativo
+  const [detailPanelOpen, setDetailPanelOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<{
+    type: string;
+    value: string;
+    data: any;
+    feedbacks: any[];
+    stats: any;
+  } | null>(null);
+
+  // Estados para o modal de gráfico grande
+  const [chartModalOpen, setChartModalOpen] = useState(false);
+  const [selectedChart, setSelectedChart] = useState<{
+    type: string;
+    title: string;
+    data: any[];
+    chartType: 'bar' | 'pie' | 'line';
+  } | null>(null);
+
   // Estados para abas expandidas
   const [expandedHotels, setExpandedHotels] = useState<Set<string>>(new Set());
   const [sortOrder, setSortOrder] = useState<string>("asc");
+  
+  // Estado para controlar a abertura do painel de filtros
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Função para aplicar filtros globais
+  const applyGlobalFilters = useCallback((data: any[]) => {
+    if (!data || data.length === 0) return [];
+    
+    return data.filter((feedback: any) => {
+      // Filtro de estrelas (ocultar avaliações selecionadas)
+      if (hiddenRatings.includes(feedback.rating)) {
+        return false;
+      }
+      
+      // Filtro de data
+      if (dateRange.start || dateRange.end) {
+        const feedbackDate = new Date(feedback.date);
+        if (dateRange.start && feedbackDate < dateRange.start) return false;
+        if (dateRange.end && feedbackDate > dateRange.end) return false;
+      }
+      
+      // Filtro de sentimento
+      if (sentimentFilter !== 'all' && feedback.sentiment !== sentimentFilter) {
+        return false;
+      }
+      
+      // Filtro de fonte
+      if (sourceFilter !== 'all' && feedback.source !== sourceFilter) {
+        return false;
+      }
+      
+      // Filtro de idioma
+      if (languageFilter !== 'all' && feedback.language !== languageFilter) {
+        return false;
+      }
+      
+      // Filtro de apartamento
+      if (apartmentFilter !== 'all' && feedback.apartamento !== apartmentFilter) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [hiddenRatings, dateRange, sentimentFilter, sourceFilter, languageFilter, apartmentFilter]);
+  
+  // Atualizar dados filtrados quando os filtros ou dados originais mudarem
+  useEffect(() => {
+    if (analysisData?.data) {
+      const filtered = applyGlobalFilters(analysisData.data);
+      setGlobalFilteredData(filtered);
+    }
+  }, [analysisData?.data, applyGlobalFilters]);
 
   // Função para diagnóstico
   const runDiagnostics = async () => {
     console.log("Executando diagnóstico completo...");
     
     try {
-      const analysesRef = collection(db, "analyses");
-      const analysesSnapshot = await getDocs(analysesRef);
-      
+      // Buscar hotéis primeiro
       const hotelsRef = collection(db, "hotels");
       const hotelsSnapshot = await getDocs(hotelsRef);
+      
+      // Buscar na nova estrutura analyse
+      const analyseRef = collection(db, "analyse");
+      const analyseSnapshot = await getDocs(analyseRef);
+      
+      // Contar feedbacks na nova estrutura
+      let totalFeedbacks = 0;
+      const feedbacksByHotel: { [key: string]: number } = {};
+      
+      for (const hotelDoc of analyseSnapshot.docs) {
+        try {
+          const feedbacksRef = collection(db, "analyse", hotelDoc.id, "feedbacks");
+          const feedbacksSnapshot = await getDocs(feedbacksRef);
+          const feedbackCount = feedbacksSnapshot.docs.length;
+          
+          feedbacksByHotel[hotelDoc.id] = feedbackCount;
+          totalFeedbacks += feedbackCount;
+        } catch (error) {
+          console.log(`Erro ao contar feedbacks para hotel ${hotelDoc.id}:`, error);
+          feedbacksByHotel[hotelDoc.id] = 0;
+        }
+      }
       
       const info = [
         `=== DIAGNÓSTICO FIRESTORE ===`,
         `Timestamp: ${new Date().toISOString()}`,
         ``,
-        `Coleção 'analyses':`,
-        `- Total de documentos: ${analysesSnapshot.docs.length}`,
+        `Coleção 'analyse' (nova estrutura):`,
+        `- Total de hotéis com dados: ${analyseSnapshot.docs.length}`,
+        `- Total de feedbacks: ${totalFeedbacks}`,
         ``,
-        `Documentos encontrados:`,
-        ...analysesSnapshot.docs.map(doc => {
-          const data = doc.data();
-          return `- ID: ${doc.id}, Hotel: ${data.hotelName || 'N/A'}, Data: ${data.importDate?.toDate?.() || data.importDate}, Feedbacks: ${data.data?.length || 0}`;
-        }),
+        `Feedbacks por hotel:`,
+        ...Object.entries(feedbacksByHotel).map(([hotelId, count]) => 
+          `- ${hotelId}: ${count} feedbacks`
+        ),
         ``,
         `Coleção 'hotels':`,
         `- Total de documentos: ${hotelsSnapshot.docs.length}`,
@@ -239,7 +403,12 @@ function AdminDashboardContent() {
   const handleChartClick = (data: any, type: string) => {
     console.log("Clique no gráfico:", data, type);
     
-    if (!analysisData?.data) {
+    // Usar dados filtrados globalmente se filtros estão ativos
+    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+      ? globalFilteredData 
+      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+      
+    if (!dataToUse) {
       toast({
         title: "Erro",
         description: "Dados não disponíveis",
@@ -249,22 +418,20 @@ function AdminDashboardContent() {
     }
 
     let filteredFeedbacks: any[] = [];
-    let title = "";
-
-    const dataToUse = isFilterApplied && filteredData ? filteredData : analysisData;
+    let value = "";
 
     switch (type) {
       case 'rating':
         const rating = parseInt(data.label);
-        filteredFeedbacks = dataToUse.data.filter((feedback: any) => 
+        filteredFeedbacks = dataToUse.filter((feedback: any) => 
           Math.floor(feedback.rating) === rating
         );
-        title = `Feedbacks com avaliação ${rating} estrela${rating !== 1 ? 's' : ''}`;
+        value = `${rating} estrela${rating !== 1 ? 's' : ''}`;
         break;
 
       case 'problem':
         const problemLabel = data.label || data.name;
-        filteredFeedbacks = dataToUse.data.filter((feedback: any) => {
+        filteredFeedbacks = dataToUse.filter((feedback: any) => {
           if (feedback.problems && Array.isArray(feedback.problems)) {
             return feedback.problems.includes(problemLabel);
           }
@@ -273,31 +440,64 @@ function AdminDashboardContent() {
           }
           return false;
         });
-        title = `Feedbacks sobre: ${problemLabel}`;
+        value = problemLabel;
         break;
 
       case 'hotel':
         const hotelLabel = data.label || data.name;
-        filteredFeedbacks = dataToUse.data.filter((feedback: any) => 
+        filteredFeedbacks = dataToUse.filter((feedback: any) => 
           feedback.hotel === hotelLabel
         );
-        title = `Feedbacks do ${hotelLabel}`;
+        value = hotelLabel;
         break;
 
       case 'source':
         const sourceLabel = data.label || data.name;
-        filteredFeedbacks = dataToUse.data.filter((feedback: any) => 
+        filteredFeedbacks = dataToUse.filter((feedback: any) => 
           feedback.source === sourceLabel
         );
-        title = `Feedbacks do ${sourceLabel}`;
+        value = sourceLabel;
         break;
 
       case 'apartamento':
         const apartamentoLabel = data.name || data.label;
-        filteredFeedbacks = dataToUse.data.filter((feedback: any) => 
+        filteredFeedbacks = dataToUse.filter((feedback: any) => 
           feedback.apartamento === apartamentoLabel
         );
-        title = `Feedbacks do Apartamento ${apartamentoLabel}`;
+        value = `Apartamento ${apartamentoLabel}`;
+        break;
+
+      case 'keyword':
+        const keywordLabel = data.label || data.name;
+        filteredFeedbacks = dataToUse.filter((feedback: any) => {
+          if (feedback.keyword && typeof feedback.keyword === 'string') {
+            return feedback.keyword.split(';').map((k: string) => k.trim()).includes(keywordLabel);
+          }
+          return false;
+        });
+        value = keywordLabel;
+        break;
+
+      case 'sector':
+        const sectorLabel = data.label || data.name;
+        filteredFeedbacks = dataToUse.filter((feedback: any) => {
+          if (feedback.sector && typeof feedback.sector === 'string') {
+            return feedback.sector === sectorLabel;
+          }
+          if (feedback.department && typeof feedback.department === 'string') {
+            return feedback.department === sectorLabel;
+          }
+          return false;
+        });
+        value = sectorLabel;
+        break;
+
+      case 'language':
+        const languageLabel = data.label || data.name;
+        filteredFeedbacks = dataToUse.filter((feedback: any) => 
+          feedback.language === languageLabel
+        );
+        value = languageLabel;
         break;
 
       default:
@@ -316,42 +516,285 @@ function AdminDashboardContent() {
       return;
     }
 
-    setSelectedFeedbacks(filteredFeedbacks);
-    setSelectedDetail({ title, type, data });
-    setDialogOpen(true);
+    // Calcular estatísticas específicas do item
+    const stats = {
+      totalOccurrences: filteredFeedbacks.length,
+      averageRating: filteredFeedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) / filteredFeedbacks.length || 0,
+      sentimentDistribution: {
+        positive: filteredFeedbacks.filter(f => f.sentiment === 'positive').length,
+        neutral: filteredFeedbacks.filter(f => f.sentiment === 'neutral').length,
+        negative: filteredFeedbacks.filter(f => f.sentiment === 'negative').length,
+      },
+      ratingDistribution: {
+        1: filteredFeedbacks.filter(f => f.rating === 1).length,
+        2: filteredFeedbacks.filter(f => f.rating === 2).length,
+        3: filteredFeedbacks.filter(f => f.rating === 3).length,
+        4: filteredFeedbacks.filter(f => f.rating === 4).length,
+        5: filteredFeedbacks.filter(f => f.rating === 5).length,
+      },
+      percentage: dataToUse ? ((filteredFeedbacks.length / dataToUse.length) * 100).toFixed(1) : 0,
+      recentFeedbacks: filteredFeedbacks
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 5),
+      topKeywords: type !== 'keyword' ? getTopKeywordsForItem(filteredFeedbacks) : [],
+      topProblems: type !== 'problem' ? getTopProblemsForItem(filteredFeedbacks) : [],
+      topHotels: type !== 'hotel' ? getTopHotelsForItem(filteredFeedbacks) : [],
+      monthlyTrend: getMonthlyTrendForItem(filteredFeedbacks)
+    };
+    
+    setSelectedItem({
+      type,
+      value,
+      data,
+      feedbacks: filteredFeedbacks,
+      stats
+    });
+    setDetailPanelOpen(true);
+  };
+
+  // Funções auxiliares para estatísticas no admin
+  const getTopKeywordsForItem = (feedbacks: any[]) => {
+    const keywordCounts: Record<string, number> = {};
+    feedbacks.forEach(f => {
+      if (f.keyword) {
+        f.keyword.split(';').forEach((k: string) => {
+          const keyword = k.trim();
+          if (keyword) keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+        });
+      }
+    });
+    return Object.entries(keywordCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([keyword, count]) => ({ keyword, count }));
+  };
+
+  const getTopProblemsForItem = (feedbacks: any[]) => {
+    const problemCounts: Record<string, number> = {};
+    feedbacks.forEach(f => {
+      if (f.problem) {
+        f.problem.split(';').forEach((p: string) => {
+          const problem = p.trim();
+          if (problem) problemCounts[problem] = (problemCounts[problem] || 0) + 1;
+        });
+      }
+    });
+    return Object.entries(problemCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([problem, count]) => ({ problem, count }));
+  };
+
+  const getTopHotelsForItem = (feedbacks: any[]) => {
+    const hotelCounts: Record<string, number> = {};
+    feedbacks.forEach(f => {
+      const hotel = f.hotel || "Não especificado";
+      hotelCounts[hotel] = (hotelCounts[hotel] || 0) + 1;
+    });
+    return Object.entries(hotelCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([hotel, count]) => ({ hotel, count }));
+  };
+
+  const getMonthlyTrendForItem = (feedbacks: any[]) => {
+    const monthCounts: Record<string, number> = {};
+    feedbacks.forEach(f => {
+      const month = new Date(f.date).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+      monthCounts[month] = (monthCounts[month] || 0) + 1;
+    });
+    return Object.entries(monthCounts)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([month, count]) => ({ month, count }));
+  };
+
+  // Função para determinar o período de agrupamento automaticamente
+  const getTimePeriodData = (data: any[], sourceField: string = 'language') => {
+    if (!data || data.length === 0) return { period: 'day', data: [] };
+    
+    // Encontrar o range de datas
+    const dates = data.map(item => new Date(item.date)).sort((a, b) => a.getTime() - b.getTime());
+    const firstDate = dates[0];
+    const lastDate = dates[dates.length - 1];
+    const daysDiff = Math.ceil((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    let period: string;
+    let formatFunction: (date: Date) => string;
+    
+    if (daysDiff <= 14) {
+      // Menos de 2 semanas: agrupar por dia
+      period = 'day';
+      formatFunction = (date: Date) => date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+    } else if (daysDiff <= 60) {
+      // Entre 2 semanas e 2 meses: agrupar por semana
+      period = 'week';
+      formatFunction = (date: Date) => {
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        return `Sem ${weekStart.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`;
+      };
+    } else {
+      // Mais de 2 meses: agrupar por mês
+      period = 'month';
+      formatFunction = (date: Date) => date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+    }
+    
+    const periodCounts: Record<string, any> = {};
+    
+    data.forEach(feedback => {
+      const date = new Date(feedback.date);
+      const periodKey = formatFunction(date);
+      const source = feedback[sourceField] || 'Outros';
+      
+      if (!periodCounts[periodKey]) {
+        periodCounts[periodKey] = {};
+      }
+      periodCounts[periodKey][source] = (periodCounts[periodKey][source] || 0) + 1;
+    });
+    
+    const result = Object.entries(periodCounts)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([periodKey, sources]) => ({
+        period: periodKey,
+        ...sources
+      }));
+    
+    return { period, data: result };
+  };
+
+  // Função para abrir modal de gráfico grande
+  const handleViewChart = (type: string, title: string, data: any[], chartType: 'bar' | 'pie' | 'line') => {
+    setSelectedChart({ type, title, data, chartType });
+    setChartModalOpen(true);
   };
 
   // Funções de processamento de dados
-  const processRatingDistribution = (analysis: any) => {
-    if (!analysis?.ratingDistribution) return [];
-    return analysis.ratingDistribution.map((item: any) => ({
-      label: `${item.label} estrela${item.label !== '1' ? 's' : ''}`,
-      value: item.value
-    }));
+  const processRatingDistribution = (data: any[]) => {
+    const ratingCounts: Record<string, number> = {
+      '1': 0, '2': 0, '3': 0, '4': 0, '5': 0
+    };
+    
+    data.forEach(feedback => {
+      if (feedback.rating && feedback.rating >= 1 && feedback.rating <= 5) {
+        ratingCounts[feedback.rating.toString()]++;
+      }
+    });
+    
+    return Object.entries(ratingCounts)
+      .map(([rating, count]) => ({ label: rating + ' estrela' + (rating === '1' ? '' : 's'), value: count }));
   };
 
-  const processProblemDistribution = (analysis: any) => {
-    if (!analysis?.problemDistribution) return [];
-    return analysis.problemDistribution.slice(0, 20);
+  const processProblemDistribution = (data: any[]) => {
+    const problemCounts: Record<string, number> = {};
+    
+    data.forEach(feedback => {
+      if (feedback.problem) {
+        feedback.problem.split(';').forEach((problem: string) => {
+          const trimmedProblem = problem.trim();
+          if (trimmedProblem) {
+            problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    return Object.entries(problemCounts)
+      .map(([problem, count]) => ({ label: problem, value: count }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 20);
   };
 
   const processSourceDistribution = (analysis: any) => {
-    if (!analysis?.languageDistribution) return [];
-    return analysis.languageDistribution.map((item: any) => ({
-      label: item.label,
-      value: item.value
-    }));
+    // Usar dados filtrados globalmente se filtros estão ativos
+    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+      ? globalFilteredData 
+      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+      
+    if (!dataToUse) return [];
+    
+    const sourceCounts: Record<string, number> = {};
+    
+    dataToUse.forEach((feedback: any) => {
+      const source = feedback.source || 'Não especificado';
+      sourceCounts[source] = (sourceCounts[source] || 0) + 1;
+    });
+    
+    return Object.entries(sourceCounts)
+      .map(([source, count]) => ({ label: source, value: count }))
+      .sort((a, b) => b.value - a.value);
   };
 
   const processApartamentoDistribution = (analysis: any) => {
-    if (!analysis?.apartamentoDistribution) return [];
-    return analysis.apartamentoDistribution.slice(0, 20);
+    // Usar dados filtrados globalmente se filtros estão ativos
+    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+      ? globalFilteredData 
+      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+      
+    if (!dataToUse) return [];
+    
+    const apartamentoCounts: Record<string, number> = {};
+    
+    dataToUse.forEach((feedback: any) => {
+      if (feedback.apartamento) {
+        const apartamento = feedback.apartamento.toString();
+        apartamentoCounts[apartamento] = (apartamentoCounts[apartamento] || 0) + 1;
+      }
+    });
+    
+    return Object.entries(apartamentoCounts)
+      .map(([apartamento, count]) => ({ name: apartamento, value: count }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 20);
+  };
+
+  const processSectorDistribution = (data: any[]) => {
+    const sectorCounts: Record<string, number> = {};
+    
+    data.forEach(feedback => {
+      if (feedback.sector) {
+        feedback.sector.split(';').forEach((sector: string) => {
+          const trimmedSector = sector.trim();
+          if (trimmedSector) {
+            sectorCounts[trimmedSector] = (sectorCounts[trimmedSector] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    return Object.entries(sectorCounts)
+      .map(([sector, count]) => ({ label: sector, value: count }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+  };
+
+  const processKeywordDistribution = (data: any[]) => {
+    const keywordCounts: Record<string, number> = {};
+    
+    data.forEach(feedback => {
+      if (feedback.keyword) {
+        feedback.keyword.split(';').forEach((keyword: string) => {
+          const trimmedKeyword = keyword.trim();
+          if (trimmedKeyword) {
+            keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    return Object.entries(keywordCounts)
+      .map(([keyword, count]) => ({ label: keyword, value: count }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 20);
   };
 
   const processApartamentoDetailsData = () => {
-    if (!analysisData?.data) return [];
+    // Usar dados filtrados globalmente se filtros estão ativos
+    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+      ? globalFilteredData 
+      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+      
+    if (!dataToUse) return [];
 
-    const dataToUse = isFilterApplied && filteredData ? filteredData : analysisData;
     const apartamentoMap = new Map<string, {
       count: number;
       totalRating: number;
@@ -361,7 +804,7 @@ function AdminDashboardContent() {
       ratings: number[];
     }>();
 
-    dataToUse.data.forEach((feedback: any) => {
+    dataToUse.forEach((feedback: any) => {
       if (!feedback.apartamento) return;
 
       if (!apartamentoMap.has(feedback.apartamento)) {
@@ -435,9 +878,13 @@ function AdminDashboardContent() {
 
   // Dados estatísticos por hotel
   const hotelStats = useMemo((): HotelStat[] => {
-    if (!analysisData?.data) return [];
+    // Usar dados filtrados globalmente se filtros estão ativos
+    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+      ? globalFilteredData 
+      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+      
+    if (!dataToUse) return [];
 
-    const dataToUse = isFilterApplied && filteredData ? filteredData : analysisData;
     const stats = new Map<string, {
       hotel: string;
       totalFeedbacks: number;
@@ -449,7 +896,7 @@ function AdminDashboardContent() {
       apartamentos: Map<string, number>;
     }>();
 
-    dataToUse.data.forEach((feedback: any) => {
+    dataToUse.forEach((feedback: any) => {
       const hotel = feedback.hotel || "Hotel não especificado";
       
       if (!stats.has(hotel)) {
@@ -518,7 +965,7 @@ function AdminDashboardContent() {
         .sort((a, b) => b[1] - a[1])
         .map(([apartamento, count]) => ({ apartamento, count }))
     }));
-  }, [analysisData, filteredData, isFilterApplied]);
+  }, [analysisData, filteredData, isFilterApplied, globalFilteredData, dateRange, sentimentFilter, sourceFilter, languageFilter, hiddenRatings]);
 
   // Função para buscar dados administrativos
   const fetchData = async () => {
@@ -539,13 +986,8 @@ function AdminDashboardContent() {
       setHotels(hotelsData);
       console.log("Hotéis carregados:", hotelsData.length);
       
-      // Buscar análises
-      const analysesRef = collection(db, "analyses");
-      const analysesSnapshot = await getDocs(analysesRef);
-      const analyses = analysesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Buscar análises usando a nova estrutura
+      const analyses = await getAllAnalyses();
       
       console.log("Total de análises encontradas:", analyses.length);
       
@@ -563,6 +1005,7 @@ function AdminDashboardContent() {
             ratingDistribution: [],
             problemDistribution: [],
             hotelDistribution: [],
+            sourceDistribution: [],
             languageDistribution: [],
             keywordDistribution: [],
             apartamentoDistribution: [],
@@ -579,6 +1022,7 @@ function AdminDashboardContent() {
         const problemMap = new Map<string, number>();
         const hotelMap = new Map<string, number>();
         const sourceMap = new Map<string, number>();
+        const languageMap = new Map<string, number>();
         const keywordMap = new Map<string, number>();
         const apartamentoMap = new Map<string, number>();
         const allFeedbacks: any[] = [];
@@ -647,6 +1091,10 @@ function AdminDashboardContent() {
               sourceMap.set(f.source, (sourceMap.get(f.source) || 0) + 1);
             }
             
+            if (f.language) {
+              languageMap.set(f.language, (languageMap.get(f.language) || 0) + 1);
+            }
+            
             if (f.keyword) {
               keywordMap.set(f.keyword, (keywordMap.get(f.keyword) || 0) + 1);
             }
@@ -670,7 +1118,9 @@ function AdminDashboardContent() {
             .map(([label, value]) => ({ label, value })),
           hotelDistribution: Array.from(hotelMap.entries())
             .map(([label, value]) => ({ label, value })),
-          languageDistribution: Array.from(sourceMap.entries())
+          sourceDistribution: Array.from(sourceMap.entries())
+            .map(([label, value]) => ({ label, value })),
+          languageDistribution: Array.from(languageMap.entries())
             .map(([label, value]) => ({ label, value })),
           keywordDistribution: Array.from(keywordMap.entries())
             .sort((a, b) => b[1] - a[1])
@@ -738,7 +1188,16 @@ function AdminDashboardContent() {
       hotelName: hotelName,
       data: filteredFeedbacks,
       analysis: {
-        ...analysisData.analysis
+        averageRating: 0,
+        positiveSentiment: 0,
+        ratingDistribution: [],
+        problemDistribution: [],
+        hotelDistribution: [],
+        sourceDistribution: [],
+        languageDistribution: [],
+        keywordDistribution: [],
+        apartamentoDistribution: [],
+        recentFeedbacks: []
       }
     };
     
@@ -749,6 +1208,7 @@ function AdminDashboardContent() {
     const ratingMap = new Map<string, number>();
     const problemMap = new Map<string, number>();
     const sourceMap = new Map<string, number>();
+    const languageMap = new Map<string, number>();
     const keywordMap = new Map<string, number>();
     const apartamentoMap = new Map<string, number>();
     
@@ -781,6 +1241,10 @@ function AdminDashboardContent() {
         sourceMap.set(feedback.source, (sourceMap.get(feedback.source) || 0) + 1);
       }
       
+      if (feedback.language) {
+        languageMap.set(feedback.language, (languageMap.get(feedback.language) || 0) + 1);
+      }
+      
       if (feedback.keyword) {
         keywordMap.set(feedback.keyword, (keywordMap.get(feedback.keyword) || 0) + 1);
       }
@@ -800,7 +1264,9 @@ function AdminDashboardContent() {
         .sort((a, b) => b[1] - a[1])
         .map(([label, value]) => ({ label, value })),
       hotelDistribution: [{ label: hotelName, value: filteredFeedbacks.length }],
-      languageDistribution: Array.from(sourceMap.entries())
+      sourceDistribution: Array.from(sourceMap.entries())
+        .map(([label, value]) => ({ label, value })),
+      languageDistribution: Array.from(languageMap.entries())
         .map(([label, value]) => ({ label, value })),
       keywordDistribution: Array.from(keywordMap.entries())
         .sort((a, b) => b[1] - a[1])
@@ -883,6 +1349,283 @@ function AdminDashboardContent() {
           </div>
           
           <div className="flex flex-wrap gap-2 md:gap-4 items-center">
+            {/* Botão de Filtros Sutil */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFiltersOpen(!filtersOpen)}
+                className={`flex items-center gap-2 transition-all duration-200 ${
+                  (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0)
+                    ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <Filter className="w-4 h-4" />
+                Filtros
+                {(dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) && (
+                  <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+                    {[
+                      dateRange.start || dateRange.end ? 1 : 0,
+                      sentimentFilter !== 'all' ? 1 : 0,
+                      sourceFilter !== 'all' ? 1 : 0,
+                      languageFilter !== 'all' ? 1 : 0,
+                      hiddenRatings.length > 0 ? 1 : 0
+                    ].reduce((sum, val) => sum + val, 0)}
+                  </span>
+                )}
+              </Button>
+
+              {/* Drawer de Filtros */}
+              {filtersOpen && analysisData && (
+                <>
+                  {/* Overlay */}
+                  <div 
+                    className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" 
+                    onClick={() => setFiltersOpen(false)}
+                  />
+                  
+                  {/* Drawer */}
+                  <div className="absolute top-full right-0 mt-3 w-[420px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                    {/* Header do Drawer */}
+                    <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-white/20 rounded-lg">
+                            <Filter className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold">Filtros Administrativos</h3>
+                            <p className="text-purple-100 text-sm">Controle total dos dados</p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFiltersOpen(false)}
+                          className="text-white hover:bg-white/20 h-8 w-8 p-0"
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Conteúdo do Drawer */}
+                    <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
+                      {/* Filtro de Data */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="p-1.5 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                            <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Período de Análise</label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Data inicial</label>
+                            <DatePicker 
+                              date={dateRange.start} 
+                              onChange={(date) => setDateRange(prev => ({ ...prev, start: date }))}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Data final</label>
+                            <DatePicker 
+                              date={dateRange.end} 
+                              onChange={(date) => setDateRange(prev => ({ ...prev, end: date }))}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Filtro de Sentimento */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="p-1.5 bg-green-100 dark:bg-green-900/50 rounded-lg">
+                            <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Análise de Sentimento</label>
+                        </div>
+                        <select 
+                          value={sentimentFilter} 
+                          onChange={(e) => setSentimentFilter(e.target.value)}
+                          className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        >
+                          <option value="all">🌐 Todos os sentimentos</option>
+                          <option value="positive">😊 Positivos</option>
+                          <option value="neutral">😐 Neutros</option>
+                          <option value="negative">😞 Negativos</option>
+                        </select>
+                      </div>
+
+                      {/* Filtro de Fonte */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="p-1.5 bg-purple-100 dark:bg-purple-900/50 rounded-lg">
+                            <svg className="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9" />
+                            </svg>
+                          </div>
+                          <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Plataforma de Origem</label>
+                        </div>
+                        <select 
+                          value={sourceFilter} 
+                          onChange={(e) => setSourceFilter(e.target.value)}
+                          className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        >
+                          <option value="all">🌐 Todas as plataformas</option>
+                          {Array.from(new Set(analysisData.data.map(f => f.source).filter(Boolean))).map(source => (
+                            <option key={source} value={source}>📱 {source}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Filtro de Idioma */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="p-1.5 bg-orange-100 dark:bg-orange-900/50 rounded-lg">
+                            <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                            </svg>
+                          </div>
+                          <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Idioma do Feedback</label>
+                        </div>
+                        <select 
+                          value={languageFilter} 
+                          onChange={(e) => setLanguageFilter(e.target.value)}
+                          className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        >
+                          <option value="all">🗣️ Todos os idiomas</option>
+                          {Array.from(new Set(analysisData.data.map(f => f.language).filter(Boolean))).map(language => (
+                            <option key={language} value={language}>
+                              {language === 'portuguese' ? '🇧🇷' : language === 'english' ? '🇺🇸' : language === 'spanish' ? '🇪🇸' : '🌍'} {language}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Filtro de Apartamento */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
+                            <Building2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                          </div>
+                          <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Apartamento</label>
+                        </div>
+                        <select 
+                          value={apartmentFilter} 
+                          onChange={(e) => setApartmentFilter(e.target.value)}
+                          className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        >
+                          <option value="all">🏠 Todos os apartamentos</option>
+                          {Array.from(new Set(analysisData.data.map(f => f.apartamento).filter(Boolean))).map(apartamento => (
+                            <option key={apartamento} value={apartamento}>🏢 Apto {apartamento}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Filtro de Estrelas */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="p-1.5 bg-yellow-100 dark:bg-yellow-900/50 rounded-lg">
+                            <svg className="w-4 h-4 text-yellow-600 dark:text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                            </svg>
+                          </div>
+                          <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Ocultar Avaliações</label>
+                        </div>
+                        <div className="grid grid-cols-5 gap-2">
+                          {[1, 2, 3, 4, 5].map(rating => (
+                            <label key={rating} className="group">
+                              <input
+                                type="checkbox"
+                                checked={hiddenRatings.includes(rating)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setHiddenRatings(prev => [...prev, rating]);
+                                  } else {
+                                    setHiddenRatings(prev => prev.filter(r => r !== rating));
+                                  }
+                                }}
+                                className="sr-only"
+                              />
+                              <div className={`flex flex-col items-center p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                                hiddenRatings.includes(rating) 
+                                  ? 'border-red-500 bg-red-50 dark:bg-red-900/30' 
+                                  : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-500'
+                              }`}>
+                                <span className="text-lg">{rating}⭐</span>
+                                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                                  {hiddenRatings.includes(rating) ? 'Oculto' : 'Visível'}
+                                </span>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        {hiddenRatings.length > 0 && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setHiddenRatings([])}
+                            className="w-full mt-2 text-red-600 border-red-300 hover:bg-red-50"
+                          >
+                            🔄 Mostrar Todas as Estrelas
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Resumo dos filtros */}
+                      <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-4">
+                          <div className="flex items-center justify-between text-sm mb-2">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Resultados da filtragem:</span>
+                            <span className="font-bold text-purple-600 dark:text-purple-400">
+                              {globalFilteredData.length} de {analysisData.data.length} feedbacks
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${(globalFilteredData.length / analysisData.data.length) * 100}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setDateRange({ start: null, end: null });
+                              setSentimentFilter('all');
+                              setSourceFilter('all');
+                              setLanguageFilter('all');
+                              setApartmentFilter('all');
+                              setHiddenRatings([]);
+                            }}
+                            className="flex-1 border-gray-300 hover:bg-gray-50"
+                          >
+                            🗑️ Limpar Tudo
+                          </Button>
+                          <Button 
+                            size="sm"
+                            onClick={() => setFiltersOpen(false)}
+                            className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                          >
+                            ✅ Aplicar Filtros
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            
             <Button 
               variant="outline"
               size="sm"
@@ -918,23 +1661,6 @@ function AdminDashboardContent() {
                 ))}
               </SelectContent>
             </Select>
-            
-            <div className="flex flex-wrap items-center gap-4">
-              <div>
-                <span className="text-sm text-muted-foreground block mb-1">Data inicial</span>
-                <DatePicker 
-                  date={dateRange.start} 
-                  onChange={(date) => setDateRange(prev => ({ ...prev, start: date }))}
-                />
-              </div>
-              <div>
-                <span className="text-sm text-muted-foreground block mb-1">Data final</span>
-                <DatePicker 
-                  date={dateRange.end} 
-                  onChange={(date) => setDateRange(prev => ({ ...prev, end: date }))}
-                />
-              </div>
-            </div>
           </div>
         </div>
         
@@ -1017,15 +1743,29 @@ function AdminDashboardContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Distribuição de Avaliações */}
               <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Distribuição de Avaliações</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Distribuição de Avaliações</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'rating',
+                      'Distribuição de Avaliações',
+                      processRatingDistribution(globalFilteredData),
+                      'bar'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={processRatingDistribution(analysisData.analysis)}>
+                    <BarChart data={processRatingDistribution(globalFilteredData)}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="label" />
                       <YAxis />
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar
+                      <RechartsTooltip />
+                      <Bar 
                         dataKey="value"
                         name="Quantidade"
                         fill="#8884d8"
@@ -1038,12 +1778,26 @@ function AdminDashboardContent() {
 
               {/* Distribuição de Problemas */}
               <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Principais Problemas</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Principais Problemas</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'problem',
+                      'Principais Problemas',
+                      processProblemDistribution(globalFilteredData),
+                      'bar'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
-                      data={processProblemDistribution(analysisData.analysis).slice(0, 6)}
+                      data={processProblemDistribution(globalFilteredData).slice(0, 6)}
                       margin={{
                         top: 20,
                         right: 30,
@@ -1065,31 +1819,87 @@ function AdminDashboardContent() {
                   </ResponsiveContainer>
                 </div>
               </Card>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Fontes dos Comentários */}
+              {/* Principais Palavras-chave */}
               <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Fontes dos Comentários</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Principais Palavras-chave</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'keyword',
+                      'Principais Palavras-chave',
+                      processKeywordDistribution(globalFilteredData).slice(0, 15),
+                      'bar'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+            </div>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={processKeywordDistribution(globalFilteredData).slice(0, 8)}
+                      margin={{
+                        top: 20,
+                        right: 30,
+                        left: 120,
+                        bottom: 5,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis dataKey="label" type="category" width={110} />
+                      <RechartsTooltip content={<CustomTooltip />} />
+                      <Bar 
+                        dataKey="value" 
+                        name="Quantidade" 
+                        fill="#00C49F"
+                        onClick={(data) => handleChartClick(data, 'keyword')}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Distribuição por Departamento */}
+              <Card className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Distribuição por Departamento</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'sector',
+                      'Distribuição por Departamento',
+                      processSectorDistribution(globalFilteredData),
+                      'pie'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={processSourceDistribution(analysisData.analysis)}
+                        data={processSectorDistribution(globalFilteredData)}
                         cx="50%"
                         cy="50%"
                         labelLine={true}
-                        label={({ name, percent }: any) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        label={({ name, percent }: any) => `${name ? name.substring(0, 15) + '...' : ''} (${(percent * 100).toFixed(0)}%)`}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
                         nameKey="label"
-                        onClick={(_, index) => {
-                          const item = processSourceDistribution(analysisData.analysis)[index];
-                          handleChartClick(item, 'source');
+                        onClick={(data, index) => {
+                          const item = processSectorDistribution(globalFilteredData)[index];
+                          handleChartClick(item, 'sector');
                         }}
                       >
-                        {processSourceDistribution(analysisData.analysis).map((_: any, index: number) => (
+                        {processSectorDistribution(globalFilteredData).map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -1098,7 +1908,9 @@ function AdminDashboardContent() {
                   </ResponsiveContainer>
                 </div>
               </Card>
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Feedbacks Recentes */}
               <Card className="p-4">
                 <h3 className="text-lg font-semibold mb-4">Feedbacks Recentes</h3>
@@ -1111,7 +1923,7 @@ function AdminDashboardContent() {
                             <Badge variant={getBadgeVariant(feedback.rating)}>
                               {feedback.rating || "?"} ★
                             </Badge>
-                            <span className="text-sm font-medium">{feedback.hotel || "Hotel não especificado"}</span>
+                            <span className="text-sm font-medium">{feedback.author || feedback.title || "Autor não identificado"}</span>
                           </div>
                           <span className="text-xs text-muted-foreground">
                             {formatDate(feedback.date)}
@@ -1152,7 +1964,24 @@ function AdminDashboardContent() {
           <TabsContent value="hotels" className="space-y-4">
             {/* Resumo por hotel */}
             <Card className="p-4">
-              <h3 className="text-lg font-semibold mb-4">Comparação entre Hotéis</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Comparação entre Hotéis</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'hotel',
+                    'Comparação entre Hotéis',
+                    hotelStats.map(stat => ({
+                      label: stat.hotel,
+                      value: stat.totalFeedbacks
+                    })),
+                    'bar'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
               <div className="h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
@@ -1360,12 +2189,26 @@ function AdminDashboardContent() {
           <TabsContent value="problems" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Problemas Mais Comuns</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Problemas Mais Comuns</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'problem',
+                      'Problemas Mais Comuns',
+                      processProblemDistribution(globalFilteredData),
+                      'bar'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
                 <div className="h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
-                      data={processProblemDistribution(isFilterApplied && filteredData ? filteredData.analysis : analysisData.analysis).slice(0, 15)}
+                      data={processProblemDistribution(globalFilteredData).slice(0, 15)}
                       margin={{
                         top: 20,
                         right: 30,
@@ -1381,7 +2224,7 @@ function AdminDashboardContent() {
                         dataKey="value" 
                         name="Quantidade" 
                         fill="#FF8042"
-                        onClick={(data) => handleChartClick({label: data.label}, 'problem')}
+                        onClick={(data) => handleChartClick(data, 'problem')}
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -1389,12 +2232,26 @@ function AdminDashboardContent() {
               </Card>
 
               <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Distribuição de Problemas</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Distribuição de Problemas</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'problem',
+                      'Distribuição de Problemas',
+                      processProblemDistribution(globalFilteredData).slice(0, 10),
+                      'pie'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
                 <div className="h-[400px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={processProblemDistribution(isFilterApplied && filteredData ? filteredData.analysis : analysisData.analysis).slice(0, 10)}
+                        data={processProblemDistribution(globalFilteredData).slice(0, 10)}
                         cx="50%"
                         cy="50%"
                         labelLine={true}
@@ -1404,11 +2261,11 @@ function AdminDashboardContent() {
                         dataKey="value"
                         nameKey="label"
                         onClick={(data, index) => {
-                          const item = processProblemDistribution(isFilterApplied && filteredData ? filteredData.analysis : analysisData.analysis)[index];
+                          const item = processProblemDistribution(globalFilteredData)[index];
                           handleChartClick(item, 'problem');
                         }}
                       >
-                        {processProblemDistribution(isFilterApplied && filteredData ? filteredData.analysis : analysisData.analysis).slice(0, 10).map((_: any, index: number) => (
+                        {processProblemDistribution(globalFilteredData).slice(0, 10).map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -1439,11 +2296,15 @@ function AdminDashboardContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {processProblemDistribution(isFilterApplied && filteredData ? filteredData.analysis : analysisData.analysis)
+                    {processProblemDistribution(globalFilteredData)
                       .slice(0, 20)
                       .map((problem: ProblemItem, index: number) => {
+                        const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+                          ? globalFilteredData 
+                          : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                        
                         const hotelEntries = Object.entries(
-                          (isFilterApplied && filteredData ? filteredData : analysisData).data
+                          (dataToUse || [])
                             .filter((item: any) => {
                               if (item.problems && Array.isArray(item.problems)) {
                                 return item.problems.includes(problem.label);
@@ -1463,7 +2324,7 @@ function AdminDashboardContent() {
                         .slice(0, 2)
                         .map(([hotel]) => hotel);
 
-                        const totalProblems = processProblemDistribution(isFilterApplied && filteredData ? filteredData.analysis : analysisData.analysis)
+                        const totalProblems = processProblemDistribution(globalFilteredData)
                           .reduce((sum: number, p: ProblemItem) => sum + p.value, 0);
                         const percentage = totalProblems > 0 ? ((problem.value / totalProblems) * 100).toFixed(1) : "0";
 
@@ -1506,62 +2367,100 @@ function AdminDashboardContent() {
           {/* Avaliações */}
           <TabsContent value="ratings" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Distribuição de Avaliações */}
               <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Fontes dos Comentários</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Distribuição de Avaliações</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'rating',
+                      'Distribuição de Avaliações',
+                      processRatingDistribution(globalFilteredData),
+                      'bar'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={processSourceDistribution(analysisData.analysis)}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={({ name, percent }: any) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="value"
-                        nameKey="label"
-                        onClick={(_, index) => {
-                          const item = processSourceDistribution(analysisData.analysis)[index];
-                          handleChartClick(item, 'source');
-                        }}
-                      >
-                        {processSourceDistribution(analysisData.analysis).map((_: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Legend />
+                    <BarChart data={processRatingDistribution(globalFilteredData)}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="label" />
+                      <YAxis />
                       <RechartsTooltip content={<CustomTooltip />} />
-                    </PieChart>
+                      <Bar
+                        dataKey="value"
+                        fill="#8884d8"
+                        onClick={(data) => handleChartClick(data, 'rating')}
+                      >
+                        {processRatingDistribution(globalFilteredData).map((entry: any, index: number) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={
+                              parseInt(entry.label) >= 4 ? '#4CAF50' : 
+                              parseInt(entry.label) >= 3 ? '#FFC107' : 
+                              '#F44336'
+                            } 
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </Card>
 
+              {/* Análise de Sentimentos */}
               <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Avaliação Média por Fonte</h3>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Análise de Sentimentos</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'sentiment',
+                      'Análise de Sentimentos',
+                      [
+                        { name: 'Positivo', value: globalFilteredData.filter(f => f.sentiment === 'positive').length },
+                        { name: 'Negativo', value: globalFilteredData.filter(f => f.sentiment === 'negative').length },
+                        { name: 'Neutro', value: globalFilteredData.filter(f => f.sentiment === 'neutral').length }
+                      ],
+                      'pie'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={[
-                        { name: 'Google', rating: 4.2 },
-                        { name: 'TripAdvisor', rating: 3.8 },
-                        { name: 'Booking.com', rating: 4.0 },
-                        { name: 'Expedia', rating: 3.9 },
-                        { name: 'Facebook', rating: 4.3 }
-                      ]}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 5]} />
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Positivo', value: globalFilteredData.filter(f => f.sentiment === 'positive').length },
+                          { name: 'Negativo', value: globalFilteredData.filter(f => f.sentiment === 'negative').length },
+                          { name: 'Neutro', value: globalFilteredData.filter(f => f.sentiment === 'neutral').length }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        paddingAngle={5}
+                        dataKey="value"
+                        label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+                        onClick={(data) => handleChartClick(data, 'sentiment')}
+                      >
+                        <Cell fill="#4CAF50" />
+                        <Cell fill="#F44336" />
+                        <Cell fill="#FFC107" />
+                      </Pie>
                       <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar dataKey="rating" name="Avaliação Média" fill="#8884d8" />
-                    </BarChart>
+                      <Legend />
+                    </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <p className="text-xs text-center text-muted-foreground mt-2">
-                  Nota: Este gráfico é ilustrativo. Para uma versão completa, seria necessário agrupar os dados por fonte.
-                </p>
               </Card>
             </div>
 
@@ -1570,31 +2469,46 @@ function AdminDashboardContent() {
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
-                    data={[
-                      { month: 'Jan', Google: 40, TripAdvisor: 24, Booking: 35, Expedia: 18 },
-                      { month: 'Fev', Google: 45, TripAdvisor: 28, Booking: 32, Expedia: 22 },
-                      { month: 'Mar', Google: 38, TripAdvisor: 32, Booking: 30, Expedia: 25 },
-                      { month: 'Abr', Google: 50, TripAdvisor: 35, Booking: 42, Expedia: 28 },
-                      { month: 'Mai', Google: 55, TripAdvisor: 30, Booking: 38, Expedia: 30 },
-                      { month: 'Jun', Google: 48, TripAdvisor: 42, Booking: 35, Expedia: 25 }
-                    ]}
+                    data={(() => {
+                      const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+                        ? globalFilteredData 
+                        : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                      return getTimePeriodData(dataToUse || [], 'source').data;
+                    })()}
                     margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
+                    <XAxis dataKey="period" />
                     <YAxis />
                     <RechartsTooltip content={<CustomTooltip />} />
                     <Legend />
-                    <Area type="monotone" dataKey="Google" stackId="1" stroke="#8884d8" fill="#8884d8" />
-                    <Area type="monotone" dataKey="TripAdvisor" stackId="1" stroke="#82ca9d" fill="#82ca9d" />
-                    <Area type="monotone" dataKey="Booking" stackId="1" stroke="#ffc658" fill="#ffc658" />
-                    <Area type="monotone" dataKey="Expedia" stackId="1" stroke="#ff7300" fill="#ff7300" />
+                    {processSourceDistribution(analysisData?.analysis).map((source: any, index: number) => (
+                      <Area 
+                        key={source.label}
+                        type="monotone" 
+                        dataKey={source.label} 
+                        stackId="1" 
+                        stroke={COLORS[index % COLORS.length]} 
+                        fill={COLORS[index % COLORS.length]} 
+                      />
+                    ))}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-              <p className="text-xs text-center text-muted-foreground mt-2">
-                Nota: Este gráfico é ilustrativo. Para uma versão completa, seria necessário agrupar os dados por períodos.
-              </p>
+              <div className="text-xs text-center text-muted-foreground mt-2">
+                Agrupamento automático: {(() => {
+                  const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+                    ? globalFilteredData 
+                    : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                  const { period } = getTimePeriodData(dataToUse || [], 'source');
+                  switch(period) {
+                    case 'day': return 'por dia (dados recentes)';
+                    case 'week': return 'por semana (dados de algumas semanas)';
+                    case 'month': return 'por mês (dados de vários meses)';
+                    default: return 'por período';
+                  }
+                })()}
+              </div>
             </Card>
           </TabsContent>
 
@@ -2074,6 +2988,281 @@ function AdminDashboardContent() {
                 </div>
               ))}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Painel Lateral Interativo */}
+      <div className={`fixed inset-y-0 right-0 z-50 w-[36rem] bg-background border-l border-border shadow-xl transform transition-transform duration-300 ease-in-out ${
+        detailPanelOpen ? 'translate-x-0' : 'translate-x-full'
+      }`}>
+        {selectedItem && (
+          <div className="h-full flex flex-col">
+            {/* Cabeçalho */}
+            <div className="p-6 border-b border-border bg-gradient-to-r from-purple-600 to-pink-600">
+              <div className="flex items-center justify-between">
+                <div className="text-white">
+                  <h3 className="text-lg font-semibold capitalize">
+                    {selectedItem.type === 'keyword' ? 'Palavra-chave' : 
+                     selectedItem.type === 'problem' ? 'Problema' :
+                     selectedItem.type === 'sector' ? 'Departamento' :
+                     selectedItem.type === 'source' ? 'Fonte' :
+                     selectedItem.type === 'language' ? 'Idioma' :
+                     selectedItem.type === 'rating' ? 'Avaliação' :
+                     selectedItem.type === 'hotel' ? 'Hotel' : selectedItem.type}
+                  </h3>
+                  <p className="text-sm text-purple-100">{selectedItem.value}</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setDetailPanelOpen(false)}
+                  className="text-white hover:bg-white/20"
+                >
+                  ✕
+                </Button>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Estatísticas Principais */}
+              <div className="grid grid-cols-2 gap-4">
+                <Card className="p-4 text-center">
+                  <div className="text-2xl font-bold text-purple-600">{selectedItem.stats.totalOccurrences}</div>
+                  <div className="text-sm text-muted-foreground">Ocorrências</div>
+                </Card>
+                <Card className="p-4 text-center">
+                  <div className="text-2xl font-bold text-green-600">{selectedItem.stats.percentage}%</div>
+                  <div className="text-sm text-muted-foreground">do Total</div>
+                </Card>
+              </div>
+
+              {/* Avaliação Média */}
+              <Card className="p-4">
+                <h4 className="font-semibold mb-3 flex items-center">
+                  <Star className="h-4 w-4 text-yellow-500 mr-2" />
+                  Avaliação Média
+                </h4>
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{selectedItem.stats.averageRating.toFixed(1)}</div>
+                  <div className="text-yellow-500">⭐⭐⭐⭐⭐</div>
+                </div>
+              </Card>
+
+              {/* Distribuição de Sentimentos */}
+              <Card className="p-4">
+                <h4 className="font-semibold mb-3">Distribuição de Sentimentos</h4>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive, fill: '#10B981' },
+                          { name: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral, fill: '#F59E0B' },
+                          { name: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative, fill: '#EF4444' }
+                        ].filter(item => item.value > 0)}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={60}
+                        dataKey="value"
+                        label={({ name, value }) => `${name}: ${value}`}
+                      >
+                      </Pie>
+                      <RechartsTooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Distribuição de Avaliações */}
+              <Card className="p-4">
+                <h4 className="font-semibold mb-3">Distribuição de Avaliações</h4>
+                <div className="h-32">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      { rating: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
+                      { rating: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
+                      { rating: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
+                      { rating: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
+                      { rating: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
+                    ]}>
+                      <XAxis dataKey="rating" />
+                      <YAxis />
+                      <RechartsTooltip />
+                      <Bar dataKey="value" fill="#8884d8" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              {/* Tendência Mensal */}
+              {selectedItem.stats.monthlyTrend.length > 1 && (
+                <Card className="p-4">
+                  <h4 className="font-semibold mb-3">Tendência Mensal</h4>
+                  <div className="h-32">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={selectedItem.stats.monthlyTrend}>
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <RechartsTooltip />
+                        <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+              )}
+
+              {/* Hotéis Afetados */}
+              {selectedItem.stats.topHotels.length > 0 && (
+                <Card className="p-4">
+                  <h4 className="font-semibold mb-3">Principais Hotéis</h4>
+                  <div className="space-y-2">
+                    {selectedItem.stats.topHotels.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center">
+                        <span className="text-sm">{item.hotel}</span>
+                        <Badge variant="outline">{item.count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Palavras-chave Relacionadas */}
+              {selectedItem.stats.topKeywords.length > 0 && (
+                <Card className="p-4">
+                  <h4 className="font-semibold mb-3">Principais Palavras-chave</h4>
+                  <div className="space-y-2">
+                    {selectedItem.stats.topKeywords.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center">
+                        <span className="text-sm">{item.keyword}</span>
+                        <Badge variant="outline">{item.count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Problemas Relacionados */}
+              {selectedItem.stats.topProblems.length > 0 && (
+                <Card className="p-4">
+                  <h4 className="font-semibold mb-3">Problemas Relacionados</h4>
+                  <div className="space-y-2">
+                    {selectedItem.stats.topProblems.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center">
+                        <span className="text-sm">{item.problem}</span>
+                        <Badge variant="outline">{item.count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Feedbacks Recentes */}
+              <Card className="p-4">
+                <h4 className="font-semibold mb-3">Feedbacks Recentes</h4>
+                <div className="space-y-3">
+                  {selectedItem.stats.recentFeedbacks.map((feedback: any, idx: number) => (
+                    <div key={idx} className="p-3 bg-muted rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="text-yellow-500">
+                            {'⭐'.repeat(feedback.rating || 0)}
+                          </div>
+                          <span className="text-xs font-medium">{feedback.hotel}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(feedback.date).toLocaleDateString('pt-BR')}
+                        </div>
+                      </div>
+                      <p className="text-sm line-clamp-2">{feedback.comment}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Overlay para fechar o painel */}
+      {detailPanelOpen && (
+        <div 
+          className="fixed inset-0 bg-black/20 z-40" 
+          onClick={() => setDetailPanelOpen(false)}
+        />
+      )}
+
+      {/* Modal de Gráfico Grande */}
+      <Dialog open={chartModalOpen} onOpenChange={setChartModalOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{selectedChart?.title}</DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto">
+            {selectedChart && (
+              <div className="space-y-6">
+                {/* Gráfico Grande */}
+                <div className="h-[500px] bg-muted/10 rounded-lg p-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {renderChart(selectedChart.chartType, selectedChart.data, handleChartClick, selectedChart.type)}
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Dados Tabulares */}
+                <Card className="p-6">
+                  <h4 className="text-lg font-semibold mb-4">Dados Detalhados</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="py-3 px-4 bg-muted border-b text-left font-semibold">
+                            {selectedChart.type === 'rating' ? 'Avaliação' :
+                             selectedChart.type === 'keyword' ? 'Palavra-chave' :
+                             selectedChart.type === 'sector' ? 'Departamento' :
+                             selectedChart.type === 'problem' ? 'Problema' :
+                             selectedChart.type === 'sentiment' ? 'Sentimento' : 'Item'}
+                          </th>
+                          <th className="py-3 px-4 bg-muted border-b text-center font-semibold">Quantidade</th>
+                          <th className="py-3 px-4 bg-muted border-b text-center font-semibold">Percentual</th>
+                          <th className="py-3 px-4 bg-muted border-b text-center font-semibold">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedChart.data.map((item: any, index: number) => {
+                          const total = selectedChart.data.reduce((sum: number, d: any) => sum + (d.value || 0), 0);
+                          const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
+                          const itemName = item.name || item.label;
+                          
+                          return (
+                            <tr key={index} className="hover:bg-muted/30 transition-colors">
+                              <td className="py-3 px-4 border-b font-medium">{itemName}</td>
+                              <td className="py-3 px-4 border-b text-center">{item.value}</td>
+                              <td className="py-3 px-4 border-b text-center">
+                                <Badge variant="outline">{percentage}%</Badge>
+                              </td>
+                              <td className="py-3 px-4 border-b text-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    handleChartClick(item, selectedChart.type);
+                                    setChartModalOpen(false);
+                                  }}
+                                >
+                                  Ver Feedbacks
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
