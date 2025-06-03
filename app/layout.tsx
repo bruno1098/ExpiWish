@@ -27,8 +27,15 @@ export default function RootLayout({
             __html: `
               try {
                 const theme = localStorage.getItem('theme-preference') || 'light';
-                document.documentElement.classList.toggle('dark', theme === 'dark');
-              } catch (e) {}
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              } catch (e) {
+                // Em caso de erro, sempre usar tema claro
+                document.documentElement.classList.remove('dark');
+              }
             `
           }}
         />
@@ -45,7 +52,6 @@ export default function RootLayout({
             <SonnerToaster 
               position="top-right" 
               richColors 
-              theme="system"
               expand={true}
               duration={4000}
               closeButton

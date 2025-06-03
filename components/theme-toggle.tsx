@@ -25,11 +25,6 @@ export function ThemeToggle() {
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light"
     setTheme(newTheme)
-    
-    // Force a DOM update to avoid inconsistencies
-    setTimeout(() => {
-      document.documentElement.classList.toggle('dark', newTheme === 'dark')
-    }, 0)
   }
 
   return (

@@ -23,21 +23,13 @@ export default function AdminLayout({
   useEffect(() => {
     setIsMounted(true)
     
-    // Verificar se o sistema está no modo escuro ou se o usuário selecionou o tema escuro
-    const isDark = 
-      window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ||
-      document.documentElement.classList.contains('dark');
-    
+    // Verificar apenas se o usuário selecionou o tema escuro (não o sistema)
+    const isDark = document.documentElement.classList.contains('dark');
     setIsDarkMode(isDark)
 
     // Verificar estado inicial da sidebar
     const storedState = localStorage.getItem('sidebarCollapsed')
     setSidebarCollapsed(storedState === 'true')
-    
-    // Ouvir mudanças no tema
-    const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const darkModeChangeHandler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
-    darkModeMediaQuery.addEventListener('change', darkModeChangeHandler);
     
     // Observar mudanças na classe da raiz do documento
     const observer = new MutationObserver((mutations) => {
@@ -75,7 +67,6 @@ export default function AdminLayout({
     window.addEventListener('sidebarToggle', handleSidebarToggle as EventListener)
     
     return () => {
-      darkModeMediaQuery.removeEventListener('change', darkModeChangeHandler);
       observer.disconnect();
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('sidebarToggle', handleSidebarToggle as EventListener)

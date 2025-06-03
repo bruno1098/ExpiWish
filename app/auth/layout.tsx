@@ -12,9 +12,9 @@ export default function AuthLayout({
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
+      defaultTheme="light"
+      enableSystem={false}
+      storageKey="theme-preference"
     >
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
         {children}
