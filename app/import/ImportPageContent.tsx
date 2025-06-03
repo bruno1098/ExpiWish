@@ -5,7 +5,7 @@ import { useDropzone } from "react-dropzone"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle } from "lucide-react"
+import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle, Timer } from "lucide-react"
 import { storeFeedbacks } from "@/lib/feedback"
 import { analyzeWithGPT } from "@/lib/openai-client"
 import { useToast } from "@/components/ui/use-toast"
@@ -16,10 +16,13 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import SharedDashboardLayout from "../shared-layout"
 import { cn } from "@/lib/utils"
+import { getPerformanceProfile, estimateProcessingTime, formatEstimatedTime } from "@/lib/performance-config"
 
-// Configurações de processamento
-const BATCH_SIZE = 40;
-const DELAY_BETWEEN_BATCHES = 50;
+// Configurações de processamento - OTIMIZADAS PARA PERFORMANCE
+const BATCH_SIZE = 100;
+const DELAY_BETWEEN_BATCHES = 20;
+const CONCURRENT_REQUESTS = 5;
+const REQUEST_DELAY = 50;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -91,30 +94,68 @@ const AnimatedProgress = ({ value, className }: { value: number; className?: str
   );
 };
 
-// Componente de estatísticas em tempo real
-const LiveStats = ({ processed, total, currentStep, retryCount, errorCount }: { 
+// Componente de estatísticas em tempo real melhorado
+const LiveStats = ({ processed, total, currentStep, retryCount, errorCount, startTime, performanceProfile }: { 
   processed: number; 
   total: number; 
   currentStep: string;
   retryCount: number;
   errorCount: number;
+  startTime: Date | null;
+  performanceProfile?: any;
 }) => {
+  const [processingRate, setProcessingRate] = useState(0);
+  const [eta, setEta] = useState("");
+
+  useEffect(() => {
+    if (startTime && processed > 0) {
+      const elapsedMs = Date.now() - startTime.getTime();
+      const elapsedSeconds = elapsedMs / 1000;
+      const rate = processed / elapsedSeconds;
+      setProcessingRate(rate);
+      
+      if (rate > 0) {
+        const remainingItems = total - processed;
+        const remainingSeconds = remainingItems / rate;
+        
+        if (remainingSeconds < 60) {
+          setEta(`${Math.ceil(remainingSeconds)}s restantes`);
+        } else if (remainingSeconds < 3600) {
+          setEta(`${Math.ceil(remainingSeconds / 60)}min restantes`);
+        } else {
+          setEta(`${Math.ceil(remainingSeconds / 3600)}h restantes`);
+        }
+      }
+    }
+  }, [processed, startTime, total]);
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
       <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
         <div className="flex items-center gap-2">
           <FileIcon className="h-4 w-4 text-blue-600" />
           <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Processados</span>
         </div>
         <div className="text-2xl font-bold text-blue-600 mt-1">{processed}</div>
+        <div className="text-xs text-blue-500 mt-1">{total > 0 ? Math.round((processed / total) * 100) : 0}% concluído</div>
       </div>
       
       <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-purple-600" />
-          <span className="text-sm font-medium text-purple-900 dark:text-purple-100">Restantes</span>
+          <span className="text-sm font-medium text-purple-900 dark:text-purple-100">Velocidade</span>
         </div>
-        <div className="text-2xl font-bold text-purple-600 mt-1">{total - processed}</div>
+        <div className="text-2xl font-bold text-purple-600 mt-1">{processingRate.toFixed(1)}</div>
+        <div className="text-xs text-purple-500 mt-1">itens/segundo</div>
+      </div>
+
+      <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
+        <div className="flex items-center gap-2">
+          <Timer className="h-4 w-4 text-emerald-600" />
+          <span className="text-sm font-medium text-emerald-900 dark:text-emerald-100">ETA</span>
+        </div>
+        <div className="text-lg font-bold text-emerald-600 mt-1">{eta || "Calculando..."}</div>
+        <div className="text-xs text-emerald-500 mt-1">{total - processed} restantes</div>
       </div>
       
       {retryCount > 0 && (
@@ -140,9 +181,17 @@ const LiveStats = ({ processed, total, currentStep, retryCount, errorCount }: {
       <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800 col-span-2 md:col-span-1">
         <div className="flex items-center gap-2">
           <Brain className="h-4 w-4 text-green-600" />
-          <span className="text-sm font-medium text-green-900 dark:text-green-100">Fase Atual</span>
+          <span className="text-sm font-medium text-green-900 dark:text-green-100">Perfil</span>
         </div>
-        <div className="text-sm font-semibold text-green-600 mt-1">{currentStep}</div>
+        <div className="text-sm font-semibold text-green-600 mt-1">
+          {performanceProfile ? 
+            `${performanceProfile.CHUNK_SIZE} itens/lote` : 
+            'Automático'
+          }
+        </div>
+        <div className="text-xs text-green-500 mt-1">
+          {performanceProfile?.CONCURRENT_REQUESTS || 5} paralelo
+        </div>
       </div>
     </div>
   );
@@ -348,9 +397,22 @@ function ImportPageContent() {
 
       const processDataInChunks = async (data: any[]): Promise<Feedback[]> => {
         const result: Feedback[] = [];
-        const chunkSize = 50; // Reduzido drasticamente para evitar sobrecarregar a API
-        const chunks = [];
         
+        // Usar configurações adaptativas baseadas no tamanho dos dados
+        const performanceProfile = getPerformanceProfile(data.length);
+        const chunkSize = performanceProfile.CHUNK_SIZE;
+        const concurrentRequests = performanceProfile.CONCURRENT_REQUESTS;
+        const requestDelay = performanceProfile.REQUEST_DELAY;
+        const delayBetweenBatches = performanceProfile.DELAY_BETWEEN_BATCHES;
+        
+        // Mostrar estimativa de tempo
+        const estimatedSeconds = estimateProcessingTime(data.length);
+        const estimatedTimeStr = formatEstimatedTime(estimatedSeconds);
+        setEstimatedTime(estimatedTimeStr);
+        
+        setCurrentStep(`Processando ${data.length} itens com perfil ${data.length < 100 ? 'LEVE' : data.length < 500 ? 'MÉDIO' : 'PESADO'} - ${estimatedTimeStr}`);
+        
+        const chunks = [];
         for (let i = 0; i < data.length; i += chunkSize) {
           chunks.push(data.slice(i, i + chunkSize));
         }
@@ -364,11 +426,10 @@ function ImportPageContent() {
         setCurrentStep("Analisando feedbacks com IA...");
 
         // Função helper para fazer retry com backoff exponencial
-        const retryWithBackoff = async (fn: Function, maxRetries: number = 3): Promise<any> => {
+        const retryWithBackoff = async (fn: Function, maxRetries: number = performanceProfile.MAX_RETRIES): Promise<any> => {
           for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
               const result = await fn();
-              // Se teve retry mas agora deu certo, resetar contador
               if (attempt > 1) {
                 setRetryCount(prev => prev - 1);
               }
@@ -376,12 +437,10 @@ function ImportPageContent() {
             } catch (error: any) {
               const isLastAttempt = attempt === maxRetries;
               
-              // Incrementar contador de tentativas na primeira falha
               if (attempt === 1) {
                 setRetryCount(prev => prev + 1);
               }
               
-              // Se for o último tentativa ou erro não relacionado à API, lança o erro
               if (isLastAttempt || !error.message.includes('HTTP error! status: 5')) {
                 if (isLastAttempt) {
                   setErrorCount(prev => prev + 1);
@@ -390,124 +449,134 @@ function ImportPageContent() {
                 throw error;
               }
               
-              // Calcular delay com backoff exponencial: 1s, 2s, 4s
-              const delayTime = Math.pow(2, attempt - 1) * 1000;
-              
-              // Atualizar step com informação de retry
+              const delayTime = Math.pow(performanceProfile.RETRY_BACKOFF_MULTIPLIER, attempt - 1) * performanceProfile.RETRY_BASE_DELAY;
               setCurrentStep(`Resolvendo problemas temporários... (tentativa ${attempt + 1}/${maxRetries})`);
-              
               await new Promise(resolve => setTimeout(resolve, delayTime));
             }
           }
         };
 
+        // Função para processar um batch em paralelo
+        const processBatchParallel = async (batch: any[]): Promise<Feedback[]> => {
+          const batchResults: Feedback[] = [];
+          
+          // Dividir o batch em grupos menores para processamento paralelo
+          const groups = [];
+          for (let i = 0; i < batch.length; i += concurrentRequests) {
+            groups.push(batch.slice(i, i + concurrentRequests));
+          }
+          
+          for (const group of groups) {
+            // Processar cada grupo em paralelo
+            const promises = group.map(async (row, index) => {
+              // Pequeno delay escalonado para evitar sobrecarga
+              await delay(index * requestDelay);
+              
+              try {
+                const analysisResult = await retryWithBackoff(async () => {
+                  const response = await fetch('/api/analyze-feedback', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                      texto: row.texto,
+                      apiKey: apiKey,
+                    }),
+                  });
+
+                  if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                  }
+
+                  const result = await response.json();
+                  
+                  if (result.error) {
+                    throw new Error(result.error);
+                  }
+
+                  return result;
+                });
+
+                const rating = analysisResult.rating || 3;
+                const rawResponse = analysisResult.response || "Não identificado, Não identificado, ";
+                
+                const parts = rawResponse.split(',').map((part: string) => part.trim());
+                const keyword = parts[0] || 'Não identificado';
+                const sector = parts[1] || 'Não identificado';
+                const problem = parts[2] || '';
+                    
+                return {
+                  id: generateUniqueId(),
+                  date: new Date().toISOString(),
+                  comment: row.texto,
+                  rating: rating,
+                  sentiment: rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral',
+                  keyword: keyword,
+                  sector: sector,
+                  problem: problem,
+                  hotel: row.nomeHotel,
+                  hotelId: hotelId,
+                  source: row.fonte || '',
+                  language: row.idioma || '',
+                  score: row.pontuacao || undefined,
+                  url: row.url || undefined,
+                  author: row.autor || undefined,
+                  title: row.titulo || undefined,
+                  apartamento: row.apartamento || undefined
+                } as Feedback;
+                  
+              } catch (error: any) {
+                console.error(`Erro ao processar feedback após todas as tentativas:`, error);
+                
+                return {
+                  id: generateUniqueId(),
+                  date: new Date().toISOString(),
+                  comment: row.texto,
+                  rating: 3,
+                  sentiment: 'neutral',
+                  keyword: 'Erro de Processamento',
+                  sector: 'Não identificado',
+                  problem: 'Falha na análise',
+                  hotel: row.nomeHotel,
+                  hotelId: hotelId,
+                  source: row.fonte || '',
+                  language: row.idioma || '',
+                  score: row.pontuacao || undefined,
+                  url: row.url || undefined,
+                  author: row.autor || undefined,
+                  title: row.titulo || undefined,
+                  apartamento: row.apartamento || undefined
+                } as Feedback;
+              }
+            });
+            
+            // Aguardar todas as requisições do grupo terminarem
+            const groupResults = await Promise.all(promises);
+            batchResults.push(...groupResults);
+            
+            // Atualizar progresso
+            const currentProcessed = result.length + batchResults.length;
+            setProcessedItems(currentProcessed);
+            const analysisProgress = 10 + ((currentProcessed / data.length) * 80);
+            setProgress(Math.min(analysisProgress, 90));
+          }
+          
+          return batchResults;
+        };
+
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
           
-          setCurrentStep(`Analisando lote ${i + 1}/${chunks.length}...`);
+          setCurrentStep(`Analisando lote ${i + 1}/${chunks.length} (${chunk.length} itens) - ${Math.round(((i + 1) / chunks.length) * 100)}% dos lotes`);
           
-          // Processar sequencialmente ao invés de Promise.all para evitar sobrecarregar
-          for (let j = 0; j < chunk.length; j++) {
-            const row = chunk[j];
-            
-            try {
-              const analysisResult = await retryWithBackoff(async () => {
-                const response = await fetch('/api/analyze-feedback', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ 
-                    texto: row.texto,
-                    apiKey: apiKey,
-                  }),
-                });
-
-                if (!response.ok) {
-                  throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                
-                if (result.error) {
-                  throw new Error(result.error);
-                }
-
-                return result;
-              });
-
-              const rating = analysisResult.rating || 3;
-              const rawResponse = analysisResult.response || "Não identificado, Não identificado, ";
-              
-              const parts = rawResponse.split(',').map((part: string) => part.trim());
-              const keyword = parts[0] || 'Não identificado';
-              const sector = parts[1] || 'Não identificado';
-              const problem = parts[2] || '';
-                  
-              const feedback: Feedback = {
-                id: generateUniqueId(),
-                date: new Date().toISOString(),
-                comment: row.texto,
-                rating: rating,
-                sentiment: rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral',
-                keyword: keyword,
-                sector: sector,
-                problem: problem,
-                hotel: row.nomeHotel,
-                hotelId: hotelId,
-                source: row.fonte || '',
-                language: row.idioma || '',
-                score: row.pontuacao || undefined,
-                url: row.url || undefined,
-                author: row.autor || undefined,
-                title: row.titulo || undefined,
-                apartamento: row.apartamento || undefined
-              };
-
-              result.push(feedback);
-
-              // Atualizar progresso em tempo real
-              const currentProcessed = result.length;
-              setProcessedItems(currentProcessed);
-              
-              // Calcular progresso (10% para leitura do arquivo, 80% para análise, 10% para salvamento)
-              const analysisProgress = 10 + ((currentProcessed / data.length) * 80);
-              setProgress(Math.min(analysisProgress, 90));
-                  
-            } catch (error: any) {
-              console.error(`Erro ao processar feedback ${j} após todas as tentativas:`, error);
-              
-              // Criar feedback com dados padrão quando falha após todas as tentativas
-              const feedback: Feedback = {
-                id: generateUniqueId(),
-                date: new Date().toISOString(),
-                comment: row.texto,
-                rating: 3,
-                sentiment: 'neutral',
-                keyword: 'Erro de Processamento',
-                sector: 'Não identificado',
-                problem: 'Falha na análise',
-                hotel: row.nomeHotel,
-                hotelId: hotelId,
-                source: row.fonte || '',
-                language: row.idioma || '',
-                score: row.pontuacao || undefined,
-                url: row.url || undefined,
-                author: row.autor || undefined,
-                title: row.titulo || undefined,
-                apartamento: row.apartamento || undefined
-              };
-
-              result.push(feedback);
-            }
-            
-            // Pequeno delay entre cada feedback para não sobrecarregar
-            await delay(10);
-          }
+          // Processar chunk em paralelo
+          const chunkResults = await processBatchParallel(chunk);
+          result.push(...chunkResults);
           
-          // Pausa maior entre chunks para não sobrecarregar a API
+          // Pausa otimizada entre chunks baseada no perfil
           if (i < chunks.length - 1) {
-            await delay(900); // Aumentado para 2 segundos entre chunks
+            await delay(delayBetweenBatches);
           }
         }
 
@@ -1010,6 +1079,8 @@ function ImportPageContent() {
                 currentStep={currentStep} 
                 retryCount={retryCount}
                 errorCount={errorCount}
+                startTime={startTime}
+                performanceProfile={getPerformanceProfile(totalItems)}
               />
             )}
 

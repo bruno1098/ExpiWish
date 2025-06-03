@@ -1,8 +1,31 @@
 import OpenAI from "openai";
 import { NextRequest, NextResponse } from "next/server";
 
+// Cache em memória para análises repetidas
+const analysisCache = new Map<string, any>();
+const CACHE_EXPIRY = 30 * 60 * 1000; // 30 minutos
+
+// Controle de rate limiting
+let requestCount = 0;
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minuto
+const MAX_REQUESTS_PER_MINUTE = 180; // Limite mais alto para melhor performance
+
+// Reset do contador a cada minuto
+setInterval(() => {
+  requestCount = 0;
+}, RATE_LIMIT_WINDOW);
+
 export async function POST(request: NextRequest) {
   try {
+    // Verificar rate limit
+    if (requestCount >= MAX_REQUESTS_PER_MINUTE) {
+      return NextResponse.json(
+        { error: 'Rate limit atingido. Aguarde um momento.' },
+        { status: 429 }
+      );
+    }
+    requestCount++;
+
     const body = await request.json();
     const { texto, apiKey, useFineTuned = false } = body;
 
@@ -22,6 +45,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Criar chave de cache
+    const cacheKey = `${texto.trim().toLowerCase().slice(0, 100)}`;
+    
+    // Verificar cache
+    const cached = analysisCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_EXPIRY) {
+      return NextResponse.json(cached.data);
+    }
+
     // Verificar se o texto contém apenas números ou caracteres não significativos
     const cleanText = texto.trim();
     const isOnlyNumbers = /^\d+$/.test(cleanText);
@@ -29,12 +61,20 @@ export async function POST(request: NextRequest) {
     const isTooShort = cleanText.length < 10;
     
     if (isOnlyNumbers || isOnlySpecialChars || isTooShort) {
-      return NextResponse.json({
+      const defaultResponse = {
         rating: 3,
         keyword: 'Não identificado',
         sector: 'Não identificado',
         problem: ''
+      };
+      
+      // Cache resultado padrão
+      analysisCache.set(cacheKey, {
+        data: defaultResponse,
+        timestamp: Date.now()
       });
+      
+      return NextResponse.json(defaultResponse);
     }
 
     const openai = new OpenAI({
@@ -188,6 +228,15 @@ Comentário: "${texto}"`;
       
       processedResponse = `${keywords}, ${sectors}, ${cleanedProblems}`;
     }
+
+    // Cache resultado
+    analysisCache.set(cacheKey, {
+      data: {
+        rating,
+        response: processedResponse
+      },
+      timestamp: Date.now()
+    });
 
     return NextResponse.json({
       rating,
