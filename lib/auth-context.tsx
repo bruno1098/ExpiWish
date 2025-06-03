@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
-import { getCurrentUserData, updateUserLastAccess, markFirstAccess } from "./auth-service";
+import { getCurrentUserData, updateUserLastAccess, markFirstAccess, canUserAccess } from "./auth-service";
 import { useRouter } from "next/navigation";
 
 // Interface para dados do usuário
@@ -20,6 +20,12 @@ export interface UserData {
   lastAccess?: any;
   lastAccessTimestamp?: number;
   mustChangePassword?: boolean;
+  emailVerifiedByAdmin?: {
+    verifiedBy: string;
+    verifiedByEmail: string;
+    verifiedAt: any;
+    reason: string;
+  };
 }
 
 interface AuthContextType {
@@ -28,6 +34,7 @@ interface AuthContextType {
   loading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  canAccess: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -35,7 +42,8 @@ const AuthContext = createContext<AuthContextType>({
   userData: null,
   loading: true,
   isAuthenticated: false,
-  isAdmin: false
+  isAdmin: false,
+  canAccess: false
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -44,6 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [canAccess, setCanAccess] = useState(false);
 
   useEffect(() => {
     console.log("AuthProvider: Inicializando listener");
@@ -57,13 +66,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.log("Dados do usuário obtidos:", userDataResult);
         setUserData(userDataResult);
         
-        // Registrar primeiro acesso se for a primeira vez
-        await markFirstAccess(authUser.uid);
-        
-        // Atualizar último acesso
-        await updateUserLastAccess(authUser.uid);
+        // Verificar se o usuário pode acessar o sistema
+        if (userDataResult) {
+          const hasAccess = await canUserAccess(authUser, userDataResult);
+          console.log("Usuário pode acessar:", hasAccess);
+          setCanAccess(hasAccess);
+          
+          // Se pode acessar, registrar acessos
+          if (hasAccess) {
+            await markFirstAccess(authUser.uid);
+            await updateUserLastAccess(authUser.uid);
+          }
+        } else {
+          setCanAccess(false);
+        }
       } else {
         setUserData(null);
+        setCanAccess(false);
       }
       
       setLoading(false);
@@ -77,28 +96,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     userData,
     loading,
     isAuthenticated: !!user,
-    isAdmin: userData?.role === 'admin'
+    isAdmin: userData?.role === 'admin',
+    canAccess: !!user && canAccess
   };
 
-  console.log("AuthProvider state:", { user: !!user, userData: !!userData, loading, isAdmin: value.isAdmin });
+  console.log("AuthProvider state:", { 
+    user: !!user, 
+    userData: !!userData, 
+    loading, 
+    isAdmin: value.isAdmin,
+    canAccess: value.canAccess 
+  });
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 // Componente de proteção de rota
 export const RequireAuth = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, canAccess, userData, loading } = useAuth();
   const router = useRouter();
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      console.log("Redirecionando para /auth/login");
-      router.push("/auth/login");
-    } else if (!loading) {
-      setChecked(true);
+    if (!loading) {
+      if (!isAuthenticated) {
+        console.log("❌ Usuário não autenticado, redirecionando para /auth/login");
+        router.push("/auth/login");
+      } else if (!canAccess) {
+        console.log("❌ Usuário não pode acessar (email não verificado), redirecionando para verificação");
+        // Se for staff e não pode acessar, redirecionar para verificação
+        if (userData?.role === 'staff') {
+          router.push("/auth/verify-email");
+        } else {
+          // Se não é staff e não pode acessar, algo está errado
+          console.error("⚠️ Usuário admin sem acesso - isso não deveria acontecer");
+          router.push("/auth/login");
+        }
+      } else {
+        console.log("✅ Usuário pode acessar");
+        setChecked(true);
+      }
     }
-  }, [isAuthenticated, loading, router]);
+  }, [isAuthenticated, canAccess, userData, loading, router]);
 
   if (loading || !checked) {
     return (
@@ -108,12 +147,12 @@ export const RequireAuth = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  return isAuthenticated ? <>{children}</> : null;
+  return (isAuthenticated && canAccess) ? <>{children}</> : null;
 };
 
 // Componente de proteção de rota para admin
 export const RequireAdmin = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, userData, loading } = useAuth();
+  const { isAuthenticated, canAccess, userData, loading } = useAuth();
   const router = useRouter();
   const [checked, setChecked] = useState(false);
   const isAdmin = userData?.role === 'admin';
@@ -121,16 +160,20 @@ export const RequireAdmin = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!loading) {
       if (!isAuthenticated) {
-        console.log("Redirecionando para /auth/login");
+        console.log("❌ Admin: Usuário não autenticado, redirecionando para /auth/login");
         router.push("/auth/login");
+      } else if (!canAccess) {
+        console.log("❌ Admin: Usuário não pode acessar, redirecionando para verificação");
+        router.push("/auth/verify-email");
       } else if (!isAdmin) {
-        console.log("Usuário não é admin, redirecionando para dashboard");
+        console.log("❌ Admin: Usuário não é admin, redirecionando para dashboard");
         router.push("/dashboard");
       } else {
+        console.log("✅ Admin: Usuário pode acessar");
         setChecked(true);
       }
     }
-  }, [isAuthenticated, isAdmin, loading, router]);
+  }, [isAuthenticated, canAccess, isAdmin, loading, router]);
 
   if (loading || !checked) {
     return (
@@ -140,5 +183,5 @@ export const RequireAdmin = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  return (isAuthenticated && isAdmin) ? <>{children}</> : null;
+  return (isAuthenticated && canAccess && isAdmin) ? <>{children}</> : null;
 }; 

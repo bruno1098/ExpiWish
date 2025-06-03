@@ -40,6 +40,12 @@ export interface UserData {
     token: number;
     expiresAt: any;
   };
+  emailVerifiedByAdmin?: {
+    verifiedBy: string;
+    verifiedByEmail: string;
+    verifiedAt: any;
+    reason: string;
+  };
 }
 
 // Criar uma segunda instância do Firebase para criação de usuários
@@ -99,6 +105,11 @@ export const registerUserSafe = async (
     // Criar usuário no Firebase Auth
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
+    
+    // Enviar email de verificação
+    console.log("📧 Enviando email de verificação...");
+    await sendEmailVerification(user);
+    console.log("✅ Email de verificação enviado");
     
     // Criar documento do usuário no Firestore
     const userData: UserData = {
@@ -1232,5 +1243,336 @@ export const updatePasswordAfterTemporaryLogin = async (email: string, temporary
   } catch (error: any) {
     console.error("Erro ao atualizar senha após login temporário:", error);
     throw new Error(`Erro ao alterar senha: ${error.message}`);
+  }
+};
+
+// Função para enviar email de redefinição de senha
+export const sendPasswordResetEmail = async (email: string): Promise<void> => {
+  try {
+    const { sendPasswordResetEmail: firebaseSendPasswordResetEmail } = await import("firebase/auth");
+    
+    await firebaseSendPasswordResetEmail(auth, email, {
+      url: `${window.location.origin}/auth/login`, // URL para retornar após redefinir senha
+      handleCodeInApp: false
+    });
+    
+    console.log("Email de redefinição de senha enviado com sucesso");
+  } catch (error: any) {
+    console.error("Erro ao enviar email de redefinição:", error);
+    
+    if (error.code === "auth/user-not-found") {
+      throw new Error("Não existe uma conta com este endereço de email.");
+    } else if (error.code === "auth/invalid-email") {
+      throw new Error("Endereço de email inválido.");
+    } else if (error.code === "auth/too-many-requests") {
+      throw new Error("Muitas tentativas de redefinição. Tente novamente mais tarde.");
+    }
+    
+    throw new Error(`Erro ao enviar email de redefinição: ${error.message}`);
+  }
+};
+
+// Função para confirmar redefinição de senha com código
+export const confirmPasswordReset = async (code: string, newPassword: string): Promise<void> => {
+  try {
+    const { confirmPasswordReset: firebaseConfirmPasswordReset } = await import("firebase/auth");
+    
+    await firebaseConfirmPasswordReset(auth, code, newPassword);
+    
+    console.log("Senha redefinida com sucesso");
+  } catch (error: any) {
+    console.error("Erro ao confirmar redefinição de senha:", error);
+    
+    if (error.code === "auth/invalid-action-code") {
+      throw new Error("Código de redefinição inválido ou expirado.");
+    } else if (error.code === "auth/expired-action-code") {
+      throw new Error("Código de redefinição expirado. Solicite um novo.");
+    } else if (error.code === "auth/weak-password") {
+      throw new Error("A senha deve ter pelo menos 6 caracteres.");
+    }
+    
+    throw new Error(`Erro ao redefinir senha: ${error.message}`);
+  }
+};
+
+// Função para verificar código de redefinição sem aplicar
+export const verifyPasswordResetCode = async (code: string): Promise<string> => {
+  try {
+    const { verifyPasswordResetCode: firebaseVerifyPasswordResetCode } = await import("firebase/auth");
+    
+    const email = await firebaseVerifyPasswordResetCode(auth, code);
+    
+    console.log("Código verificado com sucesso para email:", email);
+    return email;
+  } catch (error: any) {
+    console.error("Erro ao verificar código:", error);
+    
+    if (error.code === "auth/invalid-action-code") {
+      throw new Error("Código de redefinição inválido ou expirado.");
+    } else if (error.code === "auth/expired-action-code") {
+      throw new Error("Código de redefinição expirado. Solicite um novo.");
+    }
+    
+    throw new Error(`Erro ao verificar código: ${error.message}`);
+  }
+};
+
+// Função para aplicar código de ação (genérica)
+export const applyActionCode = async (code: string): Promise<void> => {
+  try {
+    const { applyActionCode: firebaseApplyActionCode } = await import("firebase/auth");
+    
+    await firebaseApplyActionCode(auth, code);
+    
+    console.log("Código aplicado com sucesso");
+  } catch (error: any) {
+    console.error("Erro ao aplicar código:", error);
+    
+    if (error.code === "auth/invalid-action-code") {
+      throw new Error("Código inválido ou expirado.");
+    } else if (error.code === "auth/expired-action-code") {
+      throw new Error("Código expirado.");
+    }
+    
+    throw new Error(`Erro ao aplicar código: ${error.message}`);
+  }
+};
+
+// Função para enviar email de verificação
+export const sendEmailVerification = async (user?: User): Promise<void> => {
+  try {
+    const { sendEmailVerification: firebaseSendEmailVerification } = await import("firebase/auth");
+    
+    const currentUser = user || auth.currentUser;
+    if (!currentUser) {
+      throw new Error("Nenhum usuário logado encontrado");
+    }
+    
+    await firebaseSendEmailVerification(currentUser, {
+      url: `${window.location.origin}/auth/login`, // URL para retornar após verificar email
+      handleCodeInApp: false
+    });
+    
+    console.log("Email de verificação enviado com sucesso");
+  } catch (error: any) {
+    console.error("Erro ao enviar email de verificação:", error);
+    
+    if (error.code === "auth/too-many-requests") {
+      throw new Error("Muitas tentativas de envio. Tente novamente mais tarde.");
+    }
+    
+    throw new Error(`Erro ao enviar email de verificação: ${error.message}`);
+  }
+};
+
+// Função para verificar se o email foi verificado
+export const checkEmailVerified = async (): Promise<boolean> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error("Nenhum usuário logado encontrado");
+    }
+    
+    // Recarregar dados do usuário para obter status atualizado
+    await user.reload();
+    
+    return user.emailVerified;
+  } catch (error: any) {
+    console.error("Erro ao verificar status do email:", error);
+    throw new Error(`Erro ao verificar email: ${error.message}`);
+  }
+};
+
+// Versão atualizada da função de registro com verificação de email
+export const registerUserWithEmailVerification = async (
+  email: string, 
+  password: string, 
+  hotelId: string, 
+  hotelName: string,
+  name: string = "",
+  role: 'admin' | 'staff' = 'staff'
+): Promise<UserData> => {
+  // Primeiro verificar se o email já está em uso
+  const emailExists = await isEmailInUse(email);
+  if (emailExists) {
+    throw new Error("Este email já está em uso. Por favor, use outro email.");
+  }
+  
+  try {
+    // Criar usuário no Firebase Auth
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    
+    // Enviar email de verificação
+    await sendEmailVerification(user);
+    
+    // Criar documento do usuário no Firestore
+    const userData: UserData = {
+      uid: user.uid,
+      email: user.email || email,
+      name,
+      hotelId,
+      hotelName,
+      role,
+      firstAccess: null, // Será definido quando verificar o email
+    };
+    
+    await setDoc(doc(db, "users", user.uid), userData);
+    
+    console.log("Usuário criado e email de verificação enviado");
+    return userData;
+  } catch (error: any) {
+    console.error("Erro ao cadastrar usuário:", error);
+    
+    // Tratamento específico para erro de email em uso
+    if (error.code === "auth/email-already-in-use") {
+      throw new Error("Este email já está registrado. Por favor, use outro email ou faça login.");
+    }
+    
+    throw new Error(`Falha ao cadastrar: ${error.message}`);
+  }
+};
+
+// Função para admin forçar verificação de email (liberar acesso sem verificar)
+export const adminForceEmailVerification = async (userId: string): Promise<void> => {
+  try {
+    const isAdmin = await isCurrentUserAdmin();
+    if (!isAdmin) {
+      throw new Error("Apenas administradores podem forçar verificação de email");
+    }
+
+    // Obter dados do usuário
+    const userRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (!userSnap.exists()) {
+      throw new Error("Usuário não encontrado");
+    }
+    
+    const userData = userSnap.data() as UserData;
+    
+    // Não permitir forçar verificação de outro admin
+    if (userData.role === 'admin') {
+      throw new Error("Não é possível forçar verificação de outro administrador");
+    }
+    
+    console.log(`🔓 Admin forçando verificação de email para: ${userData.email}`);
+    
+    // Marcar como email verificado no Firestore (para controle interno)
+    await setDoc(userRef, {
+      emailVerifiedByAdmin: {
+        verifiedBy: auth.currentUser?.uid,
+        verifiedByEmail: auth.currentUser?.email,
+        verifiedAt: new Date(),
+        reason: "Email verification forced by admin"
+      }
+    }, { merge: true });
+    
+    console.log("✅ Verificação de email forçada pelo admin");
+    return;
+    
+  } catch (error: any) {
+    console.error("Erro ao forçar verificação de email:", error);
+    throw new Error(`Erro ao forçar verificação: ${error.message}`);
+  }
+};
+
+// Função para verificar se usuário pode acessar (verificando tanto Firebase quanto admin override)
+export const canUserAccess = async (user: any, userData: UserData): Promise<boolean> => {
+  // Admins sempre podem acessar
+  if (userData.role === 'admin') {
+    return true;
+  }
+  
+  // Se email foi verificado no Firebase, pode acessar
+  if (user.emailVerified) {
+    return true;
+  }
+  
+  // Se admin forçou verificação, pode acessar
+  if (userData.emailVerifiedByAdmin) {
+    return true;
+  }
+  
+  // Caso contrário, não pode acessar
+  return false;
+};
+
+// Função para obter dados dos usuários com status de verificação de email
+export const getAllUsersWithEmailStatus = async () => {
+  try {
+    const isAdmin = await isCurrentUserAdmin();
+    if (!isAdmin) {
+      throw new Error("Apenas administradores podem acessar esta função");
+    }
+    
+    const usersRef = collection(db, "users");
+    const querySnapshot = await getDocs(usersRef);
+    
+    const users = querySnapshot.docs.map(doc => ({
+      uid: doc.id,
+      ...doc.data()
+    })) as UserData[];
+    
+    // Para cada usuário, tentar determinar o status de verificação
+    const usersWithStatus = users.map(user => {
+      // Se tem firstAccess e é staff, provavelmente o email foi verificado
+      // (pois só consegue fazer primeiro acesso se passou pela verificação)
+      const emailVerified = user.role === 'admin' || 
+                           user.firstAccess || 
+                           user.emailVerifiedByAdmin ? true : false;
+      
+      return {
+        ...user,
+        emailVerified
+      };
+    });
+    
+    return usersWithStatus;
+  } catch (error) {
+    console.error("Erro ao listar usuários com status de email:", error);
+    throw error;
+  }
+};
+
+// Função para admin enviar email de verificação manualmente
+export const adminSendVerificationEmail = async (userId: string): Promise<void> => {
+  try {
+    const isAdmin = await isCurrentUserAdmin();
+    if (!isAdmin) {
+      throw new Error("Apenas administradores podem enviar emails de verificação");
+    }
+
+    // Obter dados do usuário
+    const userRef = doc(db, "users", userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (!userSnap.exists()) {
+      throw new Error("Usuário não encontrado");
+    }
+    
+    const userData = userSnap.data() as UserData;
+    
+    console.log(`📧 Admin reenviando email de verificação para: ${userData.email}`);
+    
+    // Nota: Não podemos enviar email para outro usuário usando client SDK
+    // Isso deveria ser feito via Firebase Admin SDK no backend
+    // Por enquanto, apenas registramos a tentativa
+    
+    await setDoc(userRef, {
+      adminEmailResend: {
+        requestedBy: auth.currentUser?.uid,
+        requestedByEmail: auth.currentUser?.email,
+        requestedAt: new Date(),
+        status: "pending" // pending, sent, failed
+      }
+    }, { merge: true });
+    
+    console.log("✅ Solicitação de reenvio de email registrada");
+    throw new Error("Para reenviar emails de verificação é necessário Firebase Admin SDK. Use a opção 'Liberar Acesso' como alternativa.");
+    
+  } catch (error: any) {
+    console.error("Erro ao enviar email de verificação:", error);
+    throw error;
   }
 }; 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { getAllUsers, createUserKeepingAdminLoggedIn, createUserAsAdmin, updateUserRole, deleteUser, deleteUserCompletely, syncUsersWithAuth } from '@/lib/auth-service';
+import { getAllUsers, createUserKeepingAdminLoggedIn, createUserAsAdmin, updateUserRole, deleteUser, deleteUserCompletely, syncUsersWithAuth, adminForceEmailVerification, canUserAccess, getCurrentUserData, getAllUsersWithEmailStatus } from '@/lib/auth-service';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card } from "@/components/ui/card";
@@ -41,8 +41,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Loader2, Trash2, RefreshCw, Key, Copy, User, Mail, Lock, Building, UserCheck, Globe, MessageSquare } from "lucide-react";
+import { MoreHorizontal, Loader2, Trash2, RefreshCw, Key, Copy, User, Mail, Lock, Building, UserCheck, Globe, MessageSquare, Shield, CheckCircle, XCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -96,6 +97,13 @@ interface User {
   hotelId: string;
   hotelName: string;
   role: 'admin' | 'staff';
+  emailVerified?: boolean; // Status de verificação do Firebase
+  emailVerifiedByAdmin?: {
+    verifiedBy: string;
+    verifiedByEmail: string;
+    verifiedAt: any;
+    reason: string;
+  };
 }
 
 function UserManagementContent() {
@@ -118,6 +126,12 @@ function UserManagementContent() {
     role: string;
   } | null>(null);
   const [usedFallbackMethod, setUsedFallbackMethod] = useState(false);
+  
+  // Estados para verificação de email
+  const [forceVerifyDialogOpen, setForceVerifyDialogOpen] = useState(false);
+  const [userToForceVerify, setUserToForceVerify] = useState<User | null>(null);
+  const [loadingVerification, setLoadingVerification] = useState(false);
+  
   const { toast } = useToast();
 
   // Estados para novo usuário
@@ -132,7 +146,8 @@ function UserManagementContent() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const usersData = await getAllUsers();
+        const usersData = await getAllUsersWithEmailStatus();
+        
         setUsers(usersData);
         
         // Carregar hotéis
@@ -169,7 +184,7 @@ function UserManagementContent() {
       });
       
       // Recarregar a lista de usuários
-      const usersData = await getAllUsers();
+      const usersData = await getAllUsersWithEmailStatus();
       setUsers(usersData);
     } catch (error: any) {
       console.error("Erro ao atualizar função:", error);
@@ -339,7 +354,7 @@ function UserManagementContent() {
       }
       
       // Recarregar lista de usuários
-      const usersData = await getAllUsers();
+      const usersData = await getAllUsersWithEmailStatus();
       setUsers(usersData);
       
     } catch (error: any) {
@@ -428,7 +443,7 @@ function UserManagementContent() {
       });
       
       // Recarregar a lista de usuários
-      const usersData = await getAllUsers();
+      const usersData = await getAllUsersWithEmailStatus();
       setUsers(usersData);
     } catch (error: any) {
       console.error("Erro ao sincronizar usuários:", error);
@@ -471,7 +486,7 @@ function UserManagementContent() {
       });
       
       // Recarregar a lista de usuários
-      const usersData = await getAllUsers();
+      const usersData = await getAllUsersWithEmailStatus();
       setUsers(usersData);
     } catch (error: any) {
       console.error("Erro ao excluir usuário:", error);
@@ -509,6 +524,69 @@ function UserManagementContent() {
       newUserHotelId.length > 0 &&
       ['admin', 'staff'].includes(newUserRole)
     );
+  };
+
+  // Função para admin forçar verificação de email (liberar acesso)
+  const handleForceEmailVerification = async () => {
+    if (!userToForceVerify) return;
+
+    setLoadingVerification(true);
+    try {
+      await adminForceEmailVerification(userToForceVerify.uid);
+      
+      toast({
+        title: "Acesso liberado com sucesso!",
+        description: `O usuário ${userToForceVerify.name || userToForceVerify.email} pode agora acessar o sistema sem verificar o email.`,
+        variant: "default"
+      });
+
+      // Recarregar lista de usuários
+      const usersData = await getAllUsersWithEmailStatus();
+      setUsers(usersData);
+      
+    } catch (error: any) {
+      console.error("Erro ao forçar verificação:", error);
+      toast({
+        title: "Erro ao liberar acesso",
+        description: error.message || "Não foi possível liberar o acesso do usuário.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingVerification(false);
+      setForceVerifyDialogOpen(false);
+      setUserToForceVerify(null);
+    }
+  };
+
+  // Função para verificar status de acesso do usuário
+  const getUserAccessStatus = (user: User) => {
+    // Admins sempre podem acessar
+    if (user.role === 'admin') {
+      return { canAccess: true, reason: 'Admin', icon: Shield };
+    }
+    
+    // Se email foi verificado no Firebase Auth
+    if (user.emailVerified) {
+      return { 
+        canAccess: true, 
+        reason: 'Email verificado', 
+        icon: CheckCircle 
+      };
+    }
+    
+    // Se admin forçou verificação
+    if (user.emailVerifiedByAdmin) {
+      return { 
+        canAccess: true, 
+        reason: 'Liberado pelo admin', 
+        icon: CheckCircle,
+        verifiedBy: user.emailVerifiedByAdmin.verifiedByEmail,
+        verifiedAt: user.emailVerifiedByAdmin.verifiedAt
+      };
+    }
+    
+    // Se não tem verificação (Firebase ou admin)
+    return { canAccess: false, reason: 'Email não verificado', icon: XCircle };
   };
 
   if (isLoading && users.length === 0) {
@@ -755,6 +833,7 @@ function UserManagementContent() {
             • <strong>Sincronizar Usuários:</strong> Limpa dados inconsistentes do sistema<br/>
             • <strong>Criar Usuário:</strong> Admin permanece logado durante o processo<br/>
             • <strong>Alterar Função:</strong> Promove/rebaixa usuários entre Administrador e Colaborador<br/>
+            • <strong>Liberar Acesso:</strong> Permite acesso sem verificação de email (colaboradores)<br/>
             <em>Para alterar senhas: usuários devem acessar suas próprias configurações de perfil</em>
           </p>
         </div>
@@ -767,61 +846,122 @@ function UserManagementContent() {
               <TableHead>Email</TableHead>
               <TableHead>Hotel</TableHead>
               <TableHead>Função</TableHead>
+              <TableHead>Status de Acesso</TableHead>
               <TableHead>Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length > 0 ? (
-              users.map((user) => (
-                <TableRow key={user.uid}>
-                  <TableCell className="font-medium">{user.name || "—"}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>{user.hotelName}</TableCell>
-                  <TableCell className="flex items-center gap-2">
-                    <span className={user.role === 'admin' ? "font-bold text-primary" : ""}>
-                      {getRoleName(user.role)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem 
-                          onClick={() => handleChangeRole(user.uid, 'admin')}
-                          disabled={user.role === 'admin'}
-                        >
-                          Tornar Administrador
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => handleChangeRole(user.uid, 'staff')}
-                          disabled={user.role === 'staff'}
-                        >
-                          Tornar Colaborador
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-red-600"
-                          onClick={() => {
-                            setUserToDeleteData(user);
-                            setDeleteDialogOpen(true);
-                          }}
-                          disabled={user.uid === userData?.uid}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Excluir Usuário
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
+              users.map((user) => {
+                const accessStatus = getUserAccessStatus(user);
+                const StatusIcon = accessStatus.icon;
+                
+                return (
+                  <TableRow key={user.uid}>
+                    <TableCell className="font-medium">{user.name || "—"}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.hotelName}</TableCell>
+                    <TableCell className="flex items-center gap-2">
+                      <span className={user.role === 'admin' ? "font-bold text-primary" : ""}>
+                        {getRoleName(user.role)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <StatusIcon className={`h-4 w-4 ${
+                          accessStatus.canAccess 
+                            ? user.role === 'admin' 
+                              ? 'text-blue-600' 
+                              : 'text-green-600' 
+                            : 'text-red-600'
+                        }`} />
+                        <div className="flex flex-col">
+                          <span className={`text-sm font-medium ${
+                            accessStatus.canAccess ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
+                          }`}>
+                            {accessStatus.reason}
+                          </span>
+                          {accessStatus.verifiedBy && (
+                            <span className="text-xs text-muted-foreground">
+                              Por: {accessStatus.verifiedBy}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => handleChangeRole(user.uid, 'admin')}
+                            disabled={user.role === 'admin'}
+                          >
+                            <Shield className="h-4 w-4 mr-2" />
+                            Tornar Administrador
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => handleChangeRole(user.uid, 'staff')}
+                            disabled={user.role === 'staff'}
+                          >
+                            <User className="h-4 w-4 mr-2" />
+                            Tornar Colaborador
+                          </DropdownMenuItem>
+                          
+                          {/* Separador e opções de email apenas para colaboradores */}
+                          {user.role === 'staff' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              {!accessStatus.canAccess && (
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    setUserToForceVerify(user);
+                                    setForceVerifyDialogOpen(true);
+                                  }}
+                                  className="text-green-600"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Liberar Acesso
+                                </DropdownMenuItem>
+                              )}
+                              {accessStatus.canAccess && user.emailVerifiedByAdmin && (
+                                <DropdownMenuItem 
+                                  disabled
+                                  className="text-green-600 opacity-50"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Acesso já liberado
+                                </DropdownMenuItem>
+                              )}
+                            </>
+                          )}
+                          
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            className="text-red-600"
+                            onClick={() => {
+                              setUserToDeleteData(user);
+                              setDeleteDialogOpen(true);
+                            }}
+                            disabled={user.uid === userData?.uid}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Excluir Usuário
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="text-center">
+                <TableCell colSpan={6} className="text-center">
                   Nenhum usuário encontrado
                 </TableCell>
               </TableRow>
@@ -877,6 +1017,90 @@ function UserManagementContent() {
             >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Excluir Usuário
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog para confirmar liberação de acesso */}
+      <AlertDialog open={forceVerifyDialogOpen} onOpenChange={setForceVerifyDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Liberar Acesso do Usuário
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação permitirá que o usuário acesse o sistema sem verificar o email. 
+              O acesso será liberado imediatamente e ficará registrado como "liberado pelo admin".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Usuário que terá o acesso liberado:</Label>
+              <div className="bg-muted p-3 rounded-lg border">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    <User className="h-4 w-4 inline mr-1" />
+                    {userToForceVerify?.name || "—"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    <Mail className="h-4 w-4 inline mr-1" />
+                    {userToForceVerify?.email}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    <Building className="h-4 w-4 inline mr-1" />
+                    {userToForceVerify?.hotelName}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <CheckCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>O que acontecerá:</strong>
+                  <ul className="mt-1 list-disc list-inside space-y-0.5">
+                    <li>O usuário poderá fazer login imediatamente</li>
+                    <li>Não será necessário verificar o email</li>
+                    <li>O sistema registrará que foi liberado por você</li>
+                    <li>O status mudará para "Liberado pelo admin"</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <XCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+                <div className="text-sm text-amber-800 dark:text-amber-200">
+                  <strong>Use esta opção quando:</strong>
+                  <ul className="mt-1 list-disc list-inside space-y-0.5">
+                    <li>O usuário não recebeu o email de verificação</li>
+                    <li>O email está indo para spam</li>
+                    <li>É necessário acesso urgente ao sistema</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setUserToForceVerify(null);
+            }}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleForceEmailVerification}
+              disabled={loadingVerification}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loadingVerification && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Liberar Acesso
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

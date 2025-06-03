@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { loginUser, getCurrentUserData } from "@/lib/auth-service";
+import { loginUser, getCurrentUserData, sendEmailVerification, canUserAccess } from "@/lib/auth-service";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -53,7 +53,33 @@ export default function LoginPage() {
       
       // Obter dados do usuário para verificar função
       const userData = await getCurrentUserData();
-
+      
+      if (!userData) {
+        toast.error("Erro ao obter dados do usuário");
+        return;
+      }
+      
+      // Verificar se usuário pode acessar (admins sempre podem, staff precisa verificar email)
+      const canAccess = await canUserAccess(user, userData);
+      
+      if (!canAccess) {
+        console.log("📧 Colaborador sem email verificado, enviando email...");
+        
+        // Enviar email de verificação na primeira tentativa de login
+        try {
+          await sendEmailVerification();
+          console.log("✅ Email de verificação enviado");
+        } catch (emailError) {
+          console.error("Erro ao enviar email:", emailError);
+        }
+        
+        toast.info("Você precisa verificar seu email antes de acessar o sistema. Verifique sua caixa de entrada.");
+        setTimeout(() => {
+          router.push("/auth/verify-email");
+        }, 1000);
+        return;
+      }
+      
       // Verificar se deve trocar senha
       if (userData?.mustChangePassword) {
         toast.success("Login autorizado! Você será redirecionado para alterar sua senha.");
@@ -200,7 +226,7 @@ export default function LoginPage() {
           <div className="flex items-center justify-between">
                   <Label htmlFor="password" className="text-gray-700 dark:text-gray-200 text-base">Senha</Label>
             <Link 
-              href="/auth/reset-password"
+              href="/auth/forgot-password"
                     className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
             >
               Esqueceu a senha?
