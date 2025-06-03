@@ -248,7 +248,7 @@ function ImportPageContent() {
     setErrorCount(0);
     
     toast({
-      title: "🚀 Iniciando Análise Inteligente",
+      title: "Iniciando Análise Inteligente",
       description: `Preparando para processar ${file.name} com nossa IA`,
     });
 
@@ -263,83 +263,72 @@ function ImportPageContent() {
       setProgress(5);
 
       if (extension === 'xlsx') {
-        try {
-          const XLSX = await import('xlsx');
-          const { read, utils } = XLSX;
-          const buffer = await file.arrayBuffer();
-          const workbook = read(buffer);
-          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const { read, utils } = await import('xlsx');
+        const buffer = await file.arrayBuffer();
+        const workbook = read(buffer);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        
+        const range = utils.decode_range(worksheet['!ref'] || 'A1');
+        const rows = [];
+        
+        // Começar da linha 2 para pular o cabeçalho (índice 1 = linha 2 no Excel)
+        for (let row = 1; row <= range.e.r; row++) {
+          const data = worksheet[utils.encode_cell({ r: row, c: 1 })]?.v;
+          const nomeHotel = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
+          const fonte = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
+          const idioma = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v;
+          const pontuacao = worksheet[utils.encode_cell({ r: row, c: 5 })]?.v;
+          const url = worksheet[utils.encode_cell({ r: row, c: 6 })]?.v;
+          const autor = worksheet[utils.encode_cell({ r: row, c: 7 })]?.v;
+          const titulo = worksheet[utils.encode_cell({ r: row, c: 8 })]?.v;
+          const texto = worksheet[utils.encode_cell({ r: row, c: 9 })]?.v;
+          const apartamento = worksheet[utils.encode_cell({ r: row, c: 10 })]?.v;
           
-          const range = utils.decode_range(worksheet['!ref'] || 'A1');
-          const rows = [];
-          
-          // Começar da linha 2 para pular o cabeçalho (índice 1 = linha 2 no Excel)
-          for (let row = 1; row <= range.e.r; row++) {
-            const data = worksheet[utils.encode_cell({ r: row, c: 1 })]?.v;
-            const nomeHotel = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
-            const fonte = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
-            const idioma = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v;
-            const pontuacao = worksheet[utils.encode_cell({ r: row, c: 5 })]?.v;
-            const url = worksheet[utils.encode_cell({ r: row, c: 6 })]?.v;
-            const autor = worksheet[utils.encode_cell({ r: row, c: 7 })]?.v;
-            const titulo = worksheet[utils.encode_cell({ r: row, c: 8 })]?.v;
-            const texto = worksheet[utils.encode_cell({ r: row, c: 9 })]?.v;
-            const apartamento = worksheet[utils.encode_cell({ r: row, c: 10 })]?.v;
+          if (texto && 
+              typeof texto === 'string' && 
+              texto.trim() !== '' && 
+              texto.trim().length > 5 && 
+              !/^\d+$/.test(texto.trim()) &&
+              !/^[^\w\s]+$/.test(texto.trim())) {
             
-            if (texto && 
-                typeof texto === 'string' && 
-                texto.trim() !== '' && 
-                texto.trim().length > 5 && 
-                !/^\d+$/.test(texto.trim()) &&
-                !/^[^\w\s]+$/.test(texto.trim())) {
-              
-              rows.push({
-                data: data || '',
-                nomeHotel: nomeHotel || hotelName,
-                fonte: fonte || '',
-                idioma: idioma || '',
-                pontuacao: pontuacao || 0,
-                texto: texto.trim(),
-                url: url || '',
-                autor: autor || '',
-                titulo: titulo || '',
-                apartamento: apartamento || ''
-              });
-            }
-          }
-          
-          data = rows;
-        } catch (xlsxError) {
-          console.error("Erro ao processar arquivo XLSX:", xlsxError);
-          throw new Error("Falha ao processar arquivo Excel. Verifique se o arquivo não está corrompido.");
-        }
-      } else if (extension === 'csv') {
-        try {
-          const Papa = (await import('papaparse')).default;
-          const text = await file.text();
-          const result = Papa.parse(text, { header: true });
-          
-          data = (result.data as any[])
-            .filter(row => {
-              return row && 
-                     typeof row === 'object' && 
-                     row.texto && 
-                     typeof row.texto === 'string' &&
-                     row.texto.trim().length > 5 &&
-                     !/^\d+$/.test(row.texto.trim()) &&
-                     !/^[^\w\s]+$/.test(row.texto.trim());
-            })
-            .map(row => {
-              return {
-                ...row,
-                texto: row.texto.trim(),
-                nomeHotel: hotelName
-              };
+            rows.push({
+              data: data || '',
+              nomeHotel: nomeHotel || hotelName,
+              fonte: fonte || '',
+              idioma: idioma || '',
+              pontuacao: pontuacao || 0,
+              texto: texto.trim(),
+              url: url || '',
+              autor: autor || '',
+              titulo: titulo || '',
+              apartamento: apartamento || ''
             });
-        } catch (csvError) {
-          console.error("Erro ao processar arquivo CSV:", csvError);
-          throw new Error("Falha ao processar arquivo CSV. Verifique se o arquivo está no formato correto.");
+          }
         }
+        
+        data = rows;
+      } else if (extension === 'csv') {
+        const Papa = (await import('papaparse')).default;
+        const text = await file.text();
+        const result = Papa.parse(text, { header: true });
+        
+        data = (result.data as any[])
+          .filter(row => {
+            return row && 
+                   typeof row === 'object' && 
+                   row.texto && 
+                   typeof row.texto === 'string' &&
+                   row.texto.trim().length > 5 &&
+                   !/^\d+$/.test(row.texto.trim()) &&
+                   !/^[^\w\s]+$/.test(row.texto.trim());
+          })
+          .map(row => {
+            return {
+              ...row,
+              texto: row.texto.trim(),
+              nomeHotel: hotelName
+            };
+          });
       }
       
       if (data.length === 0) {
@@ -402,12 +391,12 @@ function ImportPageContent() {
               }
               
               // Calcular delay com backoff exponencial: 1s, 2s, 4s
-              const delay = Math.pow(2, attempt - 1) * 1000;
+              const delayTime = Math.pow(2, attempt - 1) * 1000;
               
               // Atualizar step com informação de retry
               setCurrentStep(`Resolvendo problemas temporários... (tentativa ${attempt + 1}/${maxRetries})`);
               
-              await new Promise(resolve => setTimeout(resolve, delay));
+              await new Promise(resolve => setTimeout(resolve, delayTime));
             }
           }
         };
@@ -486,7 +475,7 @@ function ImportPageContent() {
               setProgress(Math.min(analysisProgress, 90));
                   
             } catch (error: any) {
-              console.error(`❌ Erro ao processar feedback ${j} após todas as tentativas:`, error);
+              console.error(`Erro ao processar feedback ${j} após todas as tentativas:`, error);
               
               // Criar feedback com dados padrão quando falha após todas as tentativas
               const feedback: Feedback = {
@@ -565,7 +554,7 @@ function ImportPageContent() {
       // Salvar dados no localStorage para a tela de análise
       localStorage.setItem('analysis-feedbacks', JSON.stringify(feedbacks));
       localStorage.setItem('analysis-data', JSON.stringify(analysisToSave));
-      console.log("💾 Dados salvos no localStorage para análise");
+      console.log("Dados salvos no localStorage para análise");
 
       setProgress(100);
       setCurrentStep("Concluído!");
@@ -579,7 +568,7 @@ function ImportPageContent() {
       });
 
     } catch (error: any) {
-      console.error("❌ Erro durante o processamento:", error);
+      console.error("Erro durante o processamento:", error);
       toast({
         title: "Erro no Processamento",
         description: error.message,

@@ -11,15 +11,9 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['openai', 'firebase-admin']
   },
-  // Configurações para resolver problemas de chunk loading no Vercel
-  swcMinify: true,
+  swcMinify: false,
   compiler: {
-    removeConsole: process.env.NODE_ENV === "production",
-  },
-  // Otimizações para deployment
-  poweredByHeader: false,
-  generateBuildId: async () => {
-    return 'build-' + Date.now()
+    removeConsole: false,
   },
   webpack: (config, { isServer, dev }) => {
     if (!isServer) {
@@ -48,22 +42,17 @@ const nextConfig = {
       },
     });
 
-    // Otimizações para produção
-    if (!dev && !isServer) {
+    // Prevenir problemas de otimização que podem quebrar chunks
+    if (!dev) {
       config.optimization = {
         ...config.optimization,
+        minimize: false,
         splitChunks: {
           chunks: 'all',
           cacheGroups: {
-            default: {
-              minChunks: 1,
-              priority: -20,
-              reuseExistingChunk: true,
-            },
             vendor: {
               test: /[\\/]node_modules[\\/]/,
               name: 'vendors',
-              priority: -10,
               chunks: 'all',
             },
           },
