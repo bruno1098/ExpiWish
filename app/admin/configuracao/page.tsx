@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -35,9 +37,45 @@ import {
   DialogTrigger,
   DialogClose
 } from "@/components/ui/dialog";
-import { AlertCircle, Check, Loader2, HotelIcon, Database, RefreshCw, User, Hotel, Plus, MessageSquare, Activity, Key, Eye, EyeOff, CheckCircle2, Info, Sparkles } from "lucide-react";
+import { 
+  AlertCircle, 
+  Check, 
+  Loader2, 
+  HotelIcon, 
+  Database, 
+  RefreshCw, 
+  User, 
+  Hotel, 
+  Plus, 
+  MessageSquare, 
+  Activity, 
+  Key, 
+  Eye, 
+  EyeOff, 
+  CheckCircle2, 
+  Info, 
+  Sparkles,
+  BookOpen,
+  Crown,
+  FileUp,
+  BarChart3,
+  LineChart,
+  History,
+  Settings,
+  Building2,
+  Filter,
+  MousePointer2,
+  Users,
+  Shield,
+  TrendingUp,
+  ChevronRight,
+  Lightbulb,
+  Target,
+  Zap
+} from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import Link from 'next/link';
+import { cn } from "@/lib/utils";
 
 // Lista predefinida de hotéis para exibição
 const PREDEFINED_HOTELS = [
@@ -513,6 +551,194 @@ function ConfigPage() {
     }
   };
 
+  // Componente do Tutorial para Administradores
+  const TutorialContent = () => {
+    const [activeSection, setActiveSection] = useState<string | null>(null)
+
+    const tutorialSections = [
+      {
+        id: "overview",
+        title: "Visão Geral Administrativa",
+        icon: Crown,
+        color: "text-purple-600",
+        bgColor: "bg-purple-50 dark:bg-purple-950/30",
+        borderColor: "border-purple-200 dark:border-purple-800",
+        content: "Como administrador, você tem acesso a funcionalidades avançadas que permitem gerenciar múltiplos hotéis, comparar performance entre propriedades e administrar toda a equipe que usa o sistema. Seu painel é diferente do dashboard padrão dos colaboradores - foi desenvolvido especificamente para dar uma visão estratégica de toda a operação."
+      },
+      {
+        id: "dashboard",
+        title: "Painel Administrativo Principal",
+        icon: BarChart3,
+        color: "text-blue-600",
+        bgColor: "bg-blue-50 dark:bg-blue-950/30",
+        borderColor: "border-blue-200 dark:border-blue-800",
+        content: "Quando você faz login, é direcionado automaticamente para o painel administrativo que mostra uma visão consolidada de todos os hotéis da rede. Na parte superior, você vê métricas agregadas como a avaliação média geral da rede, total de feedbacks processados em todos os hotéis e tendências gerais de satisfação. O centro da tela mostra cards individuais para cada hotel da rede com informações essenciais e gráficos de preview."
+      },
+      {
+        id: "comparison",
+        title: "Comparação Entre Hotéis",
+        icon: TrendingUp,
+        color: "text-green-600",
+        bgColor: "bg-green-50 dark:bg-green-950/30",
+        borderColor: "border-green-200 dark:border-green-800",
+        content: "Uma das funcionalidades mais valiosas para administradores é a capacidade de comparar performance entre diferentes propriedades. Na seção 'Gestão de Hotéis', você encontra ferramentas específicas para benchmarking interno. O sistema gera automaticamente rankings de performance, mostrando quais hotéis estão nos melhores e piores posicionamentos em diferentes métricas."
+      },
+      {
+        id: "users",
+        title: "Gestão de Usuários",
+        icon: Users,
+        color: "text-indigo-600",
+        bgColor: "bg-indigo-50 dark:bg-indigo-950/30",
+        borderColor: "border-indigo-200 dark:border-indigo-800",
+        content: "Na seção 'Gerenciar Usuários', você controla quem tem acesso ao sistema e quais permissões cada pessoa possui. Pode criar novos usuários para colaboradores de qualquer hotel da rede, definir se são administradores ou staff regular, e associá-los aos hotéis específicos onde trabalham. Quando cria um novo usuário, o sistema gera automaticamente uma senha temporária que é enviada por email."
+      },
+      {
+        id: "strategic",
+        title: "Análise Estratégica Multi-Hotel",
+        icon: Building2,
+        color: "text-orange-600",
+        bgColor: "bg-orange-50 dark:bg-orange-950/30",
+        borderColor: "border-orange-200 dark:border-orange-800",
+        content: "Uma das grandes vantagens da visão administrativa é a capacidade de fazer análises estratégicas que consideram toda a rede simultaneamente. Pode identificar tendências sazonais que afetam todos os hotéis, entender como eventos externos impactam diferentes propriedades, e tomar decisões baseadas em dados agregados. O sistema oferece relatórios consolidados que mostram performance da rede em diferentes dimensões temporais."
+      },
+      {
+        id: "decisions",
+        title: "Tomada de Decisão Baseada em Dados",
+        icon: Target,
+        color: "text-red-600",
+        bgColor: "bg-red-50 dark:bg-red-950/30",
+        borderColor: "border-red-200 dark:border-red-800",
+        content: "Como administrador, você tem a responsabilidade de transformar os insights gerados pelo sistema em ações concretas que melhorem a experiência dos hóspedes em toda a rede. Use as comparações entre hotéis para identificar oportunidades de melhoria e boas práticas a serem replicadas. O histórico de dados permite acompanhar o impacto das ações tomadas ao longo do tempo."
+      }
+    ]
+
+    return (
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 animate-fade-in-up">
+            <div className="p-3 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 rounded-xl shadow-lg animate-bounce-soft">
+              <BookOpen className="h-6 w-6 text-blue-600 animate-pulse-soft" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-gradient">
+                Tutorial para Administradores
+              </h3>
+              <p className="text-muted-foreground">
+                Guia completo das funcionalidades administrativas
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 p-3 glass rounded-lg border animate-slide-in-right">
+            <Badge variant="secondary" className="bg-white/80 dark:bg-gray-800/80 badge-pulse">
+              <Crown className="h-3 w-3 mr-1 animate-rotate-slow" />
+              Administrador
+            </Badge>
+            <span className="text-sm text-muted-foreground">
+              Tutorial personalizado para seu perfil de acesso
+            </span>
+          </div>
+        </div>
+
+        <ScrollArea className="h-[600px] pr-4 custom-scrollbar">
+          <div className="space-y-4">
+            {tutorialSections.map((section, index) => (
+              <Card 
+                key={section.id}
+                className={cn(
+                  "tutorial-section card-hover transition-all duration-300 cursor-pointer gpu-acceleration",
+                  activeSection === section.id 
+                    ? `${section.bgColor} ${section.borderColor} border-2 shadow-lg active` 
+                    : "hover:bg-muted/50"
+                )}
+                onClick={() => setActiveSection(activeSection === section.id ? null : section.id)}
+              >
+                <div className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 gpu-acceleration">
+                        <div className={cn("p-2 rounded-lg transition-all duration-300", section.bgColor)}>
+                          <section.icon className={cn("h-5 w-5 transition-all duration-300", section.color)} />
+                        </div>
+                      </div>
+                      <div className="animate-fade-in-up">
+                        <h4 className="font-semibold text-lg">{section.title}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Seção {index + 1} de {tutorialSections.length}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight 
+                      className={cn(
+                        "h-5 w-5 transition-all duration-300 gpu-acceleration",
+                        activeSection === section.id ? "rotate-90" : "",
+                        section.color
+                      )} 
+                    />
+                  </div>
+
+                  {activeSection === section.id && (
+                    <div className="mt-6 space-y-4 animate-fade-in-up">
+                      <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <p className="text-muted-foreground leading-relaxed text-justify">
+                          {section.content}
+                        </p>
+                      </div>
+                      
+                      {section.id === "overview" && (
+                        <div className="mt-4 p-4 glass rounded-lg border animate-slide-in-right">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Crown className="h-4 w-4 text-purple-600 animate-bounce-soft" />
+                            <span className="font-medium text-purple-900 dark:text-purple-100">Funcionalidades Administrativas</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="flex items-center gap-2 text-purple-800 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                              <Building2 className="h-3 w-3" />
+                              Gestão Multi-Hotel
+                            </div>
+                            <div className="flex items-center gap-2 text-purple-800 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                              <Users className="h-3 w-3" />
+                              Gerenciar Usuários
+                            </div>
+                            <div className="flex items-center gap-2 text-purple-800 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                              <TrendingUp className="h-3 w-3" />
+                              Comparação de Performance
+                            </div>
+                            <div className="flex items-center gap-2 text-purple-800 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                              <Target className="h-3 w-3" />
+                              Análise Estratégica
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </ScrollArea>
+
+        <Card className="p-6 gradient-emerald-teal rounded-lg glass border animate-fade-in-up">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+              <CheckCircle2 className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-white">
+                Pronto para começar!
+              </h4>
+              <p className="text-sm text-white/90">
+                Com essas informações, você já pode gerenciar toda a rede de hotéis de forma eficiente.
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto py-10 space-y-6">
       <h1 className="text-3xl font-bold">Configuração do Sistema</h1>
@@ -524,6 +750,10 @@ function ConfigPage() {
           <TabsTrigger value="data">Dados</TabsTrigger>
           <TabsTrigger value="audit">Logs</TabsTrigger>
           <TabsTrigger value="profile">Perfil</TabsTrigger>
+          <TabsTrigger value="tutorial" className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            Tutorial
+          </TabsTrigger>
         </TabsList>
         
         {/* Aba de Hotéis */}
@@ -1405,9 +1635,181 @@ function ConfigPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Aba de Tutorial */}
+        <TabsContent value="tutorial" className="space-y-4">
+          <TutorialContent />
+        </TabsContent>
       </Tabs>
     </div>
   );
+}
+
+// Estilos CSS específicos para a página
+const styles = `
+  @keyframes fadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInRight {
+    0% {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  @keyframes bounce-soft {
+    0%, 20%, 50%, 80%, 100% {
+      transform: translateY(0);
+    }
+    40% {
+      transform: translateY(-3px);
+    }
+    60% {
+      transform: translateY(-2px);
+    }
+  }
+
+  @keyframes rotate-slow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.6s ease-out forwards;
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2s ease-in-out infinite;
+  }
+
+  .animate-bounce-soft {
+    animation: bounce-soft 2s ease-in-out infinite;
+  }
+
+  .animate-rotate-slow {
+    animation: rotate-slow 8s linear infinite;
+  }
+
+  .tutorial-section {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .tutorial-section:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  }
+
+  .tutorial-section.active {
+    transform: scale(1.02);
+  }
+
+  .glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-emerald-teal {
+    background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+  }
+
+  .card-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  }
+
+  .badge-pulse {
+    animation: pulse-soft 3s ease-in-out infinite;
+  }
+
+  .gpu-acceleration {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    border-radius: 10px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(45deg, #764ba2, #667eea);
+  }
+
+  /* Dark mode adjustments */
+  .dark .glass {
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .dark .tutorial-section:hover {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .card-hover:hover {
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.type = 'text/css';
+  styleSheet.innerText = styles;
+  if (!document.head.querySelector('style[data-tutorial-styles]')) {
+    styleSheet.setAttribute('data-tutorial-styles', 'true');
+    document.head.appendChild(styleSheet);
+  }
 }
 
 // Componente com proteção de administrador
