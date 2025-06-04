@@ -112,7 +112,7 @@ Regras obrigatórias:
 - Cada problema em **uma nova linha**, no formato exato: Palavra-chave, Departamento, Problema
 - NÃO coloque algarismos ("1.", "2." ...) nem texto extra antes ou depois de cada linha
 - NÃO devolva "Não identificado"; se não achar correspondência perfeita, escolha o departamento mais próximo na tabela
-
+- No problema caso tenha Atendimento lento, ou algo relacionado, pode colocar 2 palavras e nao apenas Lento, retorne exatamente: Atendimento Lento, e o Departamento deve ser Operações.
 
 
 Atenção a sinônimos: *Wi-Fi*, *Internet*, *Net* → "Tecnologia - Wi-fi" etc.
