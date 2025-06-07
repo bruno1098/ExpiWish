@@ -98,37 +98,26 @@ Você é um auditor de reputação hoteleira. Dado um comentário de hóspede, d
 Comentário: "${texto}"`;
 
     const sectorPrompt = `### 2) PALAVRA-CHAVE, DEPARTAMENTO, PROBLEMA
-Agora analise TODO o comentário (pode estar em QUALQUER idioma; identifique internamente e traduza se precisar) e identifique ATÉ 3 PROBLEMAS DIFERENTES.
+Agora analise TODO o comentário (pode estar em QUALQUER idioma; identifique internamente e traduza se precisar) e devolva exatamente:
+**"Palavra-chave, Departamento, Problema"**
 
-FORMATO DE RESPOSTA OBRIGATÓRIO:
-Palavra-chave, Departamento, Problema;Palavra-chave, Departamento, Problema;Palavra-chave, Departamento, Problema
+Regras obrigatórias:
+- Se houver elogios **e** problemas ➜ foque no **problema**.
+- Se houver **apenas elogios** ➜ retorne: \`Comodidade, Produto, VAZIO\` ou produtos que vc identificar necessario colocar em um dashboard
+- Use termos curtos (máx. 3 palavras).
+- Palavra-chave, departamento e problema devem falar do MESMO assunto.
+- Não use termos vagos ("Ruim", "Problema", "Coisas").
+- Identifique até 3 PROBLEMAS diferentes (linhas separadas).  
+- Se houver apenas elogios, devolva: "Comodidade, Produto, VAZIO".
+- Cada problema em **uma nova linha**, no formato exato: Palavra-chave, Departamento, Problema
+- NÃO coloque algarismos ("1.", "2." ...) nem texto extra antes ou depois de cada linha
+- NÃO devolva "Não identificado"; se não achar correspondência perfeita, escolha o departamento mais próximo na tabela
+- No problema caso tenha Atendimento lento, ou algo relacionado, pode colocar 2 palavras e nao apenas Lento, retorne exatamente: Atendimento Lento, e o Departamento deve ser Operações.
 
-Regras OBRIGATÓRIAS:
-- SEMPRE seguir EXATAMENTE a tabela de mapeamento abaixo
-- Se Palavra-chave = "Estacionamento" → Departamento DEVE ser "Operações"  
-- Se Palavra-chave = "Enxoval" → Departamento DEVE ser "Governança"
-- E assim por diante seguindo a tabela RIGOROSAMENTE
-- Se houver elogios **e** problemas ➜ foque APENAS nos **problemas**
-- Se houver **apenas elogios** ➜ retorne: \`Comodidade, Produto, VAZIO\`
-- Para problemas use termos curtos (máx. 3 palavras) e tente não criar variedades, se em um você identificar que o problema é "Piscina" apenas, nos outros sobre piscina deixe da mesma forma.
-- Palavra-chave, departamento e problema devem falar do MESMO assunto
-- Não use termos vagos ("Ruim", "Problema", "Coisas", "Lento")
-- Para PROBLEMAS, use termos ESPECÍFICOS e PADRONIZADOS:
-  * Se for serviço lento: "Demora no Atendimento"
-  * Se for quarto pequeno: "Espaço Insuficiente" 
-  * Se for comida ruim: "Qualidade da Comida"
-  * Se for ar-condicionado: "Não Funciona" ou "Muito Frio/Quente"
-  * Se for WiFi: "Conexão Instável"
-  * Se for limpeza: "Falta de Limpeza"
-  * Se for barulho: "Ruído Excessivo"
-- Identifique até 3 PROBLEMAS diferentes separados por PONTO E VÍRGULA (;)
-- Cada problema no formato: Palavra-chave, Departamento, Problema
-- NÃO coloque algarismos ("1.", "2." ...) nem texto extra
-- NÃO devolva "Não identificado"; escolha o departamento mais próximo na tabela
-- Quando for relacionado a bar, coloque em A&B (Alimentos e Bebidas)
-- Para Atendimento lento: retorne "Atendimento, Operações, Demora no Atendimento"
 
-MAPEAMENTO PALAVRA-CHAVE → DEPARTAMENTO (OBRIGATÓRIO):
+Atenção a sinônimos: *Wi-Fi*, *Internet*, *Net* → "Tecnologia - Wi-fi" etc.
+
+MAPEAMENTO PALAVRA-CHAVE → DEPARTAMENTO:
 
 | Palavra-chave              | Departamento |
 | -------------------------- | ------------ |
@@ -136,42 +125,50 @@ MAPEAMENTO PALAVRA-CHAVE → DEPARTAMENTO (OBRIGATÓRIO):
 | A&B - Serviço              | A&B          |
 | A&B - Variedade            | A&B          |
 | A&B - Preço                | A&B          |
-| Limpeza - Quarto           | Governança   |
-| Limpeza - Banheiro         | Governança   |
-| Limpeza - Áreas sociais    | Governança   |
+| Academia                   | Lazer        |
+| Limpeza                    | Governança   |
 | Enxoval                    | Governança   |
 | Manutenção - Quarto        | Manutenção   |
 | Manutenção - Banheiro      | Manutenção   |
 | Manutenção - Instalações   | Manutenção   |
-| Ar-condicionado            | Manutenção - Quarto |
-| Elevador                   | Manutenção - Instalações |
-| Frigobar                   | Manutenção - Quarto |
-| Infraestrutura             | Manutenção   |
+| Manutenção - Piscina       | Manutenção   |
 | Lazer - Variedade          | Lazer        |
 | Lazer - Estrutura          | Lazer        |
-| Spa                        | Lazer        |
-| Piscina                    | Lazer        |
+| Piscina - Limpeza          | Lazer        |
+| Piscina - Acessibilidade   | Lazer        |
 | Tecnologia - Wi-fi         | TI           |
 | Tecnologia - TV            | TI           |
-| Infraestrutura             | Produto      |
-| Comodidade                 | Produto      |
+| Infraestrutura             | Manutenção   |
 | Estacionamento             | Operações    |
+| Processo                   | Operações    |
 | Atendimento                | Operações    |
 | Acessibilidade             | Operações    |
 | Reserva de cadeiras (pool) | Operações    |
-| Atendimento – Check-in     | Operações    |
-| Processo                   | Operações    |
-| Custo-benefício            | Operações    |
-| Comunicação                | Qualidade    |
-| Processo                   | Qualidade    |
-| Check-in - Atendimento     | Recepção     |
-| Check-out - Atendimento    | Recepção     |
-| Concierge                  | Programa de vendas |
-| Cotas                      | Programa de vendas |
-| Reservas                   | Comercial    |
+| Comodidade                 | Produto      |
+| Quarto                     | Produto      |
+| Água (áreas comuns)        | Produto      |
+| Espelho                    | Produto      |
+| Comunicação                | Marketing    |
+| Custo benefício            | Comercial    |
+| Palavra-chave               | Departamento |
+| Serviço de quarto           | A&B         |
+| Bar – Serviço               | A&B         |
+| Piscina – Estrutura         | Lazer        |
+| Piscina – Capacidade        | Lazer        |
+| Concierge                   | Operações    |
+| Vendas de cotas / Timeshare | Comercial    |
+| Reserva de cadeiras         | Operações    |
+| Bar – Lento                 | A&B         |
+| Atendimento – Check-in      | Operações    |
+| Ar-condicionado             | Manutenção - Quarto |
+| Elevador                    | Manutenção - Instalações |
+| Spa                         | Lazer |
+| Frigobar                    | Manutenção - Quarto |
+| Banheiro                     | Manutenção - Banheiro |
+| Quarto                       | Produto |
+| Quarto                       | Produto |
 
-EXEMPLO DE RESPOSTA:
-"A&B - Serviço, A&B, Demora no Atendimento;Piscina, Lazer, Capacidade Insuficiente;Reserva de cadeiras (pool), Operações, Falta de Cadeiras"
+
 
 Comentário: "${texto}"`;
 
@@ -179,24 +176,24 @@ Comentário: "${texto}"`;
       openai.chat.completions.create({
         messages: [{ role: "user", content: sentimentPrompt }],
         model: model,
-        temperature: 0.0,
+        temperature: 0.0, // Zero para máxima determinismo
       }),
       openai.chat.completions.create({
         messages: [{ role: "user", content: sectorPrompt }],
         model: model,
-        temperature: 0.0,
+        temperature: 0.0, // Zero para máxima determinismo
       })
     ]);
 
     const rating = parseInt(sentimentResponse.choices[0].message.content?.trim() || "3");
-    const rawResponse = sectorResponse.choices[0].message.content?.trim() || "Comodidade, Produto, VAZIO";
+    const rawResponse = sectorResponse.choices[0].message.content?.trim() || "Não identificado, Não identificado, VAZIO";
 
-    // Processar múltiplos problemas separados por ponto e vírgula
-    let processedProblems: Array<{keyword: string, sector: string, problem: string}> = [];
+    // Processar a resposta para garantir formato correto
+    let processedResponse = rawResponse;
     
-    // Limpar resposta de formatação desnecessária
-    let cleanResponse = rawResponse;
+    // Limpar respostas que não seguem o formato
     if (rawResponse.includes('**') || rawResponse.includes('Resposta:') || rawResponse.includes('Análise:')) {
+      // Se a resposta contém formatação, extrair apenas a parte essencial
       const lines = rawResponse.split('\n');
       const cleanLine = lines.find(line => 
         line.includes(',') && 
@@ -204,56 +201,46 @@ Comentário: "${texto}"`;
         !line.includes('Resposta:') &&
         !line.includes('Análise:')
       );
-      cleanResponse = cleanLine || "Comodidade, Produto, VAZIO";
+      processedResponse = cleanLine || "Comodidade, Produto, VAZIO";
     }
     
-    // Separar por ponto e vírgula
-    const problemEntries = cleanResponse.split(';').map(entry => entry.trim()).filter(entry => entry.length > 0);
+    // Garantir que seja apenas uma linha
+    processedResponse = processedResponse.split('\n')[0];
     
-    // Processar cada problema
-    for (const entry of problemEntries.slice(0, 3)) { // Máximo 3 problemas
-      const parts = entry.split(',').map(part => part.trim());
+    // Processar as partes
+    const parts = processedResponse.split(',').map((part: string) => part.trim());
+    
+    if (parts.length >= 3) {
+      let keywords = parts[0] || "Não identificado";
+      let sectors = parts[1] || "Não identificado"; 
+      let problems = parts[2] || "VAZIO";
       
-      if (parts.length >= 3) {
-        let keyword = parts[0].replace(/['"]/g, '').trim();
-        let sector = parts[1].replace(/['"]/g, '').trim();
-        let problem = parts[2].replace(/['"]/g, '').trim();
-        
-        // Limpar problemas que indicam ausência de problemas
-        const cleanedProblem = problem.toLowerCase().includes('vazio') || 
-                              problem.toLowerCase().includes('sem problema') ||
-                              problem.toLowerCase().includes('não identificado') ||
-                              problem.trim() === '' ? '' : problem;
-        
-        processedProblems.push({
-          keyword,
-          sector,
-          problem: cleanedProblem
-        });
-      }
-    }
-    
-    // Se não conseguiu processar nenhum problema, usar padrão
-    if (processedProblems.length === 0) {
-      processedProblems.push({
-        keyword: "Comodidade",
-        sector: "Produto", 
-        problem: ""
-      });
+      // Limpar aspas e formatação extra
+      keywords = keywords.replace(/['"]/g, '').trim();
+      sectors = sectors.replace(/['"]/g, '').trim();
+      problems = problems.replace(/['"]/g, '').trim();
+      
+      // Limpar problemas que indicam ausência de problemas
+      const cleanedProblems = problems.toLowerCase().includes('vazio') || 
+                             problems.toLowerCase().includes('sem problema') ||
+                             problems.toLowerCase().includes('não identificado') ||
+                             problems.trim() === '' ? '' : problems;
+      
+      processedResponse = `${keywords}, ${sectors}, ${cleanedProblems}`;
     }
 
     // Cache resultado
     analysisCache.set(cacheKey, {
       data: {
         rating,
-        problems: processedProblems
+        response: processedResponse
       },
       timestamp: Date.now()
     });
 
     return NextResponse.json({
       rating,
-      problems: processedProblems
+      response: processedResponse
     });
 
   } catch (error: any) {

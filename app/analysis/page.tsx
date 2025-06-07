@@ -229,79 +229,55 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
           </div>
 
           {/* Análise IA */}
-          <div className="space-y-4">
-            <h4 className="font-medium text-foreground">Análise da IA</h4>
-            
-            {/* Se tem múltiplos problemas, mostrar cada um separadamente */}
-            {feedback.allProblems && feedback.allProblems.length > 1 ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  {feedback.allProblems.length} problemas identificados:
-                </p>
-                {feedback.allProblems.map((problemAnalysis, index) => (
-                  <div key={index} className="p-3 bg-muted/30 rounded-lg border">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <h5 className="text-xs font-medium text-muted-foreground">Departamento</h5>
-                        <Badge 
-                          variant="outline"
-                          className={cn("text-sm border font-medium", getSectorColor(problemAnalysis.sector))}
-                        >
-                          {problemAnalysis.sector}
-                        </Badge>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <h5 className="text-xs font-medium text-muted-foreground">Palavra-chave</h5>
-                        <KeywordBadge keyword={problemAnalysis.keyword} sector={problemAnalysis.sector} />
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <h5 className="text-xs font-medium text-muted-foreground">Problema</h5>
-                        <Badge variant="secondary" className="text-sm">
-                          {problemAnalysis.problem || 'Não especificado'}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <h4 className="font-medium text-foreground">Departamento</h4>
+              <div className="flex flex-wrap gap-1">
+                {feedback.sector.split(';').map((sector, index) => (
+                  <Badge 
+                    key={index} 
+                    variant="outline"
+                    className={cn("text-sm border font-medium", getSectorColor(sector.trim()))}
+                  >
+                    {sector.trim()}
+                  </Badge>
                 ))}
               </div>
-            ) : (
-              // Exibição tradicional para problema único
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">Departamento</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {feedback.sector.split(';').map((sector, index) => (
+            </div>
+            
+            <div className="space-y-2">
+              <h4 className="font-medium text-foreground">Palavras-chave</h4>
+              <div className="flex flex-wrap gap-1">
+                {feedback.keyword.split(';').map((kw, index) => {
+                  const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
+                  return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
+                })}
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <h4 className="font-medium text-foreground">Problemas</h4>
+              <div className="flex flex-wrap gap-1">
+                {feedback.problem ? (
+                  feedback.problem.split(';').map((problem, index) => {
+                    const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
+                    return (
                       <Badge 
                         key={index} 
                         variant="outline"
-                        className={cn("text-sm border font-medium", getSectorColor(sector.trim()))}
+                        className={cn("text-sm border font-medium", getSectorColor(sector))}
                       >
-                        {sector.trim()}
+                        {problem.trim()}
                       </Badge>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">Palavras-chave</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {feedback.keyword.split(';').map((kw, index) => {
-                      const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
-                      return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
-                    })}
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">Problema</h4>
-                  <Badge variant="secondary" className="text-sm">
-                    {feedback.problem || 'Não especificado'}
+                    );
+                  })
+                ) : (
+                  <Badge variant="outline" className="text-xs text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-300 border-green-300 dark:border-green-800">
+                    Sem problemas
                   </Badge>
-                </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Informações Adicionais */}
