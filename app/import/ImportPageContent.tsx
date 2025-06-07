@@ -605,33 +605,12 @@ function ImportPageContent() {
                 });
 
                 const rating = analysisResult.rating || 3;
+                const rawResponse = analysisResult.response || "Não identificado, Não identificado, ";
                 
-                // Processar múltiplos problemas da nova estrutura
-                let allProblems: Array<{keyword: string, sector: string, problem: string}> = [];
-                let keyword = 'Não identificado';
-                let sector = 'Não identificado';
-                let problem = '';
-                
-                if (analysisResult.problems && Array.isArray(analysisResult.problems)) {
-                  // Nova estrutura com múltiplos problemas
-                  allProblems = analysisResult.problems;
-                  // Concatenar todos os problemas com separador ";"
-                  if (allProblems.length > 0) {
-                    keyword = allProblems.map(p => p.keyword).join(';');
-                    sector = allProblems.map(p => p.sector).join(';');
-                    problem = allProblems.map(p => p.problem).join(';');
-                  }
-                } else if (analysisResult.response && typeof analysisResult.response === 'string') {
-                  // Compatibilidade com estrutura antiga
-                  const rawResponse = analysisResult.response;
-                  const parts = rawResponse.split(',').map((part: string) => part.trim());
-                  keyword = parts[0] || 'Não identificado';
-                  sector = parts[1] || 'Não identificado';
-                  problem = parts[2] || '';
-                  
-                  // Adicionar como problema único
-                  allProblems = [{ keyword, sector, problem }];
-                }
+                const parts = rawResponse.split(',').map((part: string) => part.trim());
+                const keyword = parts[0] || 'Não identificado';
+                const sector = parts[1] || 'Não identificado';
+                const problem = parts[2] || '';
                     
                 return {
                   id: generateUniqueId(),
@@ -650,8 +629,7 @@ function ImportPageContent() {
                   url: row.url || undefined,
                   author: row.autor || undefined,
                   title: row.titulo || undefined,
-                  apartamento: row.apartamento || undefined,
-                  allProblems: allProblems // Armazenar todos os problemas detectados
+                  apartamento: row.apartamento || undefined
                 } as Feedback;
                   
               } catch (error: any) {
@@ -679,8 +657,7 @@ function ImportPageContent() {
                   url: row.url || undefined,
                   author: row.autor || undefined,
                   title: row.titulo || undefined,
-                  apartamento: row.apartamento || undefined,
-                  allProblems: [] // Armazenar um array vazio para problemas
+                  apartamento: row.apartamento || undefined
                 } as Feedback;
               }
             });

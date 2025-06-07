@@ -3,13 +3,6 @@ export interface AnalysisResult {
   keyword: string;
   sector: string;
   problem: string;
-  allProblems?: ProblemAnalysis[];
-}
-
-export interface ProblemAnalysis {
-  keyword: string;
-  sector: string;
-  problem: string;
 }
 
 export type Feedback = {
@@ -30,7 +23,6 @@ export type Feedback = {
   title?: string
   hotelId?: string
   apartamento?: string
-  allProblems?: ProblemAnalysis[]
 }
 
 import { User as FirebaseUser } from "firebase/auth";
