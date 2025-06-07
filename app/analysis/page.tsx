@@ -39,10 +39,15 @@ import {
   RefreshCw,
   ArrowUp,
   ArrowDown,
-  Minus
+  Minus,
+  Edit3,
+  Save,
+  X,
+  Plus,
+  Trash2
 } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
-import { getAnalysisById } from '@/lib/firestore-service'
+import { getAnalysisById, updateFeedbackInFirestore } from '@/lib/firestore-service'
 import SharedDashboardLayout from "../shared-layout"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -83,13 +88,95 @@ const sectorColors: Record<string, string> = {
   'A&B': 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-200 border-blue-300 dark:border-blue-800',
   'Governança': 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-200 border-red-300 dark:border-red-800',
   'Manutenção': 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-200 border-orange-300 dark:border-orange-800',
+  'Manutenção - Quarto': 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-200 border-orange-300 dark:border-orange-800',
+  'Manutenção - Banheiro': 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-200 border-orange-300 dark:border-orange-800',
+  'Manutenção - Instalações': 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-200 border-orange-300 dark:border-orange-800',
   'Lazer': 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-200 border-green-300 dark:border-green-800',
   'TI': 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-200 border-purple-300 dark:border-purple-800',
   'Operações': 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-200 border-yellow-300 dark:border-yellow-800',
   'Produto': 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-200 border-indigo-300 dark:border-indigo-800',
   'Marketing': 'bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-200 border-pink-300 dark:border-pink-800',
-  'Comercial': 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-200 border-cyan-300 dark:border-cyan-800'
+  'Comercial': 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-200 border-cyan-300 dark:border-cyan-800',
+  'Qualidade': 'bg-slate-50 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 border-slate-300 dark:border-slate-800',
+  'Recepção': 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-200 border-teal-300 dark:border-teal-800',
+  'Programa de vendas': 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-200 border-amber-300 dark:border-amber-800'
 };
+
+// Lista de departamentos disponíveis
+const availableDepartments = [
+  'A&B',
+  'Governança', 
+  'Manutenção',
+  'Manutenção - Quarto',
+  'Manutenção - Banheiro', 
+  'Manutenção - Instalações',
+  'Lazer',
+  'TI',
+  'Operações',
+  'Produto',
+  'Marketing',
+  'Comercial',
+  'Qualidade',
+  'Recepção',
+  'Programa de vendas'
+];
+
+// Lista de problemas comuns para sugestão
+const commonProblems = [
+  'VAZIO',
+  'Demora no Atendimento',
+  'Falta de Limpeza',
+  'Capacidade Insuficiente',
+  'Falta de Cadeiras',
+  'Não Funciona',
+  'Conexão Instável',
+  'Ruído Excessivo',
+  'Espaço Insuficiente',
+  'Qualidade da Comida',
+  'Muito Frio',
+  'Muito Quente',
+  'Pressão de Vendas',
+  'Check-in Lento',
+  'Check-out Lento'
+];
+
+// Lista de palavras-chave comuns
+const commonKeywords = [
+  'A&B - Café da manhã',
+  'A&B - Serviço',
+  'A&B - Variedade',
+  'A&B - Preço',
+  'Limpeza - Quarto',
+  'Limpeza - Banheiro',
+  'Limpeza - Áreas sociais',
+  'Enxoval',
+  'Manutenção - Quarto',
+  'Manutenção - Banheiro',
+  'Manutenção - Instalações',
+  'Ar-condicionado',
+  'Elevador',
+  'Frigobar',
+  'Infraestrutura',
+  'Lazer - Variedade',
+  'Lazer - Estrutura',
+  'Spa',
+  'Piscina',
+  'Tecnologia - Wi-fi',
+  'Tecnologia - TV',
+  'Comodidade',
+  'Estacionamento',
+  'Atendimento',
+  'Acessibilidade',
+  'Reserva de cadeiras (pool)',
+  'Processo',
+  'Custo-benefício',
+  'Comunicação',
+  'Check-in - Atendimento',
+  'Check-out - Atendimento',
+  'Concierge',
+  'Cotas',
+  'Reservas'
+];
 
 // Função para obter a cor com base no departamento
 const getSectorColor = (sector: string) => {
@@ -153,6 +240,38 @@ const StatsCard = ({ icon: Icon, title, value, change, color }: {
 // Componente para Modal de Comentário Completo
 const CommentModal = ({ feedback }: { feedback: Feedback }) => {
   const { toast } = useToast()
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])
+  const [isSaving, setIsSaving] = useState(false)
+  
+  useEffect(() => {
+    // Inicializar problemas para edição
+    if (feedback.allProblems && feedback.allProblems.length > 0) {
+      setEditedProblems(feedback.allProblems.map((problem, index) => ({
+        id: `problem-${Date.now()}-${index}`,
+        ...problem
+      })))
+    } else {
+      // Converter formato antigo para novo
+      const keywords = feedback.keyword.split(';').map(k => k.trim())
+      const sectors = feedback.sector.split(';').map(s => s.trim())
+      const problems = feedback.problem ? feedback.problem.split(';').map(p => p.trim()) : ['']
+      
+      const maxLength = Math.max(keywords.length, sectors.length, problems.length)
+      const problemsArray = []
+      
+      for (let i = 0; i < maxLength; i++) {
+        problemsArray.push({
+          id: `problem-${Date.now()}-${i}`,
+          keyword: keywords[i] || keywords[0] || 'Não identificado',
+          sector: sectors[i] || sectors[0] || 'Não identificado', 
+          problem: problems[i] || problems[0] || ''
+        })
+      }
+      
+      setEditedProblems(problemsArray)
+    }
+  }, [feedback, isEditing])
   
   const copyComment = () => {
     navigator.clipboard.writeText(feedback.comment)
@@ -172,6 +291,103 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
     })
   }
 
+  const handleStartEdit = () => {
+    setIsEditing(true)
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+    // Resetar para os valores originais
+    if (feedback.allProblems && feedback.allProblems.length > 0) {
+      setEditedProblems(feedback.allProblems.map((problem, index) => ({
+        id: `problem-${Date.now()}-${index}`,
+        ...problem
+      })))
+    }
+  }
+
+  const handleUpdateProblem = (id: string, updated: {keyword: string, sector: string, problem: string}) => {
+    const newProblems = editedProblems.map(p => 
+      p.id === id ? { ...p, ...updated } : p
+    )
+    setEditedProblems(newProblems)
+  }
+
+  const handleRemoveProblem = (id: string) => {
+    if (editedProblems.length > 1) {
+      const newProblems = editedProblems.filter(p => p.id !== id)
+      setEditedProblems(newProblems)
+    }
+  }
+
+  const handleAddProblem = () => {
+    if (editedProblems.length < 3) {
+      setEditedProblems([
+        ...editedProblems,
+        { 
+          id: `problem-${Date.now()}-${editedProblems.length}`,
+          keyword: 'Comodidade', 
+          sector: 'Produto', 
+          problem: 'VAZIO' 
+        }
+      ])
+    }
+  }
+
+  const handleSaveChanges = async () => {
+    setIsSaving(true)
+    
+    try {
+      // Converter problemas editados de volta para formato string com ';' (removendo o ID)
+      const problemsWithoutId = editedProblems.map(({ id, ...problem }) => problem)
+      const keywords = problemsWithoutId.map(p => p.keyword).join(';')
+      const sectors = problemsWithoutId.map(p => p.sector).join(';')
+      const problems = problemsWithoutId.map(p => p.problem).join(';')
+      
+      // Atualizar feedback local
+      const updatedFeedback = {
+        ...feedback,
+        keyword: keywords,
+        sector: sectors,
+        problem: problems,
+        allProblems: problemsWithoutId
+      }
+      
+      // Atualizar no localStorage
+      const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
+      if (storedFeedbacks) {
+        const feedbacks = JSON.parse(storedFeedbacks)
+        const updatedFeedbacks = feedbacks.map((f: Feedback) => 
+          f.id === feedback.id ? updatedFeedback : f
+        )
+        localStorage.setItem('analysis-feedbacks', JSON.stringify(updatedFeedbacks))
+      }
+      
+      // Salvar no Firebase
+      await updateFeedbackInFirestore(feedback.id, updatedFeedback)
+      
+      setIsEditing(false)
+      
+      toast({
+        title: "Análise Atualizada",
+        description: "As alterações foram salvas com sucesso.",
+      })
+      
+      // Recarregar a página para mostrar as mudanças
+      window.location.reload()
+      
+    } catch (error) {
+      console.error('Erro ao salvar:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar as alterações.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -179,11 +395,51 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
           <Eye className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-yellow-500" />
-            Detalhes do Feedback - {feedback.rating} estrelas
+          <DialogTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Star className="h-5 w-5 text-yellow-500" />
+              Detalhes do Feedback - {feedback.rating} estrelas
+            </div>
+            <div className="flex items-center gap-2">
+              {!isEditing ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStartEdit}
+                  className="flex items-center gap-2"
+                >
+                  <Edit3 className="h-4 w-4" />
+                  Editar Análise
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelEdit}
+                    disabled={isSaving}
+                  >
+                    <X className="h-4 w-4" />
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveChanges}
+                    disabled={isSaving}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {isSaving ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Salvar
+                  </Button>
+                </div>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
         
@@ -230,77 +486,131 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
 
           {/* Análise IA */}
           <div className="space-y-4">
-            <h4 className="font-medium text-foreground">Análise da IA</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-foreground">Análise da IA</h4>
+              {isEditing && (
+                <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/20 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-800">
+                  Modo de Edição Ativo
+                </div>
+              )}
+            </div>
             
-            {/* Se tem múltiplos problemas, mostrar cada um separadamente */}
-            {feedback.allProblems && feedback.allProblems.length > 1 ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  {feedback.allProblems.length} problemas identificados:
-                </p>
-                {feedback.allProblems.map((problemAnalysis, index) => (
-                  <div key={index} className="p-3 bg-muted/30 rounded-lg border">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <h5 className="text-xs font-medium text-muted-foreground">Departamento</h5>
-                        <Badge 
-                          variant="outline"
-                          className={cn("text-sm border font-medium", getSectorColor(problemAnalysis.sector))}
-                        >
-                          {problemAnalysis.sector}
-                        </Badge>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <h5 className="text-xs font-medium text-muted-foreground">Palavra-chave</h5>
-                        <KeywordBadge keyword={problemAnalysis.keyword} sector={problemAnalysis.sector} />
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <h5 className="text-xs font-medium text-muted-foreground">Problema</h5>
-                        <Badge variant="secondary" className="text-sm">
-                          {problemAnalysis.problem || 'Não especificado'}
-                        </Badge>
-                      </div>
-                    </div>
+            {isEditing ? (
+              // Modo de edição
+              <div className="space-y-6">
+                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
+                    <Edit3 className="h-4 w-4" />
+                    <span className="text-sm font-medium">Editando Análise</span>
                   </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    Você pode modificar os departamentos, palavras-chave e problemas identificados pela IA. 
+                    As alterações serão salvas e refletidas nos dashboards.
+                  </p>
+                </div>
+
+                {editedProblems.map((problem, index) => (
+                  <ProblemEditor
+                    key={problem.id}
+                    problem={problem}
+                    onUpdate={(updated) => handleUpdateProblem(problem.id, updated)}
+                    onRemove={() => handleRemoveProblem(problem.id)}
+                    canRemove={editedProblems.length > 1}
+                  />
                 ))}
+
+                {editedProblems.length < 3 && (
+                  <Button
+                    variant="outline"
+                    onClick={handleAddProblem}
+                    className="w-full border-dashed border-2 h-12 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Problema ({editedProblems.length}/3)
+                  </Button>
+                )}
               </div>
             ) : (
-              // Exibição tradicional para problema único
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">Departamento</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {feedback.sector.split(';').map((sector, index) => (
-                      <Badge 
-                        key={index} 
-                        variant="outline"
-                        className={cn("text-sm border font-medium", getSectorColor(sector.trim()))}
-                      >
-                        {sector.trim()}
-                      </Badge>
+              // Modo de visualização
+              <>
+                {feedback.allProblems && feedback.allProblems.length > 1 ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      {feedback.allProblems.length} problemas identificados:
+                    </p>
+                    {feedback.allProblems.map((problemAnalysis, index) => (
+                      <div key={problemAnalysis.id || `problem-${index}`} className="p-3 bg-muted/30 rounded-lg border">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <h5 className="text-xs font-medium text-muted-foreground">Departamento</h5>
+                            <Badge 
+                              variant="outline"
+                              className={cn("text-sm border font-medium", getSectorColor(problemAnalysis.sector))}
+                            >
+                              {problemAnalysis.sector}
+                            </Badge>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <h5 className="text-xs font-medium text-muted-foreground">Palavra-chave</h5>
+                            <KeywordBadge keyword={problemAnalysis.keyword} sector={problemAnalysis.sector} />
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <h5 className="text-xs font-medium text-muted-foreground">Problema</h5>
+                            <Badge variant="secondary" className="text-sm">
+                              {problemAnalysis.problem === 'VAZIO' ? (
+                                <span className="italic text-gray-500">Sem problemas</span>
+                              ) : (
+                                problemAnalysis.problem || 'Não especificado'
+                              )}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">Palavras-chave</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {feedback.keyword.split(';').map((kw, index) => {
-                      const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
-                      return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
-                    })}
+                ) : (
+                  // Exibição tradicional para problema único
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-foreground">Departamento</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {feedback.sector.split(';').map((sector, index) => (
+                          <Badge 
+                            key={index} 
+                            variant="outline"
+                            className={cn("text-sm border font-medium", getSectorColor(sector.trim()))}
+                          >
+                            {sector.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-foreground">Palavras-chave</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {feedback.keyword.split(';').map((kw, index) => {
+                          const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
+                          return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
+                        })}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-foreground">Problema</h4>
+                      <Badge variant="secondary" className="text-sm">
+                        {feedback.problem === 'VAZIO' ? (
+                          <span className="italic text-gray-500">Sem problemas</span>
+                        ) : (
+                          feedback.problem || 'Não especificado'
+                        )}
+                      </Badge>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">Problema</h4>
-                  <Badge variant="secondary" className="text-sm">
-                    {feedback.problem || 'Não especificado'}
-                  </Badge>
-                </div>
-              </div>
+                )}
+              </>
             )}
           </div>
 
@@ -332,6 +642,206 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
     </Dialog>
   )
 }
+
+// Componente para editar um problema individual
+const ProblemEditor = ({ 
+  problem, 
+  onUpdate, 
+  onRemove, 
+  canRemove = true 
+}: { 
+  problem: { id: string; keyword: string; sector: string; problem: string };
+  onUpdate: (updated: { keyword: string; sector: string; problem: string }) => void;
+  onRemove?: () => void;
+  canRemove?: boolean;
+}) => {
+  const [keyword, setKeyword] = useState(problem.keyword);
+  const [sector, setSector] = useState(problem.sector);
+  const [problemText, setProblemText] = useState(problem.problem);
+  const [keywordInputMode, setKeywordInputMode] = useState(false);
+  const [problemInputMode, setProblemInputMode] = useState(false);
+
+  useEffect(() => {
+    onUpdate({ keyword, sector, problem: problemText });
+  }, [keyword, sector, problemText, onUpdate]);
+
+  const handleProblemChange = (value: string) => {
+    setProblemText(value);
+    if (value !== 'VAZIO') {
+      setProblemInputMode(false);
+    }
+  };
+
+  return (
+    <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-xl border-2 border-gray-200 dark:border-gray-700 space-y-4 transition-all duration-200 hover:shadow-md">
+      <div className="flex items-center justify-between">
+        <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+          Análise de Problema
+        </h5>
+        {canRemove && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRemove}
+            className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Palavra-chave */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+            Palavra-chave
+          </label>
+          {keywordInputMode ? (
+            <div className="space-y-2">
+              <Input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="text-sm"
+                placeholder="Digite palavra-chave personalizada"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => setKeywordInputMode(false)} className="text-xs">
+                  OK
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => {
+                  setKeyword(problem.keyword);
+                  setKeywordInputMode(false);
+                }} className="text-xs">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Select value={keyword} onValueChange={setKeyword}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Selecione palavra-chave" />
+                </SelectTrigger>
+                <SelectContent>
+                  {commonKeywords.map((kw) => (
+                    <SelectItem key={kw} value={kw}>{kw}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setKeywordInputMode(true)}
+                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
+              >
+                + Personalizar
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Departamento */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+            Departamento
+          </label>
+          <Select value={sector} onValueChange={setSector}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Selecione departamento" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableDepartments.map((dept) => (
+                <SelectItem key={dept} value={dept}>
+                  <div className="flex items-center gap-2">
+                    <div className={cn("w-3 h-3 rounded-full", getSectorColor(dept).replace(/text-\w+-\d+/g, '').replace(/border-\w+-\d+/g, ''))} />
+                    {dept}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Problema */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+            Problema
+          </label>
+          {problemInputMode ? (
+            <div className="space-y-2">
+              <Input
+                value={problemText}
+                onChange={(e) => setProblemText(e.target.value)}
+                className="text-sm"
+                placeholder="Digite problema personalizado"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => setProblemInputMode(false)} className="text-xs">
+                  OK
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => {
+                  setProblemText(problem.problem);
+                  setProblemInputMode(false);
+                }} className="text-xs">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Select value={problemText} onValueChange={handleProblemChange}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Selecione problema" />
+                </SelectTrigger>
+                <SelectContent>
+                  {commonProblems.map((prob) => (
+                    <SelectItem key={prob} value={prob}>
+                      {prob === 'VAZIO' ? (
+                        <span className="italic text-gray-500">Sem problemas</span>
+                      ) : (
+                        prob
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setProblemInputMode(true)}
+                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
+              >
+                + Personalizar
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Preview do badge */}
+      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-2">
+          <Eye className="h-3 w-3" />
+          Visualização:
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline" className={cn("text-sm border font-medium", getSectorColor(sector))}>
+            {sector}
+          </Badge>
+          <KeywordBadge keyword={keyword} sector={sector} />
+          <Badge variant="secondary" className="text-sm">
+            {problemText === 'VAZIO' ? (
+              <span className="italic text-gray-500">Sem problemas</span>
+            ) : (
+              problemText
+            )}
+          </Badge>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function AnalysisPage() {
   return (
@@ -779,13 +1289,23 @@ function AnalysisPageContent() {
                           {feedback.problem ? (
                             feedback.problem.split(';').slice(0, 2).map((problem, index) => {
                               const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
+                              const trimmedProblem = problem.trim();
+                              
+                              if (trimmedProblem === 'VAZIO') {
+                                return (
+                                  <span key={index} className="text-xs text-muted-foreground italic">
+                                    Sem problemas
+                                  </span>
+                                );
+                              }
+                              
                               return (
                                 <Badge 
                                   key={index} 
                                   variant="outline"
                                   className={cn("text-xs border", getSectorColor(sector))}
                                 >
-                                  {problem.trim()}
+                                  {trimmedProblem}
                                 </Badge>
                               );
                             })
