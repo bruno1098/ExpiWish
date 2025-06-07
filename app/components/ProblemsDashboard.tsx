@@ -102,7 +102,9 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
     return f.problem && 
            !f.problem.includes("Sem problemas") && 
            f.problem !== "Não identificado" &&
-           f.problem !== "Não analisado";
+           f.problem !== "Não analisado" &&
+           f.problem !== "VAZIO" &&
+           !f.problem.includes("VAZIO");
   });
 
   // Processa todos os problemas, incluindo múltiplos por feedback
@@ -112,7 +114,10 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
     const sectors = feedback.sector.split(';').map((s: string) => s.trim());
     
     return problems.map((problem: string, index: number) => {
-      if (problem === "Sem problemas" || problem === "Não identificado" || problem === "Não analisado") {
+      if (problem === "Sem problemas" || 
+          problem === "Não identificado" || 
+          problem === "Não analisado" ||
+          problem === "VAZIO") {
         return null;
       }
       

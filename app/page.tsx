@@ -1542,13 +1542,18 @@ function DashboardContent() {
                     data={allFeedbacks
                       .filter(feedback => !selectedHotel || feedback.hotel === selectedHotel || feedback.source === selectedHotel)
                       .reduce((acc: {problem: string, count: number}[], feedback) => {
-                        if (feedback.problem && feedback.problem !== 'Não identificado') {
+                        if (feedback.problem && 
+                            feedback.problem !== 'Não identificado' &&
+                            feedback.problem !== 'VAZIO' &&
+                            !feedback.problem.includes('VAZIO')) {
                           const problems = feedback.problem.includes(';') 
                             ? feedback.problem.split(';').map(p => p.trim())
                             : [feedback.problem];
                             
                           problems.forEach(problem => {
-                            if (problem !== 'Sem problemas') {
+                            if (problem !== 'Sem problemas' && 
+                                problem !== 'VAZIO' &&
+                                !problem.includes('VAZIO')) {
                               const existingProblem = acc.find(p => p.problem === problem);
                               if (existingProblem) {
                                 existingProblem.count += 1;

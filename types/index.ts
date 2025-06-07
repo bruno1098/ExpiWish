@@ -7,6 +7,7 @@ export interface AnalysisResult {
 }
 
 export interface ProblemAnalysis {
+  id?: string;
   keyword: string;
   sector: string;
   problem: string;

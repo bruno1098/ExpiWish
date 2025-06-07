@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { getCurrentUserData } from './auth-service';
 
@@ -459,6 +459,79 @@ export const testNewFirebaseStructure = async () => {
     console.log('\n✅ Teste concluído com sucesso!');
   } catch (error) {
     console.error('❌ Erro durante teste:', error);
+  }
+};
+
+// Função para atualizar um feedback específico no Firebase
+export const updateFeedbackInFirestore = async (
+  feedbackId: string, 
+  updatedFeedback: any
+): Promise<boolean> => {
+  try {
+    const userData = await getCurrentUserData();
+    if (!userData || !userData.hotelId) {
+      throw new Error('Usuário não autenticado ou hotel não identificado');
+    }
+
+    const hotelDocId = normalizeHotelName(userData.hotelName || '');
+    
+    // Buscar todas as análises do hotel para encontrar o feedback
+    const analysisCollectionRef = collection(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS);
+    const querySnapshot = await getDocs(analysisCollectionRef);
+    
+    let targetAnalysisId = null;
+    let feedbackIndex = -1;
+    
+    // Procurar o feedback nas análises
+    for (const analysisDoc of querySnapshot.docs) {
+      const analysisData = analysisDoc.data();
+      if (analysisData.data && Array.isArray(analysisData.data)) {
+        const index = analysisData.data.findIndex((f: any) => f.id === feedbackId);
+        if (index !== -1) {
+          targetAnalysisId = analysisDoc.id;
+          feedbackIndex = index;
+          break;
+        }
+      }
+    }
+    
+    if (!targetAnalysisId || feedbackIndex === -1) {
+      throw new Error('Feedback não encontrado no Firebase');
+    }
+    
+    // Buscar a análise específica
+    const analysisDocRef = doc(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS, targetAnalysisId);
+    const analysisDoc = await getDoc(analysisDocRef);
+    
+    if (!analysisDoc.exists()) {
+      throw new Error('Análise não encontrada');
+    }
+    
+    const analysisData = analysisDoc.data();
+    const updatedData = [...analysisData.data];
+    
+    // Atualizar o feedback específico
+    updatedData[feedbackIndex] = {
+      ...updatedData[feedbackIndex],
+      keyword: updatedFeedback.keyword,
+      sector: updatedFeedback.sector,
+      problem: updatedFeedback.problem,
+      allProblems: updatedFeedback.allProblems,
+      lastModified: Timestamp.now()
+    };
+    
+    // Salvar de volta no Firebase
+    await updateDoc(analysisDocRef, {
+      data: updatedData,
+      lastModified: Timestamp.now()
+    });
+    
+    console.log(`Feedback ${feedbackId} atualizado com sucesso no Firebase`);
+    return true;
+    
+  } catch (error) {
+    console.error('Erro ao atualizar feedback no Firebase:', error);
+    throw error;
   }
 };
 
