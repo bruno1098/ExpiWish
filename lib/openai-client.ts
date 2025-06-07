@@ -7,14 +7,33 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const MAX_RETRIES = 15;
 const BASE_DELAY = 1000; // 1 segundo
 
+// Tipo para um problema individual
+type ProblemAnalysis = {
+  keyword: string;
+  sector: string;
+  problem: string;
+};
+
 // Cache global para análises
-const analysisCache = new Map<string, { rating: number; keyword: string; sector: string; problem: string }>();
+const analysisCache = new Map<string, { 
+  rating: number; 
+  keyword: string; 
+  sector: string; 
+  problem: string;
+  allProblems: ProblemAnalysis[];
+}>();
 
 export async function analyzeWithGPT(
   texto: string,
   useFineTuned = false,
   retryCount = 0
-): Promise<{ rating: number; keyword: string; sector: string; problem: string }> {
+): Promise<{ 
+  rating: number; 
+  keyword: string; 
+  sector: string; 
+  problem: string;
+  allProblems: ProblemAnalysis[];
+}> {
   
   const apiKey = getApiKey();
   
@@ -31,12 +50,14 @@ export async function analyzeWithGPT(
 
   if (!texto || texto.trim() === '') {
     console.log("Texto vazio recebido para análise:", texto);
-    return {
+    const defaultResult = {
       rating: 3,
       keyword: 'Não identificado',
       sector: 'Não identificado',
-      problem: ''
+      problem: '',
+      allProblems: []
     };
+    return defaultResult;
   }
 
   try {
@@ -73,66 +94,60 @@ export async function analyzeWithGPT(
     }
 
     const rating = typeof result.rating === 'number' ? result.rating : 3;
-    const responseText = result.response || '';
+    
+    console.log('Resposta recebida da API:', { rating, fullResult: result });
 
-    console.log('Resposta recebida da API:', { rating, responseText, fullResult: result });
+    // Processar nova estrutura com múltiplos problemas
+    let allProblems: ProblemAnalysis[] = [];
+    let keyword = 'Não identificado';
+    let sector = 'Não identificado';
+    let problem = '';
+    
+    if (result.problems && Array.isArray(result.problems)) {
+      // Nova estrutura com array de problemas
+      allProblems = result.problems.map((problem: any) => ({
+        keyword: problem.keyword || 'Não identificado',
+        sector: problem.sector || 'Não identificado',
+        problem: problem.problem || ''
+      }));
+      
+      // Concatenar múltiplos problemas com ponto e vírgula
+      if (allProblems.length > 0) {
+        keyword = allProblems.map(p => p.keyword).join(';');
+        sector = allProblems.map(p => p.sector).join(';');
+        problem = allProblems.map(p => p.problem).join(';');
+      }
+    } else if (result.response && typeof result.response === 'string') {
+      // Compatibilidade com estrutura antiga (caso ainda seja usada)
+      const parts = result.response.split(',').map((part: string) => part.trim());
+      
+      if (parts.length >= 3) {
+        keyword = parts[0] || 'Não identificado';
+        sector = parts[1] || 'Não identificado';
+        problem = parts[2] || '';
+        
+        allProblems.push({ keyword, sector, problem });
+      }
+    }
 
-    // Validar se responseText é string antes de fazer split
-    if (typeof responseText !== 'string') {
-      console.error('responseText não é string:', responseText);
-      return {
-        rating,
+    // Se não conseguiu processar nenhum problema, usar padrão
+    if (allProblems.length === 0) {
+      allProblems.push({
         keyword: 'Não identificado',
         sector: 'Não identificado',
         problem: ''
-      };
-    }
-
-    // Processar a resposta com validação
-    const parts = responseText.split(',').map((part: string) => part.trim());
-
-    let keywords = "Não identificado";
-    let sectors = "Não identificado";
-    let problems = "";
-
-    if (parts.length >= 3) {
-      keywords = parts[0] || "Não identificado";
-      sectors = parts[1] || "Não identificado";
-      problems = parts[2] || "";
-      
-      // Processar keywords
-      if (keywords && typeof keywords === 'string') {
-        const keywordList = keywords.split(';').map((k: string) => k.trim()).filter((k: string) => k);
-        keywords = keywordList[0] || "Não identificado";
-      }
-      
-      // Processar sectors
-      if (sectors && typeof sectors === 'string') {
-        const sectorList = sectors.split(';').map((s: string) => s.trim()).filter((s: string) => s);
-        sectors = sectorList[0] || "Não identificado";
-      }
-      
-      // Processar problems
-      if (problems && typeof problems === 'string') {
-        problems = problems.trim();
-        // Limpar indicadores de "sem problema"
-        if (problems.toLowerCase().includes('vazio') || 
-            problems.toLowerCase().includes('sem problema') ||
-            problems.toLowerCase().includes('não identificado')) {
-          problems = '';
-        }
-      } else {
-        problems = '';
-      }
-    } else {
-      console.warn('Resposta da API não tem 3 partes:', parts);
+      });
+      keyword = 'Não identificado';
+      sector = 'Não identificado';
+      problem = '';
     }
 
     const finalResult = {
       rating,
-      keyword: keywords,
-      sector: sectors,
-      problem: problems
+      keyword,
+      sector,
+      problem,
+      allProblems
     };
 
     console.log('Resultado final processado:', finalResult);
@@ -161,7 +176,8 @@ export async function analyzeWithGPT(
         rating: 3,
         keyword: 'Não identificado',
         sector: 'Não identificado',
-        problem: ''
+        problem: '',
+        allProblems: []
       };
     }
     
