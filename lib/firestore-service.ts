@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc, deleteDoc, updateDoc, limit } from 'firebase/firestore';
 import { db } from './firebase';
 import { getCurrentUserData } from './auth-service';
 
@@ -110,6 +110,8 @@ export const getAllAnalyses = async (hotelId?: string) => {
     interface AnalysisDoc extends AnalysisData {
       id: string;
       isTestEnvironment?: boolean;
+      hotelDocId?: string;
+      hotelDisplayName?: string;
     }
     
     const results: AnalysisDoc[] = [];
@@ -148,7 +150,10 @@ export const getAllAnalyses = async (hotelId?: string) => {
               const data = feedbackDoc.data() as AnalysisData;
               results.push({
                 id: feedbackDoc.id,
-                ...data
+                ...data,
+                // Adicionar informação do hotel baseado na estrutura hierárquica
+                hotelDocId: hotel.docId,  // ID do documento do hotel
+                hotelDisplayName: hotel.hotelName // Nome real do hotel
               });
             });
           } catch (error) {
@@ -191,7 +196,10 @@ export const getAllAnalyses = async (hotelId?: string) => {
               const data = docSnap.data() as AnalysisData;
               results.push({
                 id: docSnap.id,
-                ...data
+                ...data,
+                // Adicionar informação do hotel
+                hotelDocId: userData.hotelId,
+                hotelDisplayName: hotelName
               });
             });
           } else {
@@ -535,6 +543,71 @@ export const updateFeedbackInFirestore = async (
   }
 };
 
+// Função para salvar edição recente no Firebase
+export const saveRecentEdit = async (editData: any) => {
+  try {
+    const editsRef = collection(db, "recent_edits")
+    const docRef = await addDoc(editsRef, {
+      ...editData,
+      timestamp: Timestamp.now()
+    })
+
+    return docRef.id
+  } catch (error) {
+    console.error("Erro ao salvar edição recente:", error)
+    throw error
+  }
+}
+
+// Função para obter edições recentes do Firebase
+export const getRecentEdits = async (limitDays: number = 7) => {
+  try {
+    const editsRef = collection(db, "recent_edits")
+    
+    // Buscar todos os documentos e filtrar no cliente para evitar problemas de índice
+    const snapshot = await getDocs(editsRef)
+    
+    const pastDate = new Date()
+    pastDate.setDate(pastDate.getDate() - limitDays)
+    
+    const edits = snapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .filter((edit: any) => {
+        // Filtrar pelos últimos X dias
+        const editDate = new Date(edit.modifiedAt)
+        return editDate >= pastDate
+      })
+      .sort((a: any, b: any) => {
+        // Ordenar por data mais recente primeiro
+        return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
+      })
+    
+
+    return edits
+  } catch (error) {
+    console.error("Erro ao buscar edições recentes:", error)
+    return [] // Retorna array vazio em caso de erro
+  }
+}
+
+// Função para limpar edições antigas (usar apenas para debug/teste)
+export const clearRecentEdits = async () => {
+  try {
+    const editsRef = collection(db, "recent_edits")
+    const snapshot = await getDocs(editsRef)
+    
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref))
+    await Promise.all(deletePromises)
+    
+    console.log(`${snapshot.docs.length} edições antigas removidas`)
+  } catch (error) {
+    console.error("Erro ao limpar edições:", error)
+  }
+}
+
 // Disponibilizar funções globalmente para testes no console
 if (typeof window !== 'undefined') {
   (window as any).firebaseUtils = {
@@ -542,6 +615,9 @@ if (typeof window !== 'undefined') {
     visualizeFirebaseStructure,
     listAllHotels,
     testNewFirebaseStructure,
-    normalizeHotelName
+    normalizeHotelName,
+    clearRecentEdits,
+    getRecentEdits,
+    saveRecentEdit
   };
 }

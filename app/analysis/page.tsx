@@ -50,7 +50,7 @@ import { useSearchParams } from 'next/navigation'
 import { getAnalysisById, updateFeedbackInFirestore } from '@/lib/firestore-service'
 import SharedDashboardLayout from "../shared-layout"
 import { useToast } from "@/components/ui/use-toast"
-import { cn } from "@/lib/utils"
+import { cn, formatDateBR } from "@/lib/utils"
 
 // Mapa de cores para sentimentos
 const sentimentColors = {
@@ -282,13 +282,7 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    return formatDateBR(dateString);
   }
 
   const handleStartEdit = () => {
@@ -1225,9 +1219,9 @@ function AnalysisPageContent() {
                   </TableRow>
                 ) : (
                   filteredFeedbacks.map((feedback) => (
-                    <TableRow key={feedback.id} className="hover:bg-muted/50 transition-colors">
+                    <TableRow key={feedback.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
                       <TableCell className="text-sm font-medium">
-                        {new Date(feedback.date).toLocaleDateString('pt-BR')}
+                        {formatDateBR(feedback.date)}
                       </TableCell>
                       <TableCell className="max-w-sm">
                         <Tooltip>

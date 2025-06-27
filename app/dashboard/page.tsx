@@ -10,7 +10,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { RequireAuth } from "@/lib/auth-context";
 import SharedDashboardLayout from "../shared-layout";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend, RadarChart, PolarGrid,
   PolarAngleAxis, PolarRadiusAxis, Radar, AreaChart, Area, LabelList,
   Sector, ScatterChart, Scatter, ZAxis
@@ -26,8 +26,19 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Feedback } from "@/types";
-import { Star } from "lucide-react";
-import { Filter } from "lucide-react";
+import { 
+  Star, 
+  Filter, 
+  MessageSquare, 
+  ExternalLink, 
+  X, 
+  Building2, 
+  AlertCircle, 
+  Tag, 
+  Globe, 
+  BarChart3 
+} from "lucide-react";
+import { formatDateBR } from "@/lib/utils";
 
 // Definir a interface AnalysisData
 interface AnalysisData {
@@ -103,6 +114,10 @@ function DashboardContent() {
     feedbacks: any[];
     stats: any;
   } | null>(null);
+  
+  // Estado para modal de todos os comentários
+  const [allCommentsModalOpen, setAllCommentsModalOpen] = useState(false);
+  const [allCommentsData, setAllCommentsData] = useState<any[]>([]);
   
   // Estados para o modal de gráfico grande
   const [chartModalOpen, setChartModalOpen] = useState(false);
@@ -351,10 +366,116 @@ function DashboardContent() {
     });
   };
 
+  const handleViewAllComments = () => {
+    if (selectedItem) {
+      setAllCommentsData(selectedItem.feedbacks);
+      setAllCommentsModalOpen(true);
+    }
+  };
+
   // Função para lidar com cliques nos gráficos
   const handleChartClick = (data: any, type: string) => {
+    console.log("Clique no gráfico:", data, type);
+    
     const value = data.name || data.label;
-    const filteredFeedbacks = filterFeedbacksByCriteria(type, value);
+    let filteredFeedbacks: any[] = [];
+
+    // Implementação específica para cada tipo, igual ao admin
+    switch (type) {
+      case 'rating':
+        const ratingLabel = data.label || data.name;
+        console.log("Filtrando por rating, label original:", ratingLabel);
+        // Extrair o número do label "X estrela(s)"
+        const rating = parseInt(ratingLabel.split(' ')[0]);
+        console.log("Rating extraído:", rating);
+        filteredFeedbacks = filteredData.filter((feedback: any) => {
+          const feedbackRating = Math.floor(feedback.rating);
+          console.log(`Comparando feedback rating ${feedbackRating} com ${rating}`);
+          return feedbackRating === rating;
+        });
+        break;
+
+      case 'problem':
+        const problemLabel = data.label || data.name;
+        console.log("Filtrando por problema:", problemLabel);
+        filteredFeedbacks = filteredData.filter((feedback: any) => {
+          if (feedback.problems && Array.isArray(feedback.problems)) {
+            return feedback.problems.includes(problemLabel);
+          }
+          if (feedback.problem && typeof feedback.problem === 'string') {
+            return feedback.problem.split(';').map((p: string) => p.trim()).includes(problemLabel);
+          }
+          return false;
+        });
+        break;
+
+      case 'source':
+        const sourceLabel = data.label || data.name;
+        console.log("Filtrando por fonte:", sourceLabel);
+        filteredFeedbacks = filteredData.filter((feedback: any) => 
+          feedback.source === sourceLabel
+        );
+        break;
+
+      case 'language':
+        const languageLabel = data.label || data.name;
+        console.log("Filtrando por idioma:", languageLabel);
+        filteredFeedbacks = filteredData.filter((feedback: any) => 
+          feedback.language === languageLabel
+        );
+        break;
+
+      case 'keyword':
+        const keywordLabel = data.label || data.name;
+        console.log("Filtrando por palavra-chave:", keywordLabel);
+        filteredFeedbacks = filteredData.filter((feedback: any) => {
+          if (feedback.keyword && typeof feedback.keyword === 'string') {
+            return feedback.keyword.split(';').map((k: string) => k.trim()).includes(keywordLabel);
+          }
+          return false;
+        });
+        break;
+
+      case 'sector':
+        const sectorLabel = data.label || data.name;
+        console.log("Filtrando por setor:", sectorLabel);
+        filteredFeedbacks = filteredData.filter((feedback: any) => {
+          if (feedback.sector && typeof feedback.sector === 'string') {
+            return feedback.sector === sectorLabel;
+          }
+          if (feedback.department && typeof feedback.department === 'string') {
+            return feedback.department === sectorLabel;
+          }
+          return false;
+        });
+        break;
+
+      case 'sentiment':
+        const sentimentLabel = data.label || data.name;
+        console.log("Filtrando por sentimento:", sentimentLabel);
+        // Mapear os nomes para os valores reais de sentimento
+        const sentimentMap: { [key: string]: string } = {
+          'Positivo': 'positive',
+          'Negativo': 'negative', 
+          'Neutro': 'neutral'
+        };
+        const targetSentiment = sentimentMap[sentimentLabel] || sentimentLabel.toLowerCase();
+        filteredFeedbacks = filteredData.filter((feedback: any) => 
+          feedback.sentiment === targetSentiment
+        );
+        break;
+
+      default:
+        console.log("Tipo de clique não reconhecido:", type);
+        return;
+    }
+
+    console.log(`Encontrados ${filteredFeedbacks.length} feedbacks para ${type}:`, data);
+
+    if (filteredFeedbacks.length === 0) {
+      console.log("Nenhum feedback encontrado, dados disponíveis:", filteredData.slice(0, 3));
+      return;
+    }
     
     const getTitle = (type: string, value: string) => {
       switch (type) {
@@ -427,7 +548,9 @@ function DashboardContent() {
       if (f.problem) {
         f.problem.split(';').forEach((p: string) => {
           const problem = p.trim();
-          if (problem) problemCounts[problem] = (problemCounts[problem] || 0) + 1;
+          if (problem && isValidProblem(problem)) {
+            problemCounts[problem] = (problemCounts[problem] || 0) + 1;
+          }
         });
       }
     });
@@ -446,6 +569,35 @@ function DashboardContent() {
     return Object.entries(monthCounts)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, count]) => ({ month, count }));
+  };
+
+  // Função helper para filtrar problemas válidos (remover VAZIO e variações)
+  const isValidProblem = (problem: string): boolean => {
+    if (!problem || typeof problem !== 'string') return false;
+    
+    const normalizedProblem = problem.toLowerCase().trim();
+    
+    // Lista de problemas inválidos que devem ser filtrados
+    const invalidProblems = [
+      'vazio', 
+      'sem problemas', 
+      'nao identificado', 
+      'não identificado',
+      'sem problema',
+      'nenhum problema',
+      'ok',
+      'tudo ok',
+      'sem',
+      'n/a',
+      'na',
+      '-',
+      ''
+    ];
+    
+    return !invalidProblems.includes(normalizedProblem) && 
+           !normalizedProblem.includes('vazio') &&
+           !normalizedProblem.includes('sem problemas') &&
+           normalizedProblem.length > 2; // Evitar problemas muito curtos
   };
 
   // Função para determinar o período de agrupamento automaticamente
@@ -570,7 +722,7 @@ function DashboardContent() {
       if (feedback.problem) {
         feedback.problem.split(';').forEach((problem: string) => {
           const trimmedProblem = problem.trim();
-          if (trimmedProblem) {
+          if (trimmedProblem && isValidProblem(trimmedProblem)) {
             problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
           }
         });
@@ -578,6 +730,7 @@ function DashboardContent() {
     });
     
     return Object.entries(problemCounts)
+      .filter(([problem]) => isValidProblem(problem)) // Dupla verificação
       .map(([problem, count]) => ({ label: problem, value: count }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 20);
@@ -683,7 +836,7 @@ function DashboardContent() {
         if (feedback.problem) {
           const problems: string[] = feedback.problem.split(';')
             .map((p: string) => p.trim())
-            .filter((p: string) => p);
+            .filter((p: string) => p && isValidProblem(p));
           
           problems.forEach((problem: string) => {
             apartamentoStat.problems.set(problem, (apartamentoStat.problems.get(problem) || 0) + 1);
@@ -732,7 +885,7 @@ function DashboardContent() {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="label" />
           <YAxis />
-          <Tooltip />
+          <RechartsTooltip content={<CustomTooltip />} />
           <Bar 
             dataKey="value" 
             fill="#8884d8"
@@ -767,7 +920,7 @@ function DashboardContent() {
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip />
+          <RechartsTooltip content={<CustomTooltip />} />
           <Legend />
         </PieChart>
       );
@@ -830,14 +983,14 @@ function DashboardContent() {
       
       {/* Cards de Resumo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 transition-all duration-300">
-        <Card className="p-4 hover:shadow-md transition-shadow">
+        <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
           <h3 className="text-sm font-medium text-muted-foreground">Total de Feedbacks</h3>
           <p className="text-2xl font-bold">{filteredData.length}</p>
           {filteredData.length !== analysisData.analysis.totalFeedbacks && (
             <p className="text-xs text-muted-foreground">de {analysisData.analysis.totalFeedbacks} total</p>
           )}
         </Card>
-        <Card className="p-4 hover:shadow-md transition-shadow">
+        <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
           <h3 className="text-sm font-medium text-muted-foreground">Avaliação Média</h3>
           <p className="text-2xl font-bold">
             <span className={
@@ -849,7 +1002,7 @@ function DashboardContent() {
             </span>
           </p>
         </Card>
-        <Card className="p-4 hover:shadow-md transition-shadow">
+        <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
           <h3 className="text-sm font-medium text-muted-foreground">Sentimento Positivo</h3>
           <p className="text-2xl font-bold">
             {filteredData.length > 0 
@@ -858,7 +1011,7 @@ function DashboardContent() {
             }%
           </p>
         </Card>
-        <Card className="p-4 hover:shadow-md transition-shadow">
+        <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
           <h3 className="text-sm font-medium text-muted-foreground">Taxa de Resposta</h3>
           <p className="text-2xl font-bold">{analysisData.analysis.responseRate}%</p>
         </Card>
@@ -1068,7 +1221,7 @@ function DashboardContent() {
                       variant="outline" 
                       size="sm" 
                       onClick={() => setHiddenRatings([])}
-                      className="w-full mt-2 text-red-600 border-red-300 hover:bg-red-50"
+                      className="w-full mt-2 text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
                       🔄 Mostrar Todas as Estrelas
                     </Button>
@@ -1104,7 +1257,7 @@ function DashboardContent() {
                         setApartmentFilter('all');
                         setHiddenRatings([]);
                       }}
-                      className="flex-1 border-gray-300 hover:bg-gray-50"
+                      className="flex-1 border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       🗑️ Limpar Tudo
                     </Button>
@@ -1138,7 +1291,7 @@ function DashboardContent() {
         <TabsContent value="overview" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 transition-all duration-300">
             {/* Distribuição de Avaliações */}
-            <Card className="p-4 hover:shadow-md transition-shadow">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Distribuição de Avaliações</h3>
                 <Button 
@@ -1160,11 +1313,12 @@ function DashboardContent() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="label" />
                     <YAxis />
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Bar
                       dataKey="value"
+                      name="Quantidade"
                       fill="#8884d8"
-                      onClick={(_, index) => {
+                      onClick={(data, index) => {
                         const item = processRatingDistribution(filteredData)[index];
                         handleChartClick(item, 'rating');
                       }}
@@ -1186,7 +1340,7 @@ function DashboardContent() {
             </Card>
 
             {/* Distribuição de Sentimentos */}
-            <Card className="p-4 hover:shadow-md transition-shadow">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Análise de Sentimentos</h3>
                 <Button 
@@ -1223,13 +1377,20 @@ function DashboardContent() {
                       paddingAngle={5}
                       dataKey="value"
                       label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                      onClick={(data) => handleChartClick(data, 'sentiment')}
+                      onClick={(data, index) => {
+                        const item = [
+                          { name: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
+                          { name: 'Negativo', value: filteredData.filter(f => f.sentiment === 'negative').length },
+                          { name: 'Neutro', value: filteredData.filter(f => f.sentiment === 'neutral').length }
+                        ][index];
+                        handleChartClick(item, 'sentiment');
+                      }}
                     >
                       <Cell fill="#4CAF50" />
                       <Cell fill="#F44336" />
                       <Cell fill="#FFC107" />
                     </Pie>
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1237,7 +1398,7 @@ function DashboardContent() {
             </Card>
 
             {/* Principais Palavras-chave */}
-            <Card className="p-4 hover:shadow-md transition-shadow">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Principais Palavras-chave</h3>
                 <Button 
@@ -1268,7 +1429,7 @@ function DashboardContent() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" />
                     <YAxis dataKey="label" type="category" width={110} />
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Bar 
                       dataKey="value" 
                       name="Quantidade" 
@@ -1284,7 +1445,7 @@ function DashboardContent() {
             </Card>
 
             {/* Distribuição por Departamento */}
-            <Card className="p-4 hover:shadow-md transition-shadow">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Distribuição por Departamento</h3>
                 <Button 
@@ -1322,7 +1483,7 @@ function DashboardContent() {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -1332,7 +1493,7 @@ function DashboardContent() {
 
         {/* Problemas */}
         <TabsContent value="problems" className="space-y-4">
-          <Card className="p-4">
+          <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Principais Problemas Identificados</h3>
               <Button 
@@ -1357,7 +1518,7 @@ function DashboardContent() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
                   <YAxis dataKey="label" type="category" width={150} />
-                  <Tooltip />
+                  <RechartsTooltip content={<CustomTooltip />} />
                   <Bar
                     dataKey="value"
                     fill="#8884d8"
@@ -1376,7 +1537,7 @@ function DashboardContent() {
         <TabsContent value="languages" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Distribuição por Idioma */}
-            <Card className="p-4">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Distribuição por Idioma</h3>
                 <Button 
@@ -1415,14 +1576,14 @@ function DashboardContent() {
                       ))}
                     </Pie>
                     <Legend />
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </Card>
 
             {/* Avaliação Média por Idioma */}
-            <Card className="p-4">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Avaliação Média por Fonte</h3>
                 <Button 
@@ -1459,7 +1620,7 @@ function DashboardContent() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis domain={[0, 5]} />
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Bar dataKey="rating" name="Avaliação Média" fill="#8884d8" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1468,7 +1629,7 @@ function DashboardContent() {
           </div>
 
           {/* Volume de Feedbacks por Fonte */}
-          <Card className="p-4">
+          <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <h3 className="text-lg font-semibold mb-4">Volume de Feedbacks por Fonte</h3>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -1479,7 +1640,7 @@ function DashboardContent() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="period" />
                   <YAxis />
-                  <Tooltip />
+                  <RechartsTooltip content={<CustomTooltip />} />
                   <Legend />
                   {processSourceDistribution(filteredData).map((source: any, index: number) => (
                     <Area 
@@ -1512,7 +1673,7 @@ function DashboardContent() {
         <TabsContent value="apartamentos" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Distribuição por apartamento */}
-            <Card className="p-4">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Distribuição por Apartamentos</h3>
                 <Button 
@@ -1542,7 +1703,7 @@ function DashboardContent() {
                       type="category" 
                       width={60} 
                     />
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Bar
                       name="Quantidade de Feedbacks"
                       dataKey="value"
@@ -1564,7 +1725,7 @@ function DashboardContent() {
             </Card>
 
             {/* Mapa de calor de avaliações */}
-            <Card className="p-4">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Avaliação Média por Apartamento</h3>
                 <Button 
@@ -1606,7 +1767,7 @@ function DashboardContent() {
                       range={[50, 400]} 
                       name="Sentimento Positivo"
                     />
-                    <Tooltip 
+                    <RechartsTooltip 
                       cursor={{ strokeDasharray: '3 3' }}
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
@@ -1660,7 +1821,7 @@ function DashboardContent() {
           </div>
 
           {/* Tabela detalhada de apartamentos */}
-          <Card className="p-4">
+          <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <h3 className="text-lg font-semibold mb-4">Análise Detalhada por Apartamento</h3>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
@@ -1731,7 +1892,7 @@ function DashboardContent() {
         <TabsContent value="ratings" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Distribuição de Avaliações */}
-            <Card className="p-4">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Distribuição de Avaliações</h3>
                 <Button 
@@ -1753,11 +1914,12 @@ function DashboardContent() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="label" />
                     <YAxis />
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Bar
                       dataKey="value"
+                      name="Quantidade"
                       fill="#8884d8"
-                      onClick={(_, index) => {
+                      onClick={(data, index) => {
                         const item = processRatingDistribution(filteredData)[index];
                         handleChartClick(item, 'rating');
                       }}
@@ -1779,7 +1941,7 @@ function DashboardContent() {
             </Card>
 
             {/* Análise de Sentimentos */}
-            <Card className="p-4">
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Análise de Sentimentos</h3>
                 <Button 
@@ -1816,13 +1978,20 @@ function DashboardContent() {
                       paddingAngle={5}
                       dataKey="value"
                       label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                      onClick={(data) => handleChartClick(data, 'sentiment')}
+                      onClick={(data, index) => {
+                        const item = [
+                          { name: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
+                          { name: 'Negativo', value: filteredData.filter(f => f.sentiment === 'negative').length },
+                          { name: 'Neutro', value: filteredData.filter(f => f.sentiment === 'neutral').length }
+                        ][index];
+                        handleChartClick(item, 'sentiment');
+                      }}
                     >
                       <Cell fill="#4CAF50" />
                       <Cell fill="#F44336" />
                       <Cell fill="#FFC107" />
                     </Pie>
-                    <Tooltip />
+                    <RechartsTooltip content={<CustomTooltip />} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1831,7 +2000,7 @@ function DashboardContent() {
           </div>
 
           {/* Evolução das Avaliações ao Longo do Tempo */}
-          <Card className="p-4">
+          <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <h3 className="text-lg font-semibold mb-4">Evolução das Avaliações ao Longo do Tempo</h3>
             <div className="h-[400px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -1842,7 +2011,7 @@ function DashboardContent() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="period" />
                   <YAxis />
-                  <Tooltip />
+                  <RechartsTooltip content={<CustomTooltip />} />
                   <Legend />
                   <Line type="monotone" dataKey="1" stroke="#F44336" name="1 estrela" strokeWidth={2} />
                   <Line type="monotone" dataKey="2" stroke="#FF9800" name="2 estrelas" strokeWidth={2} />
@@ -1868,12 +2037,12 @@ function DashboardContent() {
       </Tabs>
 
       {/* Feedbacks Recentes */}
-      <Card className="p-4">
+      <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
         <h3 className="text-lg font-semibold mb-4">Feedbacks Recentes</h3>
         <ScrollArea className="h-[300px]">
           <div className="space-y-4">
             {analysisData.analysis.recentFeedbacks.slice(0, 5).map((feedback: any, index: number) => (
-              <div key={index} className="p-4 border rounded-lg">
+              <div key={index} className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <p className="font-medium">{feedback.author || feedback.title || "Autor não identificado"}</p>
@@ -1906,7 +2075,7 @@ function DashboardContent() {
           </DialogHeader>
           <div className="space-y-4">
             {selectedDetail?.data.map((feedback: any, index: number) => (
-              <div key={index} className="p-4 border rounded-lg">
+              <div key={index} className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <p className="font-medium">{feedback.title}</p>
@@ -1949,50 +2118,83 @@ function DashboardContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Painel Lateral Interativo */}
-      <div className={`fixed inset-y-0 right-0 z-50 w-[36rem] bg-background border-l border-border shadow-xl transform transition-transform duration-300 ease-in-out ${
+      {/* Painel Lateral Interativo Melhorado */}
+      <div className={`fixed inset-y-0 right-0 z-50 w-[42rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
         detailPanelOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         {selectedItem && (
           <div className="h-full flex flex-col">
-            {/* Cabeçalho */}
-            <div className="p-6 border-b border-border bg-gradient-to-r from-blue-600 to-purple-600">
-              <div className="flex items-center justify-between">
-                <div className="text-white">
-                  <h3 className="text-lg font-semibold capitalize">
-                    {selectedItem.type === 'keyword' ? 'Palavra-chave' : 
-                     selectedItem.type === 'problem' ? 'Problema' :
-                     selectedItem.type === 'sector' ? 'Departamento' :
-                     selectedItem.type === 'source' ? 'Fonte' :
-                     selectedItem.type === 'language' ? 'Idioma' :
-                     selectedItem.type === 'rating' ? 'Avaliação' : selectedItem.type}
-                  </h3>
-                  <p className="text-sm text-blue-100">{selectedItem.value}</p>
+            {/* Cabeçalho Moderno */}
+            <div className="relative p-6 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 overflow-hidden">
+              <div className="absolute inset-0 bg-black/10"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                        {selectedItem.type === 'hotel' && <Building2 className="h-5 w-5" />}
+                        {selectedItem.type === 'problem' && <AlertCircle className="h-5 w-5" />}
+                        {selectedItem.type === 'rating' && <Star className="h-5 w-5" />}
+                        {selectedItem.type === 'keyword' && <Tag className="h-5 w-5" />}
+                        {selectedItem.type === 'source' && <Globe className="h-5 w-5" />}
+                        {!['hotel', 'problem', 'rating', 'keyword', 'source'].includes(selectedItem.type) && <BarChart3 className="h-5 w-5" />}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold">
+                          {selectedItem.type === 'keyword' ? 'Palavra-chave' : 
+                           selectedItem.type === 'problem' ? 'Problema' :
+                           selectedItem.type === 'sector' ? 'Departamento' :
+                           selectedItem.type === 'source' ? 'Fonte' :
+                           selectedItem.type === 'language' ? 'Idioma' :
+                           selectedItem.type === 'rating' ? 'Avaliação' : selectedItem.type}
+                        </h3>
+                        <p className="text-sm text-blue-100 opacity-90">{selectedItem.value}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setDetailPanelOpen(false)}
+                    className="text-white hover:bg-white/20 h-10 w-10 rounded-full p-0"
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setDetailPanelOpen(false)}
-                  className="text-white hover:bg-white/20"
-                >
-                  ✕
-                </Button>
+                
+                {/* Métricas Destacadas */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-white">{selectedItem.stats.totalOccurrences}</div>
+                    <div className="text-xs text-blue-100 opacity-75">Ocorrências</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-white">{selectedItem.stats.percentage}%</div>
+                    <div className="text-xs text-blue-100 opacity-75">do Total</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-white">{selectedItem.stats.averageRating.toFixed(1)}</div>
+                    <div className="text-xs text-blue-100 opacity-75">Avaliação Média</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Conteúdo */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Estatísticas Principais */}
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">{selectedItem.stats.totalOccurrences}</div>
-                  <div className="text-sm text-muted-foreground">Ocorrências</div>
-                </Card>
-                <Card className="p-4 text-center">
-                  <div className="text-2xl font-bold text-green-600">{selectedItem.stats.percentage}%</div>
-                  <div className="text-sm text-muted-foreground">do Total</div>
-                </Card>
-              </div>
+            {/* Conteúdo Principal */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-6 space-y-6">
+                {/* Botão para Ver Todos os Comentários */}
+                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-4 -m-6 mb-4 border-b">
+                  <Button 
+                    onClick={handleViewAllComments}
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
+                    size="lg"
+                  >
+                    <MessageSquare className="h-5 w-5 mr-2" />
+                    Ver TODOS os {selectedItem.stats.totalOccurrences} Comentários
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
 
               {/* Avaliação Média */}
               <Card className="p-4">
@@ -2025,7 +2227,7 @@ function DashboardContent() {
                         label={({ name, value }) => `${name}: ${value}`}
                       >
                       </Pie>
-                      <Tooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -2045,7 +2247,7 @@ function DashboardContent() {
                     ]}>
                       <XAxis dataKey="rating" />
                       <YAxis />
-                      <Tooltip />
+                      <RechartsTooltip content={<CustomTooltip />} />
                       <Bar dataKey="value" fill="#8884d8" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -2061,7 +2263,7 @@ function DashboardContent() {
                       <LineChart data={selectedItem.stats.monthlyTrend}>
                         <XAxis dataKey="month" />
                         <YAxis />
-                        <Tooltip />
+                        <RechartsTooltip content={<CustomTooltip />} />
                         <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -2112,7 +2314,7 @@ function DashboardContent() {
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(feedback.date).toLocaleDateString('pt-BR')}
+                          {formatDateBR(feedback.date)}
                         </div>
                       </div>
                       <p className="text-sm line-clamp-2">{feedback.comment}</p>
@@ -2120,6 +2322,7 @@ function DashboardContent() {
                   ))}
                 </div>
               </Card>
+              </div>
             </div>
           </div>
         )}
@@ -2132,6 +2335,101 @@ function DashboardContent() {
           onClick={() => setDetailPanelOpen(false)}
         />
       )}
+
+      {/* Modal para Ver Todos os Comentários */}
+      <Dialog open={allCommentsModalOpen} onOpenChange={setAllCommentsModalOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Todos os Comentários {selectedItem && `(${allCommentsData.length})`}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedItem && `Comentários relacionados a: ${selectedItem.value}`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-2">
+            <div className="space-y-4">
+              {allCommentsData.map((feedback: any, idx: number) => (
+                <Card key={idx} className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star 
+                            key={i} 
+                            className={`h-4 w-4 ${
+                              i < feedback.rating 
+                                ? "text-yellow-500 fill-yellow-500" 
+                                : "text-gray-300"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {feedback.rating}/5
+                      </Badge>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        {feedback.hotel || 'Hotel não identificado'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatDateBR(feedback.date)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <p className="text-sm leading-relaxed">{feedback.comment}</p>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {feedback.source && (
+                      <Badge variant="secondary" className="text-xs">
+                        📍 {feedback.source}
+                      </Badge>
+                    )}
+                    {feedback.sector && (
+                      <Badge variant="outline" className="text-xs">
+                        🏢 {feedback.sector}
+                      </Badge>
+                    )}
+                    {feedback.keyword && (
+                      <Badge variant="outline" className="text-xs">
+                        🏷️ {feedback.keyword}
+                      </Badge>
+                    )}
+                    {feedback.problem && feedback.problem !== 'VAZIO' && (
+                      <Badge variant="destructive" className="text-xs">
+                        ⚠️ {feedback.problem}
+                      </Badge>
+                    )}
+                    {feedback.apartamento && (
+                      <Badge variant="outline" className="text-xs">
+                        🚪 {feedback.apartamento}
+                      </Badge>
+                    )}
+                  </div>
+                </Card>
+              ))}
+              
+              {allCommentsData.length === 0 && (
+                <div className="text-center py-12">
+                  <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                    Nenhum comentário encontrado
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Não há comentários disponíveis para este critério.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Gráfico Grande */}
       <Dialog open={chartModalOpen} onOpenChange={setChartModalOpen}>
@@ -2175,7 +2473,7 @@ function DashboardContent() {
                           const itemName = item.name || item.label;
                           
                           return (
-                            <tr key={index} className="hover:bg-muted/30 transition-colors">
+                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors cursor-pointer">
                               <td className="py-3 px-4 border-b font-medium">{itemName}</td>
                               <td className="py-3 px-4 border-b text-center">{item.value}</td>
                               <td className="py-3 px-4 border-b text-center">

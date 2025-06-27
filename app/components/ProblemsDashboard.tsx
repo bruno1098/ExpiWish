@@ -99,12 +99,27 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
   
   // Filtra feedbacks com problemas reais (exclui "Sem problemas")
   const problemFeedbacks = validFeedbacks.filter(f => {
-    return f.problem && 
-           !f.problem.includes("Sem problemas") && 
-           f.problem !== "Não identificado" &&
-           f.problem !== "Não analisado" &&
-           f.problem !== "VAZIO" &&
-           !f.problem.includes("VAZIO");
+    if (!f.problem) return false;
+    
+    const problem = f.problem.trim().toLowerCase();
+    
+    // Lista de termos que indicam ausência de problemas
+    const emptyProblemTerms = [
+      'vazio',
+      'sem problemas', 
+      'não identificado',
+      'não analisado',
+      'sem problema',
+      'nenhum problema',
+      ''
+    ];
+    
+    // Verificar se o problema é algum dos termos de "sem problema"
+    const isEmpty = emptyProblemTerms.some(term => 
+      problem === term || problem.includes(term)
+    );
+    
+    return !isEmpty;
   });
 
   // Processa todos os problemas, incluindo múltiplos por feedback
@@ -114,10 +129,25 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
     const sectors = feedback.sector.split(';').map((s: string) => s.trim());
     
     return problems.map((problem: string, index: number) => {
-      if (problem === "Sem problemas" || 
-          problem === "Não identificado" || 
-          problem === "Não analisado" ||
-          problem === "VAZIO") {
+      const cleanProblem = problem.trim().toLowerCase();
+      
+      // Lista mais completa de termos que indicam ausência de problemas
+      const emptyProblemTerms = [
+        'vazio',
+        'sem problemas', 
+        'não identificado',
+        'não analisado',
+        'sem problema',
+        'nenhum problema',
+        ''
+      ];
+      
+      // Verificar se é um problema "vazio"
+      const isEmpty = emptyProblemTerms.some(term => 
+        cleanProblem === term || cleanProblem.includes(term)
+      );
+      
+      if (isEmpty) {
         return null;
       }
       
@@ -148,14 +178,22 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
 
   // Conta ocorrências de cada problema
   const problemCounts = processedProblems.reduce((acc, item) => {
-    if (item) {
-      const key = `${item.keyword}: ${item.problem}`;
-      acc[key] = {
-        count: (acc[key]?.count || 0) + 1,
-        sector: item.sector,
-        keyword: item.keyword,
-        problem: item.problem
-      };
+    if (item && item.problem) {
+      const cleanProblem = item.problem.trim().toLowerCase();
+      
+      // Verificação final: não contar problemas "vazios"
+      const emptyTerms = ['vazio', 'sem problemas', 'não identificado', 'sem problema'];
+      const isEmpty = emptyTerms.some(term => cleanProblem.includes(term));
+      
+      if (!isEmpty) {
+        const key = `${item.keyword}: ${item.problem}`;
+        acc[key] = {
+          count: (acc[key]?.count || 0) + 1,
+          sector: item.sector,
+          keyword: item.keyword,
+          problem: item.problem
+        };
+      }
     }
     return acc;
   }, {} as Record<string, { count: number, sector: string, keyword: string, problem: string }>);

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useRouter } from "next/navigation"
-import { Hotel, Star, MessageSquare, AlertTriangle, Users, Award, BarChart3, ArrowRight, Search, Filter, Calendar, Home } from "lucide-react"
+import { Hotel, Star, MessageSquare, AlertTriangle, Users, Award, BarChart3, ArrowRight, Search, Filter, Calendar, Home, Eye, ChevronRight, TrendingUp, TrendingDown } from "lucide-react"
 import { getAllAnalyses } from "@/lib/firestore-service"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
@@ -50,6 +50,110 @@ interface ProblemSummary {
   percentage: number
 }
 
+// Tooltip personalizado com design circular e elegante
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
+        <div className="flex items-center gap-2 mb-2">
+          <div 
+            className="w-3 h-3 rounded-full" 
+            style={{ backgroundColor: payload[0].color }}
+          />
+          <p className="font-semibold text-gray-900 dark:text-gray-100">{label}</p>
+        </div>
+        {payload.map((entry: any, index: number) => {
+          // Mapear nomes técnicos para nomes amigáveis
+          const friendlyNames: { [key: string]: string } = {
+            'value': 'Valor',
+            'count': 'Ocorrências',
+            'occurrences': 'Ocorrências',
+            'name': 'Nome',
+            'percentage': 'Porcentagem',
+            'hotels': 'Hotéis Afetados',
+            'cases': 'Casos'
+          }
+          
+          const displayName = friendlyNames[entry.dataKey] || friendlyNames[entry.name] || entry.name || 'Ocorrências'
+          
+          return (
+            <p key={index} className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="font-medium">{displayName}:</span> {
+                entry.dataKey === 'percentage' ? `${entry.value}%` :
+                typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value
+              }
+            </p>
+          )
+        })}
+      </div>
+    )
+  }
+  return null
+}
+
+// Modal para detalhes dos gráficos
+const ChartDetailModal = ({ isOpen, onClose, title, data, type }: {
+  isOpen: boolean
+  onClose: () => void
+  title: string
+  data: any[]
+  type: 'problems' | 'hotels' | 'general'
+}) => {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4" style={{position: 'fixed', top: 0, left: 0, right: 0, bottom: 0}}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-blue-500" />
+            {title}
+          </h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            className="text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            ✕ Fechar
+          </Button>
+        </div>
+        
+        <div className="overflow-y-auto max-h-[calc(85vh-120px)] p-6">
+          <div className="space-y-4">
+            {data.map((item, index) => (
+              <Card key={index} className="p-4 hover:shadow-lg transition-all duration-200 border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-600">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                      {item.name || item.hotelName || item.label}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {item.count || item.value || item.occurrences} ocorrências
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30">
+                      {item.percentage ? `${item.percentage}%` : 'Detalhes'}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function HoteisPage() {
   const { userData } = useAuth()
   const { toast } = useToast()
@@ -65,6 +169,41 @@ export default function HoteisPage() {
   const [problemResults, setProblemResults] = useState<ProblemResult[]>([])
   const [commonProblems, setCommonProblems] = useState<ProblemSummary[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+
+  // Estados para modal de detalhes
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalData, setModalData] = useState<{
+    title: string
+    data: any[]
+    type: 'problems' | 'hotels' | 'general'
+  }>({
+    title: '',
+    data: [],
+    type: 'general'
+  })
+
+  // Controlar scroll quando modal estiver aberto
+  useEffect(() => {
+    if (modalOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [modalOpen])
+
+  const openModal = (title: string, data: any[], type: 'problems' | 'hotels' | 'general') => {
+    setModalData({ title, data, type })
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    setModalOpen(false)
+    setModalData({ title: '', data: [], type: 'general' })
+  }
 
   useEffect(() => {
     fetchHotelsData()
@@ -455,15 +594,17 @@ export default function HoteisPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Gestão de Hotéis</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Gestão de Hotéis
+          </h1>
+          <p className="text-muted-foreground text-lg mt-1">
             Visão geral e análise comparativa dos hotéis da rede
           </p>
         </div>
         <div className="flex gap-3">
           <Button 
             onClick={() => router.push('/admin/comparacao/analise')}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 transition-all duration-300 shadow-lg hover:shadow-xl"
           >
             <BarChart3 className="h-4 w-4" />
             Comparar Hotéis
@@ -472,7 +613,7 @@ export default function HoteisPage() {
           <Button 
             variant="outline"
             onClick={() => router.push('/admin/comparacao/problematicos')}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 border-orange-300 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-all duration-300"
           >
             <AlertTriangle className="h-4 w-4" />
             Hotéis Problemáticos
@@ -481,51 +622,75 @@ export default function HoteisPage() {
       </div>
 
       {/* Estatísticas Gerais */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              onClick={() => openModal('Detalhes dos Hotéis', hotelsData.map(h => ({name: h.hotelName, count: h.totalFeedbacks, value: h.averageRating})), 'hotels')}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Total de Hotéis</p>
-              <p className="text-2xl font-bold">{hotelsData.length}</p>
+              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">Total de Hotéis</p>
+              <p className="text-3xl font-bold text-blue-900 dark:text-blue-100 group-hover:scale-105 transition-transform duration-200">
+                {hotelsData.length}
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Clique para ver detalhes</p>
             </div>
-            <Hotel className="h-8 w-8 text-blue-500" />
+            <div className="relative">
+              <Hotel className="h-10 w-10 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform duration-200" />
+              <div className="absolute inset-0 bg-blue-200 dark:bg-blue-700 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-200"></div>
+            </div>
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-950/30 dark:to-yellow-900/30 border-yellow-200 dark:border-yellow-800 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              onClick={() => openModal('Avaliações dos Hotéis', hotelsData.map(h => ({name: h.hotelName, value: h.averageRating, count: h.totalFeedbacks})), 'hotels')}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Avaliação Média</p>
-              <p className="text-2xl font-bold">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">Avaliação Média</p>
+              <p className="text-3xl font-bold text-yellow-900 dark:text-yellow-100 group-hover:scale-105 transition-transform duration-200">
                 {hotelsData.length > 0 
                   ? (hotelsData.reduce((sum, h) => sum + h.averageRating, 0) / hotelsData.length).toFixed(1)
                   : '0.0'
                 }
               </p>
+              <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">Média da rede</p>
             </div>
-            <Star className="h-8 w-8 text-yellow-500" />
+            <div className="relative">
+              <Star className="h-10 w-10 text-yellow-600 dark:text-yellow-400 group-hover:scale-110 transition-transform duration-200" />
+              <div className="absolute inset-0 bg-yellow-200 dark:bg-yellow-700 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-200"></div>
+            </div>
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/30 dark:to-green-900/30 border-green-200 dark:border-green-800 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              onClick={() => openModal('Total de Feedbacks por Hotel', hotelsData.map(h => ({name: h.hotelName, count: h.totalFeedbacks, percentage: Math.round((h.totalFeedbacks / hotelsData.reduce((sum, hotel) => sum + hotel.totalFeedbacks, 0)) * 100)})), 'hotels')}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Total de Feedbacks</p>
-              <p className="text-2xl font-bold">
-                {hotelsData.reduce((sum, h) => sum + h.totalFeedbacks, 0)}
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium">Total de Feedbacks</p>
+              <p className="text-3xl font-bold text-green-900 dark:text-green-100 group-hover:scale-105 transition-transform duration-200">
+                {hotelsData.reduce((sum, h) => sum + h.totalFeedbacks, 0).toLocaleString()}
               </p>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1">Comentários analisados</p>
             </div>
-            <MessageSquare className="h-8 w-8 text-green-500" />
+            <div className="relative">
+              <MessageSquare className="h-10 w-10 text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform duration-200" />
+              <div className="absolute inset-0 bg-green-200 dark:bg-green-700 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-200"></div>
+            </div>
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/30 dark:to-red-900/30 border-red-200 dark:border-red-800 hover:shadow-xl transition-all duration-300 cursor-pointer group"
+              onClick={() => openModal('Hotéis Problemáticos', problematicHotels.map(h => ({name: h.hotelName, count: h.problemCount, value: h.averageRating, negativeSentiment: h.negativeSentiment})), 'hotels')}>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Hotéis Problemáticos</p>
-              <p className="text-2xl font-bold text-red-600">{problematicHotels.length}</p>
+              <p className="text-sm text-red-700 dark:text-red-300 font-medium">Hotéis Problemáticos</p>
+              <p className="text-3xl font-bold text-red-900 dark:text-red-100 group-hover:scale-105 transition-transform duration-200">
+                {problematicHotels.length}
+              </p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1">Requerem atenção</p>
             </div>
-            <AlertTriangle className="h-8 w-8 text-red-500" />
+            <div className="relative">
+              <AlertTriangle className="h-10 w-10 text-red-600 dark:text-red-400 group-hover:scale-110 transition-transform duration-200" />
+              <div className="absolute inset-0 bg-red-200 dark:bg-red-700 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-200"></div>
+            </div>
           </div>
         </Card>
       </div>
@@ -600,7 +765,9 @@ export default function HoteisPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => router.push(`/admin/comparacao/hotel/${hotel.hotelId}`)}
+                      className="flex items-center gap-2 hover:shadow-md transition-all duration-200"
                     >
+                      <Eye className="h-4 w-4" />
                       Ver Detalhes
                     </Button>
                   </div>
@@ -643,9 +810,10 @@ export default function HoteisPage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="w-full mt-3"
+                      className="w-full mt-3 flex items-center gap-2 hover:bg-red-50 hover:border-red-300 transition-all duration-200"
                       onClick={() => router.push(`/admin/comparacao/hotel/${hotel.hotelId}`)}
                     >
+                      <AlertTriangle className="h-4 w-4" />
                       Analisar Problemas
                     </Button>
                   </Card>
@@ -729,35 +897,92 @@ export default function HoteisPage() {
 
           {/* Problemas Mais Comuns */}
           {!searchTerm && selectedHotelFilter === "all" && (
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Problemas Mais Comuns</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <Card className="p-6 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/20 dark:to-indigo-950/20 border-purple-200 dark:border-purple-800">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">Problemas Mais Comuns</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openModal('Análise Completa dos Problemas', commonProblems, 'problems')}
+                  className="flex items-center gap-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-purple-300 dark:border-purple-600 text-purple-600 dark:text-purple-400"
+                >
+                  <Eye className="h-4 w-4" />
+                  Ver Todos
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
                 {commonProblems.slice(0, 12).map((problem, index) => (
                   <div
                     key={problem.name}
-                    className="p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                    className="p-4 border border-purple-200 dark:border-purple-700 rounded-xl cursor-pointer hover:bg-gradient-to-br hover:from-purple-50 hover:to-indigo-50 dark:hover:from-purple-900/30 dark:hover:to-indigo-900/30 transition-all duration-300 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 group"
                     onClick={() => setSearchTerm(problem.name)}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-sm">{problem.name}</span>
-                      <Badge variant="secondary">{problem.count} casos</Badge>
+                      <span className="font-medium text-sm text-gray-900 dark:text-gray-100 group-hover:text-purple-900 dark:group-hover:text-purple-100 transition-colors">
+                        {problem.name}
+                      </span>
+                      <Badge 
+                        variant="secondary" 
+                        className="bg-gradient-to-r from-purple-100 to-indigo-100 dark:from-purple-900/40 dark:to-indigo-900/40 text-purple-800 dark:text-purple-200 border-purple-200 dark:border-purple-700"
+                      >
+                        {problem.count} casos
+                      </Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
                       {problem.hotels} hotéis • {problem.percentage}% dos problemas
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-gradient-to-r from-purple-500 to-indigo-500 h-2 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${Math.min(problem.percentage, 100)}%` }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
               
               {commonProblems.length > 12 && (
-                <div className="mt-4">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={commonProblems.slice(0, 15)}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#3b82f6" />
+                <div className="mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-semibold text-purple-900 dark:text-purple-100">Distribuição Visual</h4>
+                    <Badge variant="outline" className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30">
+                      Top 15 problemas
+                    </Badge>
+                  </div>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart 
+                      data={commonProblems.slice(0, 15)} 
+                      margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
+                      <XAxis 
+                        dataKey="name" 
+                        angle={-45} 
+                        textAnchor="end" 
+                        height={120}
+                        tick={{ fill: '#6b7280', fontSize: 12 }}
+                        stroke="#9ca3af"
+                      />
+                      <YAxis 
+                        tick={{ fill: '#6b7280', fontSize: 12 }}
+                        stroke="#9ca3af"
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar 
+                        dataKey="count" 
+                        fill="url(#purpleGradient)"
+                        radius={[4, 4, 0, 0]}
+                        className="hover:opacity-80 transition-opacity duration-200"
+                        onClick={(data) => setSearchTerm(data.name)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      <defs>
+                        <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#8b5cf6" />
+                          <stop offset="100%" stopColor="#a855f7" />
+                        </linearGradient>
+                      </defs>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -802,14 +1027,54 @@ export default function HoteisPage() {
 
                   {/* Gráfico de Distribuição por Hotel */}
                   <div className="mb-6">
-                    <h4 className="font-semibold mb-3">Distribuição por Hotel</h4>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={result.hotels}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="hotelName" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="occurrences" fill="#ef4444" />
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-semibold text-gray-900 dark:text-gray-100">Distribuição por Hotel</h4>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30">
+                          {result.hotels.length} hotéis afetados
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openModal(`Detalhes: ${result.problem}`, result.hotels.map(h => ({name: h.hotelName, count: h.occurrences, value: h.averageRating})), 'hotels')}
+                          className="hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart 
+                        data={result.hotels}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" opacity={0.8} />
+                        <XAxis 
+                          dataKey="hotelName" 
+                          angle={-45}
+                          textAnchor="end"
+                          height={80}
+                          tick={{ fill: '#6b7280', fontSize: 11 }}
+                          stroke="#9ca3af"
+                        />
+                        <YAxis 
+                          tick={{ fill: '#6b7280', fontSize: 12 }}
+                          stroke="#9ca3af"
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar 
+                          dataKey="occurrences" 
+                          fill="url(#redGradient)"
+                          radius={[6, 6, 0, 0]}
+                          className="hover:opacity-80 transition-opacity duration-200"
+                          style={{ cursor: 'pointer' }}
+                        />
+                        <defs>
+                          <linearGradient id="redGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#ef4444" />
+                            <stop offset="100%" stopColor="#dc2626" />
+                          </linearGradient>
+                        </defs>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -875,6 +1140,15 @@ export default function HoteisPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Modal de Detalhes */}
+      <ChartDetailModal
+        isOpen={modalOpen}
+        onClose={closeModal}
+        title={modalData.title}
+        data={modalData.data}
+        type={modalData.type}
+      />
     </div>
   )
 } 

@@ -7,8 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { formatDateBR } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { RequireAuth } from '@/lib/auth-context';
 import SharedDashboardLayout from "../shared-layout";
@@ -44,7 +43,7 @@ function HistoryPageContent() {
     if (!timestamp || !timestamp.toDate) return 'Data desconhecida';
     
     const date = timestamp.toDate();
-    return format(date, "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR });
+    return formatDateBR(date);
   };
 
   const handleViewAnalysis = (id: string) => {

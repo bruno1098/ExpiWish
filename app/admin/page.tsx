@@ -40,8 +40,15 @@ import {
   MessageSquare,
   Hotel,
   Building2,
-  Filter
+  Filter,
+  X,
+  Tag,
+  Globe,
+  AlertCircle,
+  ExternalLink,
+  BarChart3
 } from "lucide-react";
+import { formatDateBR } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -236,6 +243,10 @@ function AdminDashboardContent() {
     feedbacks: any[];
     stats: any;
   } | null>(null);
+  
+  // Estado para modal de todos os comentários
+  const [allCommentsModalOpen, setAllCommentsModalOpen] = useState(false);
+  const [allCommentsData, setAllCommentsData] = useState<any[]>([]);
 
   // Estados para o modal de gráfico grande
   const [chartModalOpen, setChartModalOpen] = useState(false);
@@ -575,7 +586,9 @@ function AdminDashboardContent() {
       if (f.problem) {
         f.problem.split(';').forEach((p: string) => {
           const problem = p.trim();
-          if (problem) problemCounts[problem] = (problemCounts[problem] || 0) + 1;
+          if (problem && isValidProblem(problem)) {
+            problemCounts[problem] = (problemCounts[problem] || 0) + 1;
+          }
         });
       }
     });
@@ -583,6 +596,13 @@ function AdminDashboardContent() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([problem, count]) => ({ problem, count }));
+  };
+
+  const handleViewAllComments = () => {
+    if (selectedItem) {
+      setAllCommentsData(selectedItem.feedbacks);
+      setAllCommentsModalOpen(true);
+    }
   };
 
   const getTopHotelsForItem = (feedbacks: any[]) => {
@@ -606,6 +626,35 @@ function AdminDashboardContent() {
     return Object.entries(monthCounts)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, count]) => ({ month, count }));
+  };
+
+  // Função helper para filtrar problemas válidos (remover VAZIO e variações)
+  const isValidProblem = (problem: string): boolean => {
+    if (!problem || typeof problem !== 'string') return false;
+    
+    const normalizedProblem = problem.toLowerCase().trim();
+    
+    // Lista de problemas inválidos que devem ser filtrados
+    const invalidProblems = [
+      'vazio', 
+      'sem problemas', 
+      'nao identificado', 
+      'não identificado',
+      'sem problema',
+      'nenhum problema',
+      'ok',
+      'tudo ok',
+      'sem',
+      'n/a',
+      'na',
+      '-',
+      ''
+    ];
+    
+    return !invalidProblems.includes(normalizedProblem) && 
+           !normalizedProblem.includes('vazio') &&
+           !normalizedProblem.includes('sem problemas') &&
+           normalizedProblem.length > 2; // Evitar problemas muito curtos
   };
 
   // Função para determinar o período de agrupamento automaticamente
@@ -691,7 +740,7 @@ function AdminDashboardContent() {
       if (feedback.problem) {
         feedback.problem.split(';').forEach((problem: string) => {
           const trimmedProblem = problem.trim();
-          if (trimmedProblem) {
+          if (trimmedProblem && isValidProblem(trimmedProblem)) {
             problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
           }
         });
@@ -699,6 +748,7 @@ function AdminDashboardContent() {
     });
     
     return Object.entries(problemCounts)
+      .filter(([problem]) => isValidProblem(problem)) // Dupla verificação
       .map(([problem, count]) => ({ label: problem, value: count }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 20);
@@ -834,12 +884,14 @@ function AdminDashboardContent() {
 
       if (feedback.problems && Array.isArray(feedback.problems)) {
         feedback.problems.forEach((problem: string) => {
-          apartamentoStat.problems.set(problem, (apartamentoStat.problems.get(problem) || 0) + 1);
+          if (isValidProblem(problem)) {
+            apartamentoStat.problems.set(problem, (apartamentoStat.problems.get(problem) || 0) + 1);
+          }
         });
       } else if (feedback.problem) {
         const problems: string[] = feedback.problem.split(';')
           .map((p: string) => p.trim())
-          .filter((p: string) => p);
+          .filter((p: string) => p && isValidProblem(p));
         
         problems.forEach((problem: string) => {
           apartamentoStat.problems.set(problem, (apartamentoStat.problems.get(problem) || 0) + 1);
@@ -928,12 +980,14 @@ function AdminDashboardContent() {
       
       if (feedback.problems && Array.isArray(feedback.problems)) {
         feedback.problems.forEach((problem: string) => {
-          hotelStat.problems.set(problem, (hotelStat.problems.get(problem) || 0) + 1);
+          if (isValidProblem(problem)) {
+            hotelStat.problems.set(problem, (hotelStat.problems.get(problem) || 0) + 1);
+          }
         });
       } else if (feedback.problem) {
         const problems: string[] = feedback.problem.split(';')
           .map((p: string) => p.trim())
-          .filter((p: string) => p);
+          .filter((p: string) => p && isValidProblem(p));
         
         problems.forEach((problem: string) => {
           hotelStat.problems.set(problem, (hotelStat.problems.get(problem) || 0) + 1);
@@ -992,12 +1046,21 @@ function AdminDashboardContent() {
       console.log("Total de análises encontradas:", analyses.length);
       
       if (analyses && analyses.length > 0) {
+        // Calcular a data mais recente dos feedbacks para a análise combinada
+        const allDates = analyses.flatMap((analysis: any) => 
+          analysis.data?.map((f: any) => new Date(f.date)).filter((date: Date) => !isNaN(date.getTime())) || []
+        );
+        
+        const mostRecentFeedbackDate = allDates.length > 0 
+          ? new Date(Math.max(...allDates.map(date => date.getTime())))
+          : new Date();
+
         // Criar análise combinada
         let combinedAnalysis: AnalysisData = {
           id: "combined",
           hotelId: "all",
           hotelName: "Todos os Hotéis",
-          importDate: new Date(),
+          importDate: mostRecentFeedbackDate, // Usar a data mais recente dos feedbacks
           data: [],
           analysis: {
             averageRating: 0,
@@ -1297,14 +1360,9 @@ function AdminDashboardContent() {
   const totalFeedbacks = analysisData?.data.length || 0;
   const totalHotels = analysisData?.analysis.hotelDistribution.length || 0;
   
-  // Função para formatar data
+  // Função para formatar data (usando a função utilitária)
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).format(date);
+    return formatDateBR(dateString);
   };
 
   // Renderização condicional
@@ -2032,7 +2090,7 @@ function AdminDashboardContent() {
                   </thead>
                   <tbody>
                     {hotelStats.map((stat, index) => (
-                      <tr key={index} className="hover:bg-muted/50">
+                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
                         <td className="py-2 px-4 border-b">{stat.hotel}</td>
                         <td className="py-2 px-4 border-b text-center">{stat.totalFeedbacks}</td>
                         <td className="py-2 px-4 border-b text-center">
@@ -2329,7 +2387,7 @@ function AdminDashboardContent() {
                         const percentage = totalProblems > 0 ? ((problem.value / totalProblems) * 100).toFixed(1) : "0";
 
                         return (
-                          <tr key={index} className="hover:bg-muted/50">
+                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
                             <td className="py-2 px-4 border-b">{problem.label}</td>
                             <td className="py-2 px-4 border-b text-center">{problem.value}</td>
                             <td className="py-2 px-4 border-b text-center">{percentage}%</td>
@@ -2862,7 +2920,7 @@ function AdminDashboardContent() {
                                 {processApartamentoDetailsData()
                                   .filter(ap => ap.mainHotel === hotel.hotel)
                                   .map((ap, idx) => (
-                                    <tr key={idx} className="hover:bg-muted/50">
+                                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
                                       <td className="py-2 px-4 border-b font-semibold">{ap.apartamento}</td>
                                       <td className="py-2 px-4 border-b text-center">{ap.count}</td>
                                       <td className="py-2 px-4 border-b text-center">
@@ -2992,51 +3050,84 @@ function AdminDashboardContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Painel Lateral Interativo */}
-      <div className={`fixed inset-y-0 right-0 z-50 w-[36rem] bg-background border-l border-border shadow-xl transform transition-transform duration-300 ease-in-out ${
+      {/* Painel Lateral Interativo Melhorado */}
+      <div className={`fixed inset-y-0 right-0 z-50 w-[42rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
         detailPanelOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         {selectedItem && (
           <div className="h-full flex flex-col">
-            {/* Cabeçalho */}
-            <div className="p-6 border-b border-border bg-gradient-to-r from-purple-600 to-pink-600">
-              <div className="flex items-center justify-between">
-                <div className="text-white">
-                  <h3 className="text-lg font-semibold capitalize">
-                    {selectedItem.type === 'keyword' ? 'Palavra-chave' : 
-                     selectedItem.type === 'problem' ? 'Problema' :
-                     selectedItem.type === 'sector' ? 'Departamento' :
-                     selectedItem.type === 'source' ? 'Fonte' :
-                     selectedItem.type === 'language' ? 'Idioma' :
-                     selectedItem.type === 'rating' ? 'Avaliação' :
-                     selectedItem.type === 'hotel' ? 'Hotel' : selectedItem.type}
-                  </h3>
-                  <p className="text-sm text-purple-100">{selectedItem.value}</p>
+            {/* Cabeçalho Moderno */}
+            <div className="relative p-6 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 overflow-hidden">
+              <div className="absolute inset-0 bg-black/10"></div>
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-white">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                        {selectedItem.type === 'hotel' && <Building2 className="h-5 w-5" />}
+                        {selectedItem.type === 'problem' && <AlertCircle className="h-5 w-5" />}
+                        {selectedItem.type === 'rating' && <Star className="h-5 w-5" />}
+                        {selectedItem.type === 'keyword' && <Tag className="h-5 w-5" />}
+                        {selectedItem.type === 'source' && <Globe className="h-5 w-5" />}
+                        {!['hotel', 'problem', 'rating', 'keyword', 'source'].includes(selectedItem.type) && <BarChart3 className="h-5 w-5" />}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold">
+                          {selectedItem.type === 'keyword' ? 'Palavra-chave' : 
+                           selectedItem.type === 'problem' ? 'Problema' :
+                           selectedItem.type === 'sector' ? 'Departamento' :
+                           selectedItem.type === 'source' ? 'Fonte' :
+                           selectedItem.type === 'language' ? 'Idioma' :
+                           selectedItem.type === 'rating' ? 'Avaliação' :
+                           selectedItem.type === 'hotel' ? 'Hotel' : selectedItem.type}
+                        </h3>
+                        <p className="text-sm text-blue-100 opacity-90">{selectedItem.value}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setDetailPanelOpen(false)}
+                    className="text-white hover:bg-white/20 h-10 w-10 rounded-full p-0"
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setDetailPanelOpen(false)}
-                  className="text-white hover:bg-white/20"
-                >
-                  ✕
-                </Button>
+                
+                {/* Métricas Destacadas */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-white">{selectedItem.stats.totalOccurrences}</div>
+                    <div className="text-xs text-blue-100 opacity-75">Ocorrências</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-white">{selectedItem.stats.percentage}%</div>
+                    <div className="text-xs text-blue-100 opacity-75">do Total</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-white">{selectedItem.stats.averageRating.toFixed(1)}</div>
+                    <div className="text-xs text-blue-100 opacity-75">Avaliação Média</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Conteúdo */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Estatísticas Principais */}
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="p-4 text-center">
-                  <div className="text-2xl font-bold text-purple-600">{selectedItem.stats.totalOccurrences}</div>
-                  <div className="text-sm text-muted-foreground">Ocorrências</div>
-                </Card>
-                <Card className="p-4 text-center">
-                  <div className="text-2xl font-bold text-green-600">{selectedItem.stats.percentage}%</div>
-                  <div className="text-sm text-muted-foreground">do Total</div>
-                </Card>
-              </div>
+            {/* Conteúdo Principal */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-6 space-y-6">
+                {/* Botão para Ver Todos os Comentários */}
+                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-4 -m-6 mb-4 border-b">
+                  <Button 
+                    onClick={handleViewAllComments}
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
+                    size="lg"
+                  >
+                    <MessageSquare className="h-5 w-5 mr-2" />
+                    Ver TODOS os {selectedItem.stats.totalOccurrences} Comentários
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                  </Button>
+                </div>
 
               {/* Avaliação Média */}
               <Card className="p-4">
@@ -3172,7 +3263,7 @@ function AdminDashboardContent() {
                           <span className="text-xs font-medium">{feedback.hotel}</span>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(feedback.date).toLocaleDateString('pt-BR')}
+                          {formatDateBR(feedback.date)}
                         </div>
                       </div>
                       <p className="text-sm line-clamp-2">{feedback.comment}</p>
@@ -3180,6 +3271,7 @@ function AdminDashboardContent() {
                   ))}
                 </div>
               </Card>
+              </div>
             </div>
           </div>
         )}
@@ -3192,6 +3284,101 @@ function AdminDashboardContent() {
           onClick={() => setDetailPanelOpen(false)}
         />
       )}
+
+      {/* Modal para Ver Todos os Comentários */}
+      <Dialog open={allCommentsModalOpen} onOpenChange={setAllCommentsModalOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Todos os Comentários {selectedItem && `(${allCommentsData.length})`}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedItem && `Comentários relacionados a: ${selectedItem.value}`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-2">
+            <div className="space-y-4">
+              {allCommentsData.map((feedback: any, idx: number) => (
+                <Card key={idx} className="p-4 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star 
+                            key={i} 
+                            className={`h-4 w-4 ${
+                              i < feedback.rating 
+                                ? "text-yellow-500 fill-yellow-500" 
+                                : "text-gray-300"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {feedback.rating}/5
+                      </Badge>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-muted-foreground">
+                        {feedback.hotel || 'Hotel não identificado'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatDateBR(feedback.date)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mb-3">
+                    <p className="text-sm leading-relaxed">{feedback.comment}</p>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {feedback.source && (
+                      <Badge variant="secondary" className="text-xs">
+                        📍 {feedback.source}
+                      </Badge>
+                    )}
+                    {feedback.sector && (
+                      <Badge variant="outline" className="text-xs">
+                        🏢 {feedback.sector}
+                      </Badge>
+                    )}
+                    {feedback.keyword && (
+                      <Badge variant="outline" className="text-xs">
+                        🏷️ {feedback.keyword}
+                      </Badge>
+                    )}
+                    {feedback.problem && feedback.problem !== 'VAZIO' && (
+                      <Badge variant="destructive" className="text-xs">
+                        ⚠️ {feedback.problem}
+                      </Badge>
+                    )}
+                    {feedback.apartamento && (
+                      <Badge variant="outline" className="text-xs">
+                        🚪 {feedback.apartamento}
+                      </Badge>
+                    )}
+                  </div>
+                </Card>
+              ))}
+              
+              {allCommentsData.length === 0 && (
+                <div className="text-center py-12">
+                  <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                    Nenhum comentário encontrado
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Não há comentários disponíveis para este critério.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Gráfico Grande */}
       <Dialog open={chartModalOpen} onOpenChange={setChartModalOpen}>
@@ -3236,7 +3423,7 @@ function AdminDashboardContent() {
                           const itemName = item.name || item.label;
                           
                           return (
-                            <tr key={index} className="hover:bg-muted/30 transition-colors">
+                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
                               <td className="py-3 px-4 border-b font-medium">{itemName}</td>
                               <td className="py-3 px-4 border-b text-center">{item.value}</td>
                               <td className="py-3 px-4 border-b text-center">

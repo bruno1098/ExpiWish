@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts'
-import { ArrowLeft, Hotel, Star, MessageSquare, AlertTriangle, Brain, Loader2, RefreshCw, TrendingUp, TrendingDown } from "lucide-react"
+import { ArrowLeft, Hotel, Star, MessageSquare, AlertTriangle, Brain, Loader2, RefreshCw, TrendingUp, TrendingDown, Users } from "lucide-react"
 import { getAllAnalyses } from "@/lib/firestore-service"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
@@ -53,6 +53,120 @@ interface BandeiraSummary {
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d']
+
+// Função helper para filtrar problemas válidos (igual ao dashboard)
+const isValidProblem = (problem: string): boolean => {
+  if (!problem || typeof problem !== 'string') return false;
+  
+  const normalizedProblem = problem.toLowerCase().trim();
+  
+  // Lista de problemas inválidos que devem ser filtrados
+  const invalidProblems = [
+    'vazio', 
+    'sem problemas', 
+    'nao identificado', 
+    'não identificado',
+    'sem problema',
+    'nenhum problema',
+    'ok',
+    'tudo ok',
+    'sem',
+    'n/a',
+    'na',
+    '-',
+    '',
+    'não',
+    'nao'
+  ];
+  
+  return !invalidProblems.includes(normalizedProblem) && 
+         !normalizedProblem.includes('vazio') &&
+         !normalizedProblem.includes('sem problemas') &&
+         normalizedProblem.length > 2; // Evitar problemas muito curtos
+};
+
+// Tooltip personalizado para gráficos de pizza (departamentos, etc.)
+const CustomPieTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload; // No pie chart, os dados vêm no payload[0].payload
+    return (
+      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
+        <div className="flex items-center gap-2 mb-2">
+          <div 
+            className="w-3 h-3 rounded-full" 
+            style={{ backgroundColor: payload[0].color }}
+          />
+          <p className="font-semibold text-gray-900 dark:text-gray-100">{data.name}</p>
+        </div>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          <span className="font-medium">Feedbacks:</span> {data.count}
+        </p>
+        {data.percent && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="font-medium">Porcentagem:</span> {(data.percent * 100).toFixed(1)}%
+          </p>
+        )}
+      </div>
+    )
+  }
+  return null
+}
+
+// Tooltip personalizado com design circular e elegante
+const CustomTooltipLocal = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
+        <div className="flex items-center gap-2 mb-2">
+          <div 
+            className="w-3 h-3 rounded-full" 
+            style={{ backgroundColor: payload[0].color }}
+          />
+          <p className="font-semibold text-gray-900 dark:text-gray-100">{label}</p>
+        </div>
+        {payload.map((entry: any, index: number) => {
+          // Mapear nomes técnicos para nomes amigáveis
+          const friendlyNames: { [key: string]: string } = {
+            'value': 'Valor',
+            'averageRating': 'Avaliação Média',
+            'totalFeedbacks': 'Total de Feedbacks',
+            'positiveSentiment': 'Sentimento Positivo (%)',
+            'problemCount': 'Quantidade de Problemas',
+            'negativeSentiment': 'Sentimento Negativo (%)',
+            'neutralSentiment': 'Sentimento Neutro (%)',
+            'positivo': 'Positivo (%)',
+            'negativo': 'Negativo (%)',
+            'neutro': 'Neutro (%)',
+            'count': 'Ocorrências',
+            'issues': 'Problemas',
+            'rating': 'Avaliação',
+            'feedbacks': 'Feedbacks',
+            'avaliacao': 'Avaliação Média',
+            'problemas': 'Total de Problemas'
+          }
+          
+          const displayName = friendlyNames[entry.dataKey] || friendlyNames[entry.name] || entry.name || 'Valor'
+          
+          return (
+            <p key={index} className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="font-medium">{displayName}:</span> {
+                entry.dataKey === 'averageRating' || entry.dataKey === 'rating' ? 
+                  `${entry.value}/5` : 
+                entry.dataKey === 'positiveSentiment' || entry.dataKey === 'negativeSentiment' || entry.dataKey === 'neutralSentiment' ||
+                entry.dataKey === 'positivo' || entry.dataKey === 'negativo' || entry.dataKey === 'neutro' ? 
+                  `${entry.value}%` :
+                entry.dataKey === 'totalFeedbacks' || entry.dataKey === 'feedbacks' ?
+                  entry.value.toLocaleString() :
+                entry.value
+              }
+            </p>
+          )
+        })}
+      </div>
+    )
+  }
+  return null
+}
 
 export default function ComparacaoAvancada() {
   const { userData } = useAuth()
@@ -128,8 +242,14 @@ export default function ComparacaoAvancada() {
         // Problemas principais
         const problemCounts: Record<string, number> = {}
         allFeedbacks.forEach(f => {
-          if (f.problem && f.problem.trim() !== '' && f.problem !== 'Não' && f.problem !== 'VAZIO') {
-            problemCounts[f.problem] = (problemCounts[f.problem] || 0) + 1
+          if (f.problem && f.problem.trim() !== '') {
+            // Dividir múltiplos problemas separados por ';'
+            f.problem.split(';').forEach((problem: string) => {
+              const trimmedProblem = problem.trim()
+              if (trimmedProblem && isValidProblem(trimmedProblem)) {
+                problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1
+              }
+            })
           }
         })
         
@@ -160,8 +280,15 @@ export default function ComparacaoAvancada() {
             }
             apartmentData[f.apartamento].count++
             apartmentData[f.apartamento].totalRating += (f.rating || 0)
-            if (f.problem && f.problem.trim() !== '' && f.problem !== 'Não' && f.problem !== 'VAZIO') {
-              apartmentData[f.apartamento].issues++
+            // Contar problemas válidos
+            if (f.problem && f.problem.trim() !== '') {
+              const hasValidProblem = f.problem.split(';').some((problem: string) => {
+                const trimmedProblem = problem.trim()
+                return trimmedProblem && isValidProblem(trimmedProblem)
+              })
+              if (hasValidProblem) {
+                apartmentData[f.apartamento].issues++
+              }
             }
           }
         })
@@ -380,7 +507,7 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
             <YAxis />
-            <Tooltip />
+            <Tooltip content={<CustomTooltipLocal />} />
             <Bar dataKey="value" fill={color} />
           </BarChart>
         </ResponsiveContainer>
@@ -697,10 +824,11 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
       )}
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="bandeiras">Bandeiras</TabsTrigger>
           <TabsTrigger value="problems">Problemas</TabsTrigger>
+          <TabsTrigger value="departments">Departamentos</TabsTrigger>
           <TabsTrigger value="apartments">Apartamentos</TabsTrigger>
           <TabsTrigger value="trends">Tendências</TabsTrigger>
         </TabsList>
@@ -764,7 +892,7 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip content={<CustomTooltipLocal />} />
                 <Bar dataKey="positivo" stackId="a" fill="#22c55e" name="Positivo" />
                 <Bar dataKey="neutro" stackId="a" fill="#64748b" name="Neutro" />
                 <Bar dataKey="negativo" stackId="a" fill="#ef4444" name="Negativo" />
@@ -875,12 +1003,7 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis />
-                      <Tooltip 
-                        formatter={(value, name) => {
-                          if (name === 'feedbacks') return [(value as number * 100).toLocaleString(), 'Total Feedbacks']
-                          return [value, name]
-                        }}
-                      />
+                      <Tooltip content={<CustomTooltipLocal />} />
                       <Bar dataKey="avaliacao" fill="#8884d8" name="Avaliação Média" />
                       <Bar dataKey="positivo" fill="#22c55e" name="Sentimento Positivo %" />
                       <Bar dataKey="feedbacks" fill="#3b82f6" name="Feedbacks (÷100)" />
@@ -1077,12 +1200,105 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip content={<CustomPieTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
                   )}
                 </div>
               </div>
+            </Card>
+          ))}
+        </TabsContent>
+
+        <TabsContent value="departments" className="space-y-6">
+          {selectedData.map(hotel => (
+            <Card key={hotel.hotelId} className="p-6">
+              <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
+                {hotel.hotelName} - Análise de Departamentos
+              </h3>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Gráfico de Departamentos */}
+                <div>
+                  <h4 className="font-semibold mb-4 flex items-center">
+                    <Users className="h-4 w-4 mr-2 text-blue-500" />
+                    Departamentos com Mais Feedbacks
+                  </h4>
+                  {hotel.topSectors.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={hotel.topSectors} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="name" type="category" width={100} />
+                                                 <Tooltip 
+                           formatter={(value: any) => [`${value} feedbacks`, 'Quantidade']}
+                           labelFormatter={(label) => `Departamento: ${label}`}
+                           content={<CustomTooltipLocal />} 
+                         />
+                        <Bar dataKey="count" fill="#3b82f6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-muted-foreground">Nenhum departamento identificado</p>
+                  )}
+                </div>
+
+                {/* Lista Detalhada */}
+                <div>
+                  <h4 className="font-semibold mb-4">Detalhamento por Departamento</h4>
+                  {hotel.topSectors.length > 0 ? (
+                    <div className="space-y-3">
+                      {hotel.topSectors.map((sector, index) => (
+                        <div key={sector.name} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                              <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div>
+                              <span className="font-medium">{sector.name}</span>
+                              <div className="text-sm text-gray-600 dark:text-gray-400">
+                                {((sector.count / hotel.totalFeedbacks) * 100).toFixed(1)}% do total
+                              </div>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/30">
+                            {sector.count} feedbacks
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">Nenhum departamento identificado nos feedbacks</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Gráfico de Pizza para Visão Geral */}
+              {hotel.topSectors.length > 0 && (
+                <div className="mt-8">
+                  <h4 className="font-semibold mb-4">Distribuição Visual dos Departamentos</h4>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <PieChart>
+                      <Pie
+                        data={hotel.topSectors}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="count"
+                      >
+                        {hotel.topSectors.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomPieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </Card>
           ))}
         </TabsContent>
@@ -1117,10 +1333,10 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                     <ResponsiveContainer width="100%" height={300}>
                       <BarChart data={hotel.apartmentIssues.slice(0, 10)}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="apartment" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="issues" fill="#ef4444" />
+                                                  <XAxis dataKey="apartment" />
+                          <YAxis />
+                          <Tooltip content={<CustomTooltipLocal />} />
+                          <Bar dataKey="issues" fill="#ef4444" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -1148,10 +1364,10 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                     <ResponsiveContainer width="100%" height={300}>
                       <LineChart data={hotel.monthlyTrend}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis domain={[1, 5]} />
-                        <Tooltip />
-                        <Line 
+                                                  <XAxis dataKey="month" />
+                          <YAxis domain={[1, 5]} />
+                          <Tooltip content={<CustomTooltipLocal />} />
+                          <Line 
                           type="monotone" 
                           dataKey="rating" 
                           stroke="#8884d8" 
@@ -1169,10 +1385,10 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={hotel.sourceDistribution.slice(0, 6)}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="source" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#82ca9d" />
+                                              <XAxis dataKey="source" />
+                        <YAxis />
+                        <Tooltip content={<CustomTooltipLocal />} />
+                        <Bar dataKey="count" fill="#82ca9d" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

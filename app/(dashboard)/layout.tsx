@@ -12,12 +12,14 @@ export default function DashboardLayout({
   return (
     <RequireAuth>
       <div className="h-full relative">
-        <div className="hidden h-full md:flex md:w-72 md:flex-col md:fixed md:inset-y-0 z-[80] bg-gray-900">
+        <div className="hidden h-full md:flex md:w-[var(--sidebar-width)] md:flex-col md:fixed md:inset-y-0 z-[80] transition-all duration-500 ease-out">
           <Sidebar />
         </div>
-        <main className="md:pl-72">
+        <main className="md:ml-[var(--sidebar-width)] transition-all duration-500 ease-out">
           <Header />
-          {children}
+          <div className="transition-all duration-500 ease-out">
+            {children}
+          </div>
         </main>
       </div>
     </RequireAuth>

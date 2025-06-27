@@ -304,7 +304,7 @@ export default function SettingsPage() {
                   "tutorial-section card-hover transition-all duration-300 cursor-pointer gpu-acceleration",
                   activeSection === section.id 
                     ? `${section.bgColor} ${section.borderColor} border-2 shadow-lg active` 
-                    : "hover:bg-muted/50"
+                    : "hover:bg-gray-50 dark:hover:bg-gray-800/70"
                 )}
                 onClick={() => setActiveSection(activeSection === section.id ? null : section.id)}
               >

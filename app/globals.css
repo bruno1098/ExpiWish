@@ -6,7 +6,7 @@
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
-  --sidebar-width: 288px;
+  --sidebar-width: 80px;
   --sidebar-collapsed-width: 80px;
 }
 
@@ -135,7 +135,7 @@
 /* Transições suaves para o conteúdo principal */
 .main-content {
   margin-left: var(--sidebar-width);
-  transition: margin-left 0.3s ease-in-out;
+  transition: margin-left 0.5s ease-out;
 }
 
 /* Responsividade para telas menores */
@@ -150,7 +150,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
-  transition: all 0.3s ease-in-out;
+  transition: all 0.5s ease-out;
 }
 
 @media (min-width: 640px) {

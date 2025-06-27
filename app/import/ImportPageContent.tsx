@@ -361,8 +361,6 @@ function ImportPageContent() {
     router.push('/settings');
   };
 
-
-
   const handleCancelApiKeyAlert = () => {
     setShowApiKeyAlert(false);
     setPendingFile(null);
@@ -397,6 +395,117 @@ function ImportPageContent() {
       setCurrentStep("Extraindo dados do arquivo...");
       setProgress(5);
 
+      // Função helper para formatar data do Excel
+      const formatExcelDate = (excelDate: any): string => {
+        console.log('=== PROCESSANDO DATA ===');
+        console.log('Valor recebido:', excelDate);
+        console.log('Tipo:', typeof excelDate);
+        console.log('É null/undefined?', excelDate == null);
+        
+        // Se não há data, não usar fallback - retornar data atual com aviso
+        if (excelDate == null || excelDate === '' || excelDate === undefined) {
+          console.error('⚠️ ATENÇÃO: Data da coluna B está vazia! Usando data atual como fallback.');
+          console.error('Isso pode indicar que:');
+          console.error('1. A coluna B não contém dados de data');
+          console.error('2. O formato da planilha está diferente do esperado');
+          console.error('3. As datas estão em outra coluna');
+          return new Date().toISOString();
+        }
+        
+        try {
+          let date: Date;
+          
+          // CASO 1: Número (Serial Date do Excel)
+          if (typeof excelDate === 'number') {
+            console.log('📅 Processando número serial do Excel:', excelDate);
+            // Excel serial date: 1 = 1/1/1900, ajuste para JavaScript
+            if (excelDate > 0 && excelDate < 2958466) { // Validar range razoável (1900-9999)
+              date = new Date((excelDate - 25569) * 86400 * 1000);
+              console.log('✅ Data convertida do serial:', date.toISOString());
+            } else {
+              console.error('❌ Número serial fora do range válido:', excelDate);
+              return new Date().toISOString();
+            }
+          } 
+          // CASO 2: String com formato de data
+          else if (typeof excelDate === 'string' && excelDate.trim() !== '') {
+            console.log('📅 Processando string de data:', excelDate);
+            const trimmedDate = excelDate.trim();
+            
+            // Formato brasileiro DD/MM/YYYY ou DD/MM/YY
+            if (trimmedDate.includes('/')) {
+              const parts = trimmedDate.split('/');
+              if (parts.length === 3) {
+                const day = parts[0].padStart(2, '0');
+                const month = parts[1].padStart(2, '0');
+                let year = parts[2];
+                
+                // Ajustar ano de 2 dígitos
+                if (year.length === 2) {
+                  const currentYear = new Date().getFullYear();
+                  const century = Math.floor(currentYear / 100) * 100;
+                  year = (parseInt(year) + century).toString();
+                }
+                
+                const isoString = `${year}-${month}-${day}`;
+                date = new Date(isoString);
+                console.log('✅ Data convertida do formato DD/MM/YYYY:', isoString, '→', date.toISOString());
+              } else {
+                date = new Date(trimmedDate);
+              }
+            }
+            // Formato ISO YYYY-MM-DD
+            else if (trimmedDate.includes('-')) {
+              date = new Date(trimmedDate);
+              console.log('✅ Data convertida do formato ISO:', date.toISOString());
+            }
+            // Outros formatos
+            else {
+              date = new Date(trimmedDate);
+              console.log('✅ Data convertida (formato automático):', date.toISOString());
+            }
+          }
+          // CASO 3: Já é um objeto Date
+          else if (excelDate instanceof Date) {
+            console.log('📅 Já é um objeto Date:', excelDate);
+            date = excelDate;
+          }
+          // CASO 4: Formato não reconhecido
+          else {
+            console.error('❌ Formato de data não reconhecido:', excelDate);
+            console.error('Tipo recebido:', typeof excelDate);
+            console.error('Valor:', excelDate);
+            return new Date().toISOString();
+          }
+          
+          // Validar se a data resultante é válida
+          if (isNaN(date.getTime())) {
+            console.error('❌ Data inválida após conversão:', date);
+            console.error('Valor original:', excelDate);
+            return new Date().toISOString();
+          }
+          
+          // Verificar se a data está em um range razoável
+          const year = date.getFullYear();
+          if (year < 1900 || year > 2100) {
+            console.error('❌ Data fora do range esperado (1900-2100):', date);
+            console.error('Valor original:', excelDate);
+            return new Date().toISOString();
+          }
+          
+          const result = date.toISOString();
+          console.log('✅ DATA FINAL PROCESSADA:', result);
+          console.log('========================');
+          return result;
+          
+        } catch (error) {
+          console.error('❌ ERRO ao processar data:', error);
+          console.error('Valor original:', excelDate);
+          console.error('Tipo:', typeof excelDate);
+          return new Date().toISOString();
+        }
+      };
+
       if (extension === 'xlsx') {
         const { read, utils } = await import('xlsx');
         const buffer = await file.arrayBuffer();
@@ -408,7 +517,12 @@ function ImportPageContent() {
         
         // Começar da linha 2 para pular o cabeçalho (índice 1 = linha 2 no Excel)
         for (let row = 1; row <= range.e.r; row++) {
-          const data = worksheet[utils.encode_cell({ r: row, c: 1 })]?.v;
+          const cellB = worksheet[utils.encode_cell({ r: row, c: 1 })]; // Coluna B (data do feedback)
+          const dataFeedback = cellB?.v || cellB?.w; // Tentar valor formatado (.w) se valor bruto (.v) não existir
+          
+          console.log(`Linha ${row + 1}: Célula B completa:`, cellB);
+          console.log(`Linha ${row + 1}: Data extraída:`, dataFeedback);
+          
           const nomeHotel = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
           const fonte = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
           const idioma = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v;
@@ -426,8 +540,11 @@ function ImportPageContent() {
               !/^\d+$/.test(texto.trim()) &&
               !/^[^\w\s]+$/.test(texto.trim())) {
             
+            const formattedDate = formatExcelDate(dataFeedback);
+            console.log(`Linha ${row + 1}: Data formatada final:`, formattedDate);
+            
             rows.push({
-              data: data || '',
+              dataFeedback: formattedDate, // Usar data real do feedback
               nomeHotel: nomeHotel || hotelName,
               fonte: fonte || '',
               idioma: idioma || '',
@@ -461,7 +578,8 @@ function ImportPageContent() {
             return {
               ...row,
               texto: row.texto.trim(),
-              nomeHotel: hotelName
+              nomeHotel: hotelName,
+              dataFeedback: formatExcelDate(row.data) // Usar data do CSV se disponível
             };
           });
       }
@@ -635,7 +753,7 @@ function ImportPageContent() {
                     
                 return {
                   id: generateUniqueId(),
-                  date: new Date().toISOString(),
+                  date: row.dataFeedback,
                   comment: row.texto,
                   rating: rating,
                   sentiment: rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral',
@@ -664,7 +782,7 @@ function ImportPageContent() {
                 
                 return {
                   id: generateUniqueId(),
-                  date: new Date().toISOString(),
+                  date: row.dataFeedback,
                   comment: row.texto,
                   rating: 3,
                   sentiment: 'neutral',
@@ -750,11 +868,20 @@ function ImportPageContent() {
       const saved = await storeFeedbacks(feedbacks);
       
       // Preparar análise para salvar
+      // Calcular a data mais recente dos feedbacks ou a data média
+      const feedbackDates = feedbacks
+        .map(f => new Date(f.date))
+        .filter(date => !isNaN(date.getTime()));
+      
+      const mostRecentFeedbackDate = feedbackDates.length > 0 
+        ? new Date(Math.max(...feedbackDates.map(date => date.getTime())))
+        : new Date();
+
       const analysisToSave = {
         id: generateUniqueId(),
         hotelId: hotelId,
         hotelName: hotelName,
-        importDate: new Date(),
+        importDate: mostRecentFeedbackDate, // Usar a data mais recente dos feedbacks
         data: feedbacks,
         analysis: {
           totalFeedbacks: feedbacks.length,
@@ -1275,7 +1402,7 @@ function ImportPageContent() {
           <div className="space-y-6">
             <div
               className={cn(
-                "border-2 border-dashed rounded-xl p-12 transition-all duration-300 hover:border-primary/50 hover:bg-muted/30 cursor-pointer dropzone-area bg-card focus:ring-2 focus:ring-primary focus:border-primary",
+                "border-2 border-dashed rounded-xl p-12 transition-all duration-300 hover:border-primary/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 cursor-pointer dropzone-area bg-card focus:ring-2 focus:ring-primary focus:border-primary",
                 isDragActive && "border-primary bg-primary/10 scale-105 shadow-lg",
                 importing && "opacity-50 cursor-not-allowed"
               )}

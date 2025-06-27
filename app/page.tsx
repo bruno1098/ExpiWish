@@ -62,6 +62,7 @@ import { useAuth } from "@/lib/auth-context"
 import { RequireAuth } from "@/lib/auth-context"
 import { Loader2, RefreshCw, MessageSquare, BarChart3, Activity } from "lucide-react"
 import Link from "next/link"
+import { formatDateBR } from "@/lib/utils"
 
 interface StatsData {
   totalFeedbacks: number
@@ -597,7 +598,7 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
                       <div>
                         <h4 className="font-medium">{feedback.author || feedback.title || 'Autor não identificado'}</h4>
                         <p className="text-sm text-muted-foreground">
-                          {feedback.source} • {new Date(feedback.date).toLocaleDateString()}
+                          {feedback.source} • {formatDateBR(feedback.date)}
                         </p>
                       </div>
                       <div className="flex items-center">
@@ -1065,14 +1066,30 @@ function DashboardContent() {
         keywordCounts[feedback.keyword] = (keywordCounts[feedback.keyword] || 0) + 1;
       }
       
-      if (feedback.problem && feedback.problem !== 'Não identificado' && feedback.problem !== 'Sem problemas') {
-        const problems = feedback.problem.includes(';') 
-          ? feedback.problem.split(';').map(p => p.trim())
-          : [feedback.problem];
-        
-        problems.forEach(problem => {
-          problemCounts[problem] = (problemCounts[problem] || 0) + 1;
-        });
+              if (feedback.problem) {
+          const problems = feedback.problem.includes(';')
+            ? feedback.problem.split(';').map(p => p.trim())
+            : [feedback.problem];
+
+          problems.forEach(problem => {
+            // Filtrar problemas válidos
+            const isValidProblem = (p: string) => {
+              if (!p || typeof p !== 'string') return false;
+              const normalized = p.toLowerCase().trim();
+              const invalidProblems = [
+                'vazio', 'sem problemas', 'nao identificado', 'não identificado',
+                'sem problema', 'nenhum problema', 'ok', 'tudo ok', 'sem', 'n/a', 'na', '-', ''
+              ];
+              return !invalidProblems.includes(normalized) && 
+                     !normalized.includes('vazio') &&
+                     !normalized.includes('sem problemas') &&
+                     normalized.length > 2;
+            };
+            
+            if (isValidProblem(problem)) {
+              problemCounts[problem] = (problemCounts[problem] || 0) + 1;
+            }
+          });
       }
       
       if (feedback.rating >= 1 && feedback.rating <= 5) {
@@ -1102,7 +1119,21 @@ function DashboardContent() {
     rating: `${item.rating} ★`,
   })), [filteredData.ratingDistribution]);
 
-  // Função para filtrar feedbacks válidos (remove não identificados)
+  // Função helper para verificar se é um problema válido
+  const isValidProblem = (problem: string): boolean => {
+    if (!problem || typeof problem !== 'string') return false;
+    const normalized = problem.toLowerCase().trim();
+    const invalidProblems = [
+      'vazio', 'sem problemas', 'nao identificado', 'não identificado',
+      'sem problema', 'nenhum problema', 'ok', 'tudo ok', 'sem', 'n/a', 'na', '-', ''
+    ];
+    return !invalidProblems.includes(normalized) && 
+           !normalized.includes('vazio') &&
+           !normalized.includes('sem problemas') &&
+           normalized.length > 2;
+  };
+
+  // Função para filtrar feedbacks válidos (remove não identificados e sem problemas reais)
   const filterValidFeedbacks = (feedbacks: any[]) => {
     return feedbacks.filter(feedback => {
       const keyword = feedback.keyword?.toLowerCase() || '';
@@ -1116,8 +1147,11 @@ function DashboardContent() {
         sector.includes('não identificado') ||
         sector.includes('vazio') ||
         sector === '';
+
+      // Verifica se tem problemas válidos
+      const hasValidProblem = feedback.problem ? isValidProblem(feedback.problem) : false;
       
-      return !isNotIdentified;
+      return !isNotIdentified && hasValidProblem;
     });
   };
 
@@ -1134,8 +1168,11 @@ function DashboardContent() {
         sector.includes('não identificado') ||
         sector.includes('vazio') ||
         sector === '';
+
+      // Incluir também feedbacks sem problemas válidos
+      const hasValidProblem = feedback.problem ? isValidProblem(feedback.problem) : false;
       
-      return isNotIdentified;
+      return isNotIdentified || !hasValidProblem;
     });
   };
 
@@ -1542,18 +1579,27 @@ function DashboardContent() {
                     data={allFeedbacks
                       .filter(feedback => !selectedHotel || feedback.hotel === selectedHotel || feedback.source === selectedHotel)
                       .reduce((acc: {problem: string, count: number}[], feedback) => {
-                        if (feedback.problem && 
-                            feedback.problem !== 'Não identificado' &&
-                            feedback.problem !== 'VAZIO' &&
-                            !feedback.problem.includes('VAZIO')) {
+                        if (feedback.problem) {
                           const problems = feedback.problem.includes(';') 
                             ? feedback.problem.split(';').map(p => p.trim())
                             : [feedback.problem];
                             
                           problems.forEach(problem => {
-                            if (problem !== 'Sem problemas' && 
-                                problem !== 'VAZIO' &&
-                                !problem.includes('VAZIO')) {
+                            // Função para verificar se é um problema válido
+                            const isValidProblem = (p: string) => {
+                              if (!p || typeof p !== 'string') return false;
+                              const normalized = p.toLowerCase().trim();
+                              const invalidProblems = [
+                                'vazio', 'sem problemas', 'nao identificado', 'não identificado',
+                                'sem problema', 'nenhum problema', 'ok', 'tudo ok', 'sem', 'n/a', 'na', '-', ''
+                              ];
+                              return !invalidProblems.includes(normalized) && 
+                                     !normalized.includes('vazio') &&
+                                     !normalized.includes('sem problemas') &&
+                                     normalized.length > 2;
+                            };
+                            
+                            if (isValidProblem(problem)) {
                               const existingProblem = acc.find(p => p.problem === problem);
                               if (existingProblem) {
                                 existingProblem.count += 1;
@@ -1646,7 +1692,7 @@ function DashboardContent() {
                         <div>
                           <h4 className="font-medium">{feedback.author || feedback.title || 'Autor não identificado'}</h4>
                           <p className="text-sm text-muted-foreground">
-                            {feedback.source} • {new Date(feedback.date).toLocaleDateString()}
+                            {feedback.source} • {formatDateBR(feedback.date)}
                           </p>
                         </div>
                         <div className="flex items-center">
