@@ -63,6 +63,14 @@ import { RequireAuth } from "@/lib/auth-context"
 import { Loader2, RefreshCw, MessageSquare, BarChart3, Activity } from "lucide-react"
 import Link from "next/link"
 import { formatDateBR } from "@/lib/utils"
+import { 
+  filterValidFeedbacks, 
+  isValidProblem, 
+  isValidSectorOrKeyword,
+  processSectorDistribution,
+  processKeywordDistribution,
+  processProblemDistribution
+} from "@/lib/utils"
 
 interface StatsData {
   totalFeedbacks: number

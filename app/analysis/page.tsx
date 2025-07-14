@@ -51,6 +51,7 @@ import { getAnalysisById, updateFeedbackInFirestore } from '@/lib/firestore-serv
 import SharedDashboardLayout from "../shared-layout"
 import { useToast } from "@/components/ui/use-toast"
 import { cn, formatDateBR } from "@/lib/utils"
+import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/lib/utils"
 
 // Mapa de cores para sentimentos
 const sentimentColors = {

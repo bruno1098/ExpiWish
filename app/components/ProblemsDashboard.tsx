@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
+import { filterValidFeedbacks, isValidProblem } from "@/lib/utils"
 
 interface ProblemsDashboardProps {
   feedbacks: Array<{
@@ -76,83 +77,26 @@ const PROBLEMAS_PADRONIZADOS = [
 ];
 
 export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboardProps) {
-  // Função para filtrar feedbacks válidos (remove não identificados)
-  const filterValidFeedbacks = (feedbacks: any[]) => {
-    return feedbacks.filter(feedback => {
-      const keyword = feedback.keyword?.toLowerCase() || '';
-      const sector = feedback.sector?.toLowerCase() || '';
-      
-      const isNotIdentified = 
-        keyword.includes('não identificado') ||
-        keyword.includes('vazio') ||
-        keyword === '' ||
-        sector.includes('não identificado') ||
-        sector.includes('vazio') ||
-        sector === '';
-      
-      return !isNotIdentified;
-    });
-  };
-
-  // Usar apenas feedbacks válidos
+  // Usar apenas feedbacks válidos (remove não identificados)
   const validFeedbacks = filterValidFeedbacks(feedbacks);
   
-  // Filtra feedbacks com problemas reais (exclui "Sem problemas")
+  // Filtra feedbacks com problemas reais (exclui "Sem problemas")  
   const problemFeedbacks = validFeedbacks.filter(f => {
-    if (!f.problem) return false;
-    
-    const problem = f.problem.trim().toLowerCase();
-    
-    // Lista de termos que indicam ausência de problemas
-    const emptyProblemTerms = [
-      'vazio',
-      'sem problemas', 
-      'não identificado',
-      'não analisado',
-      'sem problema',
-      'nenhum problema',
-      ''
-    ];
-    
-    // Verificar se o problema é algum dos termos de "sem problema"
-    const isEmpty = emptyProblemTerms.some(term => 
-      problem === term || problem.includes(term)
-    );
-    
-    return !isEmpty;
+    return f.problem && isValidProblem(f.problem);
   });
 
   // Processa todos os problemas, incluindo múltiplos por feedback
   const processedProblems = problemFeedbacks.flatMap(feedback => {
-    const problems = feedback.problem.split(';').map((p: string) => p.trim());
-    const keywords = feedback.keyword.split(';').map((k: string) => k.trim());
-    const sectors = feedback.sector.split(';').map((s: string) => s.trim());
+    const problems = Array.from(new Set(feedback.problem.split(';').map((p: string) => p.trim()))) as string[];
+    const keywords = Array.from(new Set(feedback.keyword.split(';').map((k: string) => k.trim()))) as string[];
+    const sectors = Array.from(new Set(feedback.sector.split(';').map((s: string) => s.trim()))) as string[];
     
     return problems.map((problem: string, index: number) => {
-      const cleanProblem = problem.trim().toLowerCase();
-      
-      // Lista mais completa de termos que indicam ausência de problemas
-      const emptyProblemTerms = [
-        'vazio',
-        'sem problemas', 
-        'não identificado',
-        'não analisado',
-        'sem problema',
-        'nenhum problema',
-        ''
-      ];
-      
-      // Verificar se é um problema "vazio"
-      const isEmpty = emptyProblemTerms.some(term => 
-        cleanProblem === term || cleanProblem.includes(term)
-      );
-      
-      if (isEmpty) {
+      if (!isValidProblem(problem)) {
         return null;
       }
       
       // Verificar se o problema está na lista de problemas padronizados
-      // Se não estiver, tentar encontrar o mais próximo
       let normalizedProblem = problem;
       if (!PROBLEMAS_PADRONIZADOS.includes(problem)) {
         // Tentar encontrar um problema padronizado similar
@@ -166,8 +110,8 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
       
       return {
         problem: normalizedProblem,
-        keyword: keywords[index] || keywords[0] || "Não identificado",
-        sector: sectors[index] || sectors[0] || "Não identificado"
+        keyword: keywords[index] || keywords[0] || "Comodidade",
+        sector: sectors[index] || sectors[0] || "Produto"
       };
     }).filter(Boolean) as Array<{
       problem: string;

@@ -14,6 +14,7 @@ import { getAllAnalyses } from "@/lib/firestore-service"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
 import type { Feedback, Analysis } from "@/types"
+import { filterValidFeedbacks, isValidProblem } from "@/lib/utils"
 
 interface HotelSummary {
   hotelId: string
@@ -401,55 +402,49 @@ export default function HoteisPage() {
   }
 
   const calculateCommonProblems = () => {
-    const problemCounts: Record<string, { count: number; hotels: Set<string>; originalNames: Set<string> }> = {}
+    if (!allFeedbacks || allFeedbacks.length === 0) {
+      setCommonProblems([]);
+      return;
+    }
+
+    // Usar apenas feedbacks válidos
+    const validFeedbacks = filterValidFeedbacks(allFeedbacks);
     
-    allFeedbacks.forEach(feedback => {
-      if (feedback.problem && 
-          feedback.problem.trim() !== '' && 
-          feedback.problem !== 'Não' && 
-          feedback.problem !== 'VAZIO') {
+    const problemCounts: Record<string, number> = {};
+    const hotelCounts: Record<string, Set<string>> = {};
+
+    validFeedbacks.forEach(feedback => {
+      if (feedback.problem && isValidProblem(feedback.problem)) {
+        // Separar problemas por ; e remover duplicatas
+        const problems = Array.from(new Set(feedback.problem.split(';').map((p: string) => p.trim()))) as string[];
         
-        // Normalizar o problema para agrupar similares
-        const normalizedProblem = normalizeSearchText(feedback.problem)
-        
-        if (!problemCounts[normalizedProblem]) {
-          problemCounts[normalizedProblem] = { 
-            count: 0, 
-            hotels: new Set(), 
-            originalNames: new Set() 
+        problems.forEach(problem => {
+          if (isValidProblem(problem)) {
+            problemCounts[problem] = (problemCounts[problem] || 0) + 1;
+            
+            if (!hotelCounts[problem]) {
+              hotelCounts[problem] = new Set();
+            }
+            hotelCounts[problem].add(feedback.hotelName || feedback.hotelId || 'Unknown');
           }
-        }
-        problemCounts[normalizedProblem].count++
-        problemCounts[normalizedProblem].hotels.add((feedback as any).hotelName || feedback.hotel || '')
-        problemCounts[normalizedProblem].originalNames.add(feedback.problem)
+        });
       }
-    })
+    });
 
-    const totalProblems = Object.values(problemCounts).reduce((sum, p) => sum + p.count, 0)
-    
-    const problems: ProblemSummary[] = Object.entries(problemCounts)
-      .map(([normalizedName, data]) => {
-        // Usar o nome original mais comum ou o primeiro encontrado
-        const mostCommonOriginalName = Array.from(data.originalNames)
-          .sort((a, b) => {
-            // Contar ocorrências de cada nome original
-            const countA = allFeedbacks.filter(f => f.problem === a).length
-            const countB = allFeedbacks.filter(f => f.problem === b).length
-            return countB - countA
-          })[0] || normalizedName
-        
-        return {
-          name: mostCommonOriginalName,
-          count: data.count,
-          hotels: data.hotels.size,
-          percentage: Math.round((data.count / totalProblems) * 100)
-        }
-      })
+    const totalProblems = Object.values(problemCounts).reduce((sum, count) => sum + count, 0);
+
+    const commonProblemsData: ProblemSummary[] = Object.entries(problemCounts)
+      .map(([problem, count]) => ({
+        name: problem,
+        count,
+        hotels: hotelCounts[problem]?.size || 0,
+        percentage: totalProblems > 0 ? Math.round((count / totalProblems) * 100) : 0
+      }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 20)
+      .slice(0, 20);
 
-    setCommonProblems(problems)
-  }
+    setCommonProblems(commonProblemsData);
+  };
 
   const searchProblems = async () => {
     if (!searchTerm && selectedHotelFilter === "all") {

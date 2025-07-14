@@ -17,6 +17,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
+import { filterValidFeedbacks, isValidProblem } from '@/lib/utils';
 
 // Cores para os gráficos
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -74,36 +75,40 @@ function TestDashboardContent() {
 
   // Processar estatísticas dos dados de teste
   const processStats = (analysesData: any[]) => {
-    // Combinar todos os feedbacks de todas as análises
     let allFeedbacks: any[] = [];
+    let totalAnalyses = analysesData.length;
+
+    // Consolidar todos os feedbacks
     analysesData.forEach(analysis => {
       if (analysis.data && Array.isArray(analysis.data)) {
         allFeedbacks = [...allFeedbacks, ...analysis.data];
       }
     });
-    
-    // Calcular estatísticas básicas
-    const totalFeedbacks = allFeedbacks.length;
-    const positiveFeedbacks = allFeedbacks.filter(f => f.sentiment === 'positive').length;
-    const negativeFeedbacks = allFeedbacks.filter(f => f.sentiment === 'negative').length;
-    const neutralFeedbacks = totalFeedbacks - positiveFeedbacks - negativeFeedbacks;
-    
-    // Processamento de distribuições
-    const ratingDistribution = processRatingDistribution(allFeedbacks);
-    const sourceDistribution = processSourceDistribution(allFeedbacks);
-    const languageDistribution = processLanguageDistribution(allFeedbacks);
-    const problemDistribution = processProblemDistribution(allFeedbacks);
-    
+
+    // Usar apenas feedbacks válidos
+    const validFeedbacks = filterValidFeedbacks(allFeedbacks);
+    const totalFeedbacks = validFeedbacks.length;
+
+    // Calcular percentuais de sentimento
+    const sentimentCounts = validFeedbacks.reduce((acc: any, feedback: any) => {
+      acc[feedback.sentiment] = (acc[feedback.sentiment] || 0) + 1;
+      return acc;
+    }, {});
+
+    const positivePercentage = totalFeedbacks > 0 ? Math.round((sentimentCounts.positive || 0) / totalFeedbacks * 100) : 0;
+    const negativePercentage = totalFeedbacks > 0 ? Math.round((sentimentCounts.negative || 0) / totalFeedbacks * 100) : 0;
+    const neutralPercentage = totalFeedbacks > 0 ? Math.round((sentimentCounts.neutral || 0) / totalFeedbacks * 100) : 0;
+
     setStats({
       totalFeedbacks,
-      totalAnalyses: analysesData.length,
-      positivePercentage: totalFeedbacks ? Math.round((positiveFeedbacks / totalFeedbacks) * 100) : 0,
-      negativePercentage: totalFeedbacks ? Math.round((negativeFeedbacks / totalFeedbacks) * 100) : 0,
-      neutralPercentage: totalFeedbacks ? Math.round((neutralFeedbacks / totalFeedbacks) * 100) : 0,
-      ratingDistribution,
-      sourceDistribution,
-      languageDistribution,
-      problemDistribution,
+      totalAnalyses,
+      positivePercentage,
+      negativePercentage,
+      neutralPercentage,
+      ratingDistribution: processRatingDistribution(validFeedbacks),
+      sourceDistribution: processSourceDistribution(validFeedbacks),
+      languageDistribution: processLanguageDistribution(validFeedbacks),
+      problemDistribution: processProblemDistribution(validFeedbacks),
     });
   };
 
@@ -157,24 +162,25 @@ function TestDashboardContent() {
 
   // Processar distribuição de problemas
   const processProblemDistribution = (feedbacks: any[]) => {
-    const distribution: Record<string, number> = {};
+    const problemCounts: Record<string, number> = {};
     
     feedbacks.forEach(feedback => {
-      if (!feedback.problem) return;
-      
-      const problems = feedback.problem.split(';');
-      problems.forEach((problem: string) => {
-        const p = problem.trim();
-        if (p) {
-          distribution[p] = (distribution[p] || 0) + 1;
-        }
-      });
+      if (feedback.problem && isValidProblem(feedback.problem)) {
+        // Separar problemas por ; e remover duplicatas
+        const problems = Array.from(new Set(feedback.problem.split(';').map((p: string) => p.trim()))) as string[];
+        
+        problems.forEach(problem => {
+          if (isValidProblem(problem)) {
+            problemCounts[problem] = (problemCounts[problem] || 0) + 1;
+          }
+        });
+      }
     });
     
-    return Object.entries(distribution)
+    return Object.entries(problemCounts)
       .map(([problem, count]) => ({ name: problem, value: count }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 8);
+      .slice(0, 10);
   };
 
   // Renderização customizada de tooltips para os gráficos

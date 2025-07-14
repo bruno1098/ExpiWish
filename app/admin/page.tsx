@@ -70,6 +70,14 @@ import {
   Scatter,
   ZAxis
 } from "recharts";
+import { 
+  filterValidFeedbacks, 
+  isValidProblem, 
+  isValidSectorOrKeyword,
+  processSectorDistribution as processValidSectorDistribution,
+  processKeywordDistribution as processValidKeywordDistribution,
+  processProblemDistribution as processValidProblemDistribution
+} from "@/lib/utils";
 
 // Interfaces
 interface AnalysisData {
@@ -216,17 +224,18 @@ function AdminDashboardContent() {
   const [selectedHotel, setSelectedHotel] = useState<string>("todos");
   const [isLoading, setIsLoading] = useState(true);
   const [debugInfo, setDebugInfo] = useState<string>("");
-  const [dateRange, setDateRange] = useState<{start: Date | null; end: Date | null}>({
-    start: null,
-    end: null
+  const [dateRange, setDateRange] = useState<{ start: Date | null; end: Date | null }>({ 
+    start: null, 
+    end: null 
   });
 
-  // Estados para filtros globais
+  // Estados para filtros
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sentimentFilter, setSentimentFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [languageFilter, setLanguageFilter] = useState('all');
+  const [apartmentFilter, setApartmentFilter] = useState('all');
   const [hiddenRatings, setHiddenRatings] = useState<number[]>([]);
-  const [sentimentFilter, setSentimentFilter] = useState<string>('all');
-  const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [languageFilter, setLanguageFilter] = useState<string>('all');
-  const [apartmentFilter, setApartmentFilter] = useState<string>('all');
   const [globalFilteredData, setGlobalFilteredData] = useState<any[]>([]);
 
   // Estados para modal de detalhes
@@ -257,12 +266,40 @@ function AdminDashboardContent() {
     chartType: 'bar' | 'pie' | 'line';
   } | null>(null);
 
+  // Controlar scroll da página de fundo quando modais estão abertos
+  useEffect(() => {
+    if (detailPanelOpen || allCommentsModalOpen || chartModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup ao desmontar componente
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [detailPanelOpen, allCommentsModalOpen, chartModalOpen]);
+
   // Estados para abas expandidas
   const [expandedHotels, setExpandedHotels] = useState<Set<string>>(new Set());
   const [sortOrder, setSortOrder] = useState<string>("asc");
   
-  // Estado para controlar a abertura do painel de filtros
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Controlar scroll quando modal de filtros está aberto
+  useEffect(() => {
+    if (filtersOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+  }, [filtersOpen]);
+
+  // Auto-aplicar filtros quando qualquer filtro é alterado
+  useEffect(() => {
+    if (analysisData?.data) {
+      const filtered = applyGlobalFilters(analysisData.data);
+      setGlobalFilteredData(filtered);
+    }
+  }, [dateRange, sentimentFilter, sourceFilter, languageFilter, apartmentFilter, hiddenRatings, analysisData?.data]);
 
   // Função para aplicar filtros globais
   const applyGlobalFilters = useCallback((data: any[]) => {
@@ -305,13 +342,12 @@ function AdminDashboardContent() {
     });
   }, [hiddenRatings, dateRange, sentimentFilter, sourceFilter, languageFilter, apartmentFilter]);
   
-  // Atualizar dados filtrados quando os filtros ou dados originais mudarem
+  // Atualizar dados filtrados apenas quando os dados originais mudarem (não quando filtros mudarem)
   useEffect(() => {
     if (analysisData?.data) {
-      const filtered = applyGlobalFilters(analysisData.data);
-      setGlobalFilteredData(filtered);
+      setGlobalFilteredData(analysisData.data);
     }
-  }, [analysisData?.data, applyGlobalFilters]);
+  }, [analysisData?.data]);
 
   // Função para diagnóstico
   const runDiagnostics = async () => {
@@ -798,18 +834,30 @@ function AdminDashboardContent() {
   };
 
   const processSectorDistribution = (data: any[]) => {
+    if (!analysisData?.analysis?.keywordDistribution) return [];
+    
+    // Se temos dados filtrados, usar as funções utilitárias
+    if (data && data.length > 0) {
+      return processValidSectorDistribution(data).slice(0, 15);
+    }
+    
+    // Caso contrário, usar dados da análise original
     const sectorCounts: Record<string, number> = {};
     
-    data.forEach(feedback => {
-      if (feedback.sector) {
-        feedback.sector.split(';').forEach((sector: string) => {
-          const trimmedSector = sector.trim();
-          if (trimmedSector) {
-            sectorCounts[trimmedSector] = (sectorCounts[trimmedSector] || 0) + 1;
-          }
-        });
-      }
-    });
+    if (analysisData.data && Array.isArray(analysisData.data)) {
+      analysisData.data.forEach(feedback => {
+        if (feedback.sector && isValidSectorOrKeyword(feedback.sector)) {
+          // Separar por ; e remover duplicatas
+          const sectors = Array.from(new Set(feedback.sector.split(';').map((s: string) => s.trim()))) as string[];
+          
+          sectors.forEach((sector: string) => {
+            if (isValidSectorOrKeyword(sector)) {
+              sectorCounts[sector] = (sectorCounts[sector] || 0) + 1;
+            }
+          });
+        }
+      });
+    }
     
     return Object.entries(sectorCounts)
       .map(([sector, count]) => ({ label: sector, value: count }))
@@ -818,18 +866,30 @@ function AdminDashboardContent() {
   };
 
   const processKeywordDistribution = (data: any[]) => {
+    if (!analysisData?.analysis?.keywordDistribution) return [];
+    
+    // Se temos dados filtrados, usar as funções utilitárias
+    if (data && data.length > 0) {
+      return processValidKeywordDistribution(data).slice(0, 20);
+    }
+    
+    // Caso contrário, usar dados da análise original
     const keywordCounts: Record<string, number> = {};
     
-    data.forEach(feedback => {
-      if (feedback.keyword) {
-        feedback.keyword.split(';').forEach((keyword: string) => {
-          const trimmedKeyword = keyword.trim();
-          if (trimmedKeyword) {
-            keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1;
-          }
-        });
-      }
-    });
+    if (analysisData.data && Array.isArray(analysisData.data)) {
+      analysisData.data.forEach(feedback => {
+        if (feedback.keyword && isValidSectorOrKeyword(feedback.keyword)) {
+          // Separar por ; e remover duplicatas
+          const keywords = Array.from(new Set(feedback.keyword.split(';').map((k: string) => k.trim()))) as string[];
+          
+          keywords.forEach((keyword: string) => {
+            if (isValidSectorOrKeyword(keyword)) {
+              keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+            }
+          });
+        }
+      });
+    }
     
     return Object.entries(keywordCounts)
       .map(([keyword, count]) => ({ label: keyword, value: count }))
@@ -1395,6 +1455,95 @@ function AdminDashboardContent() {
     );
   }
 
+  // Função para processar e limpar dados com duplicatas separados por ";"
+  const cleanDataWithSeparator = (text: string | null | undefined): string => {
+    if (!text || typeof text !== 'string') return '';
+    
+    // Se contém ";", dividir, remover duplicatas e reunir
+    if (text.includes(';')) {
+      const items = text.split(';')
+        .map(item => item.trim())
+        .filter(item => item && item !== 'VAZIO' && item.toLowerCase() !== 'vazio');
+      
+      if (items.length === 0) return '';
+      
+      const uniqueItems = Array.from(new Set(items));
+      return uniqueItems.join(', ');
+    }
+    
+    // Para texto simples, verificar se não é VAZIO
+    if (text === 'VAZIO' || text.toLowerCase() === 'vazio') return '';
+    
+    return text;
+  };
+
+  // Função para aplicar presets de data
+  const applyDatePreset = (days: number) => {
+    const today = new Date();
+    const startDate = new Date();
+    startDate.setDate(today.getDate() - days);
+    
+    setDateRange({
+      start: startDate,
+      end: today
+    });
+  };
+
+  // Validação de datas
+  const validateDateRange = (startDate: Date | null, endDate: Date | null) => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // Fim do dia de hoje
+    
+    if (startDate && endDate) {
+      // Data final não pode ser antes da inicial
+      if (endDate < startDate) {
+        return 'A data final não pode ser anterior à data inicial';
+      }
+      // Data final não pode ser depois de hoje
+      if (endDate > today) {
+        return 'A data final não pode ser posterior a hoje';
+      }
+    }
+    
+    if (startDate && startDate > today) {
+      return 'A data inicial não pode ser posterior a hoje';
+    }
+    
+    if (endDate && endDate > today) {
+      return 'A data final não pode ser posterior a hoje';
+    }
+    
+    return null;
+  };
+
+  // Função melhorada para definir data inicial
+  const handleStartDateChange = (date: Date | null) => {
+    const error = validateDateRange(date, dateRange.end);
+    if (!error) {
+      setDateRange(prev => ({ ...prev, start: date }));
+    } else {
+      toast({
+        title: "Data inválida",
+        description: error,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Função melhorada para definir data final
+  const handleEndDateChange = (date: Date | null) => {
+    const error = validateDateRange(dateRange.start, date);
+    if (!error) {
+      setDateRange(prev => ({ ...prev, end: date }));
+    } else {
+      toast({
+        title: "Data inválida",
+        description: error,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <>
       <div className="p-6 space-y-6">
@@ -1434,44 +1583,53 @@ function AdminDashboardContent() {
                 )}
               </Button>
 
-              {/* Drawer de Filtros */}
+              {/* Modal de Filtros Premium */}
               {filtersOpen && analysisData && (
-                <>
-                  {/* Overlay */}
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setFiltersOpen(false)}>
+                  {/* Overlay Premium */}
                   <div 
-                    className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" 
+                    className="absolute inset-0 bg-black/40 backdrop-blur-sm"
                     onClick={() => setFiltersOpen(false)}
                   />
                   
-                  {/* Drawer */}
-                  <div className="absolute top-full right-0 mt-3 w-[420px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
-                    {/* Header do Drawer */}
-                    <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 text-white">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-white/20 rounded-lg">
-                            <Filter className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold">Filtros Administrativos</h3>
-                            <p className="text-purple-100 text-sm">Controle total dos dados</p>
+                  {/* Modal Container Responsivo */}
+                  <div 
+                    className="relative w-full max-w-md sm:max-w-lg md:max-w-xl lg:max-w-3xl xl:max-w-4xl max-h-[95vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                      {/* Header Compacto */}
+                      <div className="relative p-5 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 overflow-hidden">
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent"></div>
+                        <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:20px_20px]"></div>
+                        
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm border border-white/20 shadow-lg">
+                                <Filter className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-lg font-bold text-white leading-tight truncate">Filtros Administrativos</h3>
+                                <p className="text-sm text-blue-100 opacity-90 font-medium hidden sm:block">Controle total dos dados</p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setFiltersOpen(false)}
+                              className="text-white hover:bg-white/10 h-10 w-10 rounded-full p-0 backdrop-blur-sm border border-white/20 flex-shrink-0"
+                            >
+                              <X className="w-5 h-5" />
+                            </Button>
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setFiltersOpen(false)}
-                          className="text-white hover:bg-white/20 h-8 w-8 p-0"
-                        >
-                          ✕
-                        </Button>
                       </div>
-                    </div>
 
-                    {/* Conteúdo do Drawer */}
-                    <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
-                      {/* Filtro de Data */}
-                      <div className="space-y-3">
+                      {/* Conteúdo Moderno e Responsivo */}
+                      <div className="p-6 max-h-[calc(95vh-120px)] overflow-y-auto">
+                        <div className="grid gap-6 lg:grid-cols-3">
+                      {/* Filtro de Data com Presets */}
+                      <div className="space-y-3 lg:col-span-2">
                         <div className="flex items-center gap-2 mb-3">
                           <div className="p-1.5 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
                             <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1480,22 +1638,58 @@ function AdminDashboardContent() {
                           </div>
                           <label className="text-sm font-semibold text-gray-900 dark:text-gray-100">Período de Análise</label>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        
+                        {/* Presets de Data */}
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => applyDatePreset(7)}
+                            className="text-xs h-8"
+                          >
+                            📅 7 dias
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => applyDatePreset(30)}
+                            className="text-xs h-8"
+                          >
+                            📅 30 dias
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => applyDatePreset(90)}
+                            className="text-xs h-8"
+                          >
+                            📅 90 dias
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Data inicial</label>
                             <DatePicker 
                               date={dateRange.start} 
-                              onChange={(date) => setDateRange(prev => ({ ...prev, start: date }))}
+                              onChange={handleStartDateChange}
                             />
                           </div>
                           <div className="space-y-1">
                             <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Data final</label>
                             <DatePicker 
                               date={dateRange.end} 
-                              onChange={(date) => setDateRange(prev => ({ ...prev, end: date }))}
+                              onChange={handleEndDateChange}
                             />
                           </div>
                         </div>
+                        
+                        {/* Validação visual */}
+                        {dateRange.start && dateRange.end && validateDateRange(dateRange.start, dateRange.end) && (
+                          <div className="text-xs text-red-600 dark:text-red-400 mt-1 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                            ⚠️ {validateDateRange(dateRange.start, dateRange.end)}
+                          </div>
+                        )}
                       </div>
 
                       {/* Filtro de Sentimento */}
@@ -1611,12 +1805,12 @@ function AdminDashboardContent() {
                                 }}
                                 className="sr-only"
                               />
-                              <div className={`flex flex-col items-center p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                              <div className={`flex flex-col items-center p-2 sm:p-3 rounded-lg border-2 transition-all cursor-pointer ${
                                 hiddenRatings.includes(rating) 
                                   ? 'border-red-500 bg-red-50 dark:bg-red-900/30' 
                                   : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-500'
                               }`}>
-                                <span className="text-lg">{rating}⭐</span>
+                                <span className="text-sm sm:text-lg">{rating}⭐</span>
                                 <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
                                   {hiddenRatings.includes(rating) ? 'Oculto' : 'Visível'}
                                 </span>
@@ -1653,10 +1847,9 @@ function AdminDashboardContent() {
                           </div>
                         </div>
                         
-                        <div className="flex gap-2">
+                        <div className="flex gap-3">
                           <Button 
                             variant="outline" 
-                            size="sm"
                             onClick={() => {
                               setDateRange({ start: null, end: null });
                               setSentimentFilter('all');
@@ -1665,22 +1858,22 @@ function AdminDashboardContent() {
                               setApartmentFilter('all');
                               setHiddenRatings([]);
                             }}
-                            className="flex-1 border-gray-300 hover:bg-gray-50"
+                            className="flex-1 border-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                           >
-                            🗑️ Limpar Tudo
+                            🗑️ Limpar Filtros
                           </Button>
                           <Button 
-                            size="sm"
                             onClick={() => setFiltersOpen(false)}
-                            className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                            className="flex-1 bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 hover:from-slate-900 hover:via-blue-900 hover:to-indigo-900 text-white"
                           >
-                            ✅ Aplicar Filtros
+                            ✅ Fechar
                           </Button>
+                        </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </>
+                </div>
               )}
             </div>
             
@@ -1888,18 +2081,18 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'keyword',
                       'Principais Palavras-chave',
-                      processKeywordDistribution(globalFilteredData).slice(0, 15),
+                      processKeywordDistribution(globalFilteredData || []).slice(0, 15),
                       'bar'
                     )}
                   >
                     Ver Detalhes
                   </Button>
-            </div>
+                </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
-                      data={processKeywordDistribution(globalFilteredData).slice(0, 8)}
+                      data={processKeywordDistribution(globalFilteredData || []).slice(0, 8)}
                       margin={{
                         top: 20,
                         right: 30,
@@ -1932,7 +2125,7 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'sector',
                       'Distribuição por Departamento',
-                      processSectorDistribution(globalFilteredData),
+                      processSectorDistribution(globalFilteredData || []),
                       'pie'
                     )}
                   >
@@ -1943,7 +2136,7 @@ function AdminDashboardContent() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={processSectorDistribution(globalFilteredData)}
+                        data={processSectorDistribution(globalFilteredData || [])}
                         cx="50%"
                         cy="50%"
                         labelLine={true}
@@ -1953,11 +2146,11 @@ function AdminDashboardContent() {
                         dataKey="value"
                         nameKey="label"
                         onClick={(data, index) => {
-                          const item = processSectorDistribution(globalFilteredData)[index];
+                          const item = processSectorDistribution(globalFilteredData || [])[index];
                           handleChartClick(item, 'sector');
                         }}
                       >
-                        {processSectorDistribution(globalFilteredData).map((_: any, index: number) => (
+                        {processSectorDistribution(globalFilteredData || []).map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -1969,53 +2162,57 @@ function AdminDashboardContent() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Feedbacks Recentes */}
+              {/* Análise de Apartamentos */}
               <Card className="p-4">
-                <h3 className="text-lg font-semibold mb-4">Feedbacks Recentes</h3>
-                <ScrollArea className="h-[300px] pr-4">
-                  <div className="space-y-4">
-                    {analysisData.analysis.recentFeedbacks.map((feedback: any, index: number) => (
-                      <div key={index} className="p-3 border rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center space-x-2">
-                            <Badge variant={getBadgeVariant(feedback.rating)}>
-                              {feedback.rating || "?"} ★
-                            </Badge>
-                            <span className="text-sm font-medium">{feedback.author || feedback.title || "Autor não identificado"}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDate(feedback.date)}
-                          </span>
-                        </div>
-                        <p className="text-sm line-clamp-3">{feedback.comment}</p>
-                        {feedback.source && (
-                          <div className="mt-2 flex justify-between items-center">
-                            <Badge variant="secondary" className="text-xs">
-                              {feedback.source}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              Sentimento: {feedback.sentiment !== undefined ? (
-                                <Badge 
-                                  variant={
-                                    feedback.sentiment >= 70 
-                                      ? "default" as "default" 
-                                      : feedback.sentiment >= 50 
-                                        ? "outline" as "outline" 
-                                        : "destructive" as "destructive"
-                                  }
-                                >
-                                  {feedback.sentiment}%
-                                </Badge>
-                              ) : "N/A"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+                                <h3 className="text-lg font-semibold mb-4">Análise de Apartamentos</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={processApartamentoDistribution(analysisData.analysis).slice(0, 8)}
+                      margin={{
+                        top: 20,
+                        right: 30,
+                        left: 20,
+                        bottom: 5,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <RechartsTooltip content={<CustomTooltip />} />
+                      <Bar dataKey="value" fill="#FF8042" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                              </Card>
+
+              {/* Distribuição por Fonte */}
+              <Card className="p-4">
+                <h3 className="text-lg font-semibold mb-4">Distribuição por Fonte</h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={processSourceDistribution(analysisData.analysis)}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        nameKey="label"
+                      >
+                        {processSourceDistribution(analysisData.analysis).map((_: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </Card>
-            </div>
+              </div>
           </TabsContent>
 
           {/* Hotéis */}
@@ -3051,19 +3248,21 @@ function AdminDashboardContent() {
       </Dialog>
 
       {/* Painel Lateral Interativo Melhorado */}
-      <div className={`fixed inset-y-0 right-0 z-50 w-[42rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
+      <div className={`fixed inset-y-0 right-0 z-50 w-[48rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
         detailPanelOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         {selectedItem && (
           <div className="h-full flex flex-col">
-            {/* Cabeçalho Moderno */}
-            <div className="relative p-6 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 overflow-hidden">
-              <div className="absolute inset-0 bg-black/10"></div>
+            {/* Cabeçalho Compacto */}
+            <div className="relative p-5 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent"></div>
+              <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:20px_20px]"></div>
+              
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="text-white">
+                  <div className="text-white flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                      <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm border border-white/20 shadow-lg">
                         {selectedItem.type === 'hotel' && <Building2 className="h-5 w-5" />}
                         {selectedItem.type === 'problem' && <AlertCircle className="h-5 w-5" />}
                         {selectedItem.type === 'rating' && <Star className="h-5 w-5" />}
@@ -3071,8 +3270,8 @@ function AdminDashboardContent() {
                         {selectedItem.type === 'source' && <Globe className="h-5 w-5" />}
                         {!['hotel', 'problem', 'rating', 'keyword', 'source'].includes(selectedItem.type) && <BarChart3 className="h-5 w-5" />}
                       </div>
-                      <div>
-                        <h3 className="text-xl font-bold">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-bold leading-tight truncate">
                           {selectedItem.type === 'keyword' ? 'Palavra-chave' : 
                            selectedItem.type === 'problem' ? 'Problema' :
                            selectedItem.type === 'sector' ? 'Departamento' :
@@ -3081,7 +3280,7 @@ function AdminDashboardContent() {
                            selectedItem.type === 'rating' ? 'Avaliação' :
                            selectedItem.type === 'hotel' ? 'Hotel' : selectedItem.type}
                         </h3>
-                        <p className="text-sm text-blue-100 opacity-90">{selectedItem.value}</p>
+                        <p className="text-sm text-blue-100 opacity-90 font-medium truncate">{cleanDataWithSeparator(selectedItem.value)}</p>
                       </div>
                     </div>
                   </div>
@@ -3089,226 +3288,246 @@ function AdminDashboardContent() {
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setDetailPanelOpen(false)}
-                    className="text-white hover:bg-white/20 h-10 w-10 rounded-full p-0"
+                    className="text-white hover:bg-white/10 h-10 w-10 rounded-full p-0 backdrop-blur-sm border border-white/20 flex-shrink-0"
                   >
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
                 
-                {/* Métricas Destacadas */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center">
+                {/* Métricas Compactas */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center">
                     <div className="text-2xl font-bold text-white">{selectedItem.stats.totalOccurrences}</div>
-                    <div className="text-xs text-blue-100 opacity-75">Ocorrências</div>
+                    <div className="text-xs text-blue-100 opacity-75 font-medium">Ocorrências</div>
                   </div>
-                  <div className="text-center">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center">
                     <div className="text-2xl font-bold text-white">{selectedItem.stats.percentage}%</div>
-                    <div className="text-xs text-blue-100 opacity-75">do Total</div>
+                    <div className="text-xs text-blue-100 opacity-75 font-medium">do Total</div>
                   </div>
-                  <div className="text-center">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center">
                     <div className="text-2xl font-bold text-white">{selectedItem.stats.averageRating.toFixed(1)}</div>
-                    <div className="text-xs text-blue-100 opacity-75">Avaliação Média</div>
+                    <div className="text-xs text-blue-100 opacity-75 font-medium">Avaliação Média</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Conteúdo Principal */}
+            {/* Conteúdo Principal Melhorado */}
             <div className="flex-1 overflow-y-auto">
               <div className="p-6 space-y-6">
-                {/* Botão para Ver Todos os Comentários */}
-                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-4 -m-6 mb-4 border-b">
+                {/* Botão Call-to-Action Premium */}
+                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-4 -m-6 mb-6 border-b">
                   <Button 
                     onClick={handleViewAllComments}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
+                    className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02]"
                     size="lg"
                   >
-                    <MessageSquare className="h-5 w-5 mr-2" />
+                    <MessageSquare className="h-5 w-5 mr-3" />
                     Ver TODOS os {selectedItem.stats.totalOccurrences} Comentários
-                    <ExternalLink className="h-4 w-4 ml-2" />
+                    <ExternalLink className="h-4 w-4 ml-3" />
                   </Button>
                 </div>
 
-              {/* Avaliação Média */}
-              <Card className="p-4">
-                <h4 className="font-semibold mb-3 flex items-center">
-                  <Star className="h-4 w-4 text-yellow-500 mr-2" />
-                  Avaliação Média
-                </h4>
-                <div className="text-center">
-                  <div className="text-3xl font-bold">{selectedItem.stats.averageRating.toFixed(1)}</div>
-                  <div className="text-yellow-500">⭐⭐⭐⭐⭐</div>
-                </div>
-              </Card>
+              {/* Cards de Informação com Design Moderno */}
+              <div className="grid gap-6">
+                {/* Avaliação Média */}
+                <Card className="p-6 shadow-lg border-0 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950/20 dark:to-orange-950/20">
+                  <h4 className="font-semibold mb-4 flex items-center text-lg">
+                    <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg mr-3">
+                      <Star className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                    </div>
+                    Avaliação Média
+                  </h4>
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-yellow-700 dark:text-yellow-300 mb-2">{selectedItem.stats.averageRating.toFixed(1)}</div>
+                    <div className="text-2xl">
+                      {Array.from({length: 5}, (_, i) => (
+                        <span key={i} className={i < Math.round(selectedItem.stats.averageRating) ? "text-yellow-500" : "text-gray-300"}>
+                          ⭐
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </Card>
 
-              {/* Distribuição de Sentimentos */}
-              <Card className="p-4">
-                <h4 className="font-semibold mb-3">Distribuição de Sentimentos</h4>
-                <div className="h-40">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive, fill: '#10B981' },
-                          { name: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral, fill: '#F59E0B' },
-                          { name: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative, fill: '#EF4444' }
-                        ].filter(item => item.value > 0)}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={60}
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                      >
-                      </Pie>
-                      <RechartsTooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              {/* Distribuição de Avaliações */}
-              <Card className="p-4">
-                <h4 className="font-semibold mb-3">Distribuição de Avaliações</h4>
-                <div className="h-32">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[
-                      { rating: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
-                      { rating: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
-                      { rating: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
-                      { rating: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
-                      { rating: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
-                    ]}>
-                      <XAxis dataKey="rating" />
-                      <YAxis />
-                      <RechartsTooltip />
-                      <Bar dataKey="value" fill="#8884d8" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              {/* Tendência Mensal */}
-              {selectedItem.stats.monthlyTrend.length > 1 && (
-                <Card className="p-4">
-                  <h4 className="font-semibold mb-3">Tendência Mensal</h4>
-                  <div className="h-32">
+                {/* Distribuição de Sentimentos */}
+                <Card className="p-6 shadow-lg border-0">
+                  <h4 className="font-semibold mb-4 flex items-center text-lg">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg mr-3">
+                      <TrendingUp className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    Distribuição de Sentimentos
+                  </h4>
+                  <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={selectedItem.stats.monthlyTrend}>
-                        <XAxis dataKey="month" />
-                        <YAxis />
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive, fill: '#10B981' },
+                            { name: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral, fill: '#F59E0B' },
+                            { name: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative, fill: '#EF4444' }
+                          ].filter(item => item.value > 0)}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          dataKey="value"
+                          label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+                        >
+                        </Pie>
                         <RechartsTooltip />
-                        <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
-                      </LineChart>
+                      </PieChart>
                     </ResponsiveContainer>
                   </div>
                 </Card>
-              )}
 
-              {/* Hotéis Afetados */}
-              {selectedItem.stats.topHotels.length > 0 && (
-                <Card className="p-4">
-                  <h4 className="font-semibold mb-3">Principais Hotéis</h4>
-                  <div className="space-y-2">
-                    {selectedItem.stats.topHotels.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center">
-                        <span className="text-sm">{item.hotel}</span>
-                        <Badge variant="outline">{item.count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Palavras-chave Relacionadas */}
-              {selectedItem.stats.topKeywords.length > 0 && (
-                <Card className="p-4">
-                  <h4 className="font-semibold mb-3">Principais Palavras-chave</h4>
-                  <div className="space-y-2">
-                    {selectedItem.stats.topKeywords.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center">
-                        <span className="text-sm">{item.keyword}</span>
-                        <Badge variant="outline">{item.count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Problemas Relacionados */}
-              {selectedItem.stats.topProblems.length > 0 && (
-                <Card className="p-4">
-                  <h4 className="font-semibold mb-3">Problemas Relacionados</h4>
-                  <div className="space-y-2">
-                    {selectedItem.stats.topProblems.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center">
-                        <span className="text-sm">{item.problem}</span>
-                        <Badge variant="outline">{item.count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Feedbacks Recentes */}
-              <Card className="p-4">
-                <h4 className="font-semibold mb-3">Feedbacks Recentes</h4>
-                <div className="space-y-3">
-                  {selectedItem.stats.recentFeedbacks.map((feedback: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-muted rounded-lg">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="text-yellow-500">
-                            {'⭐'.repeat(feedback.rating || 0)}
-                          </div>
-                          <span className="text-xs font-medium">{feedback.hotel}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDateBR(feedback.date)}
-                        </div>
-                      </div>
-                      <p className="text-sm line-clamp-2">{feedback.comment}</p>
+                {/* Distribuição de Avaliações */}
+                <Card className="p-6 shadow-lg border-0">
+                  <h4 className="font-semibold mb-4 flex items-center text-lg">
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg mr-3">
+                      <BarChart3 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                     </div>
-                  ))}
-                </div>
-              </Card>
+                    Distribuição de Avaliações
+                  </h4>
+                  <div className="h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={[
+                        { rating: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
+                        { rating: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
+                        { rating: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
+                        { rating: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
+                        { rating: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
+                      ]}>
+                        <XAxis dataKey="rating" />
+                        <YAxis />
+                        <RechartsTooltip />
+                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                {/* Tendência Mensal */}
+                {selectedItem.stats.monthlyTrend.length > 1 && (
+                  <Card className="p-6 shadow-lg border-0">
+                    <h4 className="font-semibold mb-4 flex items-center text-lg">
+                      <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg mr-3">
+                        <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      </div>
+                      Tendência Mensal
+                    </h4>
+                    <div className="h-40">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={selectedItem.stats.monthlyTrend}>
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <RechartsTooltip />
+                          <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={3} dot={{ r: 6 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Hotéis Afetados */}
+                {selectedItem.stats.topHotels.length > 0 && (
+                  <Card className="p-6 shadow-lg border-0">
+                    <h4 className="font-semibold mb-4 flex items-center text-lg">
+                      <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg mr-3">
+                        <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      Principais Hotéis
+                    </h4>
+                    <div className="space-y-3">
+                      {selectedItem.stats.topHotels.map((item: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                          <span className="font-medium">{item.hotel}</span>
+                          <Badge variant="secondary" className="px-3 py-1">{item.count}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Palavras-chave Relacionadas */}
+                {selectedItem.stats.topKeywords.length > 0 && (
+                  <Card className="p-6 shadow-lg border-0">
+                    <h4 className="font-semibold mb-4 flex items-center text-lg">
+                      <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg mr-3">
+                        <Tag className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                      </div>
+                      Principais Palavras-chave
+                    </h4>
+                    <div className="space-y-3">
+                      {selectedItem.stats.topKeywords.map((item: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                          <span className="font-medium">{cleanDataWithSeparator(item.keyword)}</span>
+                          <Badge variant="secondary" className="px-3 py-1">{item.count}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Problemas Relacionados */}
+                {selectedItem.stats.topProblems.length > 0 && (
+                  <Card className="p-6 shadow-lg border-0">
+                    <h4 className="font-semibold mb-4 flex items-center text-lg">
+                      <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg mr-3">
+                        <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                      </div>
+                      Problemas Relacionados
+                    </h4>
+                    <div className="space-y-3">
+                      {selectedItem.stats.topProblems.map((item: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                          <span className="font-medium">{cleanDataWithSeparator(item.problem)}</span>
+                          <Badge variant="destructive" className="px-3 py-1">{item.count}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+              </div>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Overlay para fechar o painel */}
+      {/* Overlay Premium para fechar o painel */}
       {detailPanelOpen && (
         <div 
-          className="fixed inset-0 bg-black/20 z-40" 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-all duration-500" 
           onClick={() => setDetailPanelOpen(false)}
         />
       )}
 
-      {/* Modal para Ver Todos os Comentários */}
+      {/* Modal para Ver Todos os Comentários - Melhorado */}
       <Dialog open={allCommentsModalOpen} onOpenChange={setAllCommentsModalOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
+        <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
+          <DialogHeader className="pb-6 border-b">
+            <DialogTitle className="flex items-center gap-3 text-2xl">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <MessageSquare className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
               Todos os Comentários {selectedItem && `(${allCommentsData.length})`}
             </DialogTitle>
-            <DialogDescription>
-              {selectedItem && `Comentários relacionados a: ${selectedItem.value}`}
+            <DialogDescription className="text-lg">
+              {selectedItem && `Comentários relacionados a: ${cleanDataWithSeparator(selectedItem.value)}`}
             </DialogDescription>
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto p-2">
-            <div className="space-y-4">
+            <div className="space-y-6">
               {allCommentsData.map((feedback: any, idx: number) => (
-                <Card key={idx} className="p-4 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1">
+                <Card key={idx} className="p-6 hover:shadow-xl transition-all duration-300 border-0 shadow-lg">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         {[...Array(5)].map((_, i) => (
                           <Star 
                             key={i} 
-                            className={`h-4 w-4 ${
+                            className={`h-5 w-5 ${
                               i < feedback.rating 
                                 ? "text-yellow-500 fill-yellow-500" 
                                 : "text-gray-300"
@@ -3316,48 +3535,48 @@ function AdminDashboardContent() {
                           />
                         ))}
                       </div>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="px-3 py-1 font-semibold">
                         {feedback.rating}/5
                       </Badge>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-medium text-muted-foreground">
+                      <div className="text-base font-semibold text-foreground">
                         {feedback.hotel || 'Hotel não identificado'}
                       </div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-sm text-muted-foreground">
                         {formatDateBR(feedback.date)}
                       </div>
                     </div>
                   </div>
                   
-                  <div className="mb-3">
-                    <p className="text-sm leading-relaxed">{feedback.comment}</p>
+                  <div className="mb-4">
+                    <p className="text-base leading-relaxed text-foreground">{feedback.comment}</p>
                   </div>
                   
-                  <div className="flex flex-wrap gap-2">
-                    {feedback.source && (
-                      <Badge variant="secondary" className="text-xs">
-                        📍 {feedback.source}
+                  <div className="flex flex-wrap gap-3">
+                    {feedback.source && cleanDataWithSeparator(feedback.source) && (
+                      <Badge variant="secondary" className="px-3 py-1 text-sm">
+                        📍 {cleanDataWithSeparator(feedback.source)}
                       </Badge>
                     )}
-                    {feedback.sector && (
-                      <Badge variant="outline" className="text-xs">
-                        🏢 {feedback.sector}
+                    {feedback.sector && cleanDataWithSeparator(feedback.sector) && (
+                      <Badge variant="outline" className="px-3 py-1 text-sm">
+                        🏢 {cleanDataWithSeparator(feedback.sector)}
                       </Badge>
                     )}
-                    {feedback.keyword && (
-                      <Badge variant="outline" className="text-xs">
-                        🏷️ {feedback.keyword}
+                    {feedback.keyword && cleanDataWithSeparator(feedback.keyword) && (
+                      <Badge variant="outline" className="px-3 py-1 text-sm">
+                        🏷️ {cleanDataWithSeparator(feedback.keyword)}
                       </Badge>
                     )}
-                    {feedback.problem && feedback.problem !== 'VAZIO' && (
-                      <Badge variant="destructive" className="text-xs">
-                        ⚠️ {feedback.problem}
+                    {feedback.problem && cleanDataWithSeparator(feedback.problem) && (
+                      <Badge variant="destructive" className="px-3 py-1 text-sm">
+                        ⚠️ {cleanDataWithSeparator(feedback.problem)}
                       </Badge>
                     )}
-                    {feedback.apartamento && (
-                      <Badge variant="outline" className="text-xs">
-                        🚪 {feedback.apartamento}
+                    {feedback.apartamento && cleanDataWithSeparator(feedback.apartamento) && (
+                      <Badge variant="outline" className="px-3 py-1 text-sm">
+                        🚪 {cleanDataWithSeparator(feedback.apartamento)}
                       </Badge>
                     )}
                   </div>
@@ -3365,12 +3584,12 @@ function AdminDashboardContent() {
               ))}
               
               {allCommentsData.length === 0 && (
-                <div className="text-center py-12">
-                  <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                <div className="text-center py-20">
+                  <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-6" />
+                  <h3 className="text-2xl font-semibold text-muted-foreground mb-3">
                     Nenhum comentário encontrado
                   </h3>
-                  <p className="text-muted-foreground">
+                  <p className="text-lg text-muted-foreground">
                     Não há comentários disponíveis para este critério.
                   </p>
                 </div>

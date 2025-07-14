@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArrowLeft, AlertCircle, Eye, EyeOff, Edit3, Save, X, Plus, Trash2 } from "lucide-react"
 import { formatDateBR, cn } from "@/lib/utils"
+import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from "@/lib/firestore-service"
@@ -709,51 +710,43 @@ export default function UnidentifiedFeedbacks() {
   }, [userData])
 
   const fetchUnidentifiedFeedbacks = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
+      const allAnalyses = await getAllAnalyses()
       
-      if (!userData?.hotelId) {
-        setLoading(false)
-        return
-      }
+      const unidentifiedFeedbacks: UnidentifiedFeedback[] = []
+      
+      allAnalyses.forEach((analysis: any) => {
+        if (analysis.data && Array.isArray(analysis.data)) {
+          analysis.data.forEach((feedback: any) => {
+            // Verifica se é um feedback não identificado usando as funções utilitárias
+            const isUnidentified = 
+              !isValidSectorOrKeyword(feedback.keyword) ||
+              !isValidSectorOrKeyword(feedback.sector) ||
+              feedback.keyword?.toLowerCase().includes('não identificado') ||
+              feedback.sector?.toLowerCase().includes('não identificado');
 
-      const analyses = await getAllAnalyses()
+            if (isUnidentified) {
+              unidentifiedFeedbacks.push({
+                id: feedback.id || `${analysis.id}_${Math.random()}`,
+                comment: feedback.comment || '',
+                rating: feedback.rating || 3,
+                keyword: feedback.keyword || 'Não identificado',
+                sector: feedback.sector || 'Não identificado', 
+                problem: feedback.problem || '',
+                date: feedback.date || analysis.importDate?.toDate?.()?.toISOString() || new Date().toISOString(),
+                source: feedback.source || 'Não especificado',
+                sentiment: feedback.sentiment,
+                allProblems: feedback.allProblems || []
+              })
+            }
+          })
+        }
+      })
       
-      if (analyses && analyses.length > 0) {
-        const userHotelAnalyses = analyses.filter((analysis: any) => 
-          analysis.hotelId === userData.hotelId
-        )
-        
-        let allFeedbacks: any[] = []
-        userHotelAnalyses.forEach((analysis: any) => {
-          if (analysis.data && Array.isArray(analysis.data)) {
-            allFeedbacks = [...allFeedbacks, ...analysis.data]
-          }
-        })
-        
-        // Filtrar apenas feedbacks não identificados
-        const unidentified = allFeedbacks.filter(feedback => {
-          const keyword = feedback.keyword?.toLowerCase() || ''
-          const sector = feedback.sector?.toLowerCase() || ''
-          const problem = feedback.problem?.toLowerCase() || ''
-          
-          const isNotIdentified = 
-            keyword.includes('não identificado') ||
-            keyword.includes('vazio') ||
-            keyword === '' ||
-            sector.includes('não identificado') ||
-            sector.includes('vazio') ||
-            sector === '' ||
-            problem.includes('não identificado') ||
-            problem === 'não identificado'
-          
-          return isNotIdentified
-        })
-        
-        setUnidentifiedFeedbacks(unidentified)
-      }
+      setUnidentifiedFeedbacks(unidentifiedFeedbacks)
     } catch (error) {
-      console.error('Erro ao carregar feedbacks não identificados:', error)
+      console.error('Erro ao buscar feedbacks não identificados:', error)
     } finally {
       setLoading(false)
     }

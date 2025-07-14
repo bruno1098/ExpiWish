@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { RequireAuth } from "@/lib/auth-context";
 import SharedDashboardLayout from "../shared-layout";
+import { useToast } from "@/components/ui/use-toast";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend, RadarChart, PolarGrid,
@@ -100,6 +101,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 function DashboardContent() {
   const { userData } = useAuth();
+  const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [selectedHotel, setSelectedHotel] = useState<string | null>(null);
@@ -152,11 +154,91 @@ function DashboardContent() {
   // Estado para controlar a abertura do painel de filtros
   const [filtersOpen, setFiltersOpen] = useState(false);
   
+  // Controlar scroll quando modal de filtros está aberto
+  useEffect(() => {
+    if (filtersOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [filtersOpen]);
+  
   const router = useRouter();
 
   // Adicionar a função handleViewHistory
   const handleViewHistory = () => {
     router.push('/history');
+  };
+
+  // Função para aplicar presets de data
+  const applyDatePreset = (days: number) => {
+    const today = new Date();
+    const startDate = new Date();
+    startDate.setDate(today.getDate() - days);
+    
+    setDateRange({
+      start: startDate,
+      end: today
+    });
+  };
+
+  // Validação de datas
+  const validateDateRange = (startDate: Date | null, endDate: Date | null) => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // Fim do dia de hoje
+    
+    if (startDate && endDate) {
+      // Data final não pode ser antes da inicial
+      if (endDate < startDate) {
+        return 'A data final não pode ser anterior à data inicial';
+      }
+      // Data final não pode ser depois de hoje
+      if (endDate > today) {
+        return 'A data final não pode ser posterior a hoje';
+      }
+    }
+    
+    if (startDate && startDate > today) {
+      return 'A data inicial não pode ser posterior a hoje';
+    }
+    
+    if (endDate && endDate > today) {
+      return 'A data final não pode ser posterior a hoje';
+    }
+    
+    return null;
+  };
+
+  // Função melhorada para definir data inicial
+  const handleStartDateChange = (date: Date | null) => {
+    const error = validateDateRange(date, dateRange.end);
+    if (!error) {
+      setDateRange(prev => ({ ...prev, start: date }));
+    } else {
+      toast({
+        title: "Data inválida",
+        description: error,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Função melhorada para definir data final
+  const handleEndDateChange = (date: Date | null) => {
+    const error = validateDateRange(dateRange.start, date);
+    if (!error) {
+      setDateRange(prev => ({ ...prev, end: date }));
+    } else {
+      toast({
+        title: "Data inválida",
+        description: error,
+        variant: "destructive",
+      });
+    }
   };
   
   // Função para aplicar filtros globais
@@ -968,16 +1050,28 @@ function DashboardContent() {
           >
             Ver Histórico Completo
           </Button>
-          <div className="flex flex-wrap gap-2">
-            <DatePicker 
-              date={dateRange.start} 
-              onChange={(date) => setDateRange(prev => ({ ...prev, start: date }))}
-            />
-            <DatePicker 
-              date={dateRange.end} 
-              onChange={(date) => setDateRange(prev => ({ ...prev, end: date }))}
-            />
-          </div>
+          
+          {/* Contador de filtros ativos */}
+          <Button 
+            onClick={() => setFiltersOpen(true)}
+            variant="outline"
+            className="relative bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border-blue-200 dark:border-blue-800 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-900/50 dark:hover:to-indigo-900/50"
+          >
+            <Filter className="mr-2 h-4 w-4" />
+            Filtros Avançados
+            {(dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0) && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                {[
+                  dateRange.start || dateRange.end,
+                  sentimentFilter !== 'all',
+                  sourceFilter !== 'all',
+                  languageFilter !== 'all', 
+                  apartmentFilter !== 'all',
+                  hiddenRatings.length > 0
+                ].filter(Boolean).length}
+              </span>
+            )}
+          </Button>
         </div>
       </div>
       
@@ -2503,6 +2597,175 @@ function DashboardContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Filtros Premium */}
+      {filtersOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+          onClick={() => setFiltersOpen(false)}
+        >
+          <div 
+            className="relative w-full max-w-4xl max-h-[95vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/10 rounded-lg">
+                    <Filter className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Filtros do Colaborador</h3>
+                    <p className="text-sm text-blue-100 opacity-90">Personalize sua análise</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFiltersOpen(false)}
+                  className="text-white hover:bg-white/10 h-10 w-10 rounded-full p-0"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-6 max-h-[calc(95vh-120px)] overflow-y-auto">
+              <div className="grid gap-6 lg:grid-cols-3">
+                <div className="space-y-3 lg:col-span-2">
+                  <label className="text-sm font-semibold">Período de Análise</label>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset(7)}>📅 7 dias</Button>
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset(30)}>📅 30 dias</Button>
+                    <Button variant="outline" size="sm" onClick={() => applyDatePreset(90)}>📅 90 dias</Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500">Data inicial</label>
+                      <DatePicker date={dateRange.start} onChange={handleStartDateChange} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">Data final</label>
+                      <DatePicker date={dateRange.end} onChange={handleEndDateChange} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold">Sentimento</label>
+                  <select 
+                    value={sentimentFilter} 
+                    onChange={(e) => setSentimentFilter(e.target.value)}
+                    className="w-full p-3 border rounded-lg"
+                  >
+                    <option value="all">Todos</option>
+                    <option value="positive">Positivos</option>
+                    <option value="neutral">Neutros</option>
+                    <option value="negative">Negativos</option>
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold">Fonte</label>
+                  <select 
+                    value={sourceFilter} 
+                    onChange={(e) => setSourceFilter(e.target.value)}
+                    className="w-full p-3 border rounded-lg"
+                  >
+                    <option value="all">Todas</option>
+                    {analysisData && Array.from(new Set(analysisData.data.map(f => f.source).filter(Boolean))).map(source => (
+                      <option key={source} value={source}>{source}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold">Idioma</label>
+                  <select 
+                    value={languageFilter} 
+                    onChange={(e) => setLanguageFilter(e.target.value)}
+                    className="w-full p-3 border rounded-lg"
+                  >
+                    <option value="all">Todos</option>
+                    {analysisData && Array.from(new Set(analysisData.data.map(f => f.language).filter(Boolean))).map(language => (
+                      <option key={language} value={language}>{language}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold">Apartamento</label>
+                  <select 
+                    value={apartmentFilter} 
+                    onChange={(e) => setApartmentFilter(e.target.value)}
+                    className="w-full p-3 border rounded-lg"
+                  >
+                    <option value="all">Todos</option>
+                    {analysisData && Array.from(new Set(analysisData.data.map(f => f.apartamento).filter(Boolean))).map(apartamento => (
+                      <option key={apartamento} value={apartamento}>Apto {apartamento}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-3 lg:col-span-3">
+                  <label className="text-sm font-semibold">Ocultar Avaliações</label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[1, 2, 3, 4, 5].map(rating => (
+                      <label key={rating} className="cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hiddenRatings.includes(rating)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setHiddenRatings(prev => [...prev, rating]);
+                            } else {
+                              setHiddenRatings(prev => prev.filter(r => r !== rating));
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                        <div className={`flex flex-col items-center p-3 rounded-lg border-2 transition-all ${
+                          hiddenRatings.includes(rating) 
+                            ? 'border-red-500 bg-red-50' 
+                            : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                        }`}>
+                          <span>{rating}⭐</span>
+                          <span className="text-xs">
+                            {hiddenRatings.includes(rating) ? 'Oculto' : 'Visível'}
+                          </span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setDateRange({ start: null, end: null });
+                    setSentimentFilter('all');
+                    setSourceFilter('all');
+                    setLanguageFilter('all');
+                    setApartmentFilter('all');
+                    setHiddenRatings([]);
+                  }}
+                  className="flex-1"
+                >
+                  Limpar Filtros
+                </Button>
+                <Button 
+                  onClick={() => setFiltersOpen(false)}
+                  className="flex-1"
+                >
+                  Fechar
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
