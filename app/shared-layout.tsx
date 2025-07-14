@@ -5,6 +5,7 @@ import Sidebar from "@/components/sidebar"
 import Header from "@/components/header"
 import TestEnvironmentBanner from "@/components/test-environment-banner"
 import { RequireAuth } from "@/lib/auth-context"
+import { Toaster } from "@/components/ui/toaster"
 import { Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -99,6 +100,7 @@ export default function SharedDashboardLayout({
           {children}
         </div>
         </main>
+      <Toaster />
     </>
   );
 

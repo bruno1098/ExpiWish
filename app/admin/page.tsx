@@ -450,8 +450,8 @@ function AdminDashboardContent() {
   const handleChartClick = (data: any, type: string) => {
     console.log("Clique no gráfico:", data, type);
     
-    // Usar dados filtrados globalmente se filtros estão ativos
-    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+    // Usar dados filtrados globalmente se filtros estão ativos - MESMA lógica das funções de processamento
+    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0) 
       ? globalFilteredData 
       : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
       
@@ -833,31 +833,25 @@ function AdminDashboardContent() {
       .slice(0, 20);
   };
 
-  const processSectorDistribution = (data: any[]) => {
-    if (!analysisData?.analysis?.keywordDistribution) return [];
-    
-    // Se temos dados filtrados, usar as funções utilitárias
-    if (data && data.length > 0) {
-      return processValidSectorDistribution(data).slice(0, 15);
-    }
-    
-    // Caso contrário, usar dados da análise original
+  const processSectorDistribution = (data?: any[]) => {
     const sectorCounts: Record<string, number> = {};
     
-    if (analysisData.data && Array.isArray(analysisData.data)) {
-      analysisData.data.forEach(feedback => {
-        if (feedback.sector && isValidSectorOrKeyword(feedback.sector)) {
-          // Separar por ; e remover duplicatas
-          const sectors = Array.from(new Set(feedback.sector.split(';').map((s: string) => s.trim()))) as string[];
-          
-          sectors.forEach((sector: string) => {
-            if (isValidSectorOrKeyword(sector)) {
-              sectorCounts[sector] = (sectorCounts[sector] || 0) + 1;
-            }
-          });
-        }
-      });
-    }
+    // Usar dados fornecidos ou mesma lógica do handleChartClick para consistência
+    const dataToUse = data && data.length > 0 ? data : 
+                     (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0) 
+                       ? globalFilteredData 
+                       : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+    
+    (dataToUse || []).forEach(feedback => {
+      if (feedback.sector) {
+        feedback.sector.split(';').forEach((sector: string) => {
+          const trimmedSector = sector.trim();
+          if (trimmedSector) {
+            sectorCounts[trimmedSector] = (sectorCounts[trimmedSector] || 0) + 1;
+          }
+        });
+      }
+    });
     
     return Object.entries(sectorCounts)
       .map(([sector, count]) => ({ label: sector, value: count }))
@@ -865,31 +859,25 @@ function AdminDashboardContent() {
       .slice(0, 15);
   };
 
-  const processKeywordDistribution = (data: any[]) => {
-    if (!analysisData?.analysis?.keywordDistribution) return [];
-    
-    // Se temos dados filtrados, usar as funções utilitárias
-    if (data && data.length > 0) {
-      return processValidKeywordDistribution(data).slice(0, 20);
-    }
-    
-    // Caso contrário, usar dados da análise original
+  const processKeywordDistribution = (data?: any[]) => {
     const keywordCounts: Record<string, number> = {};
     
-    if (analysisData.data && Array.isArray(analysisData.data)) {
-      analysisData.data.forEach(feedback => {
-        if (feedback.keyword && isValidSectorOrKeyword(feedback.keyword)) {
-          // Separar por ; e remover duplicatas
-          const keywords = Array.from(new Set(feedback.keyword.split(';').map((k: string) => k.trim()))) as string[];
-          
-          keywords.forEach((keyword: string) => {
-            if (isValidSectorOrKeyword(keyword)) {
-              keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
-            }
-          });
-        }
-      });
-    }
+    // Usar dados fornecidos ou mesma lógica do handleChartClick para consistência
+    const dataToUse = data && data.length > 0 ? data : 
+                     (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0) 
+                       ? globalFilteredData 
+                       : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+    
+    (dataToUse || []).forEach(feedback => {
+      if (feedback.keyword) {
+        feedback.keyword.split(';').forEach((keyword: string) => {
+          const trimmedKeyword = keyword.trim();
+          if (trimmedKeyword) {
+            keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1;
+          }
+        });
+      }
+    });
     
     return Object.entries(keywordCounts)
       .map(([keyword, count]) => ({ label: keyword, value: count }))
@@ -1219,7 +1207,12 @@ function AdminDashboardContent() {
             }
             
             if (f.keyword) {
-              keywordMap.set(f.keyword, (keywordMap.get(f.keyword) || 0) + 1);
+              f.keyword.split(';').forEach((keyword: string) => {
+                const trimmedKeyword = keyword.trim();
+                if (trimmedKeyword) {
+                  keywordMap.set(trimmedKeyword, (keywordMap.get(trimmedKeyword) || 0) + 1);
+                }
+              });
             }
             
             if (f.apartamento) {
@@ -1411,14 +1404,39 @@ function AdminDashboardContent() {
     });
   };
 
-  // Effect para carregar dados
+  // Effect para carregar dados - apenas na inicialização
   useEffect(() => {
     fetchData();
-  }, [dateRange]); // Removido selectedHotel daqui
+  }, []); // Remover dateRange para evitar reload desnecessário
 
-  // Calcular totais
-  const totalFeedbacks = analysisData?.data.length || 0;
-  const totalHotels = analysisData?.analysis.hotelDistribution.length || 0;
+  // Calcular totais baseados nos dados filtrados
+  const totalFeedbacks = globalFilteredData?.length || 0;
+  const totalHotels = useMemo(() => {
+    if (!globalFilteredData || globalFilteredData.length === 0) return 0;
+    const hotelSet = new Set(globalFilteredData.map(f => f.hotel || f.hotelName || "Hotel não especificado"));
+    return hotelSet.size;
+  }, [globalFilteredData]);
+  
+  // Calcular métricas filtradas
+  const filteredMetrics = useMemo(() => {
+    if (!globalFilteredData || globalFilteredData.length === 0) {
+      return {
+        averageRating: 0,
+        positiveSentiment: 0
+      };
+    }
+    
+    const totalRating = globalFilteredData.reduce((acc, f) => acc + (f.rating || 0), 0);
+    const averageRating = totalRating / globalFilteredData.length;
+    
+    const positiveCount = globalFilteredData.filter(f => f.sentiment === 'positive').length;
+    const positiveSentiment = Math.round((positiveCount / globalFilteredData.length) * 100);
+    
+    return {
+      averageRating,
+      positiveSentiment
+    };
+  }, [globalFilteredData]);
   
   // Função para formatar data (usando a função utilitária)
   const formatDate = (dateString: string) => {
@@ -1924,9 +1942,9 @@ function AdminDashboardContent() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {(!analysisData.analysis.averageRating || isNaN(analysisData.analysis.averageRating)) 
+                {(!filteredMetrics.averageRating || isNaN(filteredMetrics.averageRating)) 
                   ? "0.0" 
-                  : analysisData.analysis.averageRating.toFixed(1)}
+                  : filteredMetrics.averageRating.toFixed(1)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Baseado em {totalFeedbacks} feedbacks
@@ -1941,9 +1959,9 @@ function AdminDashboardContent() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {(!analysisData.analysis.positiveSentiment || isNaN(analysisData.analysis.positiveSentiment)) 
+                {(!filteredMetrics.positiveSentiment || isNaN(filteredMetrics.positiveSentiment)) 
                   ? "0" 
-                  : analysisData.analysis.positiveSentiment}%
+                  : filteredMetrics.positiveSentiment}%
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Índice de satisfação geral
@@ -2081,7 +2099,7 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'keyword',
                       'Principais Palavras-chave',
-                      processKeywordDistribution(globalFilteredData || []).slice(0, 15),
+                      processKeywordDistribution().slice(0, 15),
                       'bar'
                     )}
                   >
@@ -2092,7 +2110,7 @@ function AdminDashboardContent() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
-                      data={processKeywordDistribution(globalFilteredData || []).slice(0, 8)}
+                      data={processKeywordDistribution().slice(0, 8)}
                       margin={{
                         top: 20,
                         right: 30,
@@ -2125,7 +2143,7 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'sector',
                       'Distribuição por Departamento',
-                      processSectorDistribution(globalFilteredData || []),
+                      processSectorDistribution(),
                       'pie'
                     )}
                   >
@@ -2136,7 +2154,7 @@ function AdminDashboardContent() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={processSectorDistribution(globalFilteredData || [])}
+                        data={processSectorDistribution()}
                         cx="50%"
                         cy="50%"
                         labelLine={true}
@@ -2146,11 +2164,11 @@ function AdminDashboardContent() {
                         dataKey="value"
                         nameKey="label"
                         onClick={(data, index) => {
-                          const item = processSectorDistribution(globalFilteredData || [])[index];
+                          const item = processSectorDistribution()[index];
                           handleChartClick(item, 'sector');
                         }}
                       >
-                        {processSectorDistribution(globalFilteredData || []).map((_: any, index: number) => (
+                        {processSectorDistribution().map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -2168,7 +2186,12 @@ function AdminDashboardContent() {
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={processApartamentoDistribution(analysisData.analysis).slice(0, 8)}
+                      data={(() => {
+                        const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+                          ? globalFilteredData 
+                          : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                        return processApartamentoDistribution({ data: dataToUse || [] }).slice(0, 8);
+                      })()}
                       margin={{
                         top: 20,
                         right: 30,
@@ -2737,7 +2760,12 @@ function AdminDashboardContent() {
                     <YAxis />
                     <RechartsTooltip content={<CustomTooltip />} />
                     <Legend />
-                    {processSourceDistribution(analysisData?.analysis).map((source: any, index: number) => (
+                    {(() => {
+                      const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+                        ? globalFilteredData 
+                        : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                      return processSourceDistribution({ data: dataToUse || [] });
+                    })().map((source: any, index: number) => (
                       <Area 
                         key={source.label}
                         type="monotone" 
@@ -2782,7 +2810,12 @@ function AdminDashboardContent() {
                   <div className="h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={processApartamentoDistribution(analysisData?.analysis).slice(0, 15)}
+                        data={(() => {
+                          const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+                            ? globalFilteredData 
+                            : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                          return processApartamentoDistribution({ data: dataToUse || [] }).slice(0, 15);
+                        })()}
                         layout="vertical"
                         margin={{ top: 10, right: 30, left: 60, bottom: 20 }}
                       >
@@ -2799,11 +2832,19 @@ function AdminDashboardContent() {
                           dataKey="value"
                           fill="#8884d8"
                           onClick={(_, index) => {
-                            const item = processApartamentoDistribution(analysisData?.analysis)[index];
+                            const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+                              ? globalFilteredData 
+                              : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                            const item = processApartamentoDistribution({ data: dataToUse || [] })[index];
                             handleChartClick(item, 'apartamento');
                           }}
                         >
-                          {processApartamentoDistribution(analysisData?.analysis).slice(0, 15).map(
+                          {(() => {
+                            const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
+                              ? globalFilteredData 
+                              : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                            return processApartamentoDistribution({ data: dataToUse || [] }).slice(0, 15);
+                          })().map(
                             (entry: { name: string; value: number }, index: number) => (
                               <Cell key={index} fill={COLORS[index % COLORS.length]} />
                             )
@@ -3247,22 +3288,20 @@ function AdminDashboardContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Painel Lateral Interativo Melhorado */}
-      <div className={`fixed inset-y-0 right-0 z-50 w-[48rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
+      {/* Painel Lateral Interativo Moderno */}
+      <div className={`fixed inset-y-0 right-0 z-50 w-[42rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
         detailPanelOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         {selectedItem && (
           <div className="h-full flex flex-col">
-            {/* Cabeçalho Compacto */}
-            <div className="relative p-5 bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 overflow-hidden">
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent"></div>
-              <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:20px_20px]"></div>
-              
+            {/* Cabeçalho Moderno */}
+            <div className="relative p-6 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 overflow-hidden">
+              <div className="absolute inset-0 bg-black/10"></div>
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="text-white flex-1">
+                  <div className="text-white">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm border border-white/20 shadow-lg">
+                      <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                         {selectedItem.type === 'hotel' && <Building2 className="h-5 w-5" />}
                         {selectedItem.type === 'problem' && <AlertCircle className="h-5 w-5" />}
                         {selectedItem.type === 'rating' && <Star className="h-5 w-5" />}
@@ -3270,17 +3309,16 @@ function AdminDashboardContent() {
                         {selectedItem.type === 'source' && <Globe className="h-5 w-5" />}
                         {!['hotel', 'problem', 'rating', 'keyword', 'source'].includes(selectedItem.type) && <BarChart3 className="h-5 w-5" />}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-bold leading-tight truncate">
+                      <div>
+                        <h3 className="text-xl font-bold">
                           {selectedItem.type === 'keyword' ? 'Palavra-chave' : 
                            selectedItem.type === 'problem' ? 'Problema' :
                            selectedItem.type === 'sector' ? 'Departamento' :
                            selectedItem.type === 'source' ? 'Fonte' :
                            selectedItem.type === 'language' ? 'Idioma' :
-                           selectedItem.type === 'rating' ? 'Avaliação' :
-                           selectedItem.type === 'hotel' ? 'Hotel' : selectedItem.type}
+                           selectedItem.type === 'rating' ? 'Avaliação' : selectedItem.type}
                         </h3>
-                        <p className="text-sm text-blue-100 opacity-90 font-medium truncate">{cleanDataWithSeparator(selectedItem.value)}</p>
+                        <p className="text-sm text-blue-100 opacity-90">{selectedItem.value}</p>
                       </div>
                     </div>
                   </div>
@@ -3288,25 +3326,25 @@ function AdminDashboardContent() {
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setDetailPanelOpen(false)}
-                    className="text-white hover:bg-white/10 h-10 w-10 rounded-full p-0 backdrop-blur-sm border border-white/20 flex-shrink-0"
+                    className="text-white hover:bg-white/20 h-10 w-10 rounded-full p-0"
                   >
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
                 
-                {/* Métricas Compactas */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center">
+                {/* Métricas Destacadas */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
                     <div className="text-2xl font-bold text-white">{selectedItem.stats.totalOccurrences}</div>
-                    <div className="text-xs text-blue-100 opacity-75 font-medium">Ocorrências</div>
+                    <div className="text-xs text-blue-100 opacity-75">Ocorrências</div>
                   </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center">
+                  <div className="text-center">
                     <div className="text-2xl font-bold text-white">{selectedItem.stats.percentage}%</div>
-                    <div className="text-xs text-blue-100 opacity-75 font-medium">do Total</div>
+                    <div className="text-xs text-blue-100 opacity-75">do Total</div>
                   </div>
-                  <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/20 text-center">
+                  <div className="text-center">
                     <div className="text-2xl font-bold text-white">{selectedItem.stats.averageRating.toFixed(1)}</div>
-                    <div className="text-xs text-blue-100 opacity-75 font-medium">Avaliação Média</div>
+                    <div className="text-xs text-blue-100 opacity-75">Avaliação Média</div>
                   </div>
                 </div>
               </div>

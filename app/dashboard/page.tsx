@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { RequireAuth } from "@/lib/auth-context";
-import SharedDashboardLayout from "../shared-layout";
 import { useToast } from "@/components/ui/use-toast";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -1039,6 +1037,28 @@ function DashboardContent() {
     );
   }
 
+  // Função para processar e limpar dados com duplicatas separados por ";"
+  const cleanDataWithSeparator = (text: string | null | undefined): string => {
+    if (!text || typeof text !== 'string') return '';
+    
+    // Se contém ";", dividir, remover duplicatas e reunir
+    if (text.includes(';')) {
+      const items = text.split(';')
+        .map(item => item.trim())
+        .filter(item => item && item !== 'VAZIO' && item.toLowerCase() !== 'vazio');
+      
+      if (items.length === 0) return '';
+      
+      const uniqueItems = Array.from(new Set(items));
+      return uniqueItems.join(', ');
+    }
+    
+    // Para texto simples, verificar se não é VAZIO
+    if (text === 'VAZIO' || text.toLowerCase() === 'vazio') return '';
+    
+    return text;
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1076,7 +1096,7 @@ function DashboardContent() {
       </div>
       
       {/* Cards de Resumo */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 transition-all duration-300">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 transition-all duration-300">
         <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
           <h3 className="text-sm font-medium text-muted-foreground">Total de Feedbacks</h3>
           <p className="text-2xl font-bold">{filteredData.length}</p>
@@ -1104,10 +1124,6 @@ function DashboardContent() {
               : 0
             }%
           </p>
-        </Card>
-        <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-          <h3 className="text-sm font-medium text-muted-foreground">Taxa de Resposta</h3>
-          <p className="text-2xl font-bold">{analysisData.analysis.responseRate}%</p>
         </Card>
       </div>
 
@@ -2130,36 +2146,6 @@ function DashboardContent() {
         </TabsContent>
       </Tabs>
 
-      {/* Feedbacks Recentes */}
-      <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-        <h3 className="text-lg font-semibold mb-4">Feedbacks Recentes</h3>
-        <ScrollArea className="h-[300px]">
-          <div className="space-y-4">
-            {analysisData.analysis.recentFeedbacks.slice(0, 5).map((feedback: any, index: number) => (
-              <div key={index} className="p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="font-medium">{feedback.author || feedback.title || "Autor não identificado"}</p>
-                    <p className="text-sm text-muted-foreground">{feedback.source}</p>
-                  </div>
-                  <div className="flex items-center">
-                    <span className="text-yellow-500 mr-1">⭐</span>
-                    <span>{feedback.rating}</span>
-                  </div>
-                </div>
-                <p className="text-sm">{feedback.comment}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {feedback.keyword.split(';').map((keyword: string, idx: number) => (
-                    <span key={idx} className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800 rounded-full text-xs">
-                      {keyword.trim()}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      </Card>
 
       {/* Modal de Detalhes */}
       <Dialog open={!!selectedDetail} onOpenChange={() => setSelectedDetail(null)}>
@@ -2212,13 +2198,13 @@ function DashboardContent() {
         </DialogContent>
       </Dialog>
 
-      {/* Painel Lateral Interativo Melhorado */}
+      {/* Painel Lateral Interativo Premium */}
       <div className={`fixed inset-y-0 right-0 z-50 w-[42rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
         detailPanelOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
         {selectedItem && (
           <div className="h-full flex flex-col">
-            {/* Cabeçalho Moderno */}
+            {/* Cabeçalho Premium com Gradiente */}
             <div className="relative p-6 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 overflow-hidden">
               <div className="absolute inset-0 bg-black/10"></div>
               <div className="relative z-10">
@@ -2256,7 +2242,7 @@ function DashboardContent() {
                   </Button>
                 </div>
                 
-                {/* Métricas Destacadas */}
+                {/* Métricas Premium Destacadas */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-white">{selectedItem.stats.totalOccurrences}</div>
@@ -2274,186 +2260,202 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Conteúdo Principal */}
+            {/* Conteúdo Principal Melhorado */}
             <div className="flex-1 overflow-y-auto">
               <div className="p-6 space-y-6">
-                {/* Botão para Ver Todos os Comentários */}
-                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-4 -m-6 mb-4 border-b">
+                {/* Botão Call-to-Action Premium */}
+                <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-4 -m-6 mb-6 border-b">
                   <Button 
                     onClick={handleViewAllComments}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg"
+                    className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-[1.02]"
                     size="lg"
                   >
-                    <MessageSquare className="h-5 w-5 mr-2" />
+                    <MessageSquare className="h-5 w-5 mr-3" />
                     Ver TODOS os {selectedItem.stats.totalOccurrences} Comentários
-                    <ExternalLink className="h-4 w-4 ml-2" />
+                    <ExternalLink className="h-4 w-4 ml-3" />
                   </Button>
                 </div>
 
-              {/* Avaliação Média */}
-              <Card className="p-4">
-                <h4 className="font-semibold mb-3 flex items-center">
-                  <Star className="h-4 w-4 text-yellow-500 mr-2" />
-                  Avaliação Média
-                </h4>
-                <div className="text-center">
-                  <div className="text-3xl font-bold">{selectedItem.stats.averageRating.toFixed(1)}</div>
-                  <div className="text-yellow-500">⭐⭐⭐⭐⭐</div>
-                </div>
-              </Card>
+              {/* Cards de Informação com Design Moderno */}
+              <div className="grid gap-6">
+                {/* Avaliação Média */}
+                <Card className="p-6 shadow-lg border-0 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950/20 dark:to-orange-950/20">
+                  <h4 className="font-semibold mb-4 flex items-center text-lg">
+                    <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg mr-3">
+                      <Star className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                    </div>
+                    Avaliação Média
+                  </h4>
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-yellow-700 dark:text-yellow-300 mb-2">{selectedItem.stats.averageRating.toFixed(1)}</div>
+                    <div className="text-2xl">
+                      {Array.from({length: 5}, (_, i) => (
+                        <span key={i} className={i < Math.round(selectedItem.stats.averageRating) ? "text-yellow-500" : "text-gray-300"}>
+                          ⭐
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </Card>
 
-              {/* Distribuição de Sentimentos */}
-              <Card className="p-4">
-                <h4 className="font-semibold mb-3">Distribuição de Sentimentos</h4>
-                <div className="h-40">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive, fill: '#10B981' },
-                          { name: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral, fill: '#F59E0B' },
-                          { name: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative, fill: '#EF4444' }
-                        ].filter(item => item.value > 0)}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={60}
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                      >
-                      </Pie>
-                      <RechartsTooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              {/* Distribuição de Avaliações */}
-              <Card className="p-4">
-                <h4 className="font-semibold mb-3">Distribuição de Avaliações</h4>
-                <div className="h-32">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[
-                      { rating: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
-                      { rating: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
-                      { rating: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
-                      { rating: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
-                      { rating: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
-                    ]}>
-                      <XAxis dataKey="rating" />
-                      <YAxis />
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar dataKey="value" fill="#8884d8" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-
-              {/* Tendência Mensal */}
-              {selectedItem.stats.monthlyTrend.length > 1 && (
-                <Card className="p-4">
-                  <h4 className="font-semibold mb-3">Tendência Mensal</h4>
-                  <div className="h-32">
+                {/* Distribuição de Sentimentos */}
+                <Card className="p-6 shadow-lg border-0">
+                  <h4 className="font-semibold mb-4 flex items-center text-lg">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg mr-3">
+                      <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    Distribuição de Sentimentos
+                  </h4>
+                  <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={selectedItem.stats.monthlyTrend}>
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <RechartsTooltip content={<CustomTooltip />} />
-                        <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
-                      </LineChart>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive, fill: '#10B981' },
+                            { name: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral, fill: '#F59E0B' },
+                            { name: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative, fill: '#EF4444' }
+                          ].filter(item => item.value > 0)}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          dataKey="value"
+                          label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+                        >
+                        </Pie>
+                        <RechartsTooltip />
+                      </PieChart>
                     </ResponsiveContainer>
                   </div>
                 </Card>
-              )}
 
-              {/* Palavras-chave Relacionadas */}
-              {selectedItem.stats.topKeywords.length > 0 && (
-                <Card className="p-4">
-                  <h4 className="font-semibold mb-3">Principais Palavras-chave</h4>
-                  <div className="space-y-2">
-                    {selectedItem.stats.topKeywords.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center">
-                        <span className="text-sm">{item.keyword}</span>
-                        <Badge variant="outline">{item.count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Problemas Relacionados */}
-              {selectedItem.stats.topProblems.length > 0 && (
-                <Card className="p-4">
-                  <h4 className="font-semibold mb-3">Problemas Relacionados</h4>
-                  <div className="space-y-2">
-                    {selectedItem.stats.topProblems.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center">
-                        <span className="text-sm">{item.problem}</span>
-                        <Badge variant="outline">{item.count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Feedbacks Recentes */}
-              <Card className="p-4">
-                <h4 className="font-semibold mb-3">Feedbacks Recentes</h4>
-                <div className="space-y-3">
-                  {selectedItem.stats.recentFeedbacks.map((feedback: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-muted rounded-lg">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="text-yellow-500">
-                            {'⭐'.repeat(feedback.rating || 0)}
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDateBR(feedback.date)}
-                        </div>
-                      </div>
-                      <p className="text-sm line-clamp-2">{feedback.comment}</p>
+                {/* Distribuição de Avaliações */}
+                <Card className="p-6 shadow-lg border-0">
+                  <h4 className="font-semibold mb-4 flex items-center text-lg">
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg mr-3">
+                      <BarChart3 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                     </div>
-                  ))}
-                </div>
-              </Card>
+                    Distribuição de Avaliações
+                  </h4>
+                  <div className="h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={[
+                        { rating: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
+                        { rating: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
+                        { rating: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
+                        { rating: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
+                        { rating: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
+                      ]}>
+                        <XAxis dataKey="rating" />
+                        <YAxis />
+                        <RechartsTooltip />
+                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                {/* Tendência Mensal */}
+                {selectedItem.stats.monthlyTrend.length > 1 && (
+                  <Card className="p-6 shadow-lg border-0">
+                    <h4 className="font-semibold mb-4 flex items-center text-lg">
+                      <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg mr-3">
+                        <BarChart3 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      </div>
+                      Tendência Mensal
+                    </h4>
+                    <div className="h-40">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={selectedItem.stats.monthlyTrend}>
+                          <XAxis dataKey="month" />
+                          <YAxis />
+                          <RechartsTooltip />
+                          <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={3} dot={{ r: 6 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Palavras-chave Relacionadas */}
+                {selectedItem.stats.topKeywords.length > 0 && (
+                  <Card className="p-6 shadow-lg border-0">
+                    <h4 className="font-semibold mb-4 flex items-center text-lg">
+                      <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg mr-3">
+                        <Tag className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                      </div>
+                      Principais Palavras-chave
+                    </h4>
+                                         <div className="space-y-3">
+                       {selectedItem.stats.topKeywords.map((item: any, idx: number) => (
+                         <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                           <span className="font-medium">{cleanDataWithSeparator(item.keyword)}</span>
+                           <Badge variant="secondary" className="px-3 py-1">{item.count}</Badge>
+                         </div>
+                       ))}
+                     </div>
+                  </Card>
+                )}
+
+                {/* Problemas Relacionados */}
+                {selectedItem.stats.topProblems.length > 0 && (
+                  <Card className="p-6 shadow-lg border-0">
+                    <h4 className="font-semibold mb-4 flex items-center text-lg">
+                      <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg mr-3">
+                        <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                      </div>
+                      Problemas Relacionados
+                    </h4>
+                                         <div className="space-y-3">
+                       {selectedItem.stats.topProblems.map((item: any, idx: number) => (
+                         <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                           <span className="font-medium">{cleanDataWithSeparator(item.problem)}</span>
+                           <Badge variant="destructive" className="px-3 py-1">{item.count}</Badge>
+                         </div>
+                       ))}
+                     </div>
+                  </Card>
+                )}
+              </div>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Overlay para fechar o painel */}
+      {/* Overlay Premium para fechar o painel */}
       {detailPanelOpen && (
         <div 
-          className="fixed inset-0 bg-black/20 z-40" 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-all duration-500" 
           onClick={() => setDetailPanelOpen(false)}
         />
       )}
 
-      {/* Modal para Ver Todos os Comentários */}
+      {/* Modal para Ver Todos os Comentários - Melhorado */}
       <Dialog open={allCommentsModalOpen} onOpenChange={setAllCommentsModalOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
+        <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
+          <DialogHeader className="pb-6 border-b">
+            <DialogTitle className="flex items-center gap-3 text-2xl">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <MessageSquare className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
               Todos os Comentários {selectedItem && `(${allCommentsData.length})`}
             </DialogTitle>
-            <DialogDescription>
-              {selectedItem && `Comentários relacionados a: ${selectedItem.value}`}
+            <DialogDescription className="text-lg">
+              {selectedItem && `Comentários relacionados a: ${cleanDataWithSeparator(selectedItem.value)}`}
             </DialogDescription>
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto p-2">
-            <div className="space-y-4">
+            <div className="space-y-6">
               {allCommentsData.map((feedback: any, idx: number) => (
-                <Card key={idx} className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1">
+                <Card key={idx} className="p-6 hover:shadow-xl transition-all duration-300 border-0 shadow-lg">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         {[...Array(5)].map((_, i) => (
                           <Star 
                             key={i} 
-                            className={`h-4 w-4 ${
+                            className={`h-5 w-5 ${
                               i < feedback.rating 
                                 ? "text-yellow-500 fill-yellow-500" 
                                 : "text-gray-300"
@@ -2461,48 +2463,48 @@ function DashboardContent() {
                           />
                         ))}
                       </div>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="px-3 py-1 font-semibold">
                         {feedback.rating}/5
                       </Badge>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm font-medium text-muted-foreground">
+                      <div className="text-base font-semibold text-foreground">
                         {feedback.hotel || 'Hotel não identificado'}
                       </div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-sm text-muted-foreground">
                         {formatDateBR(feedback.date)}
                       </div>
                     </div>
                   </div>
                   
-                  <div className="mb-3">
-                    <p className="text-sm leading-relaxed">{feedback.comment}</p>
+                  <div className="mb-4">
+                    <p className="text-base leading-relaxed text-foreground">{feedback.comment}</p>
                   </div>
                   
-                  <div className="flex flex-wrap gap-2">
-                    {feedback.source && (
-                      <Badge variant="secondary" className="text-xs">
-                        📍 {feedback.source}
+                  <div className="flex flex-wrap gap-3">
+                    {feedback.source && cleanDataWithSeparator(feedback.source) && (
+                      <Badge variant="secondary" className="px-3 py-1 text-sm">
+                        📍 {cleanDataWithSeparator(feedback.source)}
                       </Badge>
                     )}
-                    {feedback.sector && (
-                      <Badge variant="outline" className="text-xs">
-                        🏢 {feedback.sector}
+                    {feedback.sector && cleanDataWithSeparator(feedback.sector) && (
+                      <Badge variant="outline" className="px-3 py-1 text-sm">
+                        🏢 {cleanDataWithSeparator(feedback.sector)}
                       </Badge>
                     )}
-                    {feedback.keyword && (
-                      <Badge variant="outline" className="text-xs">
-                        🏷️ {feedback.keyword}
+                    {feedback.keyword && cleanDataWithSeparator(feedback.keyword) && (
+                      <Badge variant="outline" className="px-3 py-1 text-sm">
+                        🏷️ {cleanDataWithSeparator(feedback.keyword)}
                       </Badge>
                     )}
-                    {feedback.problem && feedback.problem !== 'VAZIO' && (
-                      <Badge variant="destructive" className="text-xs">
-                        ⚠️ {feedback.problem}
+                    {feedback.problem && cleanDataWithSeparator(feedback.problem) && (
+                      <Badge variant="destructive" className="px-3 py-1 text-sm">
+                        ⚠️ {cleanDataWithSeparator(feedback.problem)}
                       </Badge>
                     )}
-                    {feedback.apartamento && (
-                      <Badge variant="outline" className="text-xs">
-                        🚪 {feedback.apartamento}
+                    {feedback.apartamento && cleanDataWithSeparator(feedback.apartamento) && (
+                      <Badge variant="outline" className="px-3 py-1 text-sm">
+                        🚪 {cleanDataWithSeparator(feedback.apartamento)}
                       </Badge>
                     )}
                   </div>
@@ -2510,12 +2512,12 @@ function DashboardContent() {
               ))}
               
               {allCommentsData.length === 0 && (
-                <div className="text-center py-12">
-                  <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                <div className="text-center py-20">
+                  <MessageSquare className="h-16 w-16 text-muted-foreground mx-auto mb-6" />
+                  <h3 className="text-2xl font-semibold text-muted-foreground mb-3">
                     Nenhum comentário encontrado
                   </h3>
-                  <p className="text-muted-foreground">
+                  <p className="text-lg text-muted-foreground">
                     Não há comentários disponíveis para este critério.
                   </p>
                 </div>
@@ -2770,11 +2772,7 @@ function DashboardContent() {
   );
 }
 
-// Componente com proteção de autenticação
+// Componente exportado diretamente
 export default function Dashboard() {
-  return (
-    <SharedDashboardLayout>
-      <DashboardContent />
-    </SharedDashboardLayout>
-  );
+  return <DashboardContent />;
 } 
