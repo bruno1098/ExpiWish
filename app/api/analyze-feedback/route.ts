@@ -476,9 +476,10 @@ ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLI
 - Identifique até 3 PROBLEMAS diferentes
 - Palavra-chave, departamento e problema devem falar do MESMO assunto
 - Não use termos vagos ("Ruim", "Problema", "Coisas", "Lento")
-- NÃO devolva "Não identificado"; escolha o departamento mais próximo na tabela
+- SEMPRE tente classificar o comentário; use "Não identificado" apenas em casos extremos
 - Quando for relacionado a bar/restaurante, coloque em A&B
 - JAMAIS use "Sem problemas" - use apenas "VAZIO"
+- Se há contexto suficiente, escolha o departamento mais próximo da tabela
 
 **EXEMPLOS DE ANÁLISE SEMÂNTICA:**
 

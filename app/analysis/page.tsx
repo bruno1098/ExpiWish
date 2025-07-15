@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -53,6 +54,109 @@ import { useToast } from "@/components/ui/use-toast"
 import { cn, formatDateBR } from "@/lib/utils"
 import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/lib/utils"
 
+// Estilos para scrollbars SEMPRE visíveis e header fixo
+const scrollbarStyles = `
+  /* Scrollbars sempre visíveis - PC */
+  .custom-scrollbar {
+    scrollbar-width: auto !important;
+    scrollbar-color: #64748b #e2e8f0 !important;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 16px !important;
+    height: 16px !important;
+    background: #e2e8f0 !important;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #e2e8f0 !important;
+    border-radius: 8px !important;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+    border-radius: 8px !important;
+    border: 2px solid #e2e8f0 !important;
+    min-height: 40px !important;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #475569 !important;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:active {
+    background: #334155 !important;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-corner {
+    background: #e2e8f0 !important;
+  }
+  
+  /* Dark mode scrollbars */
+  .dark .custom-scrollbar {
+    scrollbar-color: #64748b #1e293b !important;
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar {
+    background: #1e293b !important;
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-track {
+    background: #1e293b !important;
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+    border-color: #1e293b !important;
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+  }
+  
+  .dark .custom-scrollbar::-webkit-scrollbar-corner {
+    background: #1e293b !important;
+  }
+  
+  /* Header fixo que funciona de verdade */
+  .table-with-fixed-header {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+  }
+  
+  .fixed-header {
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: linear-gradient(to right, #0f172a, #1e293b);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    border-bottom: 3px solid #3b82f6;
+  }
+  
+  .dark .fixed-header {
+    background: linear-gradient(to right, #020617, #0f172a);
+    border-bottom: 3px solid #8b5cf6;
+  }
+  
+  .scrollable-body {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+  }
+  
+  /* Utility para line-clamp */
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+`;
+
 // Mapa de cores para sentimentos
 const sentimentColors = {
   positive: "text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400",
@@ -77,7 +181,7 @@ const sentimentBadges = {
 
 const SentimentBadge = ({ sentiment }: { sentiment: string }) => (
   <Badge variant="outline" className={cn(
-    "px-3 py-1 rounded-full text-sm font-medium border",
+    "px-3 py-1.5 rounded-full text-sm font-medium border",
     sentimentBadges[sentiment as keyof typeof sentimentBadges]
   )}>
     {sentiment === 'positive' ? 'Positivo' : sentiment === 'negative' ? 'Negativo' : 'Neutro'}
@@ -190,7 +294,7 @@ const KeywordBadge = ({ keyword, sector }: { keyword: string, sector: string }) 
   
   return (
     <Badge variant="outline" className={cn(
-      "text-sm px-2 py-1 rounded-full border font-medium",
+      "text-sm px-3 py-1.5 rounded-full border font-medium",
       colorClass
     )}>
       {keyword}
@@ -368,8 +472,8 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
         description: "As alterações foram salvas com sucesso.",
       })
       
-      // Recarregar a página para mostrar as mudanças
-      window.location.reload()
+      // Atualizar os dados locais sem recarregar a página
+      // A atualização será refletida quando o usuário fechar o modal ou navegar
       
     } catch (error) {
       console.error('Erro ao salvar:', error)
@@ -386,8 +490,13 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30">
-          <Eye className="h-4 w-4" />
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200 hover:scale-110"
+          title="Ver detalhes do comentário"
+        >
+          <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -655,6 +764,8 @@ const ProblemEditor = ({
   const [problemText, setProblemText] = useState(problem.problem);
   const [keywordInputMode, setKeywordInputMode] = useState(false);
   const [problemInputMode, setProblemInputMode] = useState(false);
+  const [keywordInput, setKeywordInput] = useState('');
+  const [problemInput, setProblemInput] = useState('');
 
   useEffect(() => {
     onUpdate({ keyword, sector, problem: problemText });
@@ -665,6 +776,34 @@ const ProblemEditor = ({
     if (value !== 'VAZIO') {
       setProblemInputMode(false);
     }
+  };
+
+  const handleKeywordInputModeToggle = () => {
+    if (!keywordInputMode) {
+      setKeywordInput(keyword);
+    }
+    setKeywordInputMode(!keywordInputMode);
+  };
+
+  const handleProblemInputModeToggle = () => {
+    if (!problemInputMode) {
+      setProblemInput(problemText);
+    }
+    setProblemInputMode(!problemInputMode);
+  };
+
+  const handleKeywordInputSave = () => {
+    if (keywordInput.trim()) {
+      setKeyword(keywordInput.trim());
+    }
+    setKeywordInputMode(false);
+  };
+
+  const handleProblemInputSave = () => {
+    if (problemInput.trim()) {
+      setProblemText(problemInput.trim());
+    }
+    setProblemInputMode(false);
   };
 
   return (
@@ -695,17 +834,17 @@ const ProblemEditor = ({
           {keywordInputMode ? (
             <div className="space-y-2">
               <Input
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                value={keywordInput}
+                onChange={(e) => setKeywordInput(e.target.value)}
                 className="text-sm"
                 placeholder="Digite palavra-chave personalizada"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => setKeywordInputMode(false)} className="text-xs">
+                <Button size="sm" onClick={handleKeywordInputSave} className="text-xs">
                   OK
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => {
-                  setKeyword(problem.keyword);
+                  setKeywordInput('');
                   setKeywordInputMode(false);
                 }} className="text-xs">
                   Cancelar
@@ -727,7 +866,7 @@ const ProblemEditor = ({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setKeywordInputMode(true)}
+                onClick={handleKeywordInputModeToggle}
                 className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
               >
                 + Personalizar
@@ -766,17 +905,17 @@ const ProblemEditor = ({
           {problemInputMode ? (
             <div className="space-y-2">
               <Input
-                value={problemText}
-                onChange={(e) => setProblemText(e.target.value)}
+                value={problemInput}
+                onChange={(e) => setProblemInput(e.target.value)}
                 className="text-sm"
                 placeholder="Digite problema personalizado"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => setProblemInputMode(false)} className="text-xs">
+                <Button size="sm" onClick={handleProblemInputSave} className="text-xs">
                   OK
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => {
-                  setProblemText(problem.problem);
+                  setProblemInput('');
                   setProblemInputMode(false);
                 }} className="text-xs">
                   Cancelar
@@ -804,7 +943,7 @@ const ProblemEditor = ({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setProblemInputMode(true)}
+                onClick={handleProblemInputModeToggle}
                 className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
               >
                 + Personalizar
@@ -1020,6 +1159,7 @@ function AnalysisPageContent() {
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
+      <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
       <TooltipProvider>
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -1184,144 +1324,175 @@ function AnalysisPageContent() {
 
         {/* Tabela de Feedbacks */}
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900 border-none hover:bg-gradient-to-r hover:from-slate-900 hover:to-slate-800">
-                  <TableHead className="font-semibold text-white">Data</TableHead>
-                  <TableHead className="font-semibold text-white min-w-[300px]">Comentário</TableHead>
-                  <TableHead className="font-semibold text-white">Avaliação</TableHead>
-                  <TableHead className="font-semibold text-white">Sentimento</TableHead>
-                  <TableHead className="font-semibold text-white">Departamento</TableHead>
-                  <TableHead className="font-semibold text-white">Palavra-chave</TableHead>
-                  <TableHead className="font-semibold text-white">Problema</TableHead>
-                  <TableHead className="font-semibold text-white w-20">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <div className="p-4 border-b bg-muted/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-blue-500" />
+                <h3 className="text-lg font-semibold">Feedbacks Analisados</h3>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span>Header fixo • Scrollbars visíveis • Compacto</span>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Otimizado"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="table-with-fixed-header" style={{ height: 'calc(100vh - 300px)', minHeight: '500px' }}>
+            {/* Header fixo */}
+            <div className="fixed-header">
+              <div className="overflow-hidden">
+                <div className="flex bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900">
+                  <div className="w-24 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                    Data
+                  </div>
+                  <div className="w-64 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                    Comentário
+                  </div>
+                  <div className="w-24 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs text-center">
+                    Nota
+                  </div>
+                  <div className="w-28 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs text-center">
+                    Sentimento
+                  </div>
+                  <div className="w-48 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                    Departamento
+                  </div>
+                  <div className="w-52 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                    Palavra-chave
+                  </div>
+                  <div className="w-44 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                    Problema
+                  </div>
+                  <div className="w-12 p-3 font-semibold text-white text-xs text-center">
+                    Ações
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Corpo da tabela com scroll */}
+            <div className="scrollable-body custom-scrollbar">
+              <div className="min-h-full">
                 {filteredFeedbacks.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-3">
-                        <MessageSquare className="h-12 w-12 text-muted-foreground" />
-                        <div>
-                          <p className="text-lg font-medium text-muted-foreground">
-                            Nenhum feedback encontrado
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {feedbacks.length === 0 
-                              ? "Importe dados na página de Import para começar a análise"
-                              : "Ajuste os filtros para ver mais resultados"
+                  <div className="flex flex-col items-center justify-center h-full py-12">
+                    <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-lg font-medium text-muted-foreground">
+                      Nenhum feedback encontrado
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {feedbacks.length === 0 
+                        ? "Importe dados na página de Import para começar a análise"
+                        : "Ajuste os filtros para ver mais resultados"
+                      }
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200 dark:divide-gray-800">
+                    {filteredFeedbacks.map((feedback) => (
+                      <div key={feedback.id} className="flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
+                        <div className="w-24 p-3 border-r border-gray-200 dark:border-gray-800 text-xs">
+                          {formatDateBR(feedback.date)}
+                        </div>
+                        <div className="w-64 p-3 border-r border-gray-200 dark:border-gray-800">
+                          <p className="text-xs line-clamp-3 leading-relaxed">
+                            {feedback.comment.length > 120 
+                              ? `${feedback.comment.substring(0, 120)}...` 
+                              : feedback.comment
                             }
                           </p>
                         </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredFeedbacks.map((feedback) => (
-                    <TableRow key={feedback.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
-                      <TableCell className="text-sm font-medium">
-                        {formatDateBR(feedback.date)}
-                      </TableCell>
-                      <TableCell className="max-w-sm">
-                        <Tooltip>
-                          <TooltipTrigger className="text-left cursor-pointer">
-                            <p className="truncate text-sm leading-relaxed">
-                              {feedback.comment.length > 40 
-                                ? `${feedback.comment.substring(0, 40)}...` 
-                                : feedback.comment
-                              }
-                            </p>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-xs">
-                            <p className="text-xs">Clique no ícone do olho para ver o comentário completo</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{ratingIcons[feedback.rating] || "N/A"}</span>
-                          <span className="text-sm font-medium">{feedback.rating}/5</span>
+                        <div className="w-24 p-3 border-r border-gray-200 dark:border-gray-800 text-center">
+                          <div className="flex flex-col items-center justify-center space-y-1">
+                            <span className="text-lg leading-none">{ratingIcons[feedback.rating] || "N/A"}</span>
+                            <span className="text-sm font-medium">{feedback.rating}</span>
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <SentimentBadge sentiment={feedback.sentiment} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-xs">
-                          {feedback.sector.split(';').slice(0, 2).map((sector, index) => (
-                            <Badge 
-                              key={index} 
-                              variant="outline"
-                              className={cn("text-xs border", getSectorColor(sector.trim()))}
-                            >
-                              {sector.trim()}
-                            </Badge>
-                          ))}
-                          {feedback.sector.split(';').length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{feedback.sector.split(';').length - 2}
-                            </Badge>
-                          )}
+                        <div className="w-28 p-3 border-r border-gray-200 dark:border-gray-800 text-center">
+                          <SentimentBadge sentiment={feedback.sentiment} />
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-xs">
-                          {feedback.keyword.split(';').slice(0, 2).map((kw, index) => {
-                            const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
-                            return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
-                          })}
-                          {feedback.keyword.split(';').length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{feedback.keyword.split(';').length - 2}
-                            </Badge>
-                          )}
+                        <div className="w-48 p-3 border-r border-gray-200 dark:border-gray-800">
+                          <div className="flex flex-wrap gap-1">
+                            {feedback.sector.split(';').slice(0, 3).map((sector, index) => (
+                              <Badge 
+                                key={index} 
+                                variant="outline"
+                                className={cn("text-xs border", getSectorColor(sector.trim()))}
+                              >
+                                {sector.trim().substring(0, 15)}
+                              </Badge>
+                            ))}
+                            {feedback.sector.split(';').length > 3 && (
+                              <Badge variant="outline" className="text-sm px-2 py-1">
+                                +{feedback.sector.split(';').length - 3}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-xs">
-                          {feedback.problem ? (
-                            feedback.problem.split(';').slice(0, 2).map((problem, index) => {
+                        <div className="w-52 p-3 border-r border-gray-200 dark:border-gray-800">
+                          <div className="flex flex-wrap gap-1">
+                            {feedback.keyword.split(';').slice(0, 3).map((kw, index) => {
                               const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
-                              const trimmedProblem = problem.trim();
-                              
-                              if (trimmedProblem === 'VAZIO') {
-                                return (
-                                  <span key={index} className="text-xs text-muted-foreground italic">
-                                    Sem problemas
-                                  </span>
-                                );
-                              }
-                              
                               return (
-                                <Badge 
+                                <KeywordBadge 
                                   key={index} 
-                                  variant="outline"
-                                  className={cn("text-xs border", getSectorColor(sector))}
-                                >
-                                  {trimmedProblem}
-                                </Badge>
+                                  keyword={kw.trim().substring(0, 16)} 
+                                  sector={sector} 
+                                />
                               );
-                            })
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">Sem problemas</span>
-                          )}
-                          {feedback.problem && feedback.problem.split(';').length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{feedback.problem.split(';').length - 2}
-                            </Badge>
-                          )}
+                            })}
+                            {feedback.keyword.split(';').length > 3 && (
+                              <Badge variant="outline" className="text-sm px-2 py-1">
+                                +{feedback.keyword.split(';').length - 3}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <CommentModal feedback={feedback} />
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        <div className="w-44 p-3 border-r border-gray-200 dark:border-gray-800">
+                          <div className="flex flex-wrap gap-1">
+                            {feedback.problem ? (
+                              feedback.problem.split(';').slice(0, 3).map((problem, index) => {
+                                const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
+                                const trimmedProblem = problem.trim();
+                                
+                                if (trimmedProblem === 'VAZIO') {
+                                  return (
+                                    <span key={index} className="text-xs text-muted-foreground italic">
+                                      OK
+                                    </span>
+                                  );
+                                }
+                                
+                                return (
+                                  <Badge 
+                                    key={index} 
+                                    variant="outline"
+                                    className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                  >
+                                    {trimmedProblem.substring(0, 14)}
+                                  </Badge>
+                                );
+                              })
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">OK</span>
+                            )}
+                            {feedback.problem && feedback.problem.split(';').length > 3 && (
+                              <Badge variant="outline" className="text-sm px-2 py-1">
+                                +{feedback.problem.split(';').length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="w-12 p-3 text-center">
+                          <CommentModal feedback={feedback} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </TableBody>
-            </Table>
+              </div>
+            </div>
           </div>
         </Card>
       </TooltipProvider>

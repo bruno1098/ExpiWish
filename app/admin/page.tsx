@@ -306,6 +306,11 @@ function AdminDashboardContent() {
     if (!data || data.length === 0) return [];
     
     return data.filter((feedback: any) => {
+      // Filtro para remover "não identificados" do dashboard principal
+      if (isNotIdentifiedFeedback(feedback)) {
+        return false;
+      }
+      
       // Filtro de estrelas (ocultar avaliações selecionadas)
       if (hiddenRatings.includes(feedback.rating)) {
         return false;
@@ -345,9 +350,10 @@ function AdminDashboardContent() {
   // Atualizar dados filtrados apenas quando os dados originais mudarem (não quando filtros mudarem)
   useEffect(() => {
     if (analysisData?.data) {
-      setGlobalFilteredData(analysisData.data);
+      const filtered = applyGlobalFilters(analysisData.data);
+      setGlobalFilteredData(filtered);
     }
-  }, [analysisData?.data]);
+  }, [analysisData?.data, applyGlobalFilters]);
 
   // Função para diagnóstico
   const runDiagnostics = async () => {
@@ -446,14 +452,49 @@ function AdminDashboardContent() {
     }
   };
 
+  // Função para verificar se há filtros aplicados
+  const hasFiltersApplied = () => {
+    return (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0);
+  };
+
+  // Função helper para identificar feedbacks "não identificados"
+  const isNotIdentifiedFeedback = (feedback: any): boolean => {
+    if (!feedback) return false;
+    
+    const keyword = feedback.keyword?.toLowerCase()?.trim() || '';
+    const problem = feedback.problem?.toLowerCase()?.trim() || '';
+    const department = feedback.department?.toLowerCase()?.trim() || '';
+    const sector = feedback.sector?.toLowerCase()?.trim() || '';
+    
+    // Verifica se o feedback é marcado como "não identificado"
+    return keyword.includes('não identificado') ||
+           problem.includes('não identificado') ||
+           department.includes('não identificado') ||
+           sector.includes('não identificado') ||
+           problem === 'não identificado' ||
+           keyword === 'não identificado' ||
+           department === 'não identificado' ||
+           sector === 'não identificado';
+  };
+
+  // Função centralizada para obter dados consistentes
+  const getCurrentData = () => {
+    const data = hasFiltersApplied() 
+      ? globalFilteredData 
+      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+    
+    // Filtrar feedbacks "não identificados" do dashboard principal
+    const cleanedData = data ? data.filter((feedback: any) => !isNotIdentifiedFeedback(feedback)) : [];
+    
+    return cleanedData;
+  };
+
   // Função para lidar com cliques em gráficos
   const handleChartClick = (data: any, type: string) => {
     console.log("Clique no gráfico:", data, type);
     
-    // Usar dados filtrados globalmente se filtros estão ativos - MESMA lógica das funções de processamento
-    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0) 
-      ? globalFilteredData 
-      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+    // Usar a mesma função centralizada para garantir consistência
+    const dataToUse = getCurrentData();
       
     if (!dataToUse) {
       toast({
@@ -529,14 +570,17 @@ function AdminDashboardContent() {
         const sectorLabel = data.label || data.name;
         filteredFeedbacks = dataToUse.filter((feedback: any) => {
           if (feedback.sector && typeof feedback.sector === 'string') {
-            return feedback.sector === sectorLabel;
+            // Usar a mesma lógica de divisão por ';' que o processSectorDistribution
+            return feedback.sector.split(';').map((s: string) => s.trim()).includes(sectorLabel);
           }
           if (feedback.department && typeof feedback.department === 'string') {
-            return feedback.department === sectorLabel;
+            return feedback.department.split(';').map((d: string) => d.trim()).includes(sectorLabel);
           }
           return false;
         });
         value = sectorLabel;
+        
+
         break;
 
       case 'language':
@@ -753,13 +797,16 @@ function AdminDashboardContent() {
     setChartModalOpen(true);
   };
 
-  // Funções de processamento de dados
-  const processRatingDistribution = (data: any[]) => {
+  // Funções de processamento de dados - usando dados centralizados
+  const processRatingDistribution = (data?: any[]) => {
+    const dataToUse = data || getCurrentData();
+    if (!dataToUse) return [];
+    
     const ratingCounts: Record<string, number> = {
       '1': 0, '2': 0, '3': 0, '4': 0, '5': 0
     };
     
-    data.forEach(feedback => {
+    dataToUse.forEach(feedback => {
       if (feedback.rating && feedback.rating >= 1 && feedback.rating <= 5) {
         ratingCounts[feedback.rating.toString()]++;
       }
@@ -769,10 +816,13 @@ function AdminDashboardContent() {
       .map(([rating, count]) => ({ label: rating + ' estrela' + (rating === '1' ? '' : 's'), value: count }));
   };
 
-  const processProblemDistribution = (data: any[]) => {
+  const processProblemDistribution = (data?: any[]) => {
+    const dataToUse = data || getCurrentData();
+    if (!dataToUse) return [];
+    
     const problemCounts: Record<string, number> = {};
     
-    data.forEach(feedback => {
+    dataToUse.forEach(feedback => {
       if (feedback.problem) {
         feedback.problem.split(';').forEach((problem: string) => {
           const trimmedProblem = problem.trim();
@@ -790,12 +840,8 @@ function AdminDashboardContent() {
       .slice(0, 20);
   };
 
-  const processSourceDistribution = (analysis: any) => {
-    // Usar dados filtrados globalmente se filtros estão ativos
-    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-      ? globalFilteredData 
-      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-      
+  const processSourceDistribution = (data?: any[]) => {
+    const dataToUse = data || getCurrentData();
     if (!dataToUse) return [];
     
     const sourceCounts: Record<string, number> = {};
@@ -810,12 +856,8 @@ function AdminDashboardContent() {
       .sort((a, b) => b.value - a.value);
   };
 
-  const processApartamentoDistribution = (analysis: any) => {
-    // Usar dados filtrados globalmente se filtros estão ativos
-    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-      ? globalFilteredData 
-      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-      
+  const processApartamentoDistribution = (data?: any[]) => {
+    const dataToUse = data || getCurrentData();
     if (!dataToUse) return [];
     
     const apartamentoCounts: Record<string, number> = {};
@@ -836,11 +878,10 @@ function AdminDashboardContent() {
   const processSectorDistribution = (data?: any[]) => {
     const sectorCounts: Record<string, number> = {};
     
-    // Usar dados fornecidos ou mesma lógica do handleChartClick para consistência
-    const dataToUse = data && data.length > 0 ? data : 
-                     (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0) 
-                       ? globalFilteredData 
-                       : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+    // Usar dados fornecidos ou função centralizada para garantir consistência
+    const dataToUse = data && data.length > 0 ? data : getCurrentData();
+    
+
     
     (dataToUse || []).forEach(feedback => {
       if (feedback.sector) {
@@ -853,20 +894,21 @@ function AdminDashboardContent() {
       }
     });
     
-    return Object.entries(sectorCounts)
+    const result = Object.entries(sectorCounts)
       .map(([sector, count]) => ({ label: sector, value: count }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 15);
+    
+
+    
+    return result;
   };
 
   const processKeywordDistribution = (data?: any[]) => {
     const keywordCounts: Record<string, number> = {};
     
-    // Usar dados fornecidos ou mesma lógica do handleChartClick para consistência
-    const dataToUse = data && data.length > 0 ? data : 
-                     (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0) 
-                       ? globalFilteredData 
-                       : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+    // Usar dados fornecidos ou função centralizada para garantir consistência
+    const dataToUse = data && data.length > 0 ? data : getCurrentData();
     
     (dataToUse || []).forEach(feedback => {
       if (feedback.keyword) {
@@ -886,11 +928,7 @@ function AdminDashboardContent() {
   };
 
   const processApartamentoDetailsData = () => {
-    // Usar dados filtrados globalmente se filtros estão ativos
-    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-      ? globalFilteredData 
-      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-      
+    const dataToUse = getCurrentData();
     if (!dataToUse) return [];
 
     const apartamentoMap = new Map<string, {
@@ -978,11 +1016,7 @@ function AdminDashboardContent() {
 
   // Dados estatísticos por hotel
   const hotelStats = useMemo((): HotelStat[] => {
-    // Usar dados filtrados globalmente se filtros estão ativos
-    const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-      ? globalFilteredData 
-      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-      
+    const dataToUse = getCurrentData();
     if (!dataToUse) return [];
 
     const stats = new Map<string, {
@@ -1067,7 +1101,7 @@ function AdminDashboardContent() {
         .sort((a, b) => b[1] - a[1])
         .map(([apartamento, count]) => ({ apartamento, count }))
     }));
-  }, [analysisData, filteredData, isFilterApplied, globalFilteredData, dateRange, sentimentFilter, sourceFilter, languageFilter, hiddenRatings]);
+  }, [analysisData, filteredData, isFilterApplied, globalFilteredData, dateRange, sentimentFilter, sourceFilter, languageFilter, hiddenRatings, apartmentFilter]);
 
   // Função para buscar dados administrativos
   const fetchData = async () => {
@@ -1581,14 +1615,14 @@ function AdminDashboardContent() {
                 size="sm"
                 onClick={() => setFiltersOpen(!filtersOpen)}
                 className={`flex items-center gap-2 transition-all duration-200 ${
-                  (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0)
+                  hasFiltersApplied()
                     ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 <Filter className="w-4 h-4" />
                 Filtros
-                {(dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) && (
+                {hasFiltersApplied() && (
                   <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
                     {[
                       dateRange.start || dateRange.end ? 1 : 0,
@@ -1854,13 +1888,13 @@ function AdminDashboardContent() {
                           <div className="flex items-center justify-between text-sm mb-2">
                             <span className="font-medium text-gray-700 dark:text-gray-300">Resultados da filtragem:</span>
                             <span className="font-bold text-purple-600 dark:text-purple-400">
-                              {globalFilteredData.length} de {analysisData.data.length} feedbacks
+                              {globalFilteredData.length} de {analysisData.data.filter((f: any) => !isNotIdentifiedFeedback(f)).length} feedbacks identificados
                             </span>
                           </div>
                           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                             <div 
                               className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${(globalFilteredData.length / analysisData.data.length) * 100}%` }}
+                              style={{ width: `${(globalFilteredData.length / analysisData.data.filter((f: any) => !isNotIdentifiedFeedback(f)).length) * 100}%` }}
                             ></div>
                           </div>
                         </div>
@@ -2020,7 +2054,7 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'rating',
                       'Distribuição de Avaliações',
-                      processRatingDistribution(globalFilteredData),
+                      processRatingDistribution(),
                       'bar'
                     )}
                   >
@@ -2029,7 +2063,7 @@ function AdminDashboardContent() {
                 </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={processRatingDistribution(globalFilteredData)}>
+                    <BarChart data={processRatingDistribution()}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="label" />
                       <YAxis />
@@ -2055,7 +2089,7 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'problem',
                       'Principais Problemas',
-                      processProblemDistribution(globalFilteredData),
+                      processProblemDistribution(),
                       'bar'
                     )}
                   >
@@ -2066,7 +2100,7 @@ function AdminDashboardContent() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
-                      data={processProblemDistribution(globalFilteredData).slice(0, 6)}
+                      data={processProblemDistribution().slice(0, 6)}
                       margin={{
                         top: 20,
                         right: 30,
@@ -2186,12 +2220,7 @@ function AdminDashboardContent() {
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={(() => {
-                        const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-                          ? globalFilteredData 
-                          : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-                        return processApartamentoDistribution({ data: dataToUse || [] }).slice(0, 8);
-                      })()}
+                      data={processApartamentoDistribution().slice(0, 8)}
                       margin={{
                         top: 20,
                         right: 30,
@@ -2216,7 +2245,7 @@ function AdminDashboardContent() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={processSourceDistribution(analysisData.analysis)}
+                        data={processSourceDistribution()}
                         cx="50%"
                         cy="50%"
                         labelLine={false}
@@ -2226,7 +2255,7 @@ function AdminDashboardContent() {
                         dataKey="value"
                         nameKey="label"
                       >
-                        {processSourceDistribution(analysisData.analysis).map((_: any, index: number) => (
+                        {processSourceDistribution().map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -2475,7 +2504,7 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'problem',
                       'Problemas Mais Comuns',
-                      processProblemDistribution(globalFilteredData),
+                      processProblemDistribution(),
                       'bar'
                     )}
                   >
@@ -2486,7 +2515,7 @@ function AdminDashboardContent() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       layout="vertical"
-                      data={processProblemDistribution(globalFilteredData).slice(0, 15)}
+                      data={processProblemDistribution().slice(0, 15)}
                       margin={{
                         top: 20,
                         right: 30,
@@ -2518,7 +2547,7 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'problem',
                       'Distribuição de Problemas',
-                      processProblemDistribution(globalFilteredData).slice(0, 10),
+                      processProblemDistribution().slice(0, 10),
                       'pie'
                     )}
                   >
@@ -2529,7 +2558,7 @@ function AdminDashboardContent() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={processProblemDistribution(globalFilteredData).slice(0, 10)}
+                        data={processProblemDistribution().slice(0, 10)}
                         cx="50%"
                         cy="50%"
                         labelLine={true}
@@ -2539,11 +2568,11 @@ function AdminDashboardContent() {
                         dataKey="value"
                         nameKey="label"
                         onClick={(data, index) => {
-                          const item = processProblemDistribution(globalFilteredData)[index];
+                          const item = processProblemDistribution()[index];
                           handleChartClick(item, 'problem');
                         }}
                       >
-                        {processProblemDistribution(globalFilteredData).slice(0, 10).map((_: any, index: number) => (
+                        {processProblemDistribution().slice(0, 10).map((_: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -2574,12 +2603,10 @@ function AdminDashboardContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {processProblemDistribution(globalFilteredData)
+                    {processProblemDistribution()
                       .slice(0, 20)
                       .map((problem: ProblemItem, index: number) => {
-                        const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-                          ? globalFilteredData 
-                          : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+                        const dataToUse = getCurrentData();
                         
                         const hotelEntries = Object.entries(
                           (dataToUse || [])
@@ -2602,7 +2629,7 @@ function AdminDashboardContent() {
                         .slice(0, 2)
                         .map(([hotel]) => hotel);
 
-                        const totalProblems = processProblemDistribution(globalFilteredData)
+                        const totalProblems = processProblemDistribution()
                           .reduce((sum: number, p: ProblemItem) => sum + p.value, 0);
                         const percentage = totalProblems > 0 ? ((problem.value / totalProblems) * 100).toFixed(1) : "0";
 
@@ -2655,7 +2682,7 @@ function AdminDashboardContent() {
                     onClick={() => handleViewChart(
                       'rating',
                       'Distribuição de Avaliações',
-                      processRatingDistribution(globalFilteredData),
+                      processRatingDistribution(),
                       'bar'
                     )}
                   >
@@ -2664,7 +2691,7 @@ function AdminDashboardContent() {
                 </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={processRatingDistribution(globalFilteredData)}>
+                    <BarChart data={processRatingDistribution()}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="label" />
                       <YAxis />
@@ -2674,7 +2701,7 @@ function AdminDashboardContent() {
                         fill="#8884d8"
                         onClick={(data) => handleChartClick(data, 'rating')}
                       >
-                        {processRatingDistribution(globalFilteredData).map((entry: any, index: number) => (
+                        {processRatingDistribution().map((entry: any, index: number) => (
                           <Cell 
                             key={`cell-${index}`} 
                             fill={
@@ -2716,9 +2743,9 @@ function AdminDashboardContent() {
                     <PieChart>
                       <Pie
                         data={[
-                          { name: 'Positivo', value: globalFilteredData.filter(f => f.sentiment === 'positive').length },
-                          { name: 'Negativo', value: globalFilteredData.filter(f => f.sentiment === 'negative').length },
-                          { name: 'Neutro', value: globalFilteredData.filter(f => f.sentiment === 'neutral').length }
+                          { name: 'Positivo', value: (getCurrentData() || []).filter(f => f.sentiment === 'positive').length },
+                          { name: 'Negativo', value: (getCurrentData() || []).filter(f => f.sentiment === 'negative').length },
+                          { name: 'Neutro', value: (getCurrentData() || []).filter(f => f.sentiment === 'neutral').length }
                         ]}
                         cx="50%"
                         cy="50%"
@@ -2747,12 +2774,7 @@ function AdminDashboardContent() {
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
-                    data={(() => {
-                      const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-                        ? globalFilteredData 
-                        : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-                      return getTimePeriodData(dataToUse || [], 'source').data;
-                    })()}
+                    data={getTimePeriodData(getCurrentData() || [], 'source').data}
                     margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
@@ -2760,12 +2782,7 @@ function AdminDashboardContent() {
                     <YAxis />
                     <RechartsTooltip content={<CustomTooltip />} />
                     <Legend />
-                    {(() => {
-                      const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-                        ? globalFilteredData 
-                        : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-                      return processSourceDistribution({ data: dataToUse || [] });
-                    })().map((source: any, index: number) => (
+                    {processSourceDistribution().map((source: any, index: number) => (
                       <Area 
                         key={source.label}
                         type="monotone" 
@@ -2780,10 +2797,7 @@ function AdminDashboardContent() {
               </div>
               <div className="text-xs text-center text-muted-foreground mt-2">
                 Agrupamento automático: {(() => {
-                  const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-                    ? globalFilteredData 
-                    : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-                  const { period } = getTimePeriodData(dataToUse || [], 'source');
+                  const { period } = getTimePeriodData(getCurrentData() || [], 'source');
                   switch(period) {
                     case 'day': return 'por dia (dados recentes)';
                     case 'week': return 'por semana (dados de algumas semanas)';
@@ -2810,12 +2824,7 @@ function AdminDashboardContent() {
                   <div className="h-[400px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={(() => {
-                          const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-                            ? globalFilteredData 
-                            : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-                          return processApartamentoDistribution({ data: dataToUse || [] }).slice(0, 15);
-                        })()}
+                        data={processApartamentoDistribution().slice(0, 15)}
                         layout="vertical"
                         margin={{ top: 10, right: 30, left: 60, bottom: 20 }}
                       >
@@ -2832,19 +2841,11 @@ function AdminDashboardContent() {
                           dataKey="value"
                           fill="#8884d8"
                           onClick={(_, index) => {
-                            const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-                              ? globalFilteredData 
-                              : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-                            const item = processApartamentoDistribution({ data: dataToUse || [] })[index];
+                            const item = processApartamentoDistribution()[index];
                             handleChartClick(item, 'apartamento');
                           }}
                         >
-                          {(() => {
-                            const dataToUse = (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || hiddenRatings.length > 0) 
-                              ? globalFilteredData 
-                              : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
-                            return processApartamentoDistribution({ data: dataToUse || [] }).slice(0, 15);
-                          })().map(
+                          {processApartamentoDistribution().slice(0, 15).map(
                             (entry: { name: string; value: number }, index: number) => (
                               <Cell key={index} fill={COLORS[index % COLORS.length]} />
                             )
