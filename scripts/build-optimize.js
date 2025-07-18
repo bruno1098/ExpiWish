@@ -32,20 +32,25 @@ function optimizeFile(filePath) {
     if (content.includes('console.log') && !content.includes('devLog')) {
       // Encontrar a seção de imports
       const DEV_LOG_IMPORT = "import { devLog, devError, devAuth, devData, devPerf, devAnalysis, devImport, devFilter } from '@/lib/dev-logger';\n";
-
 // não adiciona se já existe
 if (!content.includes('@/lib/dev-logger')) {
   const lines = content.split('\n');
 
-  // procura primeira linha que não seja comentário ou em branco
-  const insertIndex = lines.findIndex(line => !/^\s*(\/\/|\/\*|\*|\n|$)/.test(line));
-
-  if (insertIndex !== -1) {
-    lines.splice(insertIndex, 0, DEV_LOG_IMPORT);
-    content = lines.join('\n');
-    modified = true;
+  const hasUseClient = lines.some(line => line.trim() === '"use client"' || line.trim() === "'use client'");
+  if (hasUseClient) {
+    const useClientIndex = lines.findIndex(line => line.trim() === '"use client"' || line.trim() === "'use client'");
+    lines.splice(useClientIndex + 1, 0, DEV_LOG_IMPORT); // injeta logo após
+  } else {
+    // Encontra primeira linha que não seja comentário ou em branco
+    const insertIndex = lines.findIndex(line => !/^\s*(\/\/|\/\*|\*|\n|$)/.test(line));
+    lines.splice(insertIndex, 0, DEV_LOG_IMPORT); // injeta no topo
   }
+
+  content = lines.join('\n');
+  modified = true;
 }
+
+
 
     }
 
