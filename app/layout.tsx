@@ -11,7 +11,7 @@ import './dark-theme.css'
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Análise de Feedback',
+  title: 'BI Qualidade - Grupo Wish',
   description: 'Sistema de análise de feedback de hotéis',
   icons: {
     icon: '/WishExpi.png',
