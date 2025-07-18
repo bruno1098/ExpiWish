@@ -99,12 +99,7 @@ function Sidebar() {
       href: "/admin/feedback-nao-identificados",
       color: "text-orange-400",
     },
-    {
-      label: "Feedbacks Excluídos",
-      icon: Trash2,
-      href: "/admin/feedbacks-excluidos",
-      color: "text-red-400",
-    },
+
 
     {
       label: "Gerenciar Usuários",

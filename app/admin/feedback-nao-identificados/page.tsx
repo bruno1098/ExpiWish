@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ArrowLeft, AlertCircle, Eye, Building2, Users, Calendar, Edit3 } from "lucide-react"
+import { ArrowLeft, AlertCircle, Eye, Building2, Users, Calendar, Edit3, Trash2, Search, Star, RotateCcw, Download, User } from "lucide-react"
 import { formatDateBR, cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
@@ -13,6 +13,8 @@ import { getAllAnalyses, saveRecentEdit, getRecentEdits } from "@/lib/firestore-
 import { getAllHotels } from "@/lib/auth-service"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { useToast } from "@/hooks/use-toast"
 
 interface UnidentifiedFeedback {
   id: string
@@ -56,6 +58,23 @@ interface HotelStats {
   totalEdited: number
   avgRating: number
   lastActivity?: string
+}
+
+interface DeletedFeedback {
+  id: string
+  comment: string
+  rating: number
+  keyword: string
+  sector: string
+  problem: string
+  date: string
+  source: string
+  hotelId: string
+  hotelName?: string
+  deletedAt?: string
+  deletedBy?: string
+  deletedReason?: string
+  sentiment?: string
 }
 
 // Interface para hotéis
@@ -116,6 +135,11 @@ export default function AdminUnidentifiedFeedbacks() {
   const [hotelNames, setHotelNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [selectedHotel, setSelectedHotel] = useState<string>('all')
+  
+  // Estados para feedbacks excluídos
+  const [deletedFeedbacks, setDeletedFeedbacks] = useState<DeletedFeedback[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const { toast } = useToast()
 
   // Verificar se é admin
   useEffect(() => {
@@ -131,6 +155,7 @@ export default function AdminUnidentifiedFeedbacks() {
         await loadHotels()
         await fetchAllUnidentifiedFeedbacks()
         await loadRecentEdits()
+        await loadDeletedFeedbacks()
       }
       loadData()
     }
@@ -267,15 +292,118 @@ export default function AdminUnidentifiedFeedbacks() {
     }
   }
 
+  const loadDeletedFeedbacks = async () => {
+    try {
+      const allAnalyses = await getAllAnalyses()
+      
+      const deletedFeedbacks: DeletedFeedback[] = []
+      
+      allAnalyses.forEach((analysis: any) => {
+        if (analysis.data && Array.isArray(analysis.data)) {
+          analysis.data.forEach((feedback: any) => {
+            // Buscar apenas feedbacks marcados como deletados
+            if (feedback.deleted) {
+              deletedFeedbacks.push({
+                ...feedback,
+                hotelName: analysis.hotelName || 'Hotel não identificado'
+              })
+            }
+          })
+        }
+      })
+      
+      // Ordenar por data de exclusão (mais recentes primeiro)
+      deletedFeedbacks.sort((a, b) => {
+        const dateA = new Date(a.deletedAt || a.date).getTime()
+        const dateB = new Date(b.deletedAt || b.date).getTime()
+        return dateB - dateA
+      })
+      
+      setDeletedFeedbacks(deletedFeedbacks)
+    } catch (error) {
+      console.error('Erro ao carregar feedbacks excluídos:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os feedbacks excluídos",
+        variant: "destructive"
+      })
+    }
+  }
+
   const getSentimentBadge = (rating: number) => {
     if (rating >= 4) return <Badge className="bg-green-100 text-green-800">Positivo</Badge>
     if (rating <= 2) return <Badge className="bg-red-100 text-red-800">Negativo</Badge>
     return <Badge className="bg-yellow-100 text-yellow-800">Neutro</Badge>
   }
 
+  const restoreFeedback = async (feedbackId: string) => {
+    if (!window.confirm('Tem certeza que deseja restaurar este feedback? Ele voltará a aparecer nas análises.')) {
+      return
+    }
+
+    try {
+      const response = await fetch('/api/restore-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ feedbackId }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao restaurar feedback')
+      }
+
+      toast({
+        title: "Feedback Restaurado",
+        description: "O feedback foi restaurado e voltará a aparecer nas análises.",
+        duration: 3000,
+      })
+
+      // Recarregar lista
+      loadDeletedFeedbacks()
+
+    } catch (error) {
+      console.error('Erro ao restaurar feedback:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível restaurar o feedback.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const exportDeletedFeedbacks = () => {
+    const filteredFeedbacks = deletedFeedbacks.filter(feedback =>
+      feedback.comment.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (feedback.hotelName && feedback.hotelName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (feedback.deletedBy && feedback.deletedBy.toLowerCase().includes(searchTerm.toLowerCase()))
+    )
+    
+    const dataStr = JSON.stringify(filteredFeedbacks, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `feedbacks-excluidos-${new Date().toISOString().split('T')[0]}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+
+    toast({
+      title: "Exportação Concluída",
+      description: `${filteredFeedbacks.length} feedbacks excluídos exportados com sucesso`,
+    })
+  }
+
   const filteredHotels = selectedHotel === 'all' 
     ? Object.keys(unidentifiedByHotel) 
     : [selectedHotel]
+
+  const filteredDeletedFeedbacks = deletedFeedbacks.filter(feedback =>
+    feedback.comment.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (feedback.hotelName && feedback.hotelName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (feedback.deletedBy && feedback.deletedBy.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
 
   if (userData && userData.role !== 'admin') {
     return null
@@ -384,7 +512,7 @@ export default function AdminUnidentifiedFeedbacks() {
 
       {/* Tabs principais */}
       <Tabs defaultValue="by-hotel" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="by-hotel" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
             Por Hotel ({totalHotels})
@@ -392,6 +520,10 @@ export default function AdminUnidentifiedFeedbacks() {
           <TabsTrigger value="recent-edits" className="flex items-center gap-2">
             <Edit3 className="h-4 w-4" />
             Edições Recentes ({recentEdits.length})
+          </TabsTrigger>
+          <TabsTrigger value="deleted-feedbacks" className="flex items-center gap-2">
+            <Trash2 className="h-4 w-4" />
+            Excluídos ({deletedFeedbacks.length})
           </TabsTrigger>
           <TabsTrigger value="statistics" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -589,6 +721,213 @@ export default function AdminUnidentifiedFeedbacks() {
               </p>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="deleted-feedbacks" className="space-y-6">
+          {/* Header da seção de excluídos */}
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-red-500" />
+                Feedbacks Excluídos
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                Histórico de comentários removidos das análises
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={exportDeletedFeedbacks}
+                variant="outline"
+                className="flex items-center gap-2"
+                disabled={filteredDeletedFeedbacks.length === 0}
+              >
+                <Download className="h-4 w-4" />
+                Exportar
+              </Button>
+              <Button
+                onClick={loadDeletedFeedbacks}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Atualizar
+              </Button>
+            </div>
+          </div>
+
+          {/* Estatísticas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Total Excluídos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  {deletedFeedbacks.length}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Filtrados
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {filteredDeletedFeedbacks.length}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Mais Recente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-gray-900 dark:text-white">
+                  {deletedFeedbacks.length > 0 
+                    ? formatDateBR(deletedFeedbacks[0].deletedAt || deletedFeedbacks[0].date)
+                    : 'Nenhum'
+                  }
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Busca */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Buscar por comentário, hotel ou usuário que excluiu..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Lista de feedbacks excluídos */}
+          <div className="space-y-4">
+            {filteredDeletedFeedbacks.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <AlertCircle className="h-12 w-12 text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                    {searchTerm ? 'Nenhum resultado encontrado' : 'Nenhum feedback excluído'}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {searchTerm 
+                      ? 'Tente ajustar os termos de busca.' 
+                      : 'Não há feedbacks excluídos no momento.'
+                    }
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              filteredDeletedFeedbacks.map((feedback) => (
+                <Card key={feedback.id} className="border border-red-100 dark:border-red-900/30">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="destructive" className="text-xs">
+                            EXCLUÍDO
+                          </Badge>
+                          <Badge variant="outline">
+                            {feedback.hotelName || 'Hotel não identificado'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {formatDateBR(feedback.date)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3 text-yellow-500" />
+                            {feedback.rating}/5
+                          </div>
+                          {feedback.deletedBy && (
+                            <div className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              {feedback.deletedBy}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <Button
+                        onClick={() => restoreFeedback(feedback.id)}
+                        variant="outline"
+                        size="sm"
+                        className="flex items-center gap-2 text-green-600 hover:text-green-700 border-green-200 hover:border-green-300"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        Restaurar
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-4">
+                    {/* Comentário */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        Comentário:
+                      </h4>
+                      <p className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                        {feedback.comment}
+                      </p>
+                    </div>
+
+                    {/* Motivo da exclusão */}
+                    {feedback.deletedReason && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                          Motivo da Exclusão:
+                        </h4>
+                        <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                          {feedback.deletedReason}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Metadados */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+                      <div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Setor:</span>
+                        <p className="text-sm font-medium">{feedback.sector}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Palavra-chave:</span>
+                        <p className="text-sm font-medium">{feedback.keyword}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Fonte:</span>
+                        <p className="text-sm font-medium">{feedback.source}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Sentimento:</span>
+                        <p className="text-sm font-medium capitalize">{feedback.sentiment}</p>
+                      </div>
+                    </div>
+
+                    {/* Data de exclusão */}
+                    {feedback.deletedAt && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
+                        Excluído em: {formatDateBR(feedback.deletedAt)}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="statistics" className="space-y-4">
