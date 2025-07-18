@@ -518,13 +518,10 @@ export const updateFeedbackInFirestore = async (
     const analysisData = analysisDoc.data();
     const updatedData = [...analysisData.data];
     
-    // Atualizar o feedback específico
+    // Atualizar o feedback específico - suporta qualquer campo
     updatedData[feedbackIndex] = {
       ...updatedData[feedbackIndex],
-      keyword: updatedFeedback.keyword,
-      sector: updatedFeedback.sector,
-      problem: updatedFeedback.problem,
-      allProblems: updatedFeedback.allProblems,
+      ...updatedFeedback, // Aplicar todas as mudanças passadas
       lastModified: Timestamp.now()
     };
     

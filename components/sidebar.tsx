@@ -22,7 +22,8 @@ import {
   RefreshCw,
   Activity,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from "lucide-react"
 
 function Sidebar() {
@@ -97,6 +98,12 @@ function Sidebar() {
       icon: AlertCircle,
       href: "/admin/feedback-nao-identificados",
       color: "text-orange-400",
+    },
+    {
+      label: "Feedbacks Excluídos",
+      icon: Trash2,
+      href: "/admin/feedbacks-excluidos",
+      color: "text-red-400",
     },
 
     {

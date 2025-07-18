@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ArrowLeft, AlertCircle, Eye, EyeOff, Edit3, Save, X, Plus, Trash2 } from "lucide-react"
+import { ArrowLeft, AlertCircle, Eye, EyeOff, Edit3, Save, X, Plus, Trash2, Info } from "lucide-react"
 import { formatDateBR, cn } from "@/lib/utils"
 import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/lib/utils"
 import { useRouter } from "next/navigation"
@@ -28,6 +28,7 @@ interface UnidentifiedFeedback {
   source: string
   sentiment?: string
   allProblems?: Array<{keyword: string, sector: string, problem: string}>
+  deleted?: boolean
 }
 
 // Lista de departamentos disponíveis
@@ -383,6 +384,7 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
   const [isEditing, setIsEditing] = useState(false)
   const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   useEffect(() => {
     // Inicializar problemas para edição
@@ -493,6 +495,52 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
     }
   }
 
+  const handleDeleteFeedback = async () => {
+    // Confirmação antes de excluir
+    if (!window.confirm('Tem certeza que deseja excluir este comentário? Esta ação não pode ser desfeita.')) {
+      return
+    }
+
+    setIsDeleting(true)
+    
+    try {
+      // Chamar API para marcar feedback como excluído
+      const response = await fetch('/api/delete-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          feedbackId: feedback.id,
+          reason: 'Conteúdo irrelevante ou spam'
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao excluir feedback')
+      }
+
+      toast({
+        title: "Comentário Excluído",
+        description: "O comentário foi marcado como excluído e removido das visualizações.",
+        duration: 3000,
+      })
+
+      // Fechar modal e atualizar lista
+      onSave({ ...feedback, deleted: true })
+
+    } catch (error) {
+      console.error('Erro ao excluir feedback:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o comentário.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -523,8 +571,27 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleDeleteFeedback}
+                    disabled={isSaving || isDeleting}
+                    className="flex items-center gap-2 bg-white hover:bg-red-50 dark:bg-gray-800 dark:hover:bg-red-900/20 border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 transition-all duration-200 hover:shadow-md"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+                        Excluindo...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4" />
+                        Excluir
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={handleCancelEdit}
-                    disabled={isSaving}
+                    disabled={isSaving || isDeleting}
                   >
                     <X className="h-4 w-4" />
                     Cancelar
@@ -532,7 +599,7 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
                   <Button
                     size="sm"
                     onClick={handleSaveChanges}
-                    disabled={isSaving}
+                    disabled={isSaving || isDeleting}
                     className="bg-green-600 hover:bg-green-700"
                   >
                     {isSaving ? (
@@ -712,38 +779,98 @@ export default function UnidentifiedFeedbacks() {
   const fetchUnidentifiedFeedbacks = async () => {
     setLoading(true)
     try {
-      const allAnalyses = await getAllAnalyses()
+      // Primeiro tentar carregar do localStorage (dados da página de análise atual)
+      let feedbacksToAnalyze: any[] = []
+      
+      const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
+      if (storedFeedbacks) {
+        try {
+          const parsedFeedbacks = JSON.parse(storedFeedbacks)
+          console.log('🔍 Verificando feedbacks do localStorage:', parsedFeedbacks.length)
+          feedbacksToAnalyze = parsedFeedbacks
+        } catch (error) {
+          console.error('Erro ao parsear localStorage:', error)
+        }
+      }
+      
+      // Se não tem dados no localStorage, buscar do Firebase
+      if (feedbacksToAnalyze.length === 0) {
+        console.log('📡 Buscando dados do Firebase...')
+        const allAnalyses = await getAllAnalyses()
+        allAnalyses.forEach((analysis: any) => {
+          if (analysis.data && Array.isArray(analysis.data)) {
+            feedbacksToAnalyze.push(...analysis.data)
+          }
+        })
+      }
       
       const unidentifiedFeedbacks: UnidentifiedFeedback[] = []
       
-      allAnalyses.forEach((analysis: any) => {
-        if (analysis.data && Array.isArray(analysis.data)) {
-          analysis.data.forEach((feedback: any) => {
-            // Verifica se é um feedback não identificado usando as funções utilitárias
-            const isUnidentified = 
-              !isValidSectorOrKeyword(feedback.keyword) ||
-              !isValidSectorOrKeyword(feedback.sector) ||
-              feedback.keyword?.toLowerCase().includes('não identificado') ||
-              feedback.sector?.toLowerCase().includes('não identificado');
+      console.log(`📊 Total de feedbacks para análise: ${feedbacksToAnalyze.length}`)
+      
+      feedbacksToAnalyze.forEach((feedback: any) => {
+        // Critérios para feedback não identificado
+        const hasInvalidKeyword = !isValidSectorOrKeyword(feedback.keyword);
+        const hasInvalidSector = !isValidSectorOrKeyword(feedback.sector);
+        const hasInvalidProblem = !isValidProblem(feedback.problem);
+        
+        const hasExplicitNotIdentified = 
+          feedback.keyword?.toLowerCase().includes('não identificado') ||
+          feedback.sector?.toLowerCase().includes('não identificado') ||
+          feedback.problem?.toLowerCase().includes('não identificado');
+        
+        // Detectar comentários problemáticos/spam
+        const comment = feedback.comment?.toLowerCase() || '';
+        const isSpamOrGibberish = 
+          comment.length < 5 || // Muito curto
+          /^[^a-záéíóúàâêôãõç\s]*$/.test(comment) || // Apenas caracteres especiais/números
+          /^[a-z]{1,3}(\1)*$/.test(comment) || // Repetição como "aaa", "bbb"
+          comment.match(/^[a-z]{1,2}([a-z])\1{2,}$/); // Padrões como "dfnsdfd"
+        
+        // Feedback é não identificado se:
+        // 1. Keyword, sector OU problem inválidos OU
+        // 2. Contém "não identificado" explicitamente (em qualquer campo) OU  
+        // 3. Comentário é spam/gibberish
+        const isUnidentified = 
+          hasInvalidKeyword || 
+          hasInvalidSector || 
+          hasInvalidProblem ||
+          hasExplicitNotIdentified ||
+          isSpamOrGibberish;
 
-            if (isUnidentified) {
-              unidentifiedFeedbacks.push({
-                id: feedback.id || `${analysis.id}_${Math.random()}`,
-                comment: feedback.comment || '',
-                rating: feedback.rating || 3,
-                keyword: feedback.keyword || 'Não identificado',
-                sector: feedback.sector || 'Não identificado', 
-                problem: feedback.problem || '',
-                date: feedback.date || analysis.importDate?.toDate?.()?.toISOString() || new Date().toISOString(),
-                source: feedback.source || 'Não especificado',
-                sentiment: feedback.sentiment,
-                allProblems: feedback.allProblems || []
-              })
+        // Excluir feedbacks marcados como deletados
+        const isNotDeleted = !feedback.deleted;
+
+        if (isUnidentified && isNotDeleted) {
+          console.log('✅ Feedback não identificado:', {
+            id: feedback.id,
+            keyword: feedback.keyword,
+            sector: feedback.sector,
+            problem: feedback.problem,
+            motivos: {
+              hasInvalidKeyword,
+              hasInvalidSector,
+              hasInvalidProblem,
+              hasExplicitNotIdentified,
+              isSpamOrGibberish
             }
+          })
+          unidentifiedFeedbacks.push({
+            id: feedback.id || `feedback_${Math.random()}`,
+            comment: feedback.comment || '',
+            rating: feedback.rating || 3,
+            keyword: feedback.keyword || 'Não identificado',
+            sector: feedback.sector || 'Não identificado', 
+            problem: feedback.problem || '',
+            date: feedback.date || new Date().toISOString(),
+            source: feedback.source || 'Não especificado',
+            sentiment: feedback.sentiment,
+            allProblems: feedback.allProblems || []
           })
         }
       })
       
+      console.log(`🎯 Total de feedbacks não identificados encontrados: ${unidentifiedFeedbacks.length}`)
       setUnidentifiedFeedbacks(unidentifiedFeedbacks)
     } catch (error) {
       console.error('Erro ao buscar feedbacks não identificados:', error)
@@ -859,6 +986,68 @@ export default function UnidentifiedFeedbacks() {
               </p>
             </div>
           </div>
+          
+                    <div className="flex gap-2">
+            {/* Botão para forçar reload do Firebase */}
+            <Button 
+              variant="outline" 
+              onClick={async () => {
+                console.log('🔄 Forçando reload do Firebase...')
+                localStorage.removeItem('analysis-feedbacks')
+                await fetchUnidentifiedFeedbacks()
+                toast({
+                  title: "Dados Atualizados",
+                  description: "Recarregados diretamente do Firebase",
+                })
+              }}
+              className="text-xs"
+            >
+              🔄 Firebase
+            </Button>
+            
+            {/* Botão de debug temporário */}
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                console.log('🧪 Teste das funções de validação:')
+                console.log('isValidSectorOrKeyword:')
+                console.log('- "Não identificado":', isValidSectorOrKeyword('Não identificado'))
+                console.log('- "A&B":', isValidSectorOrKeyword('A&B'))
+                console.log('- "Manutenção":', isValidSectorOrKeyword('Manutenção'))
+                console.log('- "Comodidade":', isValidSectorOrKeyword('Comodidade'))
+                console.log('- "Produto":', isValidSectorOrKeyword('Produto'))
+                
+                console.log('isValidProblem:')
+                console.log('- "Não identificado":', isValidProblem('Não identificado'))
+                console.log('- "VAZIO":', isValidProblem('VAZIO'))
+                console.log('- "Demora no Atendimento":', isValidProblem('Demora no Atendimento'))
+                console.log('- "":', isValidProblem(''))
+                console.log('- undefined:', isValidProblem(undefined as any))
+                
+                // Buscar e mostrar alguns exemplos dos dados
+                const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
+                if (storedFeedbacks) {
+                  const feedbacks = JSON.parse(storedFeedbacks)
+                  console.log('📋 Primeiros 5 feedbacks do localStorage:')
+                  feedbacks.slice(0, 5).forEach((f: any, i: number) => {
+                    console.log(`${i + 1}. keyword: "${f.keyword}", sector: "${f.sector}", problem: "${f.problem}"`)
+                  })
+                  
+                  // Procurar por feedbacks com "Não identificado" no problema
+                  const problemsWithNotIdentified = feedbacks.filter((f: any) => 
+                    f.problem?.toLowerCase().includes('não identificado')
+                  )
+                  console.log(`🔍 Feedbacks com "Não identificado" no problema: ${problemsWithNotIdentified.length}`)
+                  problemsWithNotIdentified.slice(0, 3).forEach((f: any, i: number) => {
+                    console.log(`  ${i + 1}. ID: ${f.id}, problema: "${f.problem}"`)
+                  })
+                }
+              }}
+              className="text-xs"
+            >
+              🧪 Debug
+            </Button>
+          </div>
         </div>
 
         {/* Estatísticas */}
@@ -900,6 +1089,33 @@ export default function UnidentifiedFeedbacks() {
             </div>
           </Card>
         </div>
+
+        {/* Informações sobre critérios de detecção */}
+        <Card className="p-6 bg-blue-50 dark:bg-blue-950/20 border-blue-200">
+          <div className="flex items-start gap-4">
+            <Info className="h-6 w-6 text-blue-600 mt-1 flex-shrink-0" />
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                Critérios de Detecção Atualizados
+              </h3>
+              <p className="text-blue-800 dark:text-blue-200">
+                Os feedbacks aparecem aqui quando:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-blue-700 dark:text-blue-300">
+                <li><strong>Keywords, setores ou problemas inválidos:</strong> Não constam nas listas oficiais da IA</li>
+                <li><strong>Marcados explicitamente:</strong> Contêm "não identificado" em qualquer campo (keyword, setor, problema)</li>
+                <li><strong>Comentários problemáticos:</strong> Muito curtos (&lt; 5 chars), apenas símbolos ou padrões como "dfnsdfd"</li>
+                <li><strong>Spam ou gibberish:</strong> Detectados automaticamente por padrões suspeitos</li>
+              </ul>
+              <div className="mt-4 p-3 bg-green-100 dark:bg-green-900/30 rounded-lg border border-green-200">
+                <p className="text-sm text-green-800 dark:text-green-200">
+                  <strong>✅ Melhoria:</strong> Se poucos feedbacks aparecem aqui, significa que a IA está funcionando melhor 
+                  e identificando corretamente mais comentários!
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
 
         {/* Aviso */}
         <Card className="p-4 bg-orange-50 border-orange-200">

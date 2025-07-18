@@ -336,6 +336,7 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: any, onSave: (updat
   const [isEditing, setIsEditing] = useState(false)
   const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   useEffect(() => {
     // Inicializar problemas para edição
@@ -446,6 +447,52 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: any, onSave: (updat
     }
   }
 
+  const handleDeleteFeedback = async () => {
+    // Confirmação antes de excluir
+    if (!window.confirm('Tem certeza que deseja excluir este comentário? Esta ação não pode ser desfeita.')) {
+      return
+    }
+
+    setIsDeleting(true)
+    
+    try {
+      // Chamar API para marcar feedback como excluído
+      const response = await fetch('/api/delete-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          feedbackId: feedback.id,
+          reason: 'Conteúdo irrelevante ou spam'
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao excluir feedback')
+      }
+
+      toast({
+        title: "Comentário Excluído",
+        description: "O comentário foi marcado como excluído e removido das visualizações.",
+        duration: 3000,
+      })
+
+      // Fechar modal e atualizar lista
+      onSave({ ...feedback, deleted: true })
+
+    } catch (error) {
+      console.error('Erro ao excluir feedback:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o comentário.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -476,8 +523,27 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: any, onSave: (updat
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={handleDeleteFeedback}
+                    disabled={isSaving || isDeleting}
+                    className="flex items-center gap-2 bg-white hover:bg-red-50 dark:bg-gray-800 dark:hover:bg-red-900/20 border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 transition-all duration-200 hover:shadow-md"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent" />
+                        Excluindo...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4" />
+                        Excluir
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={handleCancelEdit}
-                    disabled={isSaving}
+                    disabled={isSaving || isDeleting}
                   >
                     <X className="h-4 w-4" />
                     Cancelar
@@ -485,7 +551,7 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: any, onSave: (updat
                   <Button
                     size="sm"
                     onClick={handleSaveChanges}
-                    disabled={isSaving}
+                    disabled={isSaving || isDeleting}
                     className="bg-green-600 hover:bg-green-700"
                   >
                     {isSaving ? (

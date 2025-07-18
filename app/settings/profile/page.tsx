@@ -13,7 +13,7 @@ import { Loader2, User, Lock, Shield } from "lucide-react"
 import SharedDashboardLayout from "../../shared-layout"
 
 function ProfileContent() {
-  const { userData, user } = useAuth()
+  const { userData } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState("")

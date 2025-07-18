@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as SonnerToaster } from 'sonner';
 import { AuthProvider } from '@/lib/auth-context';
+import { AnalyticsTracker } from '@/components/analytics-tracker';
 import './dark-theme.css'
 
 const inter = Inter({ subsets: ['latin'] });
@@ -48,6 +49,7 @@ export default function RootLayout({
           storageKey="theme-preference"
         >
           <AuthProvider>
+            <AnalyticsTracker />
             {children}
             <SonnerToaster 
               position="top-right" 

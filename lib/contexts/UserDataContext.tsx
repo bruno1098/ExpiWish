@@ -17,7 +17,7 @@ const UserDataContext = createContext<UserDataContextType>({
 export const useUserData = () => useContext(UserDataContext);
 
 export const UserDataProvider = ({ children }: { children: ReactNode }) => {
-  const { user, userData } = useAuth();
+  const { userData } = useAuth();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

@@ -240,9 +240,9 @@ function UserManagementContent() {
       errors.push("Senha e confirmação de senha devem ser iguais");
     }
     
-    // Validar hotel
-    if (!newUserHotelId) {
-      errors.push("Seleção de hotel é obrigatória");
+    // Validar hotel (apenas para colaboradores)
+    if (newUserRole === 'staff' && !newUserHotelId) {
+      errors.push("Seleção de hotel é obrigatória para colaboradores");
     }
     
     // Validar função
@@ -267,15 +267,29 @@ function UserManagementContent() {
       return;
     }
 
-    // Encontrar o hotel selecionado
-    const selectedHotel = hotels.find(h => h.id === newUserHotelId);
-    if (!selectedHotel) {
-      toast({
-        title: "❌ Erro",
-        description: "Hotel selecionado não encontrado. Tente recarregar a página.",
-        variant: "destructive"
-      });
-      return;
+    // Definir hotel baseado no role
+    let selectedHotel;
+    let finalHotelId;
+    let finalHotelName;
+    
+    if (newUserRole === 'admin') {
+      // Administradores têm acesso a todos os hotéis
+      finalHotelId = 'todos-hoteis';
+      finalHotelName = 'Todos os Hotéis - Grupo Wish';
+      selectedHotel = { id: finalHotelId, name: finalHotelName };
+    } else {
+      // Colaboradores precisam de hotel específico
+      selectedHotel = hotels.find(h => h.id === newUserHotelId);
+      if (!selectedHotel) {
+        toast({
+          title: "❌ Erro",
+          description: "Hotel selecionado não encontrado. Tente recarregar a página.",
+          variant: "destructive"
+        });
+        return;
+      }
+      finalHotelId = selectedHotel.id;
+      finalHotelName = selectedHotel.name;
     }
 
     // Tentar registrar o usuário
@@ -288,8 +302,8 @@ function UserManagementContent() {
         result = await createUserKeepingAdminLoggedIn(
           newUserEmail.trim(),
           newUserPassword,
-          newUserHotelId,
-          selectedHotel.name,
+          finalHotelId,
+          finalHotelName,
           newUserName.trim(),
           newUserRole
         );
@@ -300,8 +314,8 @@ function UserManagementContent() {
         result = await createUserAsAdmin(
           newUserEmail.trim(),
           newUserPassword,
-          newUserHotelId,
-          selectedHotel.name,
+          finalHotelId,
+          finalHotelName,
           newUserName.trim(),
           newUserRole
         );
@@ -521,8 +535,8 @@ function UserManagementContent() {
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUserEmail.trim()) &&
       newUserPassword.length >= 6 &&
       newUserPassword === newUserConfirmPassword &&
-      newUserHotelId.length > 0 &&
-      ['admin', 'staff'].includes(newUserRole)
+          (newUserRole === 'admin' || newUserHotelId.length > 0) &&
+    ['admin', 'staff'].includes(newUserRole)
     );
   };
 
@@ -737,30 +751,65 @@ function UserManagementContent() {
                     )}
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="hotel">
-                      Hotel <span className="text-red-500">*</span>
-                    </Label>
-                    <Select
-                      value={newUserHotelId}
-                      onValueChange={setNewUserHotelId}
-                      required
-                    >
-                      <SelectTrigger className={!newUserHotelId ? "border-red-300" : ""}>
-                        <SelectValue placeholder="Selecione um hotel" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {hotels.map((hotel) => (
-                          <SelectItem key={hotel.id} value={hotel.id}>
-                            {hotel.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {!newUserHotelId && (
-                      <p className="text-sm text-red-600">Seleção de hotel é obrigatória</p>
-                    )}
-                  </div>
+                  {/* Campo de hotel - apenas para colaboradores */}
+                  {newUserRole === 'staff' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="hotel">
+                        Hotel <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={newUserHotelId}
+                        onValueChange={setNewUserHotelId}
+                        required
+                      >
+                        <SelectTrigger className={!newUserHotelId ? "border-red-300" : ""}>
+                          <SelectValue placeholder="Selecione um hotel" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {hotels.map((hotel) => (
+                            <SelectItem key={hotel.id} value={hotel.id}>
+                              {hotel.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!newUserHotelId && (
+                        <p className="text-sm text-red-600">Seleção de hotel é obrigatória</p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Informação para administradores */}
+                  {newUserRole === 'admin' && (
+                    <div className="space-y-2">
+                      <Label>Acesso aos Hotéis</Label>
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Globe className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                            Administrador - Acesso a todos os hotéis
+                          </span>
+                        </div>
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          Este usuário terá acesso completo a todos os hotéis do grupo Wish:
+                        </p>
+                        <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-blue-600 dark:text-blue-400">
+                          {hotels.slice(0, 6).map((hotel) => (
+                            <div key={hotel.id} className="flex items-center gap-1">
+                              <Building className="h-3 w-3" />
+                              {hotel.name}
+                            </div>
+                          ))}
+                          {hotels.length > 6 && (
+                            <div className="flex items-center gap-1 font-medium">
+                              <Building className="h-3 w-3" />
+                              E mais {hotels.length - 6} hotéis...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <Label htmlFor="role">
@@ -781,12 +830,14 @@ function UserManagementContent() {
                     </Select>
                   </div>
                   
-                  <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded-md">
+                  <div className="text-xs text-muted-foreground bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
                     <p className="font-medium mb-1">Informações importantes:</p>
                     <ul className="space-y-1">
                       <li>• Todos os campos com * são obrigatórios</li>
                       <li>• O email deve ser único no sistema</li>
                       <li>• A senha deve ter pelo menos 6 caracteres</li>
+                      <li>• <strong>Colaboradores:</strong> Devem ser associados a um hotel específico</li>
+                      <li>• <strong>Administradores:</strong> Têm acesso automático a todos os hotéis</li>
                     </ul>
                   </div>
                 </form>

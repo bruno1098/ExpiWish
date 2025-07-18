@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/build-optimize.js",
     "build": "next build",
+    "build:dev": "NODE_ENV=development next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "optimize": "NODE_ENV=production node scripts/build-optimize.js",
+    "optimize:test": "node scripts/build-optimize.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -73,6 +77,7 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "5.2.2",
     "vaul": "^0.9.9",
+    "web-vitals": "^5.0.3",
     "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },

@@ -1076,6 +1076,53 @@ function ConfigPage() {
           
           <Card>
             <CardHeader>
+              <CardTitle>Analytics & Performance</CardTitle>
+              <CardDescription>
+                Monitoramento avançado de performance e análise de uso da plataforma.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start space-x-4">
+                <div className="bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/20 dark:to-purple-900/20 p-3 rounded-lg">
+                  <Activity className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-sm mb-2">Dashboard de Analytics</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Acesse métricas detalhadas de Core Web Vitals, acessos de usuários, performance por hotel e monitoramento em tempo real.
+                  </p>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <Badge variant="outline" className="text-xs">
+                      <BarChart3 className="h-3 w-3 mr-1" />
+                      Métricas de Performance
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      <TrendingUp className="h-3 w-3 mr-1" />
+                      Acessos
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      <Zap className="h-3 w-3 mr-1" />
+                      Velocidade
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      <Target className="h-3 w-3 mr-1" />
+                      Tempo Real
+                    </Badge>
+                  </div>
+                  <Link href="/admin/analytics">
+                    <Button className="w-full sm:w-auto">
+                      <Activity className="h-4 w-4 mr-2" />
+                      Acessar Analytics
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
               <CardTitle>Contatos de Suporte</CardTitle>
               <CardDescription>
                 Canais de suporte disponíveis para administradores.

@@ -166,11 +166,11 @@ const sentimentColors = {
 
 // Mapa de ícones para avaliações
 const ratingIcons: Record<number, string> = {
-  1: "⭐",
-  2: "⭐⭐",
-  3: "⭐⭐⭐",
-  4: "⭐⭐⭐⭐",
-  5: "⭐⭐⭐⭐⭐"
+  1: "★",
+  2: "★★",
+  3: "★★★",
+  4: "★★★★",
+  5: "★★★★★"
 }
 
 const sentimentBadges = {
@@ -343,11 +343,16 @@ const StatsCard = ({ icon: Icon, title, value, change, color }: {
 );
 
 // Componente para Modal de Comentário Completo
-const CommentModal = ({ feedback }: { feedback: Feedback }) => {
+const CommentModal = ({ feedback, onFeedbackUpdated }: { 
+  feedback: Feedback, 
+  onFeedbackUpdated?: (updatedFeedback: Feedback) => void 
+}) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
   const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
   
   useEffect(() => {
     // Inicializar problemas para edição
@@ -467,13 +472,19 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
       
       setIsEditing(false)
       
+      // Chamar callback para atualizar a lista principal
+      onFeedbackUpdated?.(updatedFeedback)
+      
       toast({
         title: "Análise Atualizada",
         description: "As alterações foram salvas com sucesso.",
+        duration: 2000,
       })
       
-      // Atualizar os dados locais sem recarregar a página
-      // A atualização será refletida quando o usuário fechar o modal ou navegar
+      // Fechar modal após um pequeno delay para mostrar o toast
+      setTimeout(() => {
+        setIsOpen(false)
+      }, 1000)
       
     } catch (error) {
       console.error('Erro ao salvar:', error)
@@ -487,166 +498,329 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
     }
   }
 
+  const handleDeleteFeedback = async () => {
+    // Confirmação antes de excluir
+    if (!window.confirm('Tem certeza que deseja excluir este comentário? Esta ação não pode ser desfeita.')) {
+      return
+    }
+
+    setIsDeleting(true)
+    
+    try {
+      // Chamar API para marcar feedback como excluído
+      const response = await fetch('/api/delete-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          feedbackId: feedback.id,
+          reason: 'Conteúdo irrelevante ou spam'
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao excluir feedback')
+      }
+
+      // Atualizar no localStorage removendo o feedback
+      const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
+      if (storedFeedbacks) {
+        const feedbacks = JSON.parse(storedFeedbacks)
+        const updatedFeedbacks = feedbacks.filter((f: Feedback) => f.id !== feedback.id)
+        localStorage.setItem('analysis-feedbacks', JSON.stringify(updatedFeedbacks))
+      }
+
+      toast({
+        title: "Comentário Excluído",
+        description: "O comentário foi marcado como excluído e removido das visualizações.",
+        duration: 3000,
+      })
+
+      // Fechar modal e atualizar lista
+      setIsOpen(false)
+      onFeedbackUpdated?.({ ...feedback, deleted: true })
+
+    } catch (error) {
+      console.error('Erro ao excluir feedback:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o comentário.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button 
           variant="ghost" 
           size="sm" 
           className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200 hover:scale-110"
           title="Ver detalhes do comentário"
+          onClick={() => setIsOpen(true)}
         >
           <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden flex flex-col bg-gradient-to-br from-white via-gray-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900/20 border-2 border-blue-100 dark:border-blue-800/30 shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-yellow-500" />
-              Detalhes do Feedback - {feedback.rating} estrelas
+          <DialogTitle>Detalhes do Comentário</DialogTitle>
+        </DialogHeader>
+        {/* Header redesenhado */}
+        <div className="relative flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+          {/* Botão X - Posicionado corretamente */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setIsOpen(false)}
+            className="absolute right-4 top-4 h-8 w-8 p-0 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200 z-10 group"
+            title="Fechar"
+          >
+            <X className="h-4 w-4 text-gray-500 group-hover:text-red-600 transition-colors" />
+          </Button>
+
+          <div className="p-6 pr-16">
+            {/* Título principal */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 shadow-lg">
+                <Star className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Feedback Detalhado
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star 
+                        key={star} 
+                        className={`h-3.5 w-3.5 ${star <= feedback.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} 
+                      />
+                    ))}
+                  </div>
+                  <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                    {feedback.rating}/5
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {!isEditing ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleStartEdit}
-                  className="flex items-center gap-2"
-                >
-                  <Edit3 className="h-4 w-4" />
-                  Editar Análise
-                </Button>
-              ) : (
-                <div className="flex items-center gap-2">
+
+            {/* Status e ações */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {isEditing && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full border border-blue-200 dark:border-blue-700 animate-pulse">
+                    <Edit3 className="h-4 w-4" />
+                    <span className="text-sm font-medium">Editando</span>
+                  </div>
+                )}
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  {formatDate(feedback.date)}
+                </div>
+              </div>
+
+              {/* Botões de ação */}
+              <div className="flex items-center gap-2">
+                {!isEditing ? (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleCancelEdit}
-                    disabled={isSaving}
+                    onClick={handleStartEdit}
+                    className="flex items-center gap-2 bg-white hover:bg-blue-50 dark:bg-gray-800 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 transition-all duration-200 hover:shadow-md"
                   >
-                    <X className="h-4 w-4" />
-                    Cancelar
+                    <Edit3 className="h-4 w-4" />
+                    Editar Análise
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveChanges}
-                    disabled={isSaving}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    {isSaving ? (
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4" />
-                    )}
-                    Salvar
-                  </Button>
-                </div>
-              )}
-            </div>
-          </DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-6">
-          {/* Informações do Feedback */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg border">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Data</p>
-              <p className="text-sm text-foreground">{formatDate(feedback.date)}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Avaliação</p>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{ratingIcons[feedback.rating] || "N/A"}</span>
-                <span className="text-sm text-foreground font-medium">{feedback.rating}/5</span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDeleteFeedback}
+                      disabled={isSaving || isDeleting}
+                      className="flex items-center gap-2 bg-white hover:bg-red-50 dark:bg-gray-800 dark:hover:bg-red-900/20 border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 transition-all duration-200 hover:shadow-md"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Excluindo...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="h-4 w-4" />
+                          Excluir
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      disabled={isSaving || isDeleting}
+                      className="flex items-center gap-2 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 transition-all duration-200"
+                    >
+                      <Minus className="h-4 w-4" />
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveChanges}
+                      disabled={isSaving || isDeleting}
+                      className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4" />
+                          Salvar Alterações
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Sentimento</p>
-              <SentimentBadge sentiment={feedback.sentiment} />
+          </div>
+        </div>
+
+        {/* Conteúdo com scroll */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-6 space-y-6">
+          {/* Informações do Feedback - Design melhorado */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-700/30 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                <Calendar className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Data</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(feedback.date)}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-yellow-500 flex items-center justify-center">
+                <Star className="h-5 w-5 text-white fill-current" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avaliação</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-base text-yellow-500">{ratingIcons[feedback.rating] || "N/A"}</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">{feedback.rating}/5</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
+                <MessageSquare className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sentimento</p>
+                <SentimentBadge sentiment={feedback.sentiment} />
+              </div>
             </div>
           </div>
 
-          {/* Comentário Principal */}
-          <div className="space-y-3">
+          {/* Comentário Principal - Design melhorado */}
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">Comentário</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Comentário do Cliente</h3>
+                <Badge variant="outline" className="text-xs">
+                  {feedback.comment.length} caracteres
+                </Badge>
+              </div>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={copyComment}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-900/20"
               >
                 <Copy className="h-4 w-4" />
                 Copiar
               </Button>
             </div>
-            <div className="p-4 bg-background border-2 border-border rounded-lg">
-              <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+            <div className="p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300 font-medium">
                 {feedback.comment}
               </p>
             </div>
           </div>
 
-          {/* Análise IA */}
+          {/* Análise IA - Design melhorado */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium text-foreground">Análise da IA</h4>
+              <div className="flex items-center gap-2">
+                <h4 className="font-semibold text-gray-900 dark:text-white">Análise da Inteligência Artificial</h4>
+                <Badge variant="secondary" className="text-xs">
+                  IA OpenAI
+                </Badge>
+              </div>
               {isEditing && (
-                <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/20 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-800">
-                  Modo de Edição Ativo
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full border border-blue-200 dark:border-blue-700 animate-pulse">
+                  <Edit3 className="h-4 w-4" />
+                  <span className="text-sm font-medium">Modo Edição Ativo</span>
                 </div>
               )}
             </div>
             
-            {isEditing ? (
-              // Modo de edição
-              <div className="space-y-6">
-                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
-                    <Edit3 className="h-4 w-4" />
-                    <span className="text-sm font-medium">Editando Análise</span>
-                  </div>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    Você pode modificar os departamentos, palavras-chave e problemas identificados pela IA. 
-                    As alterações serão salvas e refletidas nos dashboards.
-                  </p>
-                </div>
-
-                {editedProblems.map((problem, index) => (
-                  <ProblemEditor
-                    key={problem.id}
-                    problem={problem}
-                    onUpdate={(updated) => handleUpdateProblem(problem.id, updated)}
-                    onRemove={() => handleRemoveProblem(problem.id)}
-                    canRemove={editedProblems.length > 1}
-                  />
-                ))}
-
-                {editedProblems.length < 3 && (
-                  <Button
-                    variant="outline"
-                    onClick={handleAddProblem}
-                    className="w-full border-dashed border-2 h-12 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Adicionar Problema ({editedProblems.length}/3)
-                  </Button>
-                )}
-              </div>
-            ) : (
-              // Modo de visualização
-              <>
-                {feedback.allProblems && feedback.allProblems.length > 1 ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      {feedback.allProblems.length} problemas identificados:
+            {feedback.allProblems && feedback.allProblems.length > 0 ? (
+              isEditing ? (
+                // Modo de edição
+                <div className="space-y-6">
+                  <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
+                      <Edit3 className="h-4 w-4" />
+                      <span className="text-sm font-medium">Editando Classificação</span>
+                    </div>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      Corrija a análise da IA se necessário. As alterações serão salvas e refletidas nos dashboards.
                     </p>
+                  </div>
+
+                  {editedProblems.map((problem, index) => (
+                    <ProblemEditor
+                      key={problem.id}
+                      problem={problem}
+                      onUpdate={(updated) => handleUpdateProblem(problem.id, updated)}
+                      onRemove={() => handleRemoveProblem(problem.id)}
+                      canRemove={editedProblems.length > 1}
+                    />
+                  ))}
+
+                  {editedProblems.length < 3 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddProblem}
+                      className="w-full border-dashed border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Adicionar Problema ({editedProblems.length}/3)
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                // Modo visualização para múltiplos problemas
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    A IA identificou {feedback.allProblems.length} problema(s) distinto(s):
+                  </p>
+                  <div className="space-y-3">
                     {feedback.allProblems.map((problemAnalysis, index) => (
-                      <div key={problemAnalysis.id || `problem-${index}`} className="p-3 bg-muted/30 rounded-lg border">
+                      <div key={problemAnalysis.id || `problem-${index}`} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className="space-y-1">
-                            <h5 className="text-xs font-medium text-muted-foreground">Departamento</h5>
+                            <h5 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Departamento</h5>
                             <Badge 
                               variant="outline"
                               className={cn("text-sm border font-medium", getSectorColor(problemAnalysis.sector))}
@@ -656,15 +830,15 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
                           </div>
                           
                           <div className="space-y-1">
-                            <h5 className="text-xs font-medium text-muted-foreground">Palavra-chave</h5>
+                            <h5 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Palavra-chave</h5>
                             <KeywordBadge keyword={problemAnalysis.keyword} sector={problemAnalysis.sector} />
                           </div>
                           
                           <div className="space-y-1">
-                            <h5 className="text-xs font-medium text-muted-foreground">Problema</h5>
+                            <h5 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Problema</h5>
                             <Badge variant="secondary" className="text-sm">
                               {problemAnalysis.problem === 'VAZIO' ? (
-                                <span className="italic text-gray-500">Sem problemas</span>
+                                <span className="italic text-green-600 dark:text-green-400">Sem problemas</span>
                               ) : (
                                 problemAnalysis.problem || 'Não especificado'
                               )}
@@ -674,73 +848,75 @@ const CommentModal = ({ feedback }: { feedback: Feedback }) => {
                       </div>
                     ))}
                   </div>
-                ) : (
-                  // Exibição tradicional para problema único
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-foreground">Departamento</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {feedback.sector.split(';').map((sector, index) => (
-                          <Badge 
-                            key={index} 
-                            variant="outline"
-                            className={cn("text-sm border font-medium", getSectorColor(sector.trim()))}
-                          >
-                            {sector.trim()}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-foreground">Palavras-chave</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {feedback.keyword.split(';').map((kw, index) => {
-                          const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
-                          return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
-                        })}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-foreground">Problema</h4>
-                      <Badge variant="secondary" className="text-sm">
-                        {feedback.problem === 'VAZIO' ? (
-                          <span className="italic text-gray-500">Sem problemas</span>
-                        ) : (
-                          feedback.problem || 'Não especificado'
-                        )}
+                </div>
+              )
+            ) : (
+              // Exibição tradicional para problema único
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Departamento</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {feedback.sector.split(';').map((sector, index) => (
+                      <Badge 
+                        key={index} 
+                        variant="outline"
+                        className={cn("text-sm border font-medium", getSectorColor(sector.trim()))}
+                      >
+                        {sector.trim()}
                       </Badge>
-                    </div>
+                    ))}
                   </div>
-                )}
-              </>
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Palavras-chave</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {feedback.keyword.split(';').map((kw, index) => {
+                      const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
+                      return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
+                    })}
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <h4 className="font-medium text-gray-900 dark:text-white">Problema</h4>
+                  <Badge variant="secondary" className="text-sm">
+                    {feedback.problem === 'VAZIO' ? (
+                      <span className="italic text-green-600 dark:text-green-400">Sem problemas</span>
+                    ) : (
+                      feedback.problem || 'Não especificado'
+                    )}
+                  </Badge>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Informações Adicionais */}
+          {/* Informações Adicionais - Design melhorado */}
           {(feedback.source || feedback.language || feedback.apartamento) && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-800 dark:to-slate-800 rounded-lg border border-gray-200 dark:border-gray-700">
               {feedback.source && (
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Fonte</p>
-                  <p className="text-sm text-foreground">{feedback.source}</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Fonte</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{feedback.source}</p>
                 </div>
               )}
               {feedback.language && (
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Idioma</p>
-                  <p className="text-sm text-foreground">{feedback.language}</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Idioma</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{feedback.language}</p>
                 </div>
               )}
               {feedback.apartamento && (
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Apartamento</p>
-                  <p className="text-sm text-foreground">{feedback.apartamento}</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Apartamento</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{feedback.apartamento}</p>
                 </div>
               )}
             </div>
           )}
+          
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -1053,6 +1229,28 @@ function AnalysisPageContent() {
     localStorage.setItem('analysis-filters', JSON.stringify(filters))
   }, [sentimentFilter, sectorFilter, keywordFilter, problemFilter, dateFilter, searchTerm])
 
+  // Função para atualizar um feedback específico na lista
+  const handleFeedbackUpdated = (updatedFeedback: Feedback) => {
+    setFeedbacks(prevFeedbacks => 
+      prevFeedbacks.map(f => 
+        f.id === updatedFeedback.id ? updatedFeedback : f
+      )
+    )
+    
+    // Se feedback foi deletado, remover da lista filtrada, senão atualizar
+    setFilteredFeedbacks(prevFiltered => {
+      if (updatedFeedback.deleted) {
+        return prevFiltered.filter(f => f.id !== updatedFeedback.id)
+      } else {
+        return prevFiltered.map(f => 
+          f.id === updatedFeedback.id ? updatedFeedback : f
+        )
+      }
+    })
+    
+    console.log('✅ Feedback atualizado na lista:', updatedFeedback.id, updatedFeedback.deleted ? '(deletado)' : '(editado)')
+  }
+
   // Carregar análise específica se houver ID
   useEffect(() => {
     const loadAnalysis = async () => {
@@ -1094,6 +1292,8 @@ function AnalysisPageContent() {
   // Aplicar filtros
   useEffect(() => {
     let filtered = feedbacks.filter((feedback) => {
+      // Excluir feedbacks marcados como deletados
+      const isNotDeleted = !feedback.deleted
       const matchesSentiment = sentimentFilter === "all" || feedback.sentiment === sentimentFilter
       const matchesSector = sectorFilter === "all" || feedback.sector.toLowerCase().includes(sectorFilter.toLowerCase())
       const matchesKeyword = keywordFilter === "all" || feedback.keyword.toLowerCase().includes(keywordFilter.toLowerCase())
@@ -1101,19 +1301,20 @@ function AnalysisPageContent() {
       const matchesDate = !dateFilter || feedback.date.includes(dateFilter)
       const matchesSearch = !searchTerm || feedback.comment.toLowerCase().includes(searchTerm.toLowerCase())
 
-      return matchesSentiment && matchesSector && matchesKeyword && matchesProblem && matchesDate && matchesSearch
+      return isNotDeleted && matchesSentiment && matchesSector && matchesKeyword && matchesProblem && matchesDate && matchesSearch
     })
     
     setFilteredFeedbacks(filtered)
   }, [feedbacks, sentimentFilter, sectorFilter, keywordFilter, problemFilter, dateFilter, searchTerm])
 
-  // Calcular estatísticas
+  // Calcular estatísticas (excluindo feedbacks deletados)
+  const activeFeedbacks = feedbacks.filter(f => !f.deleted)
   const stats = {
-    total: feedbacks.length,
-    positive: feedbacks.filter(f => f.sentiment === 'positive').length,
-    negative: feedbacks.filter(f => f.sentiment === 'negative').length,
-    neutral: feedbacks.filter(f => f.sentiment === 'neutral').length,
-    averageRating: feedbacks.length > 0 ? (feedbacks.reduce((acc, f) => acc + f.rating, 0) / feedbacks.length).toFixed(1) : '0'
+    total: activeFeedbacks.length,
+    positive: activeFeedbacks.filter(f => f.sentiment === 'positive').length,
+    negative: activeFeedbacks.filter(f => f.sentiment === 'negative').length,
+    neutral: activeFeedbacks.filter(f => f.sentiment === 'neutral').length,
+    averageRating: activeFeedbacks.length > 0 ? (activeFeedbacks.reduce((acc, f) => acc + f.rating, 0) / activeFeedbacks.length).toFixed(1) : '0'
   }
 
   // Obter listas únicas para filtros
@@ -1344,28 +1545,28 @@ function AnalysisPageContent() {
             <div className="fixed-header">
               <div className="overflow-hidden">
                 <div className="flex bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900">
-                  <div className="w-24 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                  <div className="w-24 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
                     Data
                   </div>
-                  <div className="w-64 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                  <div className="w-64 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
                     Comentário
                   </div>
-                  <div className="w-24 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs text-center">
+                  <div className="w-24 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm text-center flex items-center justify-center">
                     Nota
                   </div>
-                  <div className="w-28 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs text-center">
+                  <div className="w-28 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm text-center flex items-center justify-center">
                     Sentimento
                   </div>
-                  <div className="w-48 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                  <div className="w-48 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
                     Departamento
                   </div>
-                  <div className="w-52 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                  <div className="w-52 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
                     Palavra-chave
                   </div>
-                  <div className="w-44 p-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-xs">
+                  <div className="w-44 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
                     Problema
                   </div>
-                  <div className="w-12 p-3 font-semibold text-white text-xs text-center">
+                  <div className="w-12 py-4 px-3 font-semibold text-white text-sm text-center flex items-center justify-center">
                     Ações
                   </div>
                 </div>
@@ -1391,28 +1592,30 @@ function AnalysisPageContent() {
                 ) : (
                   <div className="divide-y divide-gray-200 dark:divide-gray-800">
                     {filteredFeedbacks.map((feedback) => (
-                      <div key={feedback.id} className="flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
-                        <div className="w-24 p-3 border-r border-gray-200 dark:border-gray-800 text-xs">
-                          {formatDateBR(feedback.date)}
+                      <div key={feedback.id} className="flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px]">
+                        <div className="w-24 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-xs flex items-center">
+                          <span className="font-medium text-gray-600 dark:text-gray-400">
+                            {formatDateBR(feedback.date)}
+                          </span>
                         </div>
-                        <div className="w-64 p-3 border-r border-gray-200 dark:border-gray-800">
-                          <p className="text-xs line-clamp-3 leading-relaxed">
-                            {feedback.comment.length > 120 
-                              ? `${feedback.comment.substring(0, 120)}...` 
+                        <div className="w-64 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
+                          <p className="text-sm line-clamp-4 leading-relaxed text-gray-700 dark:text-gray-300">
+                            {feedback.comment.length > 150 
+                              ? `${feedback.comment.substring(0, 150)}...` 
                               : feedback.comment
                             }
                           </p>
                         </div>
-                        <div className="w-24 p-3 border-r border-gray-200 dark:border-gray-800 text-center">
+                        <div className="w-24 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-center flex items-center justify-center">
                           <div className="flex flex-col items-center justify-center space-y-1">
-                            <span className="text-lg leading-none">{ratingIcons[feedback.rating] || "N/A"}</span>
-                            <span className="text-sm font-medium">{feedback.rating}</span>
+                            <span className="text-base leading-none text-yellow-500">{ratingIcons[feedback.rating] || "N/A"}</span>
+                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{feedback.rating}</span>
                           </div>
                         </div>
-                        <div className="w-28 p-3 border-r border-gray-200 dark:border-gray-800 text-center">
+                        <div className="w-28 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-center flex items-center justify-center">
                           <SentimentBadge sentiment={feedback.sentiment} />
                         </div>
-                        <div className="w-48 p-3 border-r border-gray-200 dark:border-gray-800">
+                        <div className="w-48 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
                           <div className="flex flex-wrap gap-1">
                             {feedback.sector.split(';').slice(0, 3).map((sector, index) => (
                               <Badge 
@@ -1430,7 +1633,7 @@ function AnalysisPageContent() {
                             )}
                           </div>
                         </div>
-                        <div className="w-52 p-3 border-r border-gray-200 dark:border-gray-800">
+                        <div className="w-52 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
                           <div className="flex flex-wrap gap-1">
                             {feedback.keyword.split(';').slice(0, 3).map((kw, index) => {
                               const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
@@ -1449,7 +1652,7 @@ function AnalysisPageContent() {
                             )}
                           </div>
                         </div>
-                        <div className="w-44 p-3 border-r border-gray-200 dark:border-gray-800">
+                        <div className="w-44 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
                           <div className="flex flex-wrap gap-1">
                             {feedback.problem ? (
                               feedback.problem.split(';').slice(0, 3).map((problem, index) => {
@@ -1458,8 +1661,8 @@ function AnalysisPageContent() {
                                 
                                 if (trimmedProblem === 'VAZIO') {
                                   return (
-                                    <span key={index} className="text-xs text-muted-foreground italic">
-                                      OK
+                                    <span key={index} className="text-sm text-green-600 dark:text-green-400 italic font-medium">
+                                      Sem problemas
                                     </span>
                                   );
                                 }
@@ -1475,7 +1678,7 @@ function AnalysisPageContent() {
                                 );
                               })
                             ) : (
-                              <span className="text-xs text-muted-foreground italic">OK</span>
+                              <span className="text-sm text-green-600 dark:text-green-400 italic font-medium">Sem problemas</span>
                             )}
                             {feedback.problem && feedback.problem.split(';').length > 3 && (
                               <Badge variant="outline" className="text-sm px-2 py-1">
@@ -1484,8 +1687,8 @@ function AnalysisPageContent() {
                             )}
                           </div>
                         </div>
-                        <div className="w-12 p-3 text-center">
-                          <CommentModal feedback={feedback} />
+                        <div className="w-12 py-4 px-3 text-center flex items-center justify-center">
+                          <CommentModal feedback={feedback} onFeedbackUpdated={handleFeedbackUpdated} />
                         </div>
                       </div>
                     ))}

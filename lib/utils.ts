@@ -3,100 +3,125 @@ import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
-} 
+}
 
-// Função para formatar data no formato brasileiro (dd/mm/aaaa)
-export function formatDateBR(dateString: string | Date): string {
+export function formatDateBR(dateString: string): string {
   try {
-    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-    
+    const date = new Date(dateString);
     if (isNaN(date.getTime())) {
       return 'Data inválida';
     }
-    
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    
-    return `${day}/${month}/${year}`;
-  } catch (error) {
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  } catch {
     return 'Data inválida';
   }
 }
 
-// Função para formatar data e hora no formato brasileiro (dd/mm/aaaa HH:mm)
-export function formatDateTimeBR(dateString: string | Date): string {
+export function formatDateTime(dateString: string): string {
   try {
-    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-    
+    const date = new Date(dateString);
     if (isNaN(date.getTime())) {
       return 'Data inválida';
     }
-    
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    
-    return `${day}/${month}/${year} ${hours}:${minutes}`;
-  } catch (error) {
+    return date.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
     return 'Data inválida';
   }
-} 
+}
 
-// Função para verificar se um problema é válido (não é "Não identificado" ou vazio)
+// Keywords oficiais válidas - SINCRONIZADO com a API
+const VALID_KEYWORDS = [
+  "A&B - Café da manhã", "A&B - Serviço", "A&B - Variedade", "A&B - Preço",
+  "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval",
+  "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações",
+  "Ar-condicionado", "Elevador", "Frigobar", "Infraestrutura",
+  "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina",
+  "Tecnologia - Wi-fi", "Tecnologia - TV", "Comodidade", "Estacionamento",
+  "Atendimento", "Acessibilidade", "Reserva de cadeiras (pool)", "Processo",
+  "Custo-benefício", "Comunicação", "Check-in - Atendimento", "Check-out - Atendimento",
+  "Concierge", "Cotas", "Reservas", "Água", "Recreação",
+  "Travesseiro", "Colchão", "Espelho"
+];
+
+// Departamentos oficiais válidos - SINCRONIZADO com a API
+const VALID_DEPARTMENTS = [
+  "A&B", "Governança", "Manutenção", "Manutenção - Quarto", "Manutenção - Instalações",
+  "Lazer", "TI", "Produto", "Operações", "Qualidade", "Recepção", 
+  "Programa de vendas", "Comercial"
+];
+
+// Problemas padronizados válidos
+const VALID_PROBLEMS = [
+  "Demora no Atendimento", "Espaço Insuficiente", "Qualidade da Comida",
+  "Não Funciona", "Muito Frio/Quente", "Conexão Instável", "Falta de Limpeza",
+  "Ruído Excessivo", "Capacidade Insuficiente", "Falta de Cadeiras", 
+  "Preço Alto", "Falta de Variedade", "Qualidade Baixa", "Falta de Manutenção",
+  "Demora no Check-in", "Demora no Check-out", "Falta de Acessibilidade",
+  "Comunicação Ruim", "Processo Lento", "Falta de Equipamento", "Fila Longa",
+  "Qualidade de Bebida", "Falta de Disponibilidade", "VAZIO"
+];
+
+// Função para verificar se um problema é válido (não é "Não identificado" ou vazio inválido)
 export function isValidProblem(problem: string): boolean {
   if (!problem || typeof problem !== 'string') return false;
   
-  const cleanProblem = problem.trim().toLowerCase();
+  const cleanProblem = problem.trim();
   
+  // Se está na lista de problemas válidos, é válido
+  if (VALID_PROBLEMS.includes(cleanProblem)) return true;
+  
+  // Verificar termos inválidos
   const invalidTerms = [
     'não identificado',
-    'nao identificado', 
-    'vazio',
-    'sem problemas',
-    'sem problema',
-    'nenhum problema',
+    'nao identificado',
     'não analisado',
-    'nao analisado',
-    ''
+    'nao analisado'
   ];
   
-  return !invalidTerms.some(term => 
-    cleanProblem === term || cleanProblem.includes(term)
-  );
+  const lowerProblem = cleanProblem.toLowerCase();
+  return !invalidTerms.some(term => lowerProblem.includes(term));
 }
 
 // Função para verificar se um setor/keyword é válido
 export function isValidSectorOrKeyword(value: string): boolean {
   if (!value || typeof value !== 'string') return false;
   
-  const cleanValue = value.trim().toLowerCase();
+  const cleanValue = value.trim();
   
+  // Se está nas listas oficiais, é válido
+  if (VALID_KEYWORDS.includes(cleanValue) || VALID_DEPARTMENTS.includes(cleanValue)) {
+    return true;
+  }
+  
+  // Verificar termos explicitamente inválidos
   const invalidTerms = [
     'não identificado',
-    'nao identificado',
-    'vazio',
-    ''
+    'nao identificado'
   ];
   
-  return !invalidTerms.some(term => 
-    cleanValue === term || cleanValue.includes(term)
-  );
+  const lowerValue = cleanValue.toLowerCase();
+  return !invalidTerms.some(term => lowerValue === term);
 }
 
 // Função para filtrar feedbacks válidos (remove não identificados)
 export function filterValidFeedbacks(feedbacks: any[]) {
   return feedbacks.filter(feedback => {
-    const keyword = feedback.keyword?.toLowerCase() || '';
-    const sector = feedback.sector?.toLowerCase() || '';
-    const problem = feedback.problem?.toLowerCase() || '';
+    const keyword = feedback.keyword || '';
+    const sector = feedback.sector || '';
     
-    // Verificar se não é "não identificado"
+    // Verificar se não é "não identificado" explicitamente
     const hasValidKeyword = isValidSectorOrKeyword(keyword);
     const hasValidSector = isValidSectorOrKeyword(sector);
-    const hasValidProblem = problem ? isValidProblem(problem) : true; // Problema pode ser vazio
     
     // Pelo menos keyword e sector devem ser válidos
     return hasValidKeyword && hasValidSector;

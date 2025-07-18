@@ -9,13 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Lock, User, ShieldCheck, Building2 } from "lucide-react";
+import { Lock, User, BarChart3, TrendingUp, Shield, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const { isAuthenticated, userData, loading: authLoading } = useAuth();
 
@@ -23,6 +24,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (!authLoading && isAuthenticated && userData) {
       const redirectPath = userData.role === 'admin' ? '/admin' : '/dashboard';
+      console.log(`🔄 Usuário já logado (${userData.role}), redirecionando para: ${redirectPath}`);
       router.replace(redirectPath);
     }
   }, [isAuthenticated, userData, authLoading, router]);
@@ -30,8 +32,11 @@ export default function LoginPage() {
   // Mostrar loading enquanto verifica autenticação
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-indigo-950">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 w-16 h-16 border-4 border-purple-400/20 border-b-purple-400 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+        </div>
       </div>
     );
   }
@@ -47,9 +52,9 @@ export default function LoginPage() {
     setError("");
 
     try {
-      console.log("Tentando login com:", email, password);
+      console.log("🔐 Tentando login com:", email);
       const user = await loginUser(email, password);
-      console.log("Login realizado:", user);
+      console.log("✅ Login realizado:", user.uid);
       
       // Obter dados do usuário para verificar função
       const userData = await getCurrentUserData();
@@ -58,6 +63,8 @@ export default function LoginPage() {
         toast.error("Erro ao obter dados do usuário");
         return;
       }
+      
+      console.log("👤 Dados do usuário obtidos:", { role: userData.role, email: userData.email });
       
       // Verificar se usuário pode acessar (admins sempre podem, staff precisa verificar email)
       const canAccess = await canUserAccess(user, userData);
@@ -70,7 +77,7 @@ export default function LoginPage() {
           await sendEmailVerification();
           console.log("✅ Email de verificação enviado");
         } catch (emailError) {
-          console.error("Erro ao enviar email:", emailError);
+          console.error("❌ Erro ao enviar email:", emailError);
         }
         
         toast.info("Você precisa verificar seu email antes de acessar o sistema. Verifique sua caixa de entrada.");
@@ -82,6 +89,7 @@ export default function LoginPage() {
       
       // Verificar se deve trocar senha
       if (userData?.mustChangePassword) {
+        console.log("🔑 Usuário deve trocar senha, redirecionando...");
         toast.success("Login autorizado! Você será redirecionado para alterar sua senha.");
         
         // Redirecionar para página de troca de senha obrigatória
@@ -91,21 +99,16 @@ export default function LoginPage() {
         return;
       }
 
+      // Login bem-sucedido - o redirecionamento será feito automaticamente pelo useAuth()
       toast.success("Login realizado com sucesso");
-
-      // Redirecionar com base na função do usuário
-      setTimeout(() => {
-        if (userData?.role === 'admin') {
-          router.push("/admin");
-        } else {
-        router.push("/dashboard");
-        }
-      }, 500);
+      console.log(`🎯 Login concluído para ${userData.role}. Aguardando redirecionamento automático...`);
+      
     } catch (error: any) {
-      console.error("Erro ao fazer login:", error);
+      console.error("❌ Erro ao fazer login:", error);
       
       // Verificar se é redirecionamento para senha temporária
       if (error.message === "TEMP_PASSWORD_REDIRECT") {
+        console.log("🔑 Senha temporária detectada, redirecionando...");
         toast.success("Senha temporária detectada! Você será redirecionado para alterar sua senha.");
         // Redirecionar para página de troca de senha
         setTimeout(() => {
@@ -116,6 +119,7 @@ export default function LoginPage() {
       
       // Verificar se contém o código de redirecionamento mesmo que tenha outras palavras
       if (error.message && error.message.includes("TEMP_PASSWORD_REDIRECT")) {
+        console.log("🔑 Senha temporária detectada (string), redirecionando...");
         toast.success("Senha temporária detectada! Você será redirecionado para alterar sua senha.");
         // Redirecionar para página de troca de senha
         setTimeout(() => {
@@ -132,144 +136,190 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="w-full min-h-screen relative flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 overflow-hidden">
-      {/* Background com design arquitetônico e elementos visuais */}
-      <div className="absolute inset-0 bg-slate-100 dark:bg-slate-950 overflow-hidden">
-        {/* Padrão geométrico no fundo */}
-        <div 
-          className="absolute inset-0 opacity-10 dark:opacity-20"
-          style={{
-            backgroundImage: `radial-gradient(circle at 25px 25px, rgba(0,0,0,0.2) 2%, transparent 0%), 
-                              radial-gradient(circle at 75px 75px, rgba(0,0,0,0.2) 2%, transparent 0%)`,
-            backgroundSize: '100px 100px',
-          }}
-        ></div>
-        
-        {/* Elementos de fundo */}
-        <div className="absolute -top-20 -left-20 w-96 h-96 rounded-full bg-blue-200 dark:bg-blue-900 blur-3xl opacity-30 dark:opacity-20"></div>
-        <div className="absolute top-1/4 -right-20 w-80 h-80 rounded-full bg-indigo-200 dark:bg-indigo-900 blur-3xl opacity-30 dark:opacity-20"></div>
-        <div className="absolute -bottom-20 left-1/3 w-72 h-72 rounded-full bg-cyan-200 dark:bg-cyan-900 blur-3xl opacity-30 dark:opacity-20"></div>
-        
-        {/* Linhas decorativas */}
-        <div className="absolute inset-0 opacity-20 dark:opacity-10 overflow-hidden">
-          <div className="absolute top-20 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-400 dark:via-gray-600 to-transparent"></div>
-          <div className="absolute top-1/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-400 dark:via-gray-600 to-transparent"></div>
-          <div className="absolute top-2/3 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-400 dark:via-gray-600 to-transparent"></div>
+    <div className="min-h-screen w-full relative overflow-hidden">
+      {/* Background com gradientes modernos e elementos fluidos */}
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-950 via-purple-950 to-indigo-950">
+        {/* Elementos de fundo animados */}
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Orbs flutuantes com glassmorphism */}
+          <div className="absolute -top-20 -left-20 w-72 h-72 sm:w-96 sm:h-96 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute top-1/4 -right-20 w-64 h-64 sm:w-80 sm:h-80 bg-gradient-to-r from-purple-500/15 to-pink-500/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+          <div className="absolute -bottom-20 left-1/4 w-56 h-56 sm:w-64 sm:h-64 bg-gradient-to-r from-indigo-500/20 to-cyan-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
           
-          <div className="absolute left-20 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-gray-400 dark:via-gray-600 to-transparent"></div>
-          <div className="absolute left-1/3 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-gray-400 dark:via-gray-600 to-transparent"></div>
-          <div className="absolute left-2/3 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-gray-400 dark:via-gray-600 to-transparent"></div>
+          {/* Padrão de grade sutil */}
+          <div 
+            className="absolute inset-0 opacity-[0.02]"
+            style={{
+              backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0)`,
+              backgroundSize: '40px 40px',
+            }}
+          ></div>
         </div>
       </div>
-      
-      <div className="flex flex-col md:flex-row w-full max-w-5xl overflow-hidden rounded-xl shadow-2xl bg-white dark:bg-gray-900 z-10 backdrop-blur-sm bg-white/90 dark:bg-gray-900/90">
-        {/* Seção de ilustração à esquerda */}
-        <div className="w-full md:w-1/2 bg-gradient-to-br from-gray-50 to-slate-100 dark:from-gray-800 dark:to-slate-900 p-8 flex flex-col items-center justify-center relative border-r border-gray-200 dark:border-gray-700">
-          {/* Elementos decorativos sutis */}
-          <div className="absolute top-0 left-0 w-full h-full overflow-hidden">
-            <div className="absolute top-20 left-20 w-32 h-32 rounded-full bg-blue-100 dark:bg-blue-900/30 blur-xl opacity-50"></div>
-            <div className="absolute bottom-20 right-20 w-40 h-40 rounded-full bg-indigo-100 dark:bg-indigo-900/30 blur-xl opacity-50"></div>
-          </div>
+
+      {/* Container principal */}
+      <div className="relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8">
+        <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
           
-          {/* Ilustração principal */}
-          <div className="w-full max-w-sm flex flex-col items-center space-y-8 z-10">
-            <div className="relative">
-              <div className="bg-white dark:bg-gray-800 rounded-2xl p-10 shadow-lg">
-                <Building2 className="h-24 w-24 text-slate-700 dark:text-slate-300" />
-              </div>
-              
-              {/* Ícone de segurança que pulsa suavemente */}
-              <div className="absolute bottom-3 right-3 bg-white dark:bg-gray-800 rounded-full p-2 shadow-lg animate-pulse">
-                <ShieldCheck className="h-8 w-8 text-emerald-600 dark:text-emerald-500" />
+          {/* Lado esquerdo - Informações da marca */}
+          <div className="order-2 lg:order-1 text-center lg:text-left space-y-6 lg:space-y-8 px-4 lg:px-0">
+            {/* Logo/Ícone principal com efeito neumórfico */}
+            <div className="flex justify-center lg:justify-start">
+              <div className="relative group">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl sm:rounded-3xl flex items-center justify-center shadow-2xl transform transition-all duration-300 group-hover:scale-105">
+                  <BarChart3 className="w-10 h-10 sm:w-12 sm:h-12 text-white" />
+                  {/* Glow effect mais sutil */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl sm:rounded-3xl blur-xl opacity-30 -z-10"></div>
+                </div>
+                {/* Pulse indicator */}
+                <div className="absolute -top-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 bg-green-400 rounded-full flex items-center justify-center animate-pulse">
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-green-600 rounded-full"></div>
+                </div>
               </div>
             </div>
-            
-            <h1 className="text-3xl font-bold text-center text-gray-800 dark:text-white">
-              Sistema de Gestão Hoteleira
-            </h1>
-            <p className="text-center text-gray-600 dark:text-gray-300">
-              Plataforma de administração completa para seu estabelecimento
+
+            {/* Título principal */}
+            <div className="space-y-3 lg:space-y-4">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-200 bg-clip-text text-transparent leading-tight">
+                BI Qualidade
+              </h1>
+              <div className="flex items-center justify-center lg:justify-start gap-3">
+                <div className="h-0.5 sm:h-1 w-8 sm:w-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"></div>
+                <span className="text-lg sm:text-xl lg:text-2xl text-gray-300 font-medium">Grupo Wish</span>
+                <div className="h-0.5 sm:h-1 w-8 sm:w-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
+              </div>
+            </div>
+
+            {/* Descrição */}
+            <p className="text-base sm:text-lg text-gray-400 max-w-md mx-auto lg:mx-0 leading-relaxed">
+              Plataforma inteligente de Business Intelligence para monitoramento da qualidade e excelência operacional em toda a rede hoteleira.
             </p>
-          </div>
-        </div>
-        
-        {/* Formulário de login à direita */}
-        <div className="w-full md:w-1/2 bg-white dark:bg-gray-900 p-8 md:p-12">
-          <div className="flex flex-col space-y-8">
-            <div className="flex flex-col space-y-2">
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">Área Restrita</h1>
-              <p className="text-gray-600 dark:text-gray-300">
-                Por favor, identifique-se para acessar o sistema
-              </p>
+
+            {/* Características */}
+            <div className="flex flex-wrap justify-center lg:justify-start gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white/5 backdrop-blur-sm rounded-full border border-white/10">
+                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400" />
+                <span className="text-xs sm:text-sm text-gray-300">Analytics Avançado</span>
+              </div>
+              <div className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-white/5 backdrop-blur-sm rounded-full border border-white/10">
+                <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-400" />
+                <span className="text-xs sm:text-sm text-gray-300">Seguro & Confiável</span>
+              </div>
             </div>
-            
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-3">
-                <Label htmlFor="email" className="text-gray-700 dark:text-gray-200 text-base">Email</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+          </div>
+
+          {/* Lado direito - Formulário de login com glassmorphism */}
+          <div className="order-1 lg:order-2 w-full max-w-sm sm:max-w-md mx-auto">
+            <div className="relative">
+              {/* Card principal com glassmorphism melhorado */}
+              <div className="bg-white/5 backdrop-blur-3xl rounded-2xl sm:rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl">
+                {/* Header do formulário */}
+                <div className="text-center mb-6 sm:mb-8">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">Área de Acesso</h2>
+                  <p className="text-sm sm:text-base text-gray-400">Entre com suas credenciais para continuar</p>
+                </div>
+
+                {/* Formulário */}
+                <form onSubmit={handleLogin} className="space-y-5 sm:space-y-6">
+                  {/* Campo de email */}
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-white font-medium text-sm sm:text-base">Email</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                        <User className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
+                      </div>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="seu.email@grupowish.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10 sm:pl-12 h-11 sm:h-12 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-lg sm:rounded-xl focus:bg-white/10 focus:border-blue-400/30 transition-all duration-300 text-sm sm:text-base"
+                        required
+                      />
+                    </div>
                   </div>
-          <Input
-            id="email"
-            type="email"
-            placeholder="seu.email@hotel.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 py-5 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700"
-            required
-          />
+
+                  {/* Campo de senha */}
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-white font-medium text-sm sm:text-base">Senha</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                        <Lock className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
+                      </div>
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 sm:pl-12 pr-10 sm:pr-12 h-11 sm:h-12 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-lg sm:rounded-xl focus:bg-white/10 focus:border-blue-400/30 transition-all duration-300 text-sm sm:text-base"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 sm:pr-4 flex items-center text-gray-400 hover:text-white transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" /> : <Eye className="h-4 w-4 sm:h-5 sm:w-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Link esqueceu senha */}
+                  <div className="text-right">
+                    <Link 
+                      href="/auth/forgot-password"
+                      className="text-xs sm:text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                      Esqueceu sua senha?
+                    </Link>
+                  </div>
+
+                  {/* Mensagem de erro */}
+                  {error && (
+                    <div className="p-3 sm:p-4 bg-red-500/5 border border-red-500/20 text-red-300 text-xs sm:text-sm rounded-lg sm:rounded-xl backdrop-blur-sm">
+                      {error}
+                    </div>
+                  )}
+
+                  {/* Botão de submit */}
+                  <Button 
+                    type="submit" 
+                    className="w-full h-11 sm:h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-lg sm:rounded-xl transition-all duration-300 transform hover:scale-[1.02] shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        Autenticando...
+                      </div>
+                    ) : (
+                      "Acessar Plataforma"
+                    )}
+                  </Button>
+                </form>
+
+                {/* Footer */}
+                <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-white/5 text-center">
+                  <p className="text-xs sm:text-sm text-gray-500">
+                    Acesso restrito aos colaboradores autorizados do Grupo Wish
+                  </p>
                 </div>
-        </div>
-        
-              <div className="space-y-3">
-          <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-gray-700 dark:text-gray-200 text-base">Senha</Label>
-            <Link 
-              href="/auth/forgot-password"
-                    className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              Esqueceu a senha?
-            </Link>
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-          </div>
-          <Input
-            id="password"
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 py-5 bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700"
-            required
-          />
-                </div>
-        </div>
-        
-        {error && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm rounded-lg">
-            {error}
-          </div>
-        )}
-        
-        <Button 
-          type="submit" 
-                className="w-full py-5 text-base font-medium bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 transition-colors duration-200"
-          disabled={loading}
-        >
-                {loading ? "Autenticando..." : "Entrar no Sistema"}
-        </Button>
-      </form>
-      
-            <div className="text-center text-sm border-t border-gray-200 dark:border-gray-700 pt-6 mt-4">
-              <p className="text-gray-600 dark:text-gray-400">
-                Não possui acesso? Entre em contato com o administrador do sistema.
-        </p>
+              </div>
+
+              {/* Efeitos decorativos mais sutis */}
+              <div className="absolute -inset-0.5 sm:-inset-1 bg-gradient-to-r from-blue-600/10 to-purple-600/10 rounded-2xl sm:rounded-3xl blur-xl -z-10"></div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Partículas flutuantes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-1 h-1 sm:w-2 sm:h-2 bg-blue-400 rounded-full animate-ping opacity-20"></div>
+        <div className="absolute top-3/4 right-1/4 w-0.5 h-0.5 sm:w-1 sm:h-1 bg-purple-400 rounded-full animate-ping opacity-30" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute top-1/2 left-3/4 w-1 h-1 sm:w-1.5 sm:h-1.5 bg-pink-400 rounded-full animate-ping opacity-25" style={{ animationDelay: '4s' }}></div>
       </div>
     </div>
   );

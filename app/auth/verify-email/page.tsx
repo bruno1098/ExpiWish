@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { sendEmailVerification, checkEmailVerified, logoutUser } from "@/lib/auth-service";
 import { useAuth } from "@/lib/auth-context";
+import { auth } from "@/lib/firebase";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -14,23 +15,24 @@ export default function VerifyEmailPage() {
   const [checking, setChecking] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const router = useRouter();
-  const { user, userData } = useAuth();
+  const { userData } = useAuth();
 
   useEffect(() => {
-    if (!user) {
+    if (!userData) {
       router.push("/auth/login");
       return;
     }
 
-    // Verificar se o email já está verificado
-    if (user.emailVerified) {
+    // Verificar se o email já está verificado usando o Firebase Auth
+    const currentUser = auth.currentUser;
+    if (currentUser?.emailVerified) {
       setEmailVerified(true);
       setTimeout(() => {
         const redirectPath = userData?.role === 'admin' ? '/admin' : '/dashboard';
         router.push(redirectPath);
       }, 2000);
     }
-  }, [user, userData, router]);
+  }, [userData, router]);
 
   const handleResendEmail = async () => {
     setLoading(true);
@@ -147,12 +149,12 @@ export default function VerifyEmailPage() {
               Confirme seu endereço de email para acessar o sistema
             </p>
             
-            {user?.email && (
+            {userData?.email && (
               <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
                 <p className="text-sm text-gray-600 dark:text-gray-300">
                   Email enviado para:
                 </p>
-                <p className="font-medium text-gray-800 dark:text-white">{user.email}</p>
+                <p className="font-medium text-gray-800 dark:text-white">{userData.email}</p>
               </div>
             )}
           </div>

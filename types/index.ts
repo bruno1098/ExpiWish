@@ -32,6 +32,7 @@ export type Feedback = {
   hotelId?: string
   apartamento?: string
   allProblems?: ProblemAnalysis[]
+  deleted?: boolean // Campo para marcar feedbacks excluídos
 }
 
 import { User as FirebaseUser } from "firebase/auth";
