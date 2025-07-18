@@ -3,7 +3,19 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './table';
 import { ScrollArea } from './scroll-area';
-import { calculateVisibleItems } from '@/lib/performance-optimization';
+// Função para calcular itens visíveis em virtual scroll
+const calculateVisibleItems = (
+  containerHeight: number,
+  itemHeight: number,
+  scrollTop: number,
+  buffer: number = 5
+) => {
+  const visibleCount = Math.ceil(containerHeight / itemHeight);
+  const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - buffer);
+  const endIndex = Math.min(startIndex + visibleCount + buffer * 2);
+  
+  return { startIndex, endIndex, visibleCount };
+};
 
 interface Column<T> {
   key: keyof T | string;

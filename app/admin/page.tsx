@@ -357,7 +357,6 @@ function AdminDashboardContent() {
 
   // Função para diagnóstico
   const runDiagnostics = async () => {
-    console.log("Executando diagnóstico completo...");
     
     try {
       // Buscar hotéis primeiro
@@ -381,7 +380,7 @@ function AdminDashboardContent() {
           feedbacksByHotel[hotelDoc.id] = feedbackCount;
           totalFeedbacks += feedbackCount;
         } catch (error) {
-          console.log(`Erro ao contar feedbacks para hotel ${hotelDoc.id}:`, error);
+          
           feedbacksByHotel[hotelDoc.id] = 0;
         }
       }
@@ -412,7 +411,7 @@ function AdminDashboardContent() {
       ].join('\n');
       
       setDebugInfo(info);
-      console.log(info);
+      
     } catch (error) {
       console.error("Erro no diagnóstico:", error);
       setDebugInfo(`Erro no diagnóstico: ${error}`);
@@ -491,7 +490,6 @@ function AdminDashboardContent() {
 
   // Função para lidar com cliques em gráficos
   const handleChartClick = (data: any, type: string) => {
-    console.log("Clique no gráfico:", data, type);
     
     // Usar a mesma função centralizada para garantir consistência
     const dataToUse = getCurrentData();
@@ -579,7 +577,6 @@ function AdminDashboardContent() {
           return false;
         });
         value = sectorLabel;
-        
 
         break;
 
@@ -592,11 +589,9 @@ function AdminDashboardContent() {
         break;
 
       default:
-        console.log("Tipo de clique não reconhecido:", type);
+        
         return;
     }
-
-    console.log(`Encontrados ${filteredFeedbacks.length} feedbacks para ${type}:`, data);
 
     if (filteredFeedbacks.length === 0) {
       toast({
@@ -880,9 +875,7 @@ function AdminDashboardContent() {
     
     // Usar dados fornecidos ou função centralizada para garantir consistência
     const dataToUse = data && data.length > 0 ? data : getCurrentData();
-    
 
-    
     (dataToUse || []).forEach(feedback => {
       if (feedback.sector) {
         feedback.sector.split(';').forEach((sector: string) => {
@@ -898,9 +891,7 @@ function AdminDashboardContent() {
       .map(([sector, count]) => ({ label: sector, value: count }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 15);
-    
 
-    
     return result;
   };
 
@@ -1107,7 +1098,6 @@ function AdminDashboardContent() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      console.log("Iniciando busca de dados como admin");
       
       // Carregar todos os hotéis
       const hotelsRef = collection(db, "hotels");
@@ -1120,13 +1110,10 @@ function AdminDashboardContent() {
         };
       });
       setHotels(hotelsData);
-      console.log("Hotéis carregados:", hotelsData.length);
       
       // Buscar análises usando a nova estrutura
       const analyses = await getAllAnalyses();
-      
-      console.log("Total de análises encontradas:", analyses.length);
-      
+
       if (analyses && analyses.length > 0) {
         // Calcular a data mais recente dos feedbacks para a análise combinada
         const allDates = analyses.flatMap((analysis: any) => 
@@ -1192,7 +1179,7 @@ function AdminDashboardContent() {
         // Processar cada análise
         analyses.forEach((analysis: any) => {
           if (!analysis.data || !Array.isArray(analysis.data)) {
-            console.log("Análise sem dados válidos:", analysis.id);
+            
             return;
           }
           

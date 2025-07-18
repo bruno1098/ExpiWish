@@ -49,7 +49,7 @@ export async function analyzeWithGPT(
   }
 
   if (!texto || texto.trim() === '') {
-    console.log("Texto vazio recebido para análise:", texto);
+    
     const defaultResult = {
       rating: 3,
       keyword: 'Não identificado',
@@ -94,8 +94,6 @@ export async function analyzeWithGPT(
     }
 
     const rating = typeof result.rating === 'number' ? result.rating : 3;
-    
-    console.log('Resposta recebida da API:', { rating, fullResult: result });
 
     // Processar nova estrutura com múltiplos problemas
     let allProblems: ProblemAnalysis[] = [];
@@ -155,8 +153,6 @@ export async function analyzeWithGPT(
       allProblems
     };
 
-    console.log('Resultado final processado:', finalResult);
-
     // Armazenar no cache com chave diferenciada
     analysisCache.set(cacheKey, finalResult);
 
@@ -188,7 +184,7 @@ export async function analyzeWithGPT(
     
     if (retryCount < MAX_RETRIES && !error.message.includes('API Key') && !error.message.includes('Limite')) {
       const delayTime = BASE_DELAY * Math.pow(1.5, retryCount) + Math.random() * 1000;
-      console.log(`Tentando novamente em ${delayTime}ms...`);
+      
       await delay(delayTime);
       return analyzeWithGPT(texto, useFineTuned, retryCount + 1);
     }

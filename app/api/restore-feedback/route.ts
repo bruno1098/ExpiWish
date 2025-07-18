@@ -30,8 +30,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🔄 Restaurando feedback ${feedbackId} pelo admin ${userData.email}`);
-
     // Atualizar feedback no Firestore removendo flag de exclusão
     const updateData = {
       deleted: false, // Remover flag de exclusão
@@ -46,7 +44,7 @@ export async function POST(request: NextRequest) {
     const success = await updateFeedbackInFirestore(feedbackId, updateData);
 
     if (success) {
-      console.log(`✅ Feedback ${feedbackId} restaurado com sucesso`);
+      
       return NextResponse.json({ 
         message: 'Feedback restaurado com sucesso',
         feedbackId 

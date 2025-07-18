@@ -35,7 +35,6 @@ const normalizeHotelName = (hotelName: string): string => {
 // Função para salvar uma nova análise na estrutura hierárquica
 export const saveAnalysis = async (analysisData: Omit<AnalysisData, 'importDate'>) => {
   try {
-    console.log('Salvando análise na nova estrutura hierárquica:', analysisData);
     
     // Verificar se estamos em ambiente de teste
     const isTestEnv = typeof window !== 'undefined' && localStorage.getItem('isTestEnvironment') === 'true';
@@ -88,8 +87,7 @@ export const saveAnalysis = async (analysisData: Omit<AnalysisData, 'importDate'
       ...cleanData,
       importDate: Timestamp.now()
     });
-    
-    console.log(`Análise salva: analyse/${hotelDocId}/feedbacks/${feedbackId}`);
+
     return feedbackId;
   } catch (error) {
     console.error('Erro ao salvar análise:', error);
@@ -115,16 +113,12 @@ export const getAllAnalyses = async (hotelId?: string) => {
     }
     
     const results: AnalysisDoc[] = [];
-    
-    console.log(`getAllAnalyses: isAdmin=${isAdmin}, hotelId=${hotelId}, userHotelId=${userData?.hotelId}`);
-    
+
     if (isAdmin) {
       // Admin: buscar todos os hotéis ou um específico
-      console.log('Admin buscando feedbacks...');
       
       try {
         const hotels = await listAllHotels();
-        console.log(`Encontrados ${hotels.length} hotéis para buscar feedbacks`);
         
         // Para cada hotel encontrado, buscar seus feedbacks
         for (const hotel of hotels) {
@@ -144,7 +138,6 @@ export const getAllAnalyses = async (hotelId?: string) => {
             );
             
             const feedbacksSnapshot = await getDocs(feedbacksRef);
-            console.log(`Hotel ${hotel.docId}: ${feedbacksSnapshot.docs.length} feedbacks encontrados`);
             
             feedbacksSnapshot.docs.forEach((feedbackDoc) => {
               const data = feedbackDoc.data() as AnalysisData;
@@ -157,17 +150,15 @@ export const getAllAnalyses = async (hotelId?: string) => {
               });
             });
           } catch (error) {
-            console.log(`Erro ao buscar feedbacks para hotel ${hotel.docId}:`, error);
+            
           }
         }
-        
-        console.log(`Total de feedbacks coletados para admin: ${results.length}`);
+
       } catch (error) {
         console.error('Erro ao buscar dados para admin:', error);
       }
     } else {
       // Usuário normal: buscar apenas feedbacks do seu hotel
-      console.log('Usuário normal buscando feedbacks do seu hotel...');
       
       if (userData?.hotelId) {
         try {
@@ -190,7 +181,6 @@ export const getAllAnalyses = async (hotelId?: string) => {
             );
             
             const querySnapshot = await getDocs(feedbacksRef);
-            console.log(`Feedbacks encontrados para o usuário: ${querySnapshot.docs.length}`);
             
             querySnapshot.docs.forEach((docSnap) => {
               const data = docSnap.data() as AnalysisData;
@@ -203,13 +193,13 @@ export const getAllAnalyses = async (hotelId?: string) => {
               });
             });
           } else {
-            console.log('Hotel do usuário não encontrado na coleção hotels');
+            
           }
         } catch (error) {
-          console.log(`Erro ao buscar feedbacks para usuário:`, error);
+          
         }
       } else {
-        console.log('Usuario não tem hotelId definido');
+        
       }
     }
     
@@ -217,8 +207,7 @@ export const getAllAnalyses = async (hotelId?: string) => {
     const filteredResults = results.filter((doc: AnalysisDoc) => 
       isTestEnv || doc.isTestEnvironment !== true
     );
-    
-    console.log(`Encontrados ${filteredResults.length} feedbacks na estrutura atual`);
+
     return filteredResults;
   } catch (error) {
     console.error("Erro ao buscar análises:", error);
@@ -233,7 +222,6 @@ export const getAnalysisById = async (id: string) => {
   }
   
   try {
-    console.log('Buscando análise com ID:', id);
     
     // Como agora a estrutura é hierárquica, precisamos buscar em todos os hotéis
     const hotels = await listAllHotels();
@@ -250,7 +238,7 @@ export const getAnalysisById = async (id: string) => {
       const docSnap = await getDoc(feedbackDocRef);
       
       if (docSnap.exists()) {
-        console.log(`Documento encontrado em: analyse/${hotel.docId}/feedbacks/${id}`);
+        
         const data = docSnap.data();
         
         if (!data) {
@@ -263,8 +251,7 @@ export const getAnalysisById = async (id: string) => {
         };
       }
     }
-    
-    console.log('Documento não encontrado em nenhum hotel');
+
     throw new Error('Análise não encontrada');
   } catch (error) {
     console.error('Erro ao obter análise:', error);
@@ -275,14 +262,11 @@ export const getAnalysisById = async (id: string) => {
 // Função de migração para mover dados da estrutura antiga para a nova (usar apenas uma vez)
 export const migrateToNewStructure = async () => {
   try {
-    console.log('Iniciando migração para nova estrutura hierárquica...');
     
     // Buscar todos os documentos da estrutura antiga
     const oldAnalysesRef = collection(db, 'analyses');
     const oldSnapshot = await getDocs(oldAnalysesRef);
-    
-    console.log(`Encontrados ${oldSnapshot.docs.length} documentos para migrar`);
-    
+
     for (const oldDoc of oldSnapshot.docs) {
       const data = oldDoc.data() as AnalysisData;
       
@@ -300,11 +284,10 @@ export const migrateToNewStructure = async () => {
         );
         
         await setDoc(newDocRef, data);
-        console.log(`Migrado: ${oldDoc.id} -> analyse/${hotelDocId}/feedbacks/${feedbackId}`);
+        
       }
     }
-    
-    console.log('Migração concluída com sucesso!');
+
   } catch (error) {
     console.error('Erro durante migração:', error);
     throw error;
@@ -314,24 +297,19 @@ export const migrateToNewStructure = async () => {
 // Função para visualizar a estrutura hierárquica do Firebase
 export const visualizeFirebaseStructure = async () => {
   try {
-    console.log('\n📊 ESTRUTURA DO FIREBASE FIRESTORE:');
-    console.log('════════════════════════════════════\n');
-    
+
     const hotels = await listAllHotels();
-    
-    console.log(`📁 ${COLLECTION_ANALYSE}/`);
-    
+
     if (hotels.length === 0) {
       console.log('   └── (vazio)');
       return;
     }
     
     for (const hotel of hotels) {
-      console.log(`   ├── 📁 ${hotel.docId}/`);
+      
       console.log(`   │   └── 📁 ${SUBCOLLECTION_FEEDBACKS}/ (${hotel.feedbackCount} documentos)`);
     }
-    
-    console.log('\n✅ Estrutura visualizada com sucesso!');
+
   } catch (error) {
     console.error('❌ Erro ao visualizar estrutura:', error);
   }
@@ -340,7 +318,6 @@ export const visualizeFirebaseStructure = async () => {
 // Função auxiliar para descobrir hotéis na nova estrutura hierárquica
 const discoverHotelsInNewStructure = async (): Promise<string[]> => {
   try {
-    console.log('Descobrindo hotéis usando a coleção hotels...');
     
     // Usar a coleção 'hotels' para obter lista de hotéis
     const hotelsRef = collection(db, 'hotels');
@@ -373,16 +350,15 @@ const discoverHotelsInNewStructure = async (): Promise<string[]> => {
         const snapshot = await getDocs(feedbacksRef);
         if (!snapshot.empty) {
           existingHotels.push(hotelId);
-          console.log(`✅ Hotel ${hotelId} encontrado com ${snapshot.docs.length} feedbacks`);
+          
         } else {
-          console.log(`❌ Hotel ${hotelId} sem feedbacks na nova estrutura`);
+          
         }
       } catch (error) {
-        console.log(`❌ Hotel ${hotelId} não encontrado na nova estrutura:`, error);
+        
       }
     }
-    
-    console.log(`Total de hotéis com dados na nova estrutura: ${existingHotels.length}`);
+
     return existingHotels;
   } catch (error) {
     console.error('Erro ao descobrir hotéis:', error);
@@ -393,7 +369,7 @@ const discoverHotelsInNewStructure = async (): Promise<string[]> => {
 // Função para listar todos os hotéis na nova estrutura
 export const listAllHotels = async () => {
   try {
-    console.log('Descobrindo hotéis na nova estrutura...');
+    
     const hotelIds = await discoverHotelsInNewStructure();
     
     const hotels = [];
@@ -422,11 +398,10 @@ export const listAllHotels = async () => {
           feedbackCount: feedbacksSnapshot.docs.length
         });
       } catch (error) {
-        console.log(`Erro ao acessar hotel ${hotelId}:`, error);
+        
       }
     }
-    
-    console.log(`Encontrados ${hotels.length} hotéis na nova estrutura`);
+
     return hotels;
   } catch (error) {
     console.error('Erro ao listar hotéis:', error);
@@ -437,34 +412,24 @@ export const listAllHotels = async () => {
 // Função utilitária para testar a nova estrutura (usar no console do navegador)
 export const testNewFirebaseStructure = async () => {
   try {
-    console.log('\n🧪 TESTANDO NOVA ESTRUTURA DO FIREBASE');
-    console.log('═══════════════════════════════════════\n');
-    
+
     // 1. Visualizar estrutura atual
-    console.log('1️⃣ Visualizando estrutura atual...');
+    
     await visualizeFirebaseStructure();
     
     // 2. Listar hotéis
-    console.log('\n2️⃣ Listando todos os hotéis...');
+    
     const hotels = await listAllHotels();
     console.table(hotels);
     
     // 3. Testar busca de análises
-    console.log('\n3️⃣ Testando busca de análises...');
+    
     const analyses = await getAllAnalyses();
-    console.log(`📋 Total de análises encontradas: ${analyses.length}`);
     
     if (analyses.length > 0) {
-      console.log('\n📄 Exemplo de análise:');
-      console.log({
-        id: analyses[0].id,
-        hotelName: analyses[0].hotelName,
-        dataCount: analyses[0].data?.length || 0,
-        importDate: analyses[0].importDate
-      });
+
     }
-    
-    console.log('\n✅ Teste concluído com sucesso!');
+
   } catch (error) {
     console.error('❌ Erro durante teste:', error);
   }
@@ -530,8 +495,7 @@ export const updateFeedbackInFirestore = async (
       data: updatedData,
       lastModified: Timestamp.now()
     });
-    
-    console.log(`Feedback ${feedbackId} atualizado com sucesso no Firebase`);
+
     return true;
     
   } catch (error) {
@@ -581,7 +545,6 @@ export const getRecentEdits = async (limitDays: number = 7) => {
         // Ordenar por data mais recente primeiro
         return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
       })
-    
 
     return edits
   } catch (error) {
@@ -598,8 +561,7 @@ export const clearRecentEdits = async () => {
     
     const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref))
     await Promise.all(deletePromises)
-    
-    console.log(`${snapshot.docs.length} edições antigas removidas`)
+
   } catch (error) {
     console.error("Erro ao limpar edições:", error)
   }

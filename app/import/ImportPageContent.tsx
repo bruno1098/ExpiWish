@@ -397,11 +397,7 @@ function ImportPageContent() {
 
       // Função helper para formatar data do Excel
       const formatExcelDate = (excelDate: any): string => {
-        console.log('=== PROCESSANDO DATA ===');
-        console.log('Valor recebido:', excelDate);
-        console.log('Tipo:', typeof excelDate);
-        console.log('É null/undefined?', excelDate == null);
-        
+
         // Se não há data, não usar fallback - retornar data atual com aviso
         if (excelDate == null || excelDate === '' || excelDate === undefined) {
           console.error('⚠️ ATENÇÃO: Data da coluna B está vazia! Usando data atual como fallback.');
@@ -417,7 +413,7 @@ function ImportPageContent() {
           
           // CASO 1: Número (Serial Date do Excel)
           if (typeof excelDate === 'number') {
-            console.log('📅 Processando número serial do Excel:', excelDate);
+            
             // Excel serial date: 1 = 1/1/1900, ajuste para JavaScript
             if (excelDate > 0 && excelDate < 2958466) { // Validar range razoável (1900-9999)
               date = new Date((excelDate - 25569) * 86400 * 1000);
@@ -429,7 +425,7 @@ function ImportPageContent() {
           } 
           // CASO 2: String com formato de data
           else if (typeof excelDate === 'string' && excelDate.trim() !== '') {
-            console.log('📅 Processando string de data:', excelDate);
+            
             const trimmedDate = excelDate.trim();
             
             // Formato brasileiro DD/MM/YYYY ou DD/MM/YY
@@ -467,7 +463,7 @@ function ImportPageContent() {
           }
           // CASO 3: Já é um objeto Date
           else if (excelDate instanceof Date) {
-            console.log('📅 Já é um objeto Date:', excelDate);
+            
             date = excelDate;
           }
           // CASO 4: Formato não reconhecido
@@ -494,8 +490,7 @@ function ImportPageContent() {
           }
           
           const result = date.toISOString();
-          console.log('✅ DATA FINAL PROCESSADA:', result);
-          console.log('========================');
+
           return result;
           
         } catch (error) {
@@ -519,10 +514,7 @@ function ImportPageContent() {
         for (let row = 1; row <= range.e.r; row++) {
           const cellB = worksheet[utils.encode_cell({ r: row, c: 1 })]; // Coluna B (data do feedback)
           const dataFeedback = cellB?.v || cellB?.w; // Tentar valor formatado (.w) se valor bruto (.v) não existir
-          
-          console.log(`Linha ${row + 1}: Célula B completa:`, cellB);
-          console.log(`Linha ${row + 1}: Data extraída:`, dataFeedback);
-          
+
           const nomeHotel = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
           const fonte = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
           const idioma = worksheet[utils.encode_cell({ r: row, c: 4 })]?.v;
@@ -541,7 +533,6 @@ function ImportPageContent() {
               !/^[^\w\s]+$/.test(texto.trim())) {
             
             const formattedDate = formatExcelDate(dataFeedback);
-            console.log(`Linha ${row + 1}: Data formatada final:`, formattedDate);
             
             rows.push({
               dataFeedback: formattedDate, // Usar data real do feedback
@@ -847,7 +838,7 @@ function ImportPageContent() {
           
           // Verificar novamente após processar o chunk
           if (isCancelled) {
-            console.log('Processamento cancelado pelo usuário após chunk');
+            
             throw new Error('Análise cancelada pelo usuário');
           }
           
@@ -1400,8 +1391,6 @@ function ImportPageContent() {
             </div>
           </div>
         </div>
-        
-
 
         {!importing && !complete && (
           <div className="space-y-6">
@@ -1483,7 +1472,6 @@ function ImportPageContent() {
                 </div>
               </div>
             </div>
-            
 
           </div>
         )}

@@ -318,15 +318,13 @@ function DashboardContent() {
               validAnalyses.forEach((analysis: any) => {
                 if (analysis.data && Array.isArray(analysis.data)) {
                   // Adicionar logs para depuração
-                  console.log(`Análise ${analysis.id} - hotelId: ${analysis.hotelId}, hotelName: ${analysis.hotelName}`);
-                  console.log(`userData.hotelId: ${userData.hotelId}, userData.hotelName: ${userData.hotelName}`);
-                  
+
                   // Como as análises já foram filtradas por hotelId na consulta do Firestore,
                   // podemos incluir todos os feedbacks desta análise
                   allFeedbacks = [...allFeedbacks, ...analysis.data];
                   
                   // Log do número de feedbacks adicionados
-                  console.log(`Adicionados ${analysis.data.length} feedbacks da análise ${analysis.id}`);
+                  
                 }
               });
               
@@ -455,7 +453,6 @@ function DashboardContent() {
 
   // Função para lidar com cliques nos gráficos
   const handleChartClick = (data: any, type: string) => {
-    console.log("Clique no gráfico:", data, type);
     
     const value = data.name || data.label;
     let filteredFeedbacks: any[] = [];
@@ -464,20 +461,20 @@ function DashboardContent() {
     switch (type) {
       case 'rating':
         const ratingLabel = data.label || data.name;
-        console.log("Filtrando por rating, label original:", ratingLabel);
+        
         // Extrair o número do label "X estrela(s)"
         const rating = parseInt(ratingLabel.split(' ')[0]);
-        console.log("Rating extraído:", rating);
+        
         filteredFeedbacks = filteredData.filter((feedback: any) => {
           const feedbackRating = Math.floor(feedback.rating);
-          console.log(`Comparando feedback rating ${feedbackRating} com ${rating}`);
+          
           return feedbackRating === rating;
         });
         break;
 
       case 'problem':
         const problemLabel = data.label || data.name;
-        console.log("Filtrando por problema:", problemLabel);
+        
         filteredFeedbacks = filteredData.filter((feedback: any) => {
           if (feedback.problems && Array.isArray(feedback.problems)) {
             return feedback.problems.includes(problemLabel);
@@ -491,7 +488,7 @@ function DashboardContent() {
 
       case 'source':
         const sourceLabel = data.label || data.name;
-        console.log("Filtrando por fonte:", sourceLabel);
+        
         filteredFeedbacks = filteredData.filter((feedback: any) => 
           feedback.source === sourceLabel
         );
@@ -499,7 +496,7 @@ function DashboardContent() {
 
       case 'language':
         const languageLabel = data.label || data.name;
-        console.log("Filtrando por idioma:", languageLabel);
+        
         filteredFeedbacks = filteredData.filter((feedback: any) => 
           feedback.language === languageLabel
         );
@@ -507,7 +504,7 @@ function DashboardContent() {
 
       case 'keyword':
         const keywordLabel = data.label || data.name;
-        console.log("Filtrando por palavra-chave:", keywordLabel);
+        
         filteredFeedbacks = filteredData.filter((feedback: any) => {
           if (feedback.keyword && typeof feedback.keyword === 'string') {
             return feedback.keyword.split(';').map((k: string) => k.trim()).includes(keywordLabel);
@@ -518,7 +515,7 @@ function DashboardContent() {
 
       case 'sector':
         const sectorLabel = data.label || data.name;
-        console.log("Filtrando por setor:", sectorLabel);
+        
         filteredFeedbacks = filteredData.filter((feedback: any) => {
           if (feedback.sector && typeof feedback.sector === 'string') {
             return feedback.sector === sectorLabel;
@@ -532,7 +529,7 @@ function DashboardContent() {
 
       case 'sentiment':
         const sentimentLabel = data.label || data.name;
-        console.log("Filtrando por sentimento:", sentimentLabel);
+        
         // Mapear os nomes para os valores reais de sentimento
         const sentimentMap: { [key: string]: string } = {
           'Positivo': 'positive',
@@ -546,11 +543,9 @@ function DashboardContent() {
         break;
 
       default:
-        console.log("Tipo de clique não reconhecido:", type);
+        
         return;
     }
-
-    console.log(`Encontrados ${filteredFeedbacks.length} feedbacks para ${type}:`, data);
 
     if (filteredFeedbacks.length === 0) {
       console.log("Nenhum feedback encontrado, dados disponíveis:", filteredData.slice(0, 3));
@@ -2145,7 +2140,6 @@ function DashboardContent() {
           </Card>
         </TabsContent>
       </Tabs>
-
 
       {/* Modal de Detalhes */}
       <Dialog open={!!selectedDetail} onOpenChange={() => setSelectedDetail(null)}>

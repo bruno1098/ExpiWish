@@ -63,7 +63,7 @@ const getSecondaryAuth = () => {
       
       secondaryApp = initializeApp(firebaseConfig, "secondary");
       secondaryAuth = getAuth(secondaryApp);
-      console.log("✅ Instância secundária do Firebase criada com sucesso");
+      
     } catch (error) {
       console.error("❌ Erro ao criar instância secundária do Firebase:", error);
       return null;
@@ -107,9 +107,8 @@ export const registerUserSafe = async (
     const user = userCredential.user;
     
     // Enviar email de verificação
-    console.log("📧 Enviando email de verificação...");
+    
     await sendEmailVerification(user);
-    console.log("✅ Email de verificação enviado");
     
     // Criar documento do usuário no Firestore
     const userData: UserData = {
@@ -137,7 +136,6 @@ export const registerUserSafe = async (
 
 // Função para fazer login
 export const loginUser = async (email: string, password: string): Promise<User> => {
-  console.log("Serviço de login iniciado para:", email);
   
   try {
     // Primeiro, verificar se existe redefinição de senha pendente
@@ -151,7 +149,6 @@ export const loginUser = async (email: string, password: string): Promise<User> 
       
       // Verificar se há redefinição de senha pelo admin
       if (userData.passwordResetByAdmin && !userData.passwordResetByAdmin.used) {
-        console.log("🔄 Verificando senha redefinida pelo admin...");
         
         // Verificar se a senha temporária expirou
         const now = new Date();
@@ -160,7 +157,6 @@ export const loginUser = async (email: string, password: string): Promise<User> 
           : new Date(userData.passwordResetByAdmin.expiresAt);
         
         if (expiresAt && now > expiresAt) {
-          console.log("⚠️ Senha temporária expirou");
           
           // Remover senha temporária expirada
           await setDoc(doc(db, "users", userDoc.id), {
@@ -173,7 +169,6 @@ export const loginUser = async (email: string, password: string): Promise<User> 
         
         // Se a senha fornecida é a nova senha definida pelo admin
         if (password === userData.passwordResetByAdmin.newPassword) {
-          console.log("✅ Detectada senha temporária, redirecionando para troca");
           
           // Retornar um erro especial que será tratado no frontend
           throw new Error("TEMP_PASSWORD_REDIRECT");
@@ -183,7 +178,7 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     
     // Login normal
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    console.log("Credenciais obtidas:", userCredential.user.uid);
+    
     return userCredential.user;
   } catch (error: any) {
     console.error("Erro no serviço de login:", error);
@@ -225,7 +220,7 @@ export const getCurrentUserData = async (): Promise<UserData | null> => {
     if (docSnap.exists()) {
       return docSnap.data() as UserData;
     } else {
-      console.log("Usuário autenticado, mas sem dados no Firestore");
+      
       return null;
     }
   } catch (error) {
@@ -398,43 +393,37 @@ export const createUserKeepingAdminLoggedIn = async (
   name: string = "",
   role: 'admin' | 'staff' = 'staff'
 ): Promise<{ userData: UserData; credentials: { email: string; password: string } }> => {
-  
-  console.log("🔄 Iniciando criação de usuário mantendo admin logado:", email);
-  
+
   // Verificar se é admin
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) {
     console.error("❌ Usuário não é admin");
     throw new Error("Apenas administradores podem criar usuários");
   }
-  console.log("✅ Verificação de admin OK");
   
   // Verificar se o email já está em uso
-  console.log("🔍 Verificando se email já existe:", email);
+  
   const emailExists = await isEmailInUse(email);
   if (emailExists) {
     console.error("❌ Email já existe no sistema:", email);
     throw new Error("Este email já está em uso. Por favor, use outro email.");
   }
-  console.log("✅ Email disponível");
   
   // Verificar se admin ainda está logado
   const adminUser = auth.currentUser;
   if (!adminUser) {
     throw new Error("Admin deve estar logado para criar usuários");
   }
-  console.log("✅ Admin logado:", adminUser.email);
   
   // Tentar usar instância secundária
   const secondaryAuth = getSecondaryAuth();
   
   if (secondaryAuth) {
-    console.log("🔄 Usando instância secundária do Firebase...");
+    
     try {
       // Criar usuário na instância secundária (não afeta sessão principal)
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const newUser = userCredential.user;
-      console.log("✅ Usuário criado na instância secundária:", newUser.uid);
       
       // Criar documento do usuário no Firestore
       const userData: UserData = {
@@ -445,16 +434,12 @@ export const createUserKeepingAdminLoggedIn = async (
         hotelName,
         role
       };
-      
-      console.log("🔄 Salvando dados no Firestore...");
+
       await setDoc(doc(db, "users", newUser.uid), userData);
-      console.log("✅ Dados salvos no Firestore");
       
       // Fazer logout da instância secundária
       await signOut(secondaryAuth);
-      console.log("✅ Logout da instância secundária realizado");
-      
-      console.log("✅ Usuário criado com sucesso sem afetar admin principal:", email);
+
       return {
         userData,
         credentials: { email, password }
@@ -554,11 +539,9 @@ export const deleteUser = async (userId: string): Promise<void> => {
       // Tentar fazer login como o usuário a ser excluído usando uma senha padrão
       // Nota: Isso só funcionará se soubermos a senha do usuário
       // Por isso, vamos implementar uma abordagem diferente
-      
-      console.log(`Usuário ${userData.email} removido do Firestore. Para remoção completa do Firebase Auth, seria necessário configurar o Firebase Admin SDK no backend.`);
-      
+
     } catch (authError) {
-      console.log("Não foi possível excluir do Firebase Auth com client SDK:", authError);
+      
     }
     
     return;
@@ -611,14 +594,13 @@ export const deleteUserCompletely = async (userId: string, userPassword?: string
         const userToDelete = auth.currentUser;
         if (userToDelete) {
           await userToDelete.delete();
-          console.log(`Usuário ${userData.email} excluído do Firebase Auth com sucesso`);
+          
         }
         
         // Fazer logout
         await signOut(auth);
         
         // Relogar o admin (isso é uma limitação - o admin terá que fazer login novamente)
-        console.log("Admin precisará fazer login novamente");
         
       } catch (authError: any) {
         console.error("Erro ao excluir do Firebase Auth:", authError);
@@ -627,7 +609,7 @@ export const deleteUserCompletely = async (userId: string, userPassword?: string
         throw new Error(`Usuário removido do banco de dados, mas não foi possível excluir do Firebase Auth: ${authError.message}`);
       }
     } else {
-      console.log(`Usuário ${userData.email} removido apenas do Firestore. Para remoção completa, forneça a senha do usuário.`);
+      
     }
     
     return;
@@ -665,7 +647,7 @@ export const syncUsersWithAuth = async (): Promise<{removedCount: number, remove
         
         // Verificar se o documento tem dados básicos válidos
         if (!userData.email || !userData.hotelId) {
-          console.log(`Removendo usuário com dados incompletos: ${userId}`);
+          
           await deleteDoc(userDoc.ref);
           removedUsers.push(userId);
           continue;
@@ -674,7 +656,7 @@ export const syncUsersWithAuth = async (): Promise<{removedCount: number, remove
         // Verificar se o email tem formato válido
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(userData.email)) {
-          console.log(`Removendo usuário com email inválido: ${userId}`);
+          
           await deleteDoc(userDoc.ref);
           removedUsers.push(userId);
           continue;
@@ -682,14 +664,14 @@ export const syncUsersWithAuth = async (): Promise<{removedCount: number, remove
         
         // Verificar se o UID tem formato válido do Firebase (pelo menos 20 caracteres alfanuméricos)
         if (userId.length < 20 || !/^[a-zA-Z0-9]+$/.test(userId)) {
-          console.log(`Removendo usuário com UID inválido: ${userId}`);
+          
           await deleteDoc(userDoc.ref);
           removedUsers.push(userId);
           continue;
         }
         
       } catch (error) {
-        console.log(`Erro ao verificar usuário ${userId}, removendo:`, error);
+        
         await deleteDoc(userDoc.ref);
         removedUsers.push(userId);
       }
@@ -755,7 +737,6 @@ export const resetUserPassword = async (userId: string, newPassword: string): Pr
       await signOut(auth);
       
       // Nota: O admin original precisará fazer login novamente manualmente
-      console.log("Senha redefinida com sucesso. Admin precisa fazer login novamente.");
       
     } catch (error: any) {
       console.error("Erro ao redefinir senha:", error);
@@ -795,9 +776,7 @@ export const adminResetUserPassword = async (userId: string, newPassword: string
     if (newPassword.length < 6) {
       throw new Error("A nova senha deve ter pelo menos 6 caracteres");
     }
-    
-    console.log(`🔄 Configurando senha temporária para: ${userData.email}`);
-    
+
     // Salvar dados do admin atual
     const adminUser = auth.currentUser;
     const adminData = await getCurrentUserData();
@@ -821,9 +800,7 @@ export const adminResetUserPassword = async (userId: string, newPassword: string
       };
       
       await setDoc(userRef, resetData, { merge: true });
-      console.log("✅ Senha temporária configurada no Firestore");
-      
-      console.log(`✅ Senha temporária definida com sucesso para ${userData.email}`);
+
       return;
       
     } catch (error: any) {
@@ -874,14 +851,12 @@ export const markFirstAccess = async (userId: string): Promise<void> => {
 // Função para buscar informações detalhadas de um usuário
 export const getUserDetailedInfo = async (userId: string) => {
   try {
-    console.log("🔍 Verificando permissões de admin...");
+    
     const isAdmin = await isCurrentUserAdmin();
     if (!isAdmin) {
       throw new Error("Apenas administradores podem acessar informações detalhadas");
     }
-    console.log("✅ Permissões verificadas");
 
-    console.log("🔍 Buscando usuário no Firestore:", userId);
     const userRef = doc(db, "users", userId);
     const userDoc = await getDoc(userRef);
     
@@ -889,10 +864,8 @@ export const getUserDetailedInfo = async (userId: string) => {
       console.error("❌ Usuário não encontrado:", userId);
       throw new Error("Usuário não encontrado");
     }
-    console.log("✅ Usuário encontrado no Firestore");
     
     const userData = userDoc.data() as UserData;
-    console.log("📊 Dados do usuário:", userData);
     
     // Calcular estatísticas
     const firstAccess = userData.firstAccess?.toDate ? userData.firstAccess.toDate() : null;
@@ -901,14 +874,7 @@ export const getUserDetailedInfo = async (userId: string) => {
     const now = new Date();
     const daysSinceFirstAccess = firstAccess ? Math.floor((now.getTime() - firstAccess.getTime()) / (1000 * 60 * 60 * 24)) : null;
     const daysSinceLastAccess = lastAccess ? Math.floor((now.getTime() - lastAccess.getTime()) / (1000 * 60 * 60 * 24)) : null;
-    
-    console.log("📈 Estatísticas calculadas:", {
-      firstAccess,
-      lastAccess,
-      daysSinceFirstAccess,
-      daysSinceLastAccess
-    });
-    
+
     const result = {
       userData,
       logs: [], // Logs removidos temporariamente
@@ -921,8 +887,7 @@ export const getUserDetailedInfo = async (userId: string) => {
         totalActions: 0 // Será implementado no futuro
       }
     };
-    
-    console.log("✅ Resultado final:", result);
+
     return result;
   } catch (error) {
     console.error("❌ Erro ao buscar informações do usuário:", error);
@@ -939,9 +904,7 @@ export const createUserAsAdmin = async (
   name: string = "",
   role: 'admin' | 'staff' = 'staff'
 ): Promise<{ userData: UserData; credentials: { email: string; password: string } }> => {
-  
-  console.log("🔄 Usando método original createUserAsAdmin para:", email);
-  
+
   // Verificar se é admin
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) {
@@ -1039,12 +1002,11 @@ export const cleanupExpiredTemporaryPasswords = async (): Promise<number> => {
           }, { merge: true });
           
           cleanedCount++;
-          console.log(`🧹 Senha temporária expirada removida para: ${userData.email}`);
+          
         }
       }
     }
-    
-    console.log(`🧹 Limpeza concluída: ${cleanedCount} senhas temporárias expiradas removidas`);
+
     return cleanedCount;
   } catch (error: any) {
     console.error("Erro ao limpar senhas temporárias expiradas:", error);
@@ -1101,9 +1063,7 @@ export const loginWithTemporaryPassword = async (email: string, password: string
         expiresAt: new Date(Date.now() + 30 * 60 * 1000) // 30 minutos para trocar senha
       }
     }, { merge: true });
-    
-    console.log("✅ Login temporário autorizado para:", email);
-    
+
     return {
       userData: { ...userData, mustChangePassword: true },
       mustChangePassword: true
@@ -1125,9 +1085,8 @@ export const updatePasswordAfterTemporaryLogin = async (email: string, temporary
       // Tentar login normal primeiro
       const userCredential = await signInWithEmailAndPassword(auth, email, temporaryPassword);
       user = userCredential.user;
-      console.log("✅ Login real no Firebase Auth com senha temporária");
+      
     } catch (authError: any) {
-      console.log("⚠️ Login temporário não funciona no Firebase Auth, usando abordagem alternativa");
       
       // Se não conseguiu fazer login com a senha temporária, 
       // vamos tentar uma abordagem diferente
@@ -1172,12 +1131,10 @@ export const updatePasswordAfterTemporaryLogin = async (email: string, temporary
       
       if (secondaryAuth) {
         try {
-          console.log("🔄 Recriando usuário com nova senha na instância secundária...");
           
           // Criar usuário na instância secundária com nova senha
           const newUserCredential = await createUserWithEmailAndPassword(secondaryAuth, email, newPassword);
           const newUser = newUserCredential.user;
-          console.log("✅ Usuário recriado com nova senha:", newUser.uid);
           
           // Atualizar dados no Firestore
           await setDoc(doc(db, "users", newUser.uid), {
@@ -1201,7 +1158,6 @@ export const updatePasswordAfterTemporaryLogin = async (email: string, temporary
           
           // Fazer login normal com nova senha
           const finalUserCredential = await signInWithEmailAndPassword(auth, email, newPassword);
-          console.log("✅ Login final realizado com nova senha");
           
           return;
           
@@ -1237,9 +1193,7 @@ export const updatePasswordAfterTemporaryLogin = async (email: string, temporary
         mustChangePassword: false
       }, { merge: true });
     }
-    
-    console.log("✅ Senha alterada com sucesso");
-    
+
   } catch (error: any) {
     console.error("Erro ao atualizar senha após login temporário:", error);
     throw new Error(`Erro ao alterar senha: ${error.message}`);
@@ -1255,8 +1209,7 @@ export const sendPasswordResetEmail = async (email: string): Promise<void> => {
       url: `${window.location.origin}/auth/login`, // URL para retornar após redefinir senha
       handleCodeInApp: false
     });
-    
-    console.log("Email de redefinição de senha enviado com sucesso");
+
   } catch (error: any) {
     console.error("Erro ao enviar email de redefinição:", error);
     
@@ -1278,8 +1231,7 @@ export const confirmPasswordReset = async (code: string, newPassword: string): P
     const { confirmPasswordReset: firebaseConfirmPasswordReset } = await import("firebase/auth");
     
     await firebaseConfirmPasswordReset(auth, code, newPassword);
-    
-    console.log("Senha redefinida com sucesso");
+
   } catch (error: any) {
     console.error("Erro ao confirmar redefinição de senha:", error);
     
@@ -1301,8 +1253,7 @@ export const verifyPasswordResetCode = async (code: string): Promise<string> => 
     const { verifyPasswordResetCode: firebaseVerifyPasswordResetCode } = await import("firebase/auth");
     
     const email = await firebaseVerifyPasswordResetCode(auth, code);
-    
-    console.log("Código verificado com sucesso para email:", email);
+
     return email;
   } catch (error: any) {
     console.error("Erro ao verificar código:", error);
@@ -1323,8 +1274,7 @@ export const applyActionCode = async (code: string): Promise<void> => {
     const { applyActionCode: firebaseApplyActionCode } = await import("firebase/auth");
     
     await firebaseApplyActionCode(auth, code);
-    
-    console.log("Código aplicado com sucesso");
+
   } catch (error: any) {
     console.error("Erro ao aplicar código:", error);
     
@@ -1352,8 +1302,7 @@ export const sendEmailVerification = async (user?: User): Promise<void> => {
       url: `${window.location.origin}/auth/login`, // URL para retornar após verificar email
       handleCodeInApp: false
     });
-    
-    console.log("Email de verificação enviado com sucesso");
+
   } catch (error: any) {
     console.error("Erro ao enviar email de verificação:", error);
     
@@ -1418,8 +1367,7 @@ export const registerUserWithEmailVerification = async (
     };
     
     await setDoc(doc(db, "users", user.uid), userData);
-    
-    console.log("Usuário criado e email de verificação enviado");
+
     return userData;
   } catch (error: any) {
     console.error("Erro ao cadastrar usuário:", error);
@@ -1455,9 +1403,7 @@ export const adminForceEmailVerification = async (userId: string): Promise<void>
     if (userData.role === 'admin') {
       throw new Error("Não é possível forçar verificação de outro administrador");
     }
-    
-    console.log(`🔓 Admin forçando verificação de email para: ${userData.email}`);
-    
+
     // Marcar como email verificado no Firestore (para controle interno)
     await setDoc(userRef, {
       emailVerifiedByAdmin: {
@@ -1467,8 +1413,7 @@ export const adminForceEmailVerification = async (userId: string): Promise<void>
         reason: "Email verification forced by admin"
       }
     }, { merge: true });
-    
-    console.log("✅ Verificação de email forçada pelo admin");
+
     return;
     
   } catch (error: any) {
@@ -1552,9 +1497,7 @@ export const adminSendVerificationEmail = async (userId: string): Promise<void> 
     }
     
     const userData = userSnap.data() as UserData;
-    
-    console.log(`📧 Admin reenviando email de verificação para: ${userData.email}`);
-    
+
     // Nota: Não podemos enviar email para outro usuário usando client SDK
     // Isso deveria ser feito via Firebase Admin SDK no backend
     // Por enquanto, apenas registramos a tentativa
@@ -1567,8 +1510,7 @@ export const adminSendVerificationEmail = async (userId: string): Promise<void> 
         status: "pending" // pending, sent, failed
       }
     }, { merge: true });
-    
-    console.log("✅ Solicitação de reenvio de email registrada");
+
     throw new Error("Para reenviar emails de verificação é necessário Firebase Admin SDK. Use a opção 'Liberar Acesso' como alternativa.");
     
   } catch (error: any) {

@@ -42,7 +42,6 @@ interface StatsData {
 
 let feedbacks: Feedback[] = []
 
-
 export { type Feedback, type StatsData }
 
 export function getFeedbacks() {
@@ -204,17 +203,15 @@ export const getLatestAnalysisFromFirestore = async (): Promise<FirestoreAnalysi
 // Função para obter todos os dados do Firestore para o dashboard
 export const getAllAnalysisDataForDashboard = async () => {
   try {
-    console.log('Obtendo todos os dados para o dashboard...');
+    
     const q = query(collection(db, 'analyses'), orderBy('importDate', 'desc'));
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
-      console.log('Nenhum dado encontrado no Firestore');
+      
       return null;
     }
-    
-    console.log(`Encontrados ${querySnapshot.size} documentos`);
-    
+
     // Array para armazenar todos os dados de feedback
     let allFeedbacks: Feedback[] = [];
     
@@ -222,13 +219,11 @@ export const getAllAnalysisDataForDashboard = async () => {
     querySnapshot.forEach(doc => {
       const data = doc.data();
       if (data.data && Array.isArray(data.data)) {
-        console.log(`Adicionando ${data.data.length} feedbacks do documento ${doc.id}`);
+        
         allFeedbacks = [...allFeedbacks, ...data.data];
       }
     });
-    
-    console.log(`Total de feedbacks agregados: ${allFeedbacks.length}`);
-    
+
     // Processar os dados agregados
     const aggregatedStats = processAggregatedData(allFeedbacks);
     

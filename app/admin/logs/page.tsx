@@ -171,9 +171,7 @@ function LogsPageContent() {
       if (selectedAction) filters.action = selectedAction;
       if (startDate) filters.startDate = new Date(startDate);
       if (endDate) filters.endDate = new Date(endDate + 'T23:59:59');
-      
-  
-      
+
     } catch (error) {
       console.error("Erro ao carregar logs:", error);
     } finally {

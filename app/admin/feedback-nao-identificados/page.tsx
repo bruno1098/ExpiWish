@@ -149,7 +149,6 @@ export default function AdminUnidentifiedFeedbacks() {
         namesMap[key] = hotel.name || `Hotel ${key}`
       })
       setHotelNames(namesMap)
-      
 
     } catch (error) {
       console.error('Erro ao carregar hotéis:', error)

@@ -1191,7 +1191,7 @@ function AnalysisPageContent() {
         if (storedFeedbacks) {
           const parsedFeedbacks = JSON.parse(storedFeedbacks)
           setFeedbacks(parsedFeedbacks)
-          console.log('📂 Dados carregados do localStorage:', parsedFeedbacks.length, 'feedbacks')
+          
         }
         
         if (storedAnalysis) {

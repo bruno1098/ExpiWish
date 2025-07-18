@@ -26,14 +26,12 @@ function AmbienteTestePage() {
   const fetchTestEnvironmentStatus = async () => {
     setIsLoading(true);
     try {
-      console.log("Buscando status do ambiente de teste...");
+      
       const response = await fetch("/api/test-environment");
       
       if (response.ok) {
         const data = await response.json();
-        console.log("Status do ambiente de teste:", data);
-        console.log("Hotéis encontrados:", data.hotels?.length || 0);
-        
+
         setTestEnvironment(data);
         
         // Atualizar localStorage baseado na resposta real

@@ -342,7 +342,7 @@ function UserManagementContent() {
       
       // Registrar a criação nos logs
       if (userData) {
-        console.log("Usuário criado com sucesso, logs não implementados");
+        
       }
       
       // Limpar formulário e fechar dialog principal
@@ -411,7 +411,7 @@ function UserManagementContent() {
           variant: "destructive",
           duration: 15000
         });
-        console.log("✅ Toast de erro enviado com sucesso");
+        
       } catch (toastError) {
         console.error("❌ Erro ao mostrar toast:", toastError);
       }
@@ -423,7 +423,6 @@ function UserManagementContent() {
       console.error("🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨");
       
       // Log adicional para debug
-      console.log("Toast chamado com:", { title: errorTitle, description: errorMessage });
       
       // Se o erro for relacionado à autenticação, redirecionar para login
       if (errorMessage.includes("Admin deve estar logado") || 
@@ -491,7 +490,7 @@ function UserManagementContent() {
       
       // Registrar a exclusão nos logs
       if (userData && userToDeleteData) {
-        console.log("Usuário excluído, logs não implementados");
+        
       }
       
       toast({

@@ -72,17 +72,6 @@ import {
   processProblemDistribution
 } from "@/lib/utils"
 
-
-
-
-
-
-
-
-
-
-
-
 interface StatsData {
   totalFeedbacks: number
   averageRating: number
@@ -315,16 +304,11 @@ interface InteractiveModalProps {
 
 const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }: InteractiveModalProps) => {
   if (!selectedItem) return null;
-  
-  console.log("Modal aberto com item:", selectedItem);
-  console.log("Feedbacks disponíveis:", allFeedbacks.length);
-  
+
   // Filtrar feedbacks com base no item selecionado
   const filteredFeedbacks = allFeedbacks.filter(feedback => {
     if (!selectedItem) return false;
-    
-    console.log(`Filtrando por ${selectedItem.type}: ${selectedItem.value}`);
-    
+
     switch (selectedItem.type) {
       case 'hotel':
         // Verificar tanto no campo hotel quanto no source (que parece conter nomes de hotéis)
@@ -333,7 +317,7 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
           (feedback.hotel && feedback.hotel.toLowerCase() === hotelValue) || 
           (feedback.source && feedback.source.toLowerCase() === hotelValue);
         
-        if (matchesHotel) console.log(`Match hotel: ${feedback.hotel || feedback.source}`);
+        if (matchesHotel) 
         return matchesHotel;
         
       case 'sector':
@@ -342,7 +326,7 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
         const feedbackSectors = feedback.sector ? feedback.sector.toLowerCase().split(';').map(s => s.trim()) : [];
         const matchesSector = feedbackSectors.some(s => s === sectorValue);
         
-        if (matchesSector) console.log(`Match sector: ${feedback.sector}`);
+        if (matchesSector) 
         return matchesSector;
         
       case 'problem':
@@ -351,14 +335,14 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
         const feedbackProblems = feedback.problem ? feedback.problem.toLowerCase().split(';').map(p => p.trim()) : [];
         const matchesProblem = feedbackProblems.some(p => p.includes(problemValue));
         
-        if (matchesProblem) console.log(`Match problem: ${feedback.problem}`);
+        if (matchesProblem) 
         return matchesProblem;
         
       case 'source':
         const sourceValue = String(selectedItem.value).toLowerCase();
         const matchesSource = feedback.source && feedback.source.toLowerCase() === sourceValue;
         
-        if (matchesSource) console.log(`Match source: ${feedback.source}`);
+        if (matchesSource) 
         return matchesSource;
         
       case 'keyword':
@@ -367,7 +351,7 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
         const feedbackKeywords = feedback.keyword ? feedback.keyword.toLowerCase().split(';').map(k => k.trim()) : [];
         const matchesKeyword = feedbackKeywords.some(k => k === keywordValue || k.includes(keywordValue));
         
-        if (matchesKeyword) console.log(`Match keyword: ${feedback.keyword}`);
+        if (matchesKeyword) 
         return matchesKeyword;
         
       case 'rating':
@@ -376,21 +360,21 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
           : selectedItem.value;
         const matchesRating = feedback.rating === ratingValue;
         
-        if (matchesRating) console.log(`Match rating: ${feedback.rating}`);
+        if (matchesRating) 
         return matchesRating;
         
       case 'language':
         const languageValue = String(selectedItem.value).toLowerCase();
         const matchesLanguage = feedback.language && feedback.language.toLowerCase() === languageValue;
         
-        if (matchesLanguage) console.log(`Match language: ${feedback.language}`);
+        if (matchesLanguage) 
         return matchesLanguage;
         
       case 'sentiment':
         const sentimentValue = String(selectedItem.value).toLowerCase();
         const matchesSentiment = feedback.sentiment && feedback.sentiment.toLowerCase() === sentimentValue;
         
-        if (matchesSentiment) console.log(`Match sentiment: ${feedback.sentiment}`);
+        if (matchesSentiment) 
         return matchesSentiment;
         
       case 'all':
@@ -401,9 +385,7 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
         return false;
     }
   });
-  
-  console.log(`Total de feedbacks filtrados: ${filteredFeedbacks.length} de ${allFeedbacks.length}`);
-  
+
   // Calcular estatísticas para o item selecionado
   const totalFeedbacks = filteredFeedbacks.length;
   const averageRating = totalFeedbacks > 0 
@@ -1215,7 +1197,7 @@ function DashboardContent() {
             const aggregatedData = await getAllAnalysisDataForDashboard();
             
             if (aggregatedData) {
-              console.log('Usando dados agregados do Firestore');
+              
               setStats(aggregatedData);
               
               try {
@@ -1227,19 +1209,18 @@ function DashboardContent() {
                 querySnapshot.forEach(doc => {
                   const data = doc.data();
                   if (data.data && Array.isArray(data.data)) {
-                    console.log(`Adicionando ${data.data.length} feedbacks do documento ${doc.id}`);
+                    
                     allFeedbacksData = [...allFeedbacksData, ...data.data];
                   }
                 });
-                
-                console.log(`Total de feedbacks carregados: ${allFeedbacksData.length}`);
+
                 setAllFeedbacks(allFeedbacksData);
               } catch (error) {
                 console.error('Erro ao carregar todos os feedbacks:', error);
                 setAllFeedbacks(aggregatedData.recentFeedbacks || []);
               }
             } else {
-              console.log('Fallback para último documento');
+              
               const firestoreData = await getLatestAnalysisFromFirestore();
               
               if (firestoreData && firestoreData.analysis) {
@@ -1252,7 +1233,7 @@ function DashboardContent() {
                   setAllFeedbacks(firestoreData.analysis.recentFeedbacks || []);
                 }
               } else {
-                console.log('Fallback para dados locais');
+                
                 const data = await getFeedbackStats();
                 setStats(data as StatsData);
                 

@@ -52,9 +52,8 @@ export default function LoginPage() {
     setError("");
 
     try {
-      console.log("🔐 Tentando login com:", email);
+      
       const user = await loginUser(email, password);
-      console.log("✅ Login realizado:", user.uid);
       
       // Obter dados do usuário para verificar função
       const userData = await getCurrentUserData();
@@ -63,19 +62,16 @@ export default function LoginPage() {
         toast.error("Erro ao obter dados do usuário");
         return;
       }
-      
-      console.log("👤 Dados do usuário obtidos:", { role: userData.role, email: userData.email });
-      
+
       // Verificar se usuário pode acessar (admins sempre podem, staff precisa verificar email)
       const canAccess = await canUserAccess(user, userData);
       
       if (!canAccess) {
-        console.log("📧 Colaborador sem email verificado, enviando email...");
         
         // Enviar email de verificação na primeira tentativa de login
         try {
           await sendEmailVerification();
-          console.log("✅ Email de verificação enviado");
+          
         } catch (emailError) {
           console.error("❌ Erro ao enviar email:", emailError);
         }
@@ -89,7 +85,7 @@ export default function LoginPage() {
       
       // Verificar se deve trocar senha
       if (userData?.mustChangePassword) {
-        console.log("🔑 Usuário deve trocar senha, redirecionando...");
+        
         toast.success("Login autorizado! Você será redirecionado para alterar sua senha.");
         
         // Redirecionar para página de troca de senha obrigatória
@@ -101,14 +97,13 @@ export default function LoginPage() {
 
       // Login bem-sucedido - o redirecionamento será feito automaticamente pelo useAuth()
       toast.success("Login realizado com sucesso");
-      console.log(`🎯 Login concluído para ${userData.role}. Aguardando redirecionamento automático...`);
       
     } catch (error: any) {
       console.error("❌ Erro ao fazer login:", error);
       
       // Verificar se é redirecionamento para senha temporária
       if (error.message === "TEMP_PASSWORD_REDIRECT") {
-        console.log("🔑 Senha temporária detectada, redirecionando...");
+        
         toast.success("Senha temporária detectada! Você será redirecionado para alterar sua senha.");
         // Redirecionar para página de troca de senha
         setTimeout(() => {

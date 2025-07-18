@@ -786,7 +786,7 @@ export default function UnidentifiedFeedbacks() {
       if (storedFeedbacks) {
         try {
           const parsedFeedbacks = JSON.parse(storedFeedbacks)
-          console.log('🔍 Verificando feedbacks do localStorage:', parsedFeedbacks.length)
+          
           feedbacksToAnalyze = parsedFeedbacks
         } catch (error) {
           console.error('Erro ao parsear localStorage:', error)
@@ -795,7 +795,7 @@ export default function UnidentifiedFeedbacks() {
       
       // Se não tem dados no localStorage, buscar do Firebase
       if (feedbacksToAnalyze.length === 0) {
-        console.log('📡 Buscando dados do Firebase...')
+        
         const allAnalyses = await getAllAnalyses()
         allAnalyses.forEach((analysis: any) => {
           if (analysis.data && Array.isArray(analysis.data)) {
@@ -805,9 +805,7 @@ export default function UnidentifiedFeedbacks() {
       }
       
       const unidentifiedFeedbacks: UnidentifiedFeedback[] = []
-      
-      console.log(`📊 Total de feedbacks para análise: ${feedbacksToAnalyze.length}`)
-      
+
       feedbacksToAnalyze.forEach((feedback: any) => {
         // Critérios para feedback não identificado
         const hasInvalidKeyword = !isValidSectorOrKeyword(feedback.keyword);
@@ -842,19 +840,7 @@ export default function UnidentifiedFeedbacks() {
         const isNotDeleted = !feedback.deleted;
 
         if (isUnidentified && isNotDeleted) {
-          console.log('✅ Feedback não identificado:', {
-            id: feedback.id,
-            keyword: feedback.keyword,
-            sector: feedback.sector,
-            problem: feedback.problem,
-            motivos: {
-              hasInvalidKeyword,
-              hasInvalidSector,
-              hasInvalidProblem,
-              hasExplicitNotIdentified,
-              isSpamOrGibberish
-            }
-          })
+          
           unidentifiedFeedbacks.push({
             id: feedback.id || `feedback_${Math.random()}`,
             comment: feedback.comment || '',
@@ -869,8 +855,7 @@ export default function UnidentifiedFeedbacks() {
           })
         }
       })
-      
-      console.log(`🎯 Total de feedbacks não identificados encontrados: ${unidentifiedFeedbacks.length}`)
+
       setUnidentifiedFeedbacks(unidentifiedFeedbacks)
     } catch (error) {
       console.error('Erro ao buscar feedbacks não identificados:', error)
@@ -919,8 +904,7 @@ export default function UnidentifiedFeedbacks() {
       
       localStorage.setItem('recent-analyses', JSON.stringify(updated))
       setRecentAnalyses(updated.slice(0, 10))
-      
-      console.log('Edição salva no Firebase e localStorage')
+
     } catch (error) {
       console.error('Erro ao salvar análise recente:', error)
     }
@@ -992,7 +976,7 @@ export default function UnidentifiedFeedbacks() {
             <Button 
               variant="outline" 
               onClick={async () => {
-                console.log('🔄 Forçando reload do Firebase...')
+                
                 localStorage.removeItem('analysis-feedbacks')
                 await fetchUnidentifiedFeedbacks()
                 toast({
@@ -1009,15 +993,13 @@ export default function UnidentifiedFeedbacks() {
             <Button 
               variant="outline" 
               onClick={() => {
-                console.log('🧪 Teste das funções de validação:')
-                console.log('isValidSectorOrKeyword:')
+
                 console.log('- "Não identificado":', isValidSectorOrKeyword('Não identificado'))
                 console.log('- "A&B":', isValidSectorOrKeyword('A&B'))
                 console.log('- "Manutenção":', isValidSectorOrKeyword('Manutenção'))
                 console.log('- "Comodidade":', isValidSectorOrKeyword('Comodidade'))
                 console.log('- "Produto":', isValidSectorOrKeyword('Produto'))
-                
-                console.log('isValidProblem:')
+
                 console.log('- "Não identificado":', isValidProblem('Não identificado'))
                 console.log('- "VAZIO":', isValidProblem('VAZIO'))
                 console.log('- "Demora no Atendimento":', isValidProblem('Demora no Atendimento'))
@@ -1028,18 +1010,18 @@ export default function UnidentifiedFeedbacks() {
                 const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
                 if (storedFeedbacks) {
                   const feedbacks = JSON.parse(storedFeedbacks)
-                  console.log('📋 Primeiros 5 feedbacks do localStorage:')
+                  
                   feedbacks.slice(0, 5).forEach((f: any, i: number) => {
-                    console.log(`${i + 1}. keyword: "${f.keyword}", sector: "${f.sector}", problem: "${f.problem}"`)
+                    
                   })
                   
                   // Procurar por feedbacks com "Não identificado" no problema
                   const problemsWithNotIdentified = feedbacks.filter((f: any) => 
                     f.problem?.toLowerCase().includes('não identificado')
                   )
-                  console.log(`🔍 Feedbacks com "Não identificado" no problema: ${problemsWithNotIdentified.length}`)
+                  
                   problemsWithNotIdentified.slice(0, 3).forEach((f: any, i: number) => {
-                    console.log(`  ${i + 1}. ID: ${f.id}, problema: "${f.problem}"`)
+                    
                   })
                 }
               }}

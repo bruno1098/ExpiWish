@@ -22,8 +22,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🗑️ Marcando feedback ${feedbackId} como excluído pelo usuário ${userData.email}`);
-
     // Atualizar feedback no Firestore marcando como excluído
     const updateData = {
       deleted: true,
@@ -35,7 +33,7 @@ export async function POST(request: NextRequest) {
     const success = await updateFeedbackInFirestore(feedbackId, updateData);
 
     if (success) {
-      console.log(`✅ Feedback ${feedbackId} marcado como excluído com sucesso`);
+      
       return NextResponse.json({ 
         message: 'Feedback excluído com sucesso',
         feedbackId 

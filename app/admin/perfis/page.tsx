@@ -171,9 +171,9 @@ function PerfisPageContent() {
   const loadUserDetail = async (userId: string) => {
     try {
       setDetailLoading(true);
-      console.log("🔄 Carregando detalhes do usuário:", userId);
+      
       const userDetail = await getUserDetailedInfo(userId);
-      console.log("✅ Detalhes carregados:", userDetail);
+      
       setSelectedUser(userDetail);
       setUserDetailDialogOpen(true);
     } catch (error: any) {

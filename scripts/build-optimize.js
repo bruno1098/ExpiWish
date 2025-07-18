@@ -1,26 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * Script de Otimização para Build de Produção
- * Executa automaticamente na Vercel durante o deploy
- * 
- * - Remove logs desnecessários em produção
- * - Mantém logs críticos
- * - Substitui console.log por devLog automaticamente
+ * Script de Otimização SIMPLES para Build de Produção
+ * Remove apenas console.log desnecessários em produção
+ * Mantém console.error e console.warn
  */
 
 const fs = require('fs');
 const path = require('path');
 
-console.log('🚀 Iniciando otimização de build para produção...');
-
-// Arquivos que devem ser otimizados
-const OPTIMIZE_PATTERNS = [
-  'app/**/*.tsx',
-  'app/**/*.ts',
-  'lib/**/*.ts',
-  'components/**/*.tsx'
-];
+console.log('🚀 Iniciando otimização SIMPLES de build para produção...');
 
 // Função para processar um arquivo
 function optimizeFile(filePath) {
@@ -28,95 +17,23 @@ function optimizeFile(filePath) {
     let content = fs.readFileSync(filePath, 'utf8');
     let modified = false;
 
-    // 1. Adicionar import do devLog se há console.log
-    if (content.includes('console.log') && !content.includes('devLog')) {
-      // Encontrar a seção de imports
-      const DEV_LOG_IMPORT = "import { devLog, devError, devAuth, devData, devPerf, devAnalysis, devImport, devFilter } from '@/lib/dev-logger';\n";
-// não adiciona se já existe
-if (!content.includes('@/lib/dev-logger')) {
-  const lines = content.split('\n');
-
-  const hasUseClient = lines.some(line => line.trim() === '"use client"' || line.trim() === "'use client'");
-  if (hasUseClient) {
-    // remove quaisquer linhas acima de "use client"
-    const useClientIndex = lines.findIndex(line => line.trim() === '"use client"' || line.trim() === "'use client'");
-    const remainingLines = lines.slice(useClientIndex + 1);
-    lines.length = 0;
-    lines.push('"use client"');
-    lines.push(DEV_LOG_IMPORT.trim());
-    lines.push(...remainingLines);  
-  } else {
-    // Encontra a primeira linha válida para inserir o import
-    const insertIndex = lines.findIndex(line => !/^\s*(\/\/|\/\*|\*|\n|$)/.test(line));
-    lines.splice(insertIndex, 0, DEV_LOG_IMPORT);
-  }
-
-  content = lines.join('\n');
-  modified = true;
-}
-
-
-
-
-    }
-
-    // 2. Substituir console.log específicos por versões otimizadas
-    const logReplacements = [
-      // Logs de autenticação
-      [/console\.log\(([^)]*Login[^)]*)\)/g, 'devAuth($1)'],
-      [/console\.log\(([^)]*Auth[^)]*)\)/g, 'devAuth($1)'],
-      [/console\.log\(([^)]*🔐[^)]*)\)/g, 'devAuth($1)'],
-      
-      // Logs de dados e análise
-      [/console\.log\(([^)]*dados[^)]*)\)/gi, 'devData("Dados", $1)'],
-      [/console\.log\(([^)]*feedbacks[^)]*)\)/gi, 'devData("Feedbacks", $1)'],
-      [/console\.log\(([^)]*análise[^)]*)\)/gi, 'devAnalysis($1)'],
-      [/console\.log\(([^)]*🤖[^)]*)\)/g, 'devAnalysis($1)'],
-      
-      // Logs de performance
-      [/console\.log\(([^)]*tempo[^)]*)\)/gi, 'devPerf("Tempo", $1)'],
-      [/console\.log\(([^)]*performance[^)]*)\)/gi, 'devPerf("Performance", $1)'],
-      [/console\.log\(([^)]*⚡[^)]*)\)/g, 'devPerf("Performance", $1)'],
-      
-      // Logs de importação
-      [/console\.log\(([^)]*import[^)]*)\)/gi, 'devImport($1)'],
-      [/console\.log\(([^)]*📥[^)]*)\)/g, 'devImport($1)'],
-      
-      // Logs de filtros (muito custosos)
-      [/console\.log\(([^)]*Match[^)]*)\)/g, 'devFilter($1)'],
-      [/console\.log\(([^)]*filtro[^)]*)\)/gi, 'devFilter($1)'],
-      [/console\.log\(([^)]*🔍[^)]*)\)/g, 'devFilter($1)'],
-      
-      // Logs gerais que sobram
-      [/console\.log\(/g, 'devLog(']
-    ];
-
-    // Aplicar substituições
-    for (const [pattern, replacement] of logReplacements) {
-      if (pattern.test(content)) {
-        content = content.replace(pattern, replacement);
-        modified = true;
-      }
-    }
-
-    // 3. Remover logs de performance críticos completamente
-    const performanceKillers = [
-      // Logs em loops de filtro
-      /devFilter\(`Match [^`]*`[^)]*\);?\s*$/gm,
-      /if \(matches[A-Za-z]+\) devFilter\([^)]*\);?\s*$/gm,
-      /devLog\(`Linha \d+[^`]*`[^)]*\);?\s*$/gm,
-      /devLog\('=== PROCESSANDO[^']*'[^)]*\);?\s*$/gm,
-    ];
-
-    for (const pattern of performanceKillers) {
-      if (pattern.test(content)) {
-        content = content.replace(pattern, '');
-        modified = true;
-      }
-    }
-
-    // Salvar arquivo se foi modificado
-    if (modified) {
+    // 1. Remover console.log, console.debug, console.info (mantém console.error e console.warn)
+    const originalContent = content;
+    
+    // Remover console.log
+    content = content.replace(/console\.log\([^)]*\);?\s*$/gm, '');
+    
+    // Remover console.debug
+    content = content.replace(/console\.debug\([^)]*\);?\s*$/gm, '');
+    
+    // Remover console.info
+    content = content.replace(/console\.info\([^)]*\);?\s*$/gm, '');
+    
+    // Remover linhas vazias extras criadas
+    content = content.replace(/\n\s*\n\s*\n/g, '\n\n');
+    
+    // Verificar se houve mudanças
+    if (originalContent !== content) {
       fs.writeFileSync(filePath, content, 'utf8');
       console.log(`   ✅ Otimizado: ${filePath}`);
       return true;
@@ -167,7 +84,7 @@ function main() {
     return;
   }
 
-  console.log('🔧 Otimizando arquivos para produção...');
+  console.log('🔧 Otimizando arquivos para produção (método SIMPLES)...');
   
   const projectRoot = process.cwd();
   const dirsToOptimize = ['app', 'lib', 'components'];
@@ -195,20 +112,20 @@ function main() {
 
   const duration = Date.now() - startTime;
   
-  console.log('\n📊 RELATÓRIO DE OTIMIZAÇÃO:');
-  console.log('============================');
+  console.log('\n📊 RELATÓRIO DE OTIMIZAÇÃO SIMPLES:');
+  console.log('====================================');
   console.log(`📁 Arquivos analisados: ${totalFiles}`);
   console.log(`✅ Arquivos otimizados: ${optimizedFiles}`);
   console.log(`⏱️  Tempo de execução: ${duration}ms`);
-  console.log(`🚀 Redução estimada de logs: 70-80%`);
-  console.log(`⚡ Performance esperada: +20-30%`);
+  console.log(`🚀 Logs removidos: console.log, console.debug, console.info`);
+  console.log(`✅ Logs mantidos: console.error, console.warn`);
   
   console.log('\n🎯 RESULTADO:');
   console.log('=============');
-  console.log('✅ Logs mantidos em desenvolvimento');
-  console.log('✅ Logs otimizados em produção');
-  console.log('✅ Performance crítica otimizada');
-  console.log('✅ Deploy Vercel otimizado');
+  console.log('✅ Estrutura de arquivos preservada');
+  console.log('✅ Imports não modificados');
+  console.log('✅ Apenas logs desnecessários removidos');
+  console.log('✅ Build mais limpo e rápido');
   
   console.log('\n🚀 Build de produção otimizado com sucesso!');
 }
