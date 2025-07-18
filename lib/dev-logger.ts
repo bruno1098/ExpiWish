@@ -1,6 +1,4 @@
-// Sistema de Logging Inteligente - BI Qualidade
-// Mantém logs em desenvolvimento, remove automaticamente em produção
-
+"use client";
 // Detectar ambiente
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isProduction = process.env.NODE_ENV === 'production';
