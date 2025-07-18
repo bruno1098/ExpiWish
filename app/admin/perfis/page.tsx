@@ -121,18 +121,42 @@ function PerfisPageContent() {
   };
 
   const getDaysSinceFirstAccess = (user: User) => {
-    if (!user.firstAccess) return null;
+    if (!user.firstAccess && !user.firstAccessTimestamp) return null;
     
-    const firstAccessDate = user.firstAccess.toDate ? user.firstAccess.toDate() : new Date(user.firstAccess);
+    let firstAccessDate = null;
+    if (user.firstAccess) {
+      if (user.firstAccess.toDate) {
+        firstAccessDate = user.firstAccess.toDate();
+      } else if (user.firstAccessTimestamp) {
+        firstAccessDate = new Date(user.firstAccessTimestamp);
+      } else if (user.firstAccess instanceof Date) {
+        firstAccessDate = user.firstAccess;
+      }
+    }
+    
+    if (!firstAccessDate) return null;
+    
     const now = new Date();
     const diffMs = now.getTime() - firstAccessDate.getTime();
     return Math.floor(diffMs / (1000 * 60 * 60 * 24));
   };
 
   const getDaysSinceLastAccess = (user: User) => {
-    if (!user.lastAccess) return null;
+    if (!user.lastAccess && !user.lastAccessTimestamp) return null;
     
-    const lastAccessDate = user.lastAccess.toDate ? user.lastAccess.toDate() : new Date(user.lastAccess);
+    let lastAccessDate = null;
+    if (user.lastAccess) {
+      if (user.lastAccess.toDate) {
+        lastAccessDate = user.lastAccess.toDate();
+      } else if (user.lastAccessTimestamp) {
+        lastAccessDate = new Date(user.lastAccessTimestamp);
+      } else if (user.lastAccess instanceof Date) {
+        lastAccessDate = user.lastAccess;
+      }
+    }
+    
+    if (!lastAccessDate) return null;
+    
     const now = new Date();
     const diffMs = now.getTime() - lastAccessDate.getTime();
     return Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -328,8 +352,28 @@ function PerfisPageContent() {
               filteredUsers.map((user) => {
                 const accessStatus = getAccessStatus(user);
                 const daysSinceFirst = getDaysSinceFirstAccess(user);
-                const firstAccessDate = user.firstAccess?.toDate ? user.firstAccess.toDate() : null;
-                const lastAccessDate = user.lastAccess?.toDate ? user.lastAccess.toDate() : null;
+                
+                let firstAccessDate = null;
+                if (user.firstAccess) {
+                  if (user.firstAccess.toDate) {
+                    firstAccessDate = user.firstAccess.toDate();
+                  } else if (user.firstAccessTimestamp) {
+                    firstAccessDate = new Date(user.firstAccessTimestamp);
+                  } else if (user.firstAccess instanceof Date) {
+                    firstAccessDate = user.firstAccess;
+                  }
+                }
+                
+                let lastAccessDate = null;
+                if (user.lastAccess) {
+                  if (user.lastAccess.toDate) {
+                    lastAccessDate = user.lastAccess.toDate();
+                  } else if (user.lastAccessTimestamp) {
+                    lastAccessDate = new Date(user.lastAccessTimestamp);
+                  } else if (user.lastAccess instanceof Date) {
+                    lastAccessDate = user.lastAccess;
+                  }
+                }
                 
                 return (
                   <TableRow key={user.uid}>

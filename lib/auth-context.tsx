@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react"
 import { onAuthStateChanged, type User } from "firebase/auth"
 import { auth } from "./firebase"
-import { getCurrentUserData, canUserAccess, type UserData } from "./auth-service"
+import { getCurrentUserData, canUserAccess, updateUserLastAccess, markFirstAccess, type UserData } from "./auth-service"
 import { useRouter, usePathname } from "next/navigation"
 import { devAuth, devError, devLog } from "./dev-logger"
 
@@ -39,6 +39,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const hasAccess = await canUserAccess(authUser, userDataResult);
             devAuth("Usuário pode acessar:", hasAccess);
             setIsAuthenticated(hasAccess);
+            
+            // Atualizar timestamps de acesso
+            if (hasAccess) {
+              try {
+                // Marcar primeiro acesso se não existir
+                await markFirstAccess(authUser.uid);
+                
+                // Atualizar último acesso
+                await updateUserLastAccess(authUser.uid);
+                
+                devAuth("✅ Timestamps de acesso atualizados para:", authUser.uid);
+              } catch (accessError) {
+                devError("❌ Erro ao atualizar timestamps de acesso:", accessError);
+              }
+            }
           } else {
             setIsAuthenticated(false);
           }

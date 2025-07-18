@@ -63,7 +63,6 @@ const getSecondaryAuth = () => {
       
       secondaryApp = initializeApp(firebaseConfig, "secondary");
       secondaryAuth = getAuth(secondaryApp);
-      
     } catch (error) {
       console.error("❌ Erro ao criar instância secundária do Firebase:", error);
       return null;
@@ -200,6 +199,17 @@ export const loginUser = async (email: string, password: string): Promise<User> 
 // Função para fazer logout
 export const logoutUser = async (): Promise<void> => {
   try {
+    // Atualizar último acesso antes de fazer logout
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        await updateUserLastAccess(user.uid);
+        console.log("✅ Último acesso atualizado antes do logout");
+      } catch (accessError) {
+        console.error("❌ Erro ao atualizar último acesso no logout:", accessError);
+      }
+    }
+    
     await signOut(auth);
   } catch (error: any) {
     console.error("Erro ao fazer logout:", error);
@@ -825,6 +835,7 @@ export const updateUserLastAccess = async (userId: string): Promise<void> => {
       lastAccessTimestamp: now.getTime()
     }, { merge: true });
     
+    console.log("✅ Último acesso atualizado para usuário:", userId, "às", now.toISOString());
   } catch (error) {
     console.error("Erro ao atualizar último acesso:", error);
   }
@@ -836,12 +847,21 @@ export const markFirstAccess = async (userId: string): Promise<void> => {
     const userRef = doc(db, "users", userId);
     const userDoc = await getDoc(userRef);
     
-    if (userDoc.exists() && !userDoc.data().firstAccess) {
-      const now = new Date();
-      await setDoc(userRef, {
-        firstAccess: now,
-        firstAccessTimestamp: now.getTime()
-      }, { merge: true });
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      
+      // Verificar se já tem primeiro acesso
+      if (!userData.firstAccess && !userData.firstAccessTimestamp) {
+        const now = new Date();
+        await setDoc(userRef, {
+          firstAccess: now,
+          firstAccessTimestamp: now.getTime()
+        }, { merge: true });
+        
+        console.log("✅ Primeiro acesso marcado para usuário:", userId);
+      } else {
+        console.log("ℹ️ Usuário já tem primeiro acesso registrado:", userId);
+      }
     }
   } catch (error) {
     console.error("Erro ao marcar primeiro acesso:", error);
@@ -868,8 +888,30 @@ export const getUserDetailedInfo = async (userId: string) => {
     const userData = userDoc.data() as UserData;
     
     // Calcular estatísticas
-    const firstAccess = userData.firstAccess?.toDate ? userData.firstAccess.toDate() : null;
-    const lastAccess = userData.lastAccess?.toDate ? userData.lastAccess.toDate() : null;
+    let firstAccess = null;
+    let lastAccess = null;
+    
+    // Verificar se firstAccess existe e converter
+    if (userData.firstAccess) {
+      if (userData.firstAccess.toDate) {
+        firstAccess = userData.firstAccess.toDate();
+      } else if (userData.firstAccessTimestamp) {
+        firstAccess = new Date(userData.firstAccessTimestamp);
+      } else if (userData.firstAccess instanceof Date) {
+        firstAccess = userData.firstAccess;
+      }
+    }
+    
+    // Verificar se lastAccess existe e converter
+    if (userData.lastAccess) {
+      if (userData.lastAccess.toDate) {
+        lastAccess = userData.lastAccess.toDate();
+      } else if (userData.lastAccessTimestamp) {
+        lastAccess = new Date(userData.lastAccessTimestamp);
+      } else if (userData.lastAccess instanceof Date) {
+        lastAccess = userData.lastAccess;
+      }
+    }
     
     const now = new Date();
     const daysSinceFirstAccess = firstAccess ? Math.floor((now.getTime() - firstAccess.getTime()) / (1000 * 60 * 60 * 24)) : null;
