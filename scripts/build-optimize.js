@@ -31,12 +31,22 @@ function optimizeFile(filePath) {
     // 1. Adicionar import do devLog se há console.log
     if (content.includes('console.log') && !content.includes('devLog')) {
       // Encontrar a seção de imports
-      const importMatch = content.match(/^(import[^;]+;[\s\n]*)+/m);
-      if (importMatch) {
-        const newImport = "import { devLog, devError, devAuth, devData, devPerf, devAnalysis, devImport, devFilter } from '@/lib/dev-logger';\n";
-        content = content.replace(importMatch[0], importMatch[0] + newImport);
-        modified = true;
-      }
+      const DEV_LOG_IMPORT = "import { devLog, devError, devAuth, devData, devPerf, devAnalysis, devImport, devFilter } from '@/lib/dev-logger';\n";
+
+// não adiciona se já existe
+if (!content.includes('@/lib/dev-logger')) {
+  const lines = content.split('\n');
+
+  // procura primeira linha que não seja comentário ou em branco
+  const insertIndex = lines.findIndex(line => !/^\s*(\/\/|\/\*|\*|\n|$)/.test(line));
+
+  if (insertIndex !== -1) {
+    lines.splice(insertIndex, 0, DEV_LOG_IMPORT);
+    content = lines.join('\n');
+    modified = true;
+  }
+}
+
     }
 
     // 2. Substituir console.log específicos por versões otimizadas
