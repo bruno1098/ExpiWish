@@ -38,15 +38,13 @@ if (!content.includes('@/lib/dev-logger')) {
 
   const hasUseClient = lines.some(line => line.trim() === '"use client"' || line.trim() === "'use client'");
   if (hasUseClient) {
-    // ⚠️ Remover "use client" da posição atual
+    // remove quaisquer linhas acima de "use client"
     const useClientIndex = lines.findIndex(line => line.trim() === '"use client"' || line.trim() === "'use client'");
-    const useClientLine = lines.splice(useClientIndex, 1)[0];
-
-    // ✅ Recolocar "use client" na linha 0
-    lines.unshift(useClientLine);
-
-    // ✅ Inserir o import logo após
-    lines.splice(1, 0, DEV_LOG_IMPORT);
+    const remainingLines = lines.slice(useClientIndex + 1);
+    lines.length = 0;
+    lines.push('"use client"');
+    lines.push(DEV_LOG_IMPORT.trim());
+    lines.push(...remainingLines);  
   } else {
     // Encontra a primeira linha válida para inserir o import
     const insertIndex = lines.findIndex(line => !/^\s*(\/\/|\/\*|\*|\n|$)/.test(line));
