@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ArrowLeft, AlertCircle, Eye, EyeOff, Edit3, Save, X, Plus, Trash2, Info } from "lucide-react"
+import { ArrowLeft, AlertCircle, Eye, EyeOff, Edit3, Save, X, Plus, Trash2, Info, MessageSquare, Star, Calendar } from "lucide-react"
 import { formatDateBR, cn } from "@/lib/utils"
 import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/lib/utils"
 import { useRouter } from "next/navigation"
@@ -16,6 +16,133 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
+
+// Estilos para scroll otimizado
+const scrollbarStyles = `
+  .custom-scrollbar {
+    scrollbar-width: auto !important;
+    scrollbar-color: #64748b #e2e8f0 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 16px !important;
+    height: 16px !important;
+    background: #e2e8f0 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #e2e8f0 !important;
+    border-radius: 8px !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+    border-radius: 8px !important;
+    border: 2px solid #e2e8f0 !important;
+    min-height: 40px !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #475569 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:active {
+    background: #334155 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-corner {
+    background: #e2e8f0 !important;
+  }
+
+  /* Dark mode */
+  .dark .custom-scrollbar {
+    scrollbar-color: #64748b #1e293b !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar {
+    background: #1e293b !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-track {
+    background: #1e293b !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+    border-color: #1e293b !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-corner {
+    background: #1e293b !important;
+  }
+
+  /* Layout da tabela com header fixo */
+  .table-with-fixed-header {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+  }
+
+  .fixed-header {
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: linear-gradient(to right, #ea580c, #dc2626);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    border-bottom: 3px solid #f97316;
+  }
+
+  .dark .fixed-header {
+    background: linear-gradient(to right, #9a3412, #7c2d12);
+    border-bottom: 3px solid #ea580c;
+  }
+
+  .scrollable-body {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+  }
+
+  .scrollable-body::-webkit-scrollbar {
+    width: 16px !important;
+    height: 16px !important;
+    background: #e2e8f0 !important;
+  }
+
+  .scrollable-body::-webkit-scrollbar-track {
+    background: #e2e8f0 !important;
+    border-radius: 8px !important;
+  }
+
+  .scrollable-body::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+    border-radius: 8px !important;
+    border: 2px solid #e2e8f0 !important;
+    min-height: 40px !important;
+  }
+
+  .scrollable-body::-webkit-scrollbar-thumb:hover {
+    background: #475569 !important;
+  }
+
+  .scrollable-body::-webkit-scrollbar-corner {
+    background: #e2e8f0 !important;
+  }
+
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+`;
 
 interface UnidentifiedFeedback {
   id: string
@@ -774,6 +901,15 @@ export default function UnidentifiedFeedbacks() {
   useEffect(() => {
     fetchUnidentifiedFeedbacks()
     loadRecentAnalyses()
+    
+    // Injetar estilos de barra de rolagem
+    const styleElement = document.createElement('style')
+    styleElement.textContent = scrollbarStyles
+    document.head.appendChild(styleElement)
+    
+    return () => {
+      document.head.removeChild(styleElement)
+    }
   }, [userData])
 
   const fetchUnidentifiedFeedbacks = async () => {
@@ -1118,72 +1254,111 @@ export default function UnidentifiedFeedbacks() {
         {/* Lista de Feedbacks */}
         {unidentifiedFeedbacks.length > 0 ? (
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Lista de Feedbacks Não Identificados</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Avaliação</TableHead>
-                  <TableHead>Comentário</TableHead>
-                  <TableHead>Palavra-chave</TableHead>
-                  <TableHead>Departamento</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {unidentifiedFeedbacks.map((feedback) => (
-                  <TableRow key={feedback.id}>
-                    <TableCell>
-                      {formatDateBR(feedback.date)}
-                    </TableCell>
-                    <TableCell>
+            <div className="flex items-center gap-3 mb-6">
+              <MessageSquare className="h-6 w-6 text-orange-600" />
+              <h3 className="text-lg font-semibold">Lista de Feedbacks Não Identificados</h3>
+              <Badge variant="secondary" className="ml-auto">
+                {unidentifiedFeedbacks.length} feedbacks
+              </Badge>
+            </div>
+            
+            <div className="table-with-fixed-header" style={{ height: '600px' }}>
+              <Table>
+                <TableHeader className="fixed-header">
+                  <TableRow>
+                    <TableHead className="text-white font-semibold w-32">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">⭐{feedback.rating}</span>
-                        {getSentimentBadge(feedback.rating)}
+                        <Calendar className="h-4 w-4" />
+                        Data
                       </div>
-                    </TableCell>
-                    <TableCell className="max-w-md">
-                      <div className={`${showDetails[feedback.id] ? '' : 'truncate'}`}>
-                        {feedback.comment}
+                    </TableHead>
+                    <TableHead className="text-white font-semibold w-32">
+                      <div className="flex items-center gap-2">
+                        <Star className="h-4 w-4" />
+                        Avaliação
                       </div>
-                      {feedback.comment.length > 100 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleDetails(feedback.id)}
-                          className="mt-1 h-6 text-xs"
-                        >
-                          {showDetails[feedback.id] ? (
-                            <>
-                              <EyeOff className="h-3 w-3 mr-1" />
-                              Menos
-                            </>
-                          ) : (
-                            <>
-                              <Eye className="h-3 w-3 mr-1" />
-                              Mais
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="bg-orange-100 text-orange-800">
-                        {feedback.keyword || 'Não identificado'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="bg-orange-100 text-orange-800">
-                        {feedback.sector || 'Não identificado'}
-                      </Badge>
-                    </TableCell>
-                                         <TableCell>
-                       <EditFeedbackModal feedback={feedback} onSave={handleFeedbackSaved} />
-                     </TableCell>
+                    </TableHead>
+                    <TableHead className="text-white font-semibold min-w-96">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Comentário
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-white font-semibold w-48">Palavra-chave</TableHead>
+                    <TableHead className="text-white font-semibold w-48">Departamento</TableHead>
+                    <TableHead className="text-white font-semibold w-32">Ações</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+              </Table>
+              
+              <div className="scrollable-body custom-scrollbar">
+                <Table>
+                  <TableBody>
+                    {unidentifiedFeedbacks.map((feedback) => (
+                      <TableRow key={feedback.id} className="border-b border-gray-200 dark:border-gray-700">
+                        <TableCell className="w-32">
+                          <div className="text-sm font-medium">
+                            {formatDateBR(feedback.date)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-32">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">⭐{feedback.rating}</span>
+                            {getSentimentBadge(feedback.rating)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="min-w-96">
+                          <div className={`${showDetails[feedback.id] ? '' : 'line-clamp-2'} text-sm`}>
+                            {feedback.comment}
+                          </div>
+                          {feedback.comment.length > 100 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleDetails(feedback.id)}
+                              className="mt-1 h-6 text-xs"
+                            >
+                              {showDetails[feedback.id] ? (
+                                <>
+                                  <EyeOff className="h-3 w-3 mr-1" />
+                                  Menos
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Mais
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </TableCell>
+                        <TableCell className="w-48">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant="outline" className="bg-orange-100 text-orange-800">
+                                {feedback.keyword || 'Não identificado'}
+                              </Badge>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-48">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant="outline" className="bg-orange-100 text-orange-800">
+                                {feedback.sector || 'Não identificado'}
+                              </Badge>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-32">
+                          <EditFeedbackModal feedback={feedback} onSave={handleFeedbackSaved} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </Card>
         ) : (
           <Card className="p-8 text-center">
@@ -1204,25 +1379,33 @@ export default function UnidentifiedFeedbacks() {
         {/* Tabela de Análises Recentes */}
         {recentAnalyses.length > 0 && (
           <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Análises Recentes</h3>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Info className="h-6 w-6 text-blue-600" />
+                <h3 className="text-lg font-semibold">Análises Recentes</h3>
+              </div>
               <Badge variant="outline" className="bg-blue-50 text-blue-600">
                 {recentAnalyses.length} reclassificação{recentAnalyses.length !== 1 ? 'ões' : ''} nos últimos 7 dias
               </Badge>
             </div>
             
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data Modificação</TableHead>
-                  <TableHead>Comentário</TableHead>
-                  <TableHead>⭐ Nota</TableHead>
-                  <TableHead>Classificação Anterior</TableHead>
-                  <TableHead>Nova Classificação</TableHead>
-                  <TableHead>Modificado por</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <div className="table-with-fixed-header" style={{ height: '500px' }}>
+              <Table>
+                <TableHeader className="fixed-header">
+                  <TableRow>
+                    <TableHead className="text-white font-semibold w-40">Data Modificação</TableHead>
+                    <TableHead className="text-white font-semibold min-w-80">Comentário</TableHead>
+                    <TableHead className="text-white font-semibold w-24">⭐ Nota</TableHead>
+                    <TableHead className="text-white font-semibold w-64">Classificação Anterior</TableHead>
+                    <TableHead className="text-white font-semibold w-64">Nova Classificação</TableHead>
+                    <TableHead className="text-white font-semibold w-40">Modificado por</TableHead>
+                  </TableRow>
+                </TableHeader>
+              </Table>
+              
+              <div className="scrollable-body custom-scrollbar">
+                <Table>
+                  <TableBody>
                 {recentAnalyses.map((analysis) => (
                   <TableRow key={`${analysis.id}-${analysis.modifiedAt}`}>
                     <TableCell>
@@ -1305,8 +1488,10 @@ export default function UnidentifiedFeedbacks() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
-            
+                </Table>
+              </div>
+            </div>
+
             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
               <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 text-sm">
                 <AlertCircle className="h-4 w-4" />
@@ -1322,4 +1507,4 @@ export default function UnidentifiedFeedbacks() {
         </div>
       </SharedDashboardLayout>
     )
-} 
+}

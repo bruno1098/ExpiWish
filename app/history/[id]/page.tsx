@@ -8,13 +8,123 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, AlertCircle, Eye, EyeOff, Edit3, Save, X, Plus, Trash2, Star } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Eye, EyeOff, Edit3, Save, X, Plus, Trash2, Star, Calendar, MessageSquare, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/lib/auth-context';
 import SharedDashboardLayout from '../../shared-layout';
+
+// Estilos CSS para rolagem otimizada
+const scrollbarStyles = `
+  .custom-scrollbar {
+    scrollbar-width: auto !important;
+    scrollbar-color: #64748b #e2e8f0 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 16px !important;
+    height: 16px !important;
+    background: #e2e8f0 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #e2e8f0 !important;
+    border-radius: 8px !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+    border-radius: 8px !important;
+    border: 2px solid #e2e8f0 !important;
+    min-height: 40px !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #475569 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:active {
+    background: #334155 !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-corner {
+    background: #e2e8f0 !important;
+  }
+
+  /* Modo escuro */
+  .dark .custom-scrollbar {
+    scrollbar-color: #64748b #1e293b !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar {
+    background: #1e293b !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-track {
+    background: #1e293b !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+    border-color: #1e293b !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8 !important;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-corner {
+    background: #1e293b !important;
+  }
+
+  /* Layout da tabela com scroll simples */
+  .table-container {
+    max-height: 600px;
+    overflow: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+  }
+
+  .table-container::-webkit-scrollbar {
+    width: 16px !important;
+    height: 16px !important;
+    background: #e2e8f0 !important;
+  }
+
+  .table-container::-webkit-scrollbar-track {
+    background: #e2e8f0 !important;
+    border-radius: 8px !important;
+  }
+
+  .table-container::-webkit-scrollbar-thumb {
+    background: #64748b !important;
+    border-radius: 8px !important;
+    border: 2px solid #e2e8f0 !important;
+    min-height: 40px !important;
+  }
+
+  .table-container::-webkit-scrollbar-thumb:hover {
+    background: #475569 !important;
+  }
+
+  .table-container::-webkit-scrollbar-corner {
+    background: #e2e8f0 !important;
+  }
+
+  .dark .table-container {
+    border-color: #374151;
+  }
+
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+`;
 
 // Lista de departamentos disponíveis
 const availableDepartments = [
@@ -693,6 +803,17 @@ export default function AnalysisDetailPage() {
   const { toast } = useToast();
   const id = params?.id as string;
 
+  // Injetar estilos de rolagem
+  useEffect(() => {
+    const styleElement = document.createElement('style');
+    styleElement.textContent = scrollbarStyles;
+    document.head.appendChild(styleElement);
+
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
+
   useEffect(() => {
     fetchAnalysisData();
   }, [id, userData]);
@@ -888,70 +1009,107 @@ export default function AnalysisDetailPage() {
         {/* Lista de Feedbacks */}
         {feedbacks.length > 0 ? (
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Comentários ({feedbacks.length})</h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Avaliação</TableHead>
-                  <TableHead>Comentário</TableHead>
-                  <TableHead>Palavra-chave</TableHead>
-                  <TableHead>Departamento</TableHead>
-                  <TableHead>Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {feedbacks.map((feedback) => (
-                  <TableRow key={feedback.id}>
-                    <TableCell>
-                      {formatDateBR(feedback.date)}
-                    </TableCell>
-                    <TableCell>
+            <div className="flex items-center gap-2 mb-4">
+              <MessageSquare className="h-5 w-5 text-blue-600" />
+              <h3 className="text-lg font-semibold">Comentários ({feedbacks.length})</h3>
+            </div>
+            <div className="table-container custom-scrollbar">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[120px]">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">⭐{feedback.rating}</span>
-                        {getSentimentBadge(feedback.rating)}
+                        <Calendar className="h-4 w-4" />
+                        Data
                       </div>
-                    </TableCell>
-                    <TableCell className="max-w-md">
-                      <div className={`${showDetails[feedback.id] ? '' : 'truncate'}`}>
-                        {feedback.comment}
+                    </TableHead>
+                    <TableHead className="w-[120px]">
+                      <div className="flex items-center gap-2">
+                        <Star className="h-4 w-4" />
+                        Avaliação
                       </div>
-                      {feedback.comment.length > 100 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleDetails(feedback.id)}
-                          className="mt-1 h-6 text-xs"
-                        >
-                          {showDetails[feedback.id] ? (
-                            <>
-                              <EyeOff className="h-3 w-3 mr-1" />
-                              Menos
-                            </>
-                          ) : (
-                            <>
-                              <Eye className="h-3 w-3 mr-1" />
-                              Mais
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <KeywordBadge keyword={feedback.keyword} sector={feedback.sector} />
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn("text-sm border font-medium", getSectorColor(feedback.sector))}>
-                        {feedback.sector}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <EditFeedbackModal feedback={feedback} onSave={handleFeedbackUpdate} />
-                    </TableCell>
+                    </TableHead>
+                    <TableHead className="w-[300px]">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" />
+                        Comentário
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[180px]">
+                      <div className="flex items-center gap-2">
+                        <Info className="h-4 w-4" />
+                        Palavra-chave
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[150px]">
+                      Departamento
+                    </TableHead>
+                    <TableHead className="w-[100px]">
+                      Ações
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {feedbacks.map((feedback) => (
+                    <TableRow key={feedback.id}>
+                      <TableCell className="w-[120px]">
+                        {formatDateBR(feedback.date)}
+                      </TableCell>
+                      <TableCell className="w-[120px]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">⭐{feedback.rating}</span>
+                          {getSentimentBadge(feedback.rating)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-[300px]">
+                        <div className={`${showDetails[feedback.id] ? '' : 'line-clamp-2'}`}>
+                          {feedback.comment}
+                        </div>
+                        {feedback.comment.length > 100 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleDetails(feedback.id)}
+                            className="mt-1 h-6 text-xs"
+                          >
+                            {showDetails[feedback.id] ? (
+                              <>
+                                <EyeOff className="h-3 w-3 mr-1" />
+                                Menos
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="h-3 w-3 mr-1" />
+                                Mais
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </TableCell>
+                      <TableCell className="w-[180px]">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap gap-1">
+                            <KeywordBadge keyword={feedback.keyword} sector={feedback.sector} />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-[150px]">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap gap-1">
+                            <Badge variant="outline" className={cn("text-sm border font-medium", getSectorColor(feedback.sector))}>
+                              {feedback.sector}
+                            </Badge>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="w-[100px]">
+                        <EditFeedbackModal feedback={feedback} onSave={handleFeedbackUpdate} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </Card>
         ) : (
           <Card className="p-8 text-center">
