@@ -7,6 +7,17 @@ import { getCurrentUserData, canUserAccess, updateUserLastAccess, markFirstAcces
 import { useRouter, usePathname } from "next/navigation"
 import { devAuth, devError, devLog } from "./dev-logger"
 
+// Função para definir cookie
+const setCookie = (name: string, value: string, days: number = 7) => {
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; secure; samesite=strict`;
+};
+
+// Função para remover cookie
+const removeCookie = (name: string) => {
+  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+};
+
 interface AuthContextType {
   isAuthenticated: boolean
   userData: UserData | null
@@ -31,6 +42,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (authUser) {
         try {
+          // Capturar e armazenar token de autenticação em cookie
+          const token = await authUser.getIdToken();
+          setCookie('firebase-auth-token', token, 1); // Cookie expira em 1 dia
+          devAuth("🍪 Token de autenticação armazenado em cookie");
+          
           const userDataResult = await getCurrentUserData();
           devAuth("Dados do usuário obtidos:", userDataResult);
           setUserData(userDataResult);
@@ -63,6 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserData(null);
         }
       } else {
+        // Remover cookie quando usuário faz logout
+        removeCookie('firebase-auth-token');
+        devAuth("🍪 Cookie de autenticação removido");
         setIsAuthenticated(false);
         setUserData(null);
       }
@@ -154,4 +173,4 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
-} 
+}

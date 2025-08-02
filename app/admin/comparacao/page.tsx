@@ -250,14 +250,16 @@ export default function HoteisPage() {
         }
         hotelGroups[hotelKey].push(analysis)
         
-        // Consolidar todos os feedbacks para busca
+        // Consolidar todos os feedbacks para busca (excluindo feedbacks deletados)
         if (analysis.data && Array.isArray(analysis.data)) {
-          const feedbacksWithHotel = analysis.data.map((feedback: Feedback) => ({
-            ...feedback,
-            hotelId: analysis.hotelId || hotelKey,
-            hotelName: analysis.hotelName || hotelKey
-          }))
-          consolidatedFeedbacks = [...consolidatedFeedbacks, ...feedbacksWithHotel]
+          const validFeedbacks = analysis.data
+            .filter((feedback: any) => feedback.deleted !== true)
+            .map((feedback: Feedback) => ({
+              ...feedback,
+              hotelId: analysis.hotelId || hotelKey,
+              hotelName: analysis.hotelName || hotelKey
+            }))
+          consolidatedFeedbacks = [...consolidatedFeedbacks, ...validFeedbacks]
         }
       })
 
@@ -269,7 +271,9 @@ export default function HoteisPage() {
         
         analyses.forEach(analysis => {
           if (analysis.data && Array.isArray(analysis.data)) {
-            allFeedbacks = [...allFeedbacks, ...analysis.data]
+            // Filtrar feedbacks excluídos
+            const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
+            allFeedbacks = [...allFeedbacks, ...validFeedbacks]
           }
         })
 
@@ -1146,4 +1150,4 @@ export default function HoteisPage() {
       />
     </div>
   )
-} 
+}

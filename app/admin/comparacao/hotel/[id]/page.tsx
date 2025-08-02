@@ -155,7 +155,9 @@ export default function HotelDetalhes() {
       
       hotelAnalyses.forEach((analysis: any) => {
         if (analysis.data && Array.isArray(analysis.data)) {
-          allFeedbacks = [...allFeedbacks, ...analysis.data]
+          // Filtrar feedbacks excluídos
+          const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
+          allFeedbacks = [...allFeedbacks, ...validFeedbacks]
         }
       })
 
@@ -1986,4 +1988,4 @@ export default function HotelDetalhes() {
       </Tabs>
     </div>
   )
-} 
+}

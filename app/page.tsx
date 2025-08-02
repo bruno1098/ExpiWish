@@ -1209,8 +1209,9 @@ function DashboardContent() {
                 querySnapshot.forEach(doc => {
                   const data = doc.data();
                   if (data.data && Array.isArray(data.data)) {
-                    
-                    allFeedbacksData = [...allFeedbacksData, ...data.data];
+                    // Filtrar feedbacks excluídos
+                    const validFeedbacks = data.data.filter((feedback: any) => feedback.deleted !== true);
+                    allFeedbacksData = [...allFeedbacksData, ...validFeedbacks];
                   }
                 });
 
@@ -1228,9 +1229,14 @@ function DashboardContent() {
                 setLatestAnalysisId(firestoreData.id);
                 
                 if (firestoreData.data && Array.isArray(firestoreData.data)) {
-                  setAllFeedbacks(firestoreData.data);
+                  // Filtrar feedbacks excluídos
+                  const validFeedbacks = firestoreData.data.filter((feedback: any) => feedback.deleted !== true);
+                  setAllFeedbacks(validFeedbacks);
                 } else {
-                  setAllFeedbacks(firestoreData.analysis.recentFeedbacks || []);
+                  // Filtrar feedbacks excluídos dos feedbacks recentes
+                  const recentFeedbacks = firestoreData.analysis.recentFeedbacks || [];
+                  const validRecentFeedbacks = recentFeedbacks.filter((feedback: any) => feedback.deleted !== true);
+                  setAllFeedbacks(validRecentFeedbacks);
                 }
               } else {
                 

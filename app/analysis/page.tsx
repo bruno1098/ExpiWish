@@ -161,6 +161,113 @@ const scrollbarStyles = `
     -webkit-line-clamp: 2;
     line-clamp: 2;
   }
+
+  /* Animações para exclusão de feedback */
+  .feedback-deleting {
+    animation: deleteSlideOut 0.8s ease-in-out forwards;
+    background: linear-gradient(90deg, #fee2e2, #fecaca) !important;
+    border-left: 4px solid #ef4444 !important;
+    transform-origin: left center;
+  }
+
+  .dark .feedback-deleting {
+    background: linear-gradient(90deg, #7f1d1d, #991b1b) !important;
+  }
+
+  @keyframes deleteSlideOut {
+    0% {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      max-height: 80px;
+      margin-bottom: 0;
+    }
+    25% {
+      opacity: 0.8;
+      transform: translateX(-10px) scale(0.98);
+      max-height: 80px;
+      margin-bottom: 0;
+    }
+    50% {
+      opacity: 0.5;
+      transform: translateX(-30px) scale(0.95);
+      max-height: 80px;
+      margin-bottom: 0;
+    }
+    75% {
+      opacity: 0.2;
+      transform: translateX(-60px) scale(0.9);
+      max-height: 60px;
+      margin-bottom: 0;
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-100%) scale(0.8);
+      max-height: 0;
+      margin-bottom: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border: none;
+    }
+  }
+
+  .feedback-deleted-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(239, 68, 68, 0.95);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 1000;
+    animation: fadeInOut 2s ease-in-out;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  @keyframes fadeInOut {
+    0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    20%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  .delete-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .delete-modal {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .dark .delete-modal {
+    background: #1f2937;
+    color: white;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideIn {
+    from { transform: scale(0.95) translateY(-10px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+  }
 `;
 
 // Mapa de cores para sentimentos
@@ -349,9 +456,10 @@ const StatsCard = ({ icon: Icon, title, value, change, color }: {
 );
 
 // Componente para Modal de Comentário Completo
-const CommentModal = ({ feedback, onFeedbackUpdated }: { 
+const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback }: { 
   feedback: Feedback, 
-  onFeedbackUpdated?: (updatedFeedback: Feedback) => void 
+  onFeedbackUpdated?: (updatedFeedback: Feedback) => void,
+  onDeleteFeedback?: (feedback: Feedback) => void 
 }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
@@ -504,59 +612,9 @@ const CommentModal = ({ feedback, onFeedbackUpdated }: {
     }
   }
 
-  const handleDeleteFeedback = async () => {
-    // Confirmação antes de excluir
-    if (!window.confirm('Tem certeza que deseja excluir este comentário? Esta ação não pode ser desfeita.')) {
-      return
-    }
-
-    setIsDeleting(true)
-    
-    try {
-      // Chamar API para marcar feedback como excluído
-      const response = await fetch('/api/delete-feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          feedbackId: feedback.id,
-          reason: 'Conteúdo irrelevante ou spam'
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Falha ao excluir feedback')
-      }
-
-      // Atualizar no localStorage removendo o feedback
-      const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
-      if (storedFeedbacks) {
-        const feedbacks = JSON.parse(storedFeedbacks)
-        const updatedFeedbacks = feedbacks.filter((f: Feedback) => f.id !== feedback.id)
-        localStorage.setItem('analysis-feedbacks', JSON.stringify(updatedFeedbacks))
-      }
-
-      toast({
-        title: "Comentário Excluído",
-        description: "O comentário foi marcado como excluído e removido das visualizações.",
-        duration: 3000,
-      })
-
-      // Fechar modal e atualizar lista
-      setIsOpen(false)
-      onFeedbackUpdated?.({ ...feedback, deleted: true })
-
-    } catch (error) {
-      console.error('Erro ao excluir feedback:', error)
-      toast({
-        title: "Erro",
-        description: "Não foi possível excluir o comentário.",
-        variant: "destructive"
-      })
-    } finally {
-      setIsDeleting(false)
-    }
+  const handleDeleteFeedback = () => {
+    onDeleteFeedback?.(feedback)
+    setIsOpen(false)
   }
 
   return (
@@ -632,22 +690,12 @@ const CommentModal = ({ feedback, onFeedbackUpdated }: {
               {/* Botões de ação */}
               <div className="flex items-center gap-2">
                 {!isEditing ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleStartEdit}
-                    className="flex items-center gap-2 bg-white hover:bg-blue-50 dark:bg-gray-800 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 transition-all duration-200 hover:shadow-md"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                    Editar Análise
-                  </Button>
-                ) : (
-                  <div className="flex items-center gap-2">
+                  <>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleDeleteFeedback}
-                      disabled={isSaving || isDeleting}
+                      disabled={isDeleting}
                       className="flex items-center gap-2 bg-white hover:bg-red-50 dark:bg-gray-800 dark:hover:bg-red-900/20 border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 transition-all duration-200 hover:shadow-md"
                     >
                       {isDeleting ? (
@@ -662,6 +710,18 @@ const CommentModal = ({ feedback, onFeedbackUpdated }: {
                         </>
                       )}
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStartEdit}
+                      className="flex items-center gap-2 bg-white hover:bg-blue-50 dark:bg-gray-800 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 transition-all duration-200 hover:shadow-md"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      Editar Análise
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -1183,6 +1243,14 @@ function AnalysisPageContent() {
   const [searchTerm, setSearchTerm] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [quickDateFilter, setQuickDateFilter] = useState("all")
+  
+  // Estados para animação de exclusão
+  const [deletingFeedbacks, setDeletingFeedbacks] = useState<Set<string>>(new Set())
+  const [showDeletedIndicator, setShowDeletedIndicator] = useState(false)
+  
+  // Estados para modal de confirmação de exclusão
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [feedbackToDelete, setFeedbackToDelete] = useState<Feedback | null>(null)
 
   const searchParams = useSearchParams()
   const id = searchParams.get('id')
@@ -1200,14 +1268,16 @@ function AnalysisPageContent() {
         const allFeedbacks: Feedback[] = []
         allAnalyses.forEach((analysis) => {
           if (analysis.data && Array.isArray(analysis.data)) {
-            // Adicionar informações da importação a cada feedback
-            const feedbacksWithImportInfo = analysis.data.map((feedback: Feedback) => ({
-              ...feedback,
-              importId: analysis.id,
-              importDate: analysis.importDate,
-              hotelName: analysis.hotelName || analysis.hotelDisplayName
-            }))
-            allFeedbacks.push(...feedbacksWithImportInfo)
+            // Filtrar feedbacks excluídos e adicionar informações da importação
+            const validFeedbacks = analysis.data
+              .filter((feedback: any) => feedback.deleted !== true)
+              .map((feedback: Feedback) => ({
+                ...feedback,
+                importId: analysis.id,
+                importDate: analysis.importDate,
+                hotelName: analysis.hotelName || analysis.hotelDisplayName
+              }))
+            allFeedbacks.push(...validFeedbacks)
           }
         })
         
@@ -1273,18 +1343,92 @@ function AnalysisPageContent() {
       )
     )
     
-    // Se feedback foi deletado, remover da lista filtrada, senão atualizar
-    setFilteredFeedbacks(prevFiltered => {
-      if (updatedFeedback.deleted) {
-        return prevFiltered.filter(f => f.id !== updatedFeedback.id)
-      } else {
-        return prevFiltered.map(f => 
+    // Se feedback foi deletado, iniciar animação antes de remover
+    if (updatedFeedback.deleted) {
+      // Adicionar à lista de feedbacks sendo excluídos
+       setDeletingFeedbacks(prev => new Set([...Array.from(prev), updatedFeedback.id]))
+      
+      // Mostrar indicador de exclusão
+      setShowDeletedIndicator(true)
+      
+      // Remover da lista após a animação (500ms)
+      setTimeout(() => {
+        setFilteredFeedbacks(prevFiltered => 
+          prevFiltered.filter(f => f.id !== updatedFeedback.id)
+        )
+        setDeletingFeedbacks(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(updatedFeedback.id)
+          return newSet
+        })
+      }, 500)
+      
+      // Esconder indicador após 2 segundos
+      setTimeout(() => {
+        setShowDeletedIndicator(false)
+      }, 2000)
+    } else {
+      // Atualizar feedback editado normalmente
+      setFilteredFeedbacks(prevFiltered => 
+        prevFiltered.map(f => 
           f.id === updatedFeedback.id ? updatedFeedback : f
         )
-      }
-    })
+      )
+    }
     
     console.log('✅ Feedback atualizado na lista:', updatedFeedback.id, updatedFeedback.deleted ? '(deletado)' : '(editado)')
+  }
+
+  // Função para abrir modal de confirmação de exclusão
+  const handleDeleteFeedback = (feedback: Feedback) => {
+    setFeedbackToDelete(feedback)
+    setShowDeleteConfirm(true)
+  }
+
+  // Função para confirmar exclusão
+  const confirmDeleteFeedback = async () => {
+    if (!feedbackToDelete) return
+
+    // Fechar o modal imediatamente para mostrar a animação de exclusão
+    setShowDeleteConfirm(false)
+    
+    try {
+      // Adicionar animação de saída
+      setDeletingFeedbacks(prev => new Set([...Array.from(prev), feedbackToDelete.id]))
+      
+      const updatedFeedback = { ...feedbackToDelete, deleted: true }
+      await updateFeedbackInFirestore(feedbackToDelete.id, updatedFeedback)
+      
+      // Aguardar a animação antes de remover (mais tempo para animação suave)
+      setTimeout(() => {
+        handleFeedbackUpdated(updatedFeedback)
+        setDeletingFeedbacks(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(feedbackToDelete.id)
+          return newSet
+        })
+      }, 800) // Duração aumentada para animação mais suave
+      
+      toast({
+        title: "Feedback excluído",
+        description: "O feedback foi excluído com sucesso.",
+      })
+    } catch (error) {
+      console.error('Erro ao excluir feedback:', error)
+      // Remover da lista de exclusão em caso de erro
+      setDeletingFeedbacks(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(feedbackToDelete.id)
+        return newSet
+      })
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir o feedback.",
+        variant: "destructive"
+      })
+    } finally {
+      setFeedbackToDelete(null)
+    }
   }
 
   // Função para recarregar dados do Firebase
@@ -1733,7 +1877,13 @@ function AnalysisPageContent() {
                           {/* Feedbacks do grupo */}
                           <div className="divide-y divide-gray-200 dark:divide-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                             {groupFeedbacks.map((feedback) => (
-                      <div key={feedback.id} className="flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px]">
+                      <div 
+                        key={feedback.id} 
+                        className={cn(
+                          "flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px]",
+                          deletingFeedbacks.has(feedback.id) && "feedback-deleting"
+                        )}
+                      >
                         <div className="w-24 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-xs flex items-center">
                           <span className="font-medium text-gray-600 dark:text-gray-400">
                             {formatDateBR(feedback.date)}
@@ -1829,7 +1979,7 @@ function AnalysisPageContent() {
                           </div>
                         </div>
                         <div className="w-12 py-4 px-3 text-center flex items-center justify-center">
-                          <CommentModal feedback={feedback} onFeedbackUpdated={handleFeedbackUpdated} />
+                          <CommentModal feedback={feedback} onFeedbackUpdated={handleFeedbackUpdated} onDeleteFeedback={handleDeleteFeedback} />
                         </div>
                       </div>
                     ))}
@@ -1843,6 +1993,50 @@ function AnalysisPageContent() {
             </div>
           </div>
         </Card>
+        
+        {/* Indicador de exclusão */}
+        {showDeletedIndicator && (
+          <div className="feedback-deleted-indicator">
+            ✓ Comentário excluído com sucesso
+          </div>
+        )}
+        
+        {/* Modal de confirmação de exclusão */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300" style={{zIndex: 999999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0}}>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 transform animate-in zoom-in-95 duration-300 border border-gray-200 dark:border-gray-700">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                    <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Confirmar Exclusão
+                  </h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
+                  Tem certeza que deseja excluir este feedback? Esta ação não pode ser desfeita e o feedback será removido permanentemente.
+                </p>
+                <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="w-full sm:w-auto transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={confirmDeleteFeedback}
+                    className="w-full sm:w-auto transition-all duration-200 bg-red-600 hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                  >
+                    Excluir Feedback
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </TooltipProvider>
     </div>
   )

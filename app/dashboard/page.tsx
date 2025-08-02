@@ -317,14 +317,12 @@ function DashboardContent() {
               
               validAnalyses.forEach((analysis: any) => {
                 if (analysis.data && Array.isArray(analysis.data)) {
-                  // Adicionar logs para depuração
-
+                  // Filtrar feedbacks excluídos
+                  const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
+                  
                   // Como as análises já foram filtradas por hotelId na consulta do Firestore,
-                  // podemos incluir todos os feedbacks desta análise
-                  allFeedbacks = [...allFeedbacks, ...analysis.data];
-                  
-                  // Log do número de feedbacks adicionados
-                  
+                  // podemos incluir todos os feedbacks válidos desta análise
+                  allFeedbacks = [...allFeedbacks, ...validFeedbacks];
                 }
               });
               
@@ -2769,4 +2767,4 @@ function DashboardContent() {
 // Componente exportado diretamente
 export default function Dashboard() {
   return <DashboardContent />;
-} 
+}

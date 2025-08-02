@@ -142,6 +142,106 @@ const scrollbarStyles = `
     -webkit-line-clamp: 2;
     line-clamp: 2;
   }
+
+  /* Animações de exclusão */
+  .feedback-deleting {
+    animation: deleteSlideOut 1.5s ease-in-out forwards;
+    background: linear-gradient(90deg, #fee2e2, #fecaca) !important;
+    border-left: 4px solid #ef4444 !important;
+  }
+
+  .dark .feedback-deleting {
+    background: linear-gradient(90deg, #7f1d1d, #991b1b) !important;
+  }
+
+  @keyframes deleteSlideOut {
+    0% {
+      opacity: 1;
+      transform: translateX(0);
+      max-height: 80px;
+      margin-bottom: 0;
+    }
+    50% {
+      opacity: 0.5;
+      transform: translateX(-20px);
+      max-height: 80px;
+      margin-bottom: 0;
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-100%);
+      max-height: 0;
+      margin-bottom: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border: none;
+    }
+  }
+
+  .feedback-deleted-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(239, 68, 68, 0.95);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 1000;
+    animation: fadeInOut 2s ease-in-out;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  @keyframes fadeInOut {
+    0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    20%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  .delete-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .delete-modal {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .dark .delete-modal {
+    background: #1f2937;
+    border: 1px solid #374151;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideIn {
+    from { 
+      opacity: 0;
+      transform: scale(0.95) translateY(-10px);
+    }
+    to { 
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
 `;
 
 interface UnidentifiedFeedback {
@@ -512,6 +612,7 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
   const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   
   useEffect(() => {
     // Inicializar problemas para edição
@@ -622,13 +723,13 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
     }
   }
 
-  const handleDeleteFeedback = async () => {
-    // Confirmação antes de excluir
-    if (!window.confirm('Tem certeza que deseja excluir este comentário? Esta ação não pode ser desfeita.')) {
-      return
-    }
+  const handleDeleteFeedback = () => {
+    setShowDeleteConfirm(true)
+  }
 
+  const confirmDeleteFeedback = async () => {
     setIsDeleting(true)
+    setShowDeleteConfirm(false)
     
     try {
       // Chamar API para marcar feedback como excluído
@@ -845,6 +946,60 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
           </div>
         </div>
       </DialogContent>
+      
+      {/* Modal de Confirmação de Exclusão */}
+      {showDeleteConfirm && (
+        <div className="delete-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  Confirmar Exclusão
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Esta ação não pode ser desfeita
+                </p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 dark:text-gray-300 mb-6">
+              Tem certeza que deseja excluir este feedback? O comentário será marcado como excluído e removido das visualizações.
+            </p>
+            
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="px-4 py-2"
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDeleteFeedback}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isDeleting ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Excluindo...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Excluir
+                  </div>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Dialog>
   )
 }
@@ -877,6 +1032,10 @@ export default function UnidentifiedFeedbacks() {
   const [recentAnalyses, setRecentAnalyses] = useState<RecentAnalysis[]>([])
   const [loading, setLoading] = useState(true)
   const [showDetails, setShowDetails] = useState<{ [key: string]: boolean }>({})
+  const [deletingFeedbacks, setDeletingFeedbacks] = useState<Set<string>>(new Set())
+  const [showDeletedIndicator, setShowDeletedIndicator] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [feedbackToDelete, setFeedbackToDelete] = useState<UnidentifiedFeedback | null>(null)
 
   const loadRecentAnalyses = () => {
     try {
@@ -1055,7 +1214,33 @@ export default function UnidentifiedFeedbacks() {
       await saveRecentAnalysis(originalFeedback, updatedFeedback)
     }
     
-    // Remove da lista de não identificados
+    // Se o feedback foi marcado como deletado, aplicar animação
+    if (updatedFeedback.deleted) {
+      // Adicionar ao estado de feedbacks sendo excluídos
+      setDeletingFeedbacks(prev => new Set([...Array.from(prev), updatedFeedback.id]))
+      
+      // Mostrar indicador de exclusão
+      setShowDeletedIndicator(true)
+      
+      // Remover da lista após a animação
+      setTimeout(() => {
+        setUnidentifiedFeedbacks(prev => prev.filter(f => f.id !== updatedFeedback.id))
+        setDeletingFeedbacks(prev => {
+          const newSet = new Set(Array.from(prev))
+          newSet.delete(updatedFeedback.id)
+          return newSet
+        })
+      }, 1500)
+      
+      // Esconder indicador após 2 segundos
+      setTimeout(() => {
+        setShowDeletedIndicator(false)
+      }, 2000)
+      
+      return
+    }
+    
+    // Remove da lista de não identificados (para casos normais)
     setUnidentifiedFeedbacks(prev => prev.filter(f => f.id !== updatedFeedback.id))
     
     toast({
@@ -1295,7 +1480,7 @@ export default function UnidentifiedFeedbacks() {
                 <Table>
                   <TableBody>
                     {unidentifiedFeedbacks.map((feedback) => (
-                      <TableRow key={feedback.id} className="border-b border-gray-200 dark:border-gray-700">
+                      <TableRow key={feedback.id} className={`border-b border-gray-200 dark:border-gray-700 ${deletingFeedbacks.has(feedback.id) ? 'feedback-deleting' : ''}`}>
                         <TableCell className="w-32">
                           <div className="text-sm font-medium">
                             {formatDateBR(feedback.date)}
@@ -1503,8 +1688,14 @@ export default function UnidentifiedFeedbacks() {
               </p>
             </div>
           </Card>
+        )}        </div>
+        
+        {/* Indicador de exclusão */}
+        {showDeletedIndicator && (
+          <div className="feedback-deleted-indicator">
+            Feedback excluído com sucesso!
+          </div>
         )}
-        </div>
       </SharedDashboardLayout>
     )
 }

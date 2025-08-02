@@ -1,6 +1,6 @@
 import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc, deleteDoc, updateDoc, limit } from 'firebase/firestore';
 import { db } from './firebase';
-import { getCurrentUserData } from './auth-service';
+import { getCurrentUserData, UserData } from './auth-service';
 
 // Interface para os dados de análise
 export interface AnalysisData {
@@ -436,12 +436,31 @@ export const testNewFirebaseStructure = async () => {
 };
 
 // Função para atualizar um feedback específico no Firebase
+// Versão original para uso no cliente
 export const updateFeedbackInFirestore = async (
   feedbackId: string, 
   updatedFeedback: any
 ): Promise<boolean> => {
   try {
     const userData = await getCurrentUserData();
+    if (!userData || !userData.hotelId) {
+      throw new Error('Usuário não autenticado ou hotel não identificado');
+    }
+
+    return await updateFeedbackInFirestoreWithUserData(feedbackId, updatedFeedback, userData);
+  } catch (error) {
+    console.error('Erro ao atualizar feedback:', error);
+    throw error;
+  }
+};
+
+// Versão para uso em API routes (servidor)
+export const updateFeedbackInFirestoreWithUserData = async (
+  feedbackId: string, 
+  updatedFeedback: any,
+  userData: UserData
+): Promise<boolean> => {
+  try {
     if (!userData || !userData.hotelId) {
       throw new Error('Usuário não autenticado ou hotel não identificado');
     }
