@@ -25,6 +25,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { 
   Eye, 
   Copy, 
@@ -45,14 +47,18 @@ import {
   Save,
   X,
   Plus,
-  Trash2
+  Trash2,
+  CalendarDays
 } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
-import { getAnalysisById, updateFeedbackInFirestore } from '@/lib/firestore-service'
+import { getAllAnalyses, updateFeedbackInFirestore } from '@/lib/firestore-service'
 import SharedDashboardLayout from "../shared-layout"
 import { useToast } from "@/components/ui/use-toast"
 import { cn, formatDateBR } from "@/lib/utils"
 import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/lib/utils"
+import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import type { DateRange } from "react-day-picker"
 
 // Estilos para scrollbars SEMPRE visíveis e header fixo
 const scrollbarStyles = `
@@ -1165,7 +1171,7 @@ function AnalysisPageContent() {
   // Estados principais
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
   const [filteredFeedbacks, setFilteredFeedbacks] = useState<Feedback[]>([])
-  const [analysis, setAnalysis] = useState<any>(null)
+  const [analyses, setAnalyses] = useState<Analysis[]>([])
   const [loading, setLoading] = useState(true)
   
   // Estados de filtros
@@ -1173,61 +1179,91 @@ function AnalysisPageContent() {
   const [sectorFilter, setSectorFilter] = useState("all")
   const [keywordFilter, setKeywordFilter] = useState("all")
   const [problemFilter, setProblemFilter] = useState("all")
-  const [dateFilter, setDateFilter] = useState("")
+
   const [searchTerm, setSearchTerm] = useState("")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [quickDateFilter, setQuickDateFilter] = useState("all")
 
   const searchParams = useSearchParams()
   const id = searchParams.get('id')
   const { toast } = useToast()
 
-  // Carregar dados do localStorage na inicialização
+  // Carregar dados do Firebase na inicialização
   useEffect(() => {
-    const loadStoredData = () => {
+    const loadFirebaseData = async () => {
       try {
-        const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
-        const storedAnalysis = localStorage.getItem('analysis-data')
-        const storedFilters = localStorage.getItem('analysis-filters')
+        setLoading(true)
+        const allAnalyses = await getAllAnalyses()
+        setAnalyses(allAnalyses)
         
-        if (storedFeedbacks) {
-          const parsedFeedbacks = JSON.parse(storedFeedbacks)
-          setFeedbacks(parsedFeedbacks)
-          
-        }
+        // Combinar todos os feedbacks de todas as análises
+        const allFeedbacks: Feedback[] = []
+        allAnalyses.forEach((analysis) => {
+          if (analysis.data && Array.isArray(analysis.data)) {
+            // Adicionar informações da importação a cada feedback
+            const feedbacksWithImportInfo = analysis.data.map((feedback: Feedback) => ({
+              ...feedback,
+              importId: analysis.id,
+              importDate: analysis.importDate,
+              hotelName: analysis.hotelName || analysis.hotelDisplayName
+            }))
+            allFeedbacks.push(...feedbacksWithImportInfo)
+          }
+        })
         
-        if (storedAnalysis) {
-          setAnalysis(JSON.parse(storedAnalysis))
-        }
+        setFeedbacks(allFeedbacks)
         
-        if (storedFilters) {
-          const filters = JSON.parse(storedFilters)
-          setSentimentFilter(filters.sentiment || "all")
-          setSectorFilter(filters.sector || "all")
-          setKeywordFilter(filters.keyword || "all")
-          setProblemFilter(filters.problem || "all")
-          setDateFilter(filters.date || "")
-          setSearchTerm(filters.search || "")
-        }
+        toast({
+          title: "Dados Carregados",
+          description: `${allFeedbacks.length} feedbacks carregados de ${allAnalyses.length} importações`,
+        })
       } catch (error) {
-        console.error('Erro ao carregar dados do localStorage:', error)
+        console.error('Erro ao carregar dados do Firebase:', error)
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar os dados",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
       }
     }
 
-    loadStoredData()
-    setLoading(false)
+    loadFirebaseData()
   }, [])
 
-  // Salvar filtros no localStorage quando mudam
-  useEffect(() => {
-    const filters = {
-      sentiment: sentimentFilter,
-      sector: sectorFilter,
-      keyword: keywordFilter,
-      problem: problemFilter,
-      date: dateFilter,
-      search: searchTerm
+  // Aplicar filtros de data rápidos
+  const applyQuickDateFilter = (filter: string) => {
+    const now = new Date()
+    let from: Date | undefined
+    let to: Date | undefined
+    
+    switch (filter) {
+      case "7days":
+        from = subDays(now, 7)
+        to = now
+        break
+      case "30days":
+        from = subDays(now, 30)
+        to = now
+        break
+      case "thisMonth":
+        from = startOfMonth(now)
+        to = endOfMonth(now)
+        break
+      case "lastMonth":
+        const lastMonth = subMonths(now, 1)
+        from = startOfMonth(lastMonth)
+        to = endOfMonth(lastMonth)
+        break
+      default:
+        from = undefined
+        to = undefined
     }
-    localStorage.setItem('analysis-filters', JSON.stringify(filters))
-  }, [sentimentFilter, sectorFilter, keywordFilter, problemFilter, dateFilter, searchTerm])
+    
+    setDateRange({ from, to })
+    setQuickDateFilter(filter)
+  }
 
   // Função para atualizar um feedback específico na lista
   const handleFeedbackUpdated = (updatedFeedback: Feedback) => {
@@ -1251,43 +1287,45 @@ function AnalysisPageContent() {
     console.log('✅ Feedback atualizado na lista:', updatedFeedback.id, updatedFeedback.deleted ? '(deletado)' : '(editado)')
   }
 
-  // Carregar análise específica se houver ID
-  useEffect(() => {
-    const loadAnalysis = async () => {
-      if (id) {
-        try {
-          setLoading(true)
-          const data = await getAnalysisById(id) as Analysis
-          if (data && data.data) {
-            setFeedbacks(data.data)
-            setAnalysis(data)
-            
-            // Salvar no localStorage
-            localStorage.setItem('analysis-feedbacks', JSON.stringify(data.data))
-            localStorage.setItem('analysis-data', JSON.stringify(data))
-            
-            toast({
-              title: "Análise Carregada",
-              description: `${data.data.length} feedbacks carregados com sucesso`,
-            })
-          }
-        } catch (error) {
-          console.error('Erro ao carregar análise:', error)
-          toast({
-            title: "Erro",
-            description: "Não foi possível carregar a análise",
-            variant: "destructive"
-          })
-        } finally {
-          setLoading(false)
+  // Função para recarregar dados do Firebase
+  const reloadData = async () => {
+    try {
+      setLoading(true)
+      const allAnalyses = await getAllAnalyses()
+      setAnalyses(allAnalyses)
+      
+      // Combinar todos os feedbacks de todas as análises
+      const allFeedbacks: Feedback[] = []
+      allAnalyses.forEach((analysis) => {
+        if (analysis.data && Array.isArray(analysis.data)) {
+          // Adicionar informações da importação a cada feedback
+          const feedbacksWithImportInfo = analysis.data.map((feedback: Feedback) => ({
+            ...feedback,
+            importId: analysis.id,
+            importDate: analysis.importDate,
+            hotelName: analysis.hotelName || analysis.hotelDisplayName
+          }))
+          allFeedbacks.push(...feedbacksWithImportInfo)
         }
-      }
+      })
+      
+      setFeedbacks(allFeedbacks)
+      
+      toast({
+        title: "Dados Atualizados",
+        description: `${allFeedbacks.length} feedbacks carregados de ${allAnalyses.length} importações`,
+      })
+    } catch (error) {
+      console.error('Erro ao recarregar dados:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível recarregar os dados",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
     }
-
-    if (id) {
-      loadAnalysis()
-    }
-  }, [id, toast])
+  }
 
   // Aplicar filtros
   useEffect(() => {
@@ -1298,14 +1336,32 @@ function AnalysisPageContent() {
       const matchesSector = sectorFilter === "all" || feedback.sector.toLowerCase().includes(sectorFilter.toLowerCase())
       const matchesKeyword = keywordFilter === "all" || feedback.keyword.toLowerCase().includes(keywordFilter.toLowerCase())
       const matchesProblem = problemFilter === "all" || feedback.problem?.toLowerCase().includes(problemFilter.toLowerCase())
-      const matchesDate = !dateFilter || feedback.date.includes(dateFilter)
+      
+      // Filtro de data por range
+      let matchesDateRange = true
+      if (dateRange?.from || dateRange?.to) {
+        const feedbackDate = new Date(feedback.date)
+        if (dateRange.from && feedbackDate < dateRange.from) {
+          matchesDateRange = false
+        }
+        if (dateRange.to && feedbackDate > dateRange.to) {
+          matchesDateRange = false
+        }
+      }
       const matchesSearch = !searchTerm || feedback.comment.toLowerCase().includes(searchTerm.toLowerCase())
 
-      return isNotDeleted && matchesSentiment && matchesSector && matchesKeyword && matchesProblem && matchesDate && matchesSearch
+      return isNotDeleted && matchesSentiment && matchesSector && matchesKeyword && matchesProblem && matchesDateRange && matchesSearch
     })
-    
+
+    // Ordenar por data de importação para agrupar visualmente
+    filtered.sort((a, b) => {
+      const dateA = new Date((a as any).importDate?.seconds ? (a as any).importDate.seconds * 1000 : (a as any).importDate || 0)
+      const dateB = new Date((b as any).importDate?.seconds ? (b as any).importDate.seconds * 1000 : (b as any).importDate || 0)
+      return dateB.getTime() - dateA.getTime()
+    })
+
     setFilteredFeedbacks(filtered)
-  }, [feedbacks, sentimentFilter, sectorFilter, keywordFilter, problemFilter, dateFilter, searchTerm])
+  }, [feedbacks, sentimentFilter, sectorFilter, keywordFilter, problemFilter, dateRange, searchTerm])
 
   // Calcular estatísticas (excluindo feedbacks deletados)
   const activeFeedbacks = feedbacks.filter(f => !f.deleted)
@@ -1327,7 +1383,8 @@ function AnalysisPageContent() {
     setSectorFilter("all")
     setKeywordFilter("all")
     setProblemFilter("all")
-    setDateFilter("")
+    setDateRange(undefined)
+    setQuickDateFilter("")
     setSearchTerm("")
   }
 
@@ -1497,16 +1554,51 @@ function AnalysisPageContent() {
               </SelectContent>
             </Select>
 
-            {/* Filtro por data */}
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+            {/* Filtros pré-definidos de data */}
+            <Select value={quickDateFilter} onValueChange={applyQuickDateFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Período" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os períodos</SelectItem>
+                <SelectItem value="7days">Últimos 7 dias</SelectItem>
+                <SelectItem value="30days">Últimos 30 dias</SelectItem>
+                <SelectItem value="thisMonth">Este mês</SelectItem>
+                <SelectItem value="lastMonth">Mês passado</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Calendário para seleção de intervalo */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="justify-start text-left font-normal">
+                  <CalendarDays className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })} -{" "}
+                        {format(dateRange.to, "dd/MM/yyyy", { locale: ptBR })}
+                      </>
+                    ) : (
+                      format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })
+                    )
+                  ) : (
+                    "Selecionar período"
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <CalendarComponent
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Indicador de resultados filtrados */}
@@ -1514,7 +1606,7 @@ function AnalysisPageContent() {
             <span>
               Mostrando <strong>{filteredFeedbacks.length}</strong> de <strong>{feedbacks.length}</strong> feedbacks
             </span>
-            {(sentimentFilter !== "all" || sectorFilter !== "all" || keywordFilter !== "all" || problemFilter !== "all" || dateFilter || searchTerm) && (
+            {(sentimentFilter !== "all" || sectorFilter !== "all" || keywordFilter !== "all" || problemFilter !== "all" || dateRange?.from || dateRange?.to || searchTerm) && (
               <Badge variant="secondary" className="flex items-center gap-2">
                 <Filter className="h-3 w-3" />
                 Filtros ativos
@@ -1590,8 +1682,57 @@ function AnalysisPageContent() {
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-gray-200 dark:divide-gray-800">
-                    {filteredFeedbacks.map((feedback) => (
+                  <div>
+                    {(() => {
+                      // Agrupar feedbacks por data de importação
+                      const groupedFeedbacks = filteredFeedbacks.reduce((groups, feedback) => {
+                        const importDate = (feedback as any).importDate
+                        
+                        // Corrigir timezone: adicionar 1 dia para compensar UTC
+                        let dateKey: string
+                        if (importDate?.seconds) {
+                          const firebaseDate = new Date(importDate.seconds * 1000)
+                          // Adicionar 1 dia para compensar diferença de timezone
+                          firebaseDate.setDate(firebaseDate.getDate() + 1)
+                          dateKey = firebaseDate.toISOString().split('T')[0]
+                        } else {
+                          const fallbackDate = new Date(importDate || 0)
+                          fallbackDate.setDate(fallbackDate.getDate() + 1)
+                          dateKey = fallbackDate.toISOString().split('T')[0]
+                        }
+                        
+                        if (!groups[dateKey]) {
+                          groups[dateKey] = []
+                        }
+                        groups[dateKey].push(feedback)
+                        return groups
+                      }, {} as Record<string, typeof filteredFeedbacks>)
+
+                      // Ordenar grupos por data (mais recente primeiro)
+                      const sortedGroups = Object.entries(groupedFeedbacks).sort(([a], [b]) => 
+                        new Date(b).getTime() - new Date(a).getTime()
+                      )
+
+                      return sortedGroups.map(([dateKey, groupFeedbacks], groupIndex) => (
+                        <div key={dateKey} className="mb-6">
+                          {/* Cabeçalho do grupo com data de importação */}
+                          <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border-l-4 border-blue-500 dark:border-blue-400 px-4 py-3 mb-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-blue-500 dark:bg-blue-400 animate-pulse"></div>
+                                <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                                  Importação de {formatDateBR(dateKey)}
+                                </h4>
+                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                {groupFeedbacks.length} feedback{groupFeedbacks.length !== 1 ? 's' : ''}
+                              </Badge>
+                            </div>
+                          </div>
+                          
+                          {/* Feedbacks do grupo */}
+                          <div className="divide-y divide-gray-200 dark:divide-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                            {groupFeedbacks.map((feedback) => (
                       <div key={feedback.id} className="flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px]">
                         <div className="w-24 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-xs flex items-center">
                           <span className="font-medium text-gray-600 dark:text-gray-400">
@@ -1692,6 +1833,10 @@ function AnalysisPageContent() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                        </div>
+                      ))
+                    })()}
                   </div>
                 )}
               </div>
