@@ -8,12 +8,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Legend, RadarChart, PolarGrid,
-  PolarAngleAxis, PolarRadiusAxis, Radar, AreaChart, Area, LabelList,
-  Sector, ScatterChart, Scatter, ZAxis
-} from 'recharts';
+import { ModernChart, ProblemsChart, HotelsChart, RatingsChart, DepartmentsChart, SourcesChart, ApartmentsChart, KeywordsChart } from '@/components/modern-charts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -37,7 +32,7 @@ import {
   Globe, 
   BarChart3 
 } from "lucide-react";
-import { formatDateBR } from "@/lib/utils";
+import { formatDateBR, filterValidFeedbacks } from "@/lib/utils";
 
 // Definir a interface AnalysisData
 interface AnalysisData {
@@ -49,8 +44,7 @@ interface AnalysisData {
   analysis: any;
 }
 
-// Cores para os gráficos
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+// Componentes modernos de gráficos já importados
 
 // Interface para os dados de detalhamento
 interface DetailData {
@@ -243,7 +237,10 @@ function DashboardContent() {
   const applyFilters = useCallback((data: any[]) => {
     if (!data || data.length === 0) return [];
     
-    return data.filter((feedback: any) => {
+    // Primeiro, filtrar feedbacks válidos (excluir "Não identificados")
+    const validFeedbacks = filterValidFeedbacks(data);
+    
+    return validFeedbacks.filter((feedback: any) => {
       // Filtro de estrelas (ocultar avaliações selecionadas)
       if (hiddenRatings.includes(feedback.rating)) {
         return false;
@@ -952,60 +949,24 @@ function DashboardContent() {
 
   // Componente para renderizar gráficos no modal
   const renderChart = (chartType: string, data: any[], onChartClick: (item: any, type: string) => void, type: string) => {
+    const handleClick = (item: any, index: number) => {
+      onChartClick(item, type);
+    };
+
     if (chartType === 'bar') {
-      return (
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="label" />
-          <YAxis />
-          <RechartsTooltip content={<CustomTooltip />} />
-          <Bar 
-            dataKey="value" 
-            fill="#8884d8"
-            onClick={(_, index) => {
-              const item = data[index];
-              onChartClick(item, type);
-            }}
-          />
-        </BarChart>
-      );
+      return <ModernChart data={data} type="bar" onClick={handleClick} />;
     }
     
     if (chartType === 'pie') {
-      return (
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            labelLine={true}
-            label={({ name, value, percent }: any) => `${name}: ${value} (${(percent * 100).toFixed(1)}%)`}
-            outerRadius={150}
-            fill="#8884d8"
-            dataKey="value"
-            nameKey={data[0]?.name ? 'name' : 'label'}
-            onClick={(dataItem, index) => {
-              const item = data[index];
-              onChartClick(item, type);
-            }}
-          >
-            {data.map((_: any, index: number) => (
-              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-            ))}
-          </Pie>
-          <RechartsTooltip content={<CustomTooltip />} />
-          <Legend />
-        </PieChart>
-      );
+      return <ModernChart data={data} type="pie" onClick={handleClick} />;
     }
     
-    // Fallback - retorna um gráfico vazio
-    return (
-      <BarChart data={[]}>
-        <XAxis />
-        <YAxis />
-      </BarChart>
-    );
+    if (chartType === 'horizontalBar') {
+      return <ModernChart data={data} type="horizontalBar" onClick={handleClick} />;
+    }
+    
+    // Fallback - retorna um gráfico de barras
+    return <ModernChart data={data} type="bar" onClick={handleClick} />;
   };
 
   if (isLoading) {
@@ -1411,34 +1372,12 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={processRatingDistribution(filteredData)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="label" />
-                    <YAxis />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar
-                      dataKey="value"
-                      name="Quantidade"
-                      fill="#8884d8"
-                      onClick={(data, index) => {
-                        const item = processRatingDistribution(filteredData)[index];
-                        handleChartClick(item, 'rating');
-                      }}
-                    >
-                      {processRatingDistribution(filteredData).map((entry: any, index: number) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={
-                            parseInt(entry.label) >= 4 ? '#4CAF50' : 
-                            parseInt(entry.label) >= 3 ? '#FFC107' : 
-                            '#F44336'
-                          } 
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <RatingsChart 
+                  data={processRatingDistribution(filteredData)}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'rating');
+                  }}
+                />
               </div>
             </Card>
 
@@ -1464,39 +1403,17 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
-                        { name: 'Negativo', value: filteredData.filter(f => f.sentiment === 'negative').length },
-                        { name: 'Neutro', value: filteredData.filter(f => f.sentiment === 'neutral').length }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={120}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="value"
-                      label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                      onClick={(data, index) => {
-                        const item = [
-                          { name: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
-                          { name: 'Negativo', value: filteredData.filter(f => f.sentiment === 'negative').length },
-                          { name: 'Neutro', value: filteredData.filter(f => f.sentiment === 'neutral').length }
-                        ][index];
-                        handleChartClick(item, 'sentiment');
-                      }}
-                    >
-                      <Cell fill="#4CAF50" />
-                      <Cell fill="#F44336" />
-                      <Cell fill="#FFC107" />
-                    </Pie>
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                <ModernChart 
+                  data={[
+                    { label: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
+                    { label: 'Negativo', value: filteredData.filter(f => f.sentiment === 'negative').length },
+                    { label: 'Neutro', value: filteredData.filter(f => f.sentiment === 'neutral').length }
+                  ]}
+                  type="pie"
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'sentiment');
+                  }}
+                />
               </div>
             </Card>
 
@@ -1518,32 +1435,12 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    layout="vertical"
-                    data={processKeywordDistribution(filteredData).slice(0, 8)}
-                    margin={{
-                      top: 20,
-                      right: 30,
-                      left: 120,
-                      bottom: 5,
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="label" type="category" width={110} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar 
-                      dataKey="value" 
-                      name="Quantidade" 
-                      fill="#00C49F"
-                      onClick={(_, index) => {
-                        const item = processKeywordDistribution(filteredData)[index];
-                        handleChartClick(item, 'keyword');
-                      }}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+                <KeywordsChart 
+                  data={processKeywordDistribution(filteredData).slice(0, 8)}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'keyword');
+                  }}
+                />
               </div>
             </Card>
 
@@ -1565,30 +1462,13 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={processSectorDistribution()}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={true}
-                      label={({ name, percent }: any) => `${name ? name.substring(0, 15) + '...' : ''} (${(percent * 100).toFixed(0)}%)`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      nameKey="label"
-                      onClick={(data, index) => {
-                        const item = processSectorDistribution()[index];
-                        handleChartClick(item, 'sector');
-                      }}
-                    >
-                      {processSectorDistribution().map((_: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <ModernChart 
+                  type="pie"
+                  data={processSectorDistribution()}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'sector');
+                  }}
+                />
               </div>
             </Card>
           </div>
@@ -1613,25 +1493,12 @@ function DashboardContent() {
               </Button>
             </div>
             <div className="h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={processProblemDistribution(filteredData)}
-                  layout="vertical"
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="label" type="category" width={150} />
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <Bar
-                    dataKey="value"
-                    fill="#8884d8"
-                    onClick={(_, index) => {
-                      const item = processProblemDistribution(filteredData)[index];
-                      handleChartClick(item, 'problem');
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <ProblemsChart 
+                data={processProblemDistribution(filteredData)}
+                onClick={(item: any, index: number) => {
+                  handleChartClick(item, 'problem');
+                }}
+              />
             </div>
           </Card>
         </TabsContent>
@@ -1657,31 +1524,13 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={processLanguageDistribution(filteredData)}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={true}
-                      label={({ name, percent }: any) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                      nameKey="label"
-                      onClick={(_, index) => {
-                        const item = processLanguageDistribution(filteredData)[index];
-                        handleChartClick(item, 'language');
-                      }}
-                    >
-                      {processLanguageDistribution(filteredData).map((_: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Legend />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <ModernChart 
+                  type="pie"
+                  data={processLanguageDistribution(filteredData)}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'language');
+                  }}
+                />
               </div>
             </Card>
 
@@ -1709,24 +1558,19 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={processSourceDistribution(filteredData).map((source: any) => {
-                      const feedbacksDaFonte = filteredData.filter((f: any) => f.source === source.label);
-                      const avgRating = feedbacksDaFonte.length > 0 
-                        ? feedbacksDaFonte.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedbacksDaFonte.length 
-                        : 0;
-                      return { name: source.label, rating: avgRating.toFixed(1) };
-                    })}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis domain={[0, 5]} />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar dataKey="rating" name="Avaliação Média" fill="#8884d8" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <ModernChart 
+                  type="bar"
+                  data={processSourceDistribution(filteredData).map((source: any) => {
+                    const feedbacksDaFonte = filteredData.filter((f: any) => f.source === source.label);
+                    const avgRating = feedbacksDaFonte.length > 0 
+                      ? feedbacksDaFonte.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedbacksDaFonte.length 
+                      : 0;
+                    return { label: source.label, value: parseFloat(avgRating.toFixed(1)) };
+                  })}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'source');
+                  }}
+                />
               </div>
             </Card>
           </div>
@@ -1735,28 +1579,12 @@ function DashboardContent() {
           <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <h3 className="text-lg font-semibold mb-4">Volume de Feedbacks por Fonte</h3>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={getTimePeriodData(filteredData, 'source').data}
-                  margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="period" />
-                  <YAxis />
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <Legend />
-                  {processSourceDistribution(filteredData).map((source: any, index: number) => (
-                    <Area 
-                      key={source.label}
-                      type="monotone" 
-                      dataKey={source.label} 
-                      stackId="1" 
-                      stroke={COLORS[index % COLORS.length]} 
-                      fill={COLORS[index % COLORS.length]} 
-                    />
-                  ))}
-                </AreaChart>
-              </ResponsiveContainer>
+              <SourcesChart 
+                data={getTimePeriodData(filteredData, 'source').data}
+                onClick={(item: any, index: number) => {
+                  handleChartClick(item, 'source');
+                }}
+              />
             </div>
             <div className="text-xs text-center text-muted-foreground mt-2">
               Agrupamento automático: {(() => {
@@ -1793,37 +1621,12 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={processApartamentoDistribution().slice(0, 15)}
-                    layout="vertical"
-                    margin={{ top: 10, right: 30, left: 60, bottom: 20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis 
-                      dataKey="name" 
-                      type="category" 
-                      width={60} 
-                    />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar
-                      name="Quantidade de Feedbacks"
-                      dataKey="value"
-                      fill="#8884d8"
-                      onClick={(_, index) => {
-                        const item = processApartamentoDistribution()[index];
-                        handleChartClick(item, 'apartamento');
-                      }}
-                    >
-                      {processApartamentoDistribution().slice(0, 15).map(
-                        (entry: { label: string; value: number }, index: number) => (
-                          <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                        )
-                      )}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <ApartmentsChart 
+                  data={processApartamentoDistribution().slice(0, 15)}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'apartamento');
+                  }}
+                />
               </div>
             </Card>
 
@@ -1845,66 +1648,17 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ScatterChart
-                    margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      type="number" 
-                      dataKey="count" 
-                      name="Quantidade" 
-                      domain={['dataMin', 'dataMax']}
-                      label={{ value: 'Quantidade de Feedbacks', position: 'bottom', offset: 0 }}
-                    />
-                    <YAxis 
-                      type="number" 
-                      dataKey="averageRating" 
-                      name="Avaliação" 
-                      domain={[0, 5]} 
-                      label={{ value: 'Avaliação Média', angle: -90, position: 'insideLeft' }}
-                    />
-                    <ZAxis 
-                      type="number" 
-                      dataKey="sentiment" 
-                      range={[50, 400]} 
-                      name="Sentimento Positivo"
-                    />
-                    <RechartsTooltip 
-                      cursor={{ strokeDasharray: '3 3' }}
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          return (
-                            <div className="bg-white/90 backdrop-blur-sm shadow-md p-3 rounded-md border">
-                              <p className="font-bold">Apartamento {data.apartamento}</p>
-                              <p className="text-sm">Feedbacks: {data.count}</p>
-                              <p className="text-sm">Avaliação: {data.averageRating.toFixed(1)} ★</p>
-                              <p className="text-sm">Sentimento: {data.sentiment}%</p>
-                              {data.topProblems && data.topProblems.length > 0 && (
-                                <p className="text-sm">Problema principal: {data.topProblems[0].problem}</p>
-                              )}
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Scatter 
-                      name="Apartamentos" 
-                      data={processApartamentoScatterData()} 
-                      fill="#8884d8"
-                      onClick={(data) => handleChartClick({name: data.apartamento}, 'apartamento')}
-                    >
-                      {processApartamentoScatterData().map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={entry.sentiment >= 70 ? '#4CAF50' : entry.sentiment >= 50 ? '#FFC107' : '#F44336'}
-                        />
-                      ))}
-                    </Scatter>
-                  </ScatterChart>
-                </ResponsiveContainer>
+                <ModernChart 
+                  type="bar"
+                  data={processApartamentoScatterData().map((item: any) => ({
+                    label: `Apt ${item.apartamento}`,
+                    value: item.averageRating
+                  }))}
+                  onClick={(item: any, index: number) => {
+                    const originalData = processApartamentoScatterData()[index];
+                    handleChartClick({name: originalData.apartamento}, 'apartamento');
+                  }}
+                />
               </div>
               <div className="flex justify-center mt-2 space-x-4 text-xs">
                 <div className="flex items-center">
@@ -2012,34 +1766,12 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={processRatingDistribution(filteredData)}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="label" />
-                    <YAxis />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Bar
-                      dataKey="value"
-                      name="Quantidade"
-                      fill="#8884d8"
-                      onClick={(data, index) => {
-                        const item = processRatingDistribution(filteredData)[index];
-                        handleChartClick(item, 'rating');
-                      }}
-                    >
-                      {processRatingDistribution(filteredData).map((entry: any, index: number) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={
-                            parseInt(entry.label) >= 4 ? '#4CAF50' : 
-                            parseInt(entry.label) >= 3 ? '#FFC107' : 
-                            '#F44336'
-                          } 
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <RatingsChart 
+                  data={processRatingDistribution(filteredData)}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'rating');
+                  }}
+                />
               </div>
             </Card>
 
@@ -2065,39 +1797,17 @@ function DashboardContent() {
                 </Button>
               </div>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
-                        { name: 'Negativo', value: filteredData.filter(f => f.sentiment === 'negative').length },
-                        { name: 'Neutro', value: filteredData.filter(f => f.sentiment === 'neutral').length }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={120}
-                      fill="#8884d8"
-                      paddingAngle={5}
-                      dataKey="value"
-                      label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                      onClick={(data, index) => {
-                        const item = [
-                          { name: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
-                          { name: 'Negativo', value: filteredData.filter(f => f.sentiment === 'negative').length },
-                          { name: 'Neutro', value: filteredData.filter(f => f.sentiment === 'neutral').length }
-                        ][index];
-                        handleChartClick(item, 'sentiment');
-                      }}
-                    >
-                      <Cell fill="#4CAF50" />
-                      <Cell fill="#F44336" />
-                      <Cell fill="#FFC107" />
-                    </Pie>
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                <ModernChart 
+                  type="pie"
+                  data={[
+                    { label: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
+                    { label: 'Negativo', value: filteredData.filter(f => f.sentiment === 'negative').length },
+                    { label: 'Neutro', value: filteredData.filter(f => f.sentiment === 'neutral').length }
+                  ]}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'sentiment');
+                  }}
+                />
               </div>
             </Card>
           </div>
@@ -2106,23 +1816,13 @@ function DashboardContent() {
           <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <h3 className="text-lg font-semibold mb-4">Evolução das Avaliações ao Longo do Tempo</h3>
             <div className="h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={getTimePeriodData(filteredData, 'rating').data}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="period" />
-                  <YAxis />
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Line type="monotone" dataKey="1" stroke="#F44336" name="1 estrela" strokeWidth={2} />
-                  <Line type="monotone" dataKey="2" stroke="#FF9800" name="2 estrelas" strokeWidth={2} />
-                  <Line type="monotone" dataKey="3" stroke="#FFC107" name="3 estrelas" strokeWidth={2} />
-                  <Line type="monotone" dataKey="4" stroke="#8BC34A" name="4 estrelas" strokeWidth={2} />
-                  <Line type="monotone" dataKey="5" stroke="#4CAF50" name="5 estrelas" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
+              <ModernChart 
+                type="bar"
+                data={getTimePeriodData(filteredData, 'rating').data.map((item: any) => ({
+                  label: item.period,
+                  value: (item['1'] || 0) + (item['2'] || 0) + (item['3'] || 0) + (item['4'] || 0) + (item['5'] || 0)
+                }))}
+              />
             </div>
             <div className="text-xs text-center text-muted-foreground mt-2">
               Agrupamento automático: {(() => {
@@ -2299,24 +1999,14 @@ function DashboardContent() {
                     Distribuição de Sentimentos
                   </h4>
                   <div className="h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive, fill: '#10B981' },
-                            { name: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral, fill: '#F59E0B' },
-                            { name: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative, fill: '#EF4444' }
-                          ].filter(item => item.value > 0)}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          dataKey="value"
-                          label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                        >
-                        </Pie>
-                        <RechartsTooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <ModernChart 
+                      type="pie"
+                      data={[
+                        { label: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive },
+                        { label: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral },
+                        { label: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative }
+                      ].filter(item => item.value > 0)}
+                    />
                   </div>
                 </Card>
 
@@ -2329,20 +2019,15 @@ function DashboardContent() {
                     Distribuição de Avaliações
                   </h4>
                   <div className="h-40">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={[
-                        { rating: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
-                        { rating: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
-                        { rating: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
-                        { rating: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
-                        { rating: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
-                      ]}>
-                        <XAxis dataKey="rating" />
-                        <YAxis />
-                        <RechartsTooltip />
-                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <RatingsChart 
+                      data={[
+                        { label: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
+                        { label: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
+                        { label: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
+                        { label: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
+                        { label: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
+                      ]}
+                    />
                   </div>
                 </Card>
 
@@ -2356,14 +2041,13 @@ function DashboardContent() {
                       Tendência Mensal
                     </h4>
                     <div className="h-40">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={selectedItem.stats.monthlyTrend}>
-                          <XAxis dataKey="month" />
-                          <YAxis />
-                          <RechartsTooltip />
-                          <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={3} dot={{ r: 6 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      <ModernChart 
+                        type="line"
+                        data={selectedItem.stats.monthlyTrend.map((item: any) => ({
+                          label: item.month,
+                          value: item.count
+                        }))}
+                      />
                     </div>
                   </Card>
                 )}
@@ -2531,9 +2215,11 @@ function DashboardContent() {
               <div className="space-y-6">
                 {/* Gráfico Grande */}
                 <div className="h-[500px] bg-muted/10 rounded-lg p-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {renderChart(selectedChart.chartType, selectedChart.data, handleChartClick, selectedChart.type)}
-                  </ResponsiveContainer>
+                  <ModernChart 
+                    type={selectedChart.chartType === 'pie' ? 'pie' : 'bar'}
+                    data={selectedChart.data}
+                    onClick={(item: any, index: number) => handleChartClick(item, selectedChart.type)}
+                  />
                 </div>
 
                 {/* Dados Tabulares */}

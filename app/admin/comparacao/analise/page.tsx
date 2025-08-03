@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts'
+import { ModernChart, ProblemsChart, HotelsChart, RatingsChart, DepartmentsChart, SourcesChart, ApartmentsChart } from '@/components/modern-charts'
 import { ArrowLeft, Hotel, Star, MessageSquare, AlertTriangle, Brain, Loader2, RefreshCw, TrendingUp, TrendingDown, Users } from "lucide-react"
 import { getAllAnalyses } from "@/lib/firestore-service"
 import { useAuth } from "@/lib/auth-context"
@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { getApiKey } from "@/lib/openai-client"
 import type { Feedback, Analysis } from "@/types"
+import { filterValidFeedbacks } from "@/lib/utils"
 
 interface HotelComparisonData {
   hotelId: string
@@ -215,8 +216,8 @@ export default function ComparacaoAvancada() {
         
         analyses.forEach(analysis => {
           if (analysis.data && Array.isArray(analysis.data)) {
-            // Filtrar feedbacks excluídos
-            const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
+            // Filtrar feedbacks excluídos e "Não identificados"
+            const validFeedbacks = filterValidFeedbacks(analysis.data.filter((feedback: any) => feedback.deleted !== true));
             allFeedbacks = [...allFeedbacks, ...validFeedbacks]
           }
         })
@@ -504,15 +505,12 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
     return (
       <Card className="p-6">
         <h3 className="text-lg font-semibold mb-4">{title}</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip content={<CustomTooltipLocal />} />
-            <Bar dataKey="value" fill={color} />
-          </BarChart>
-        </ResponsiveContainer>
+        <HotelsChart
+          data={data.map(item => ({
+            label: item.name,
+            value: item.value
+          }))}
+        />
       </Card>
     )
   }
@@ -882,24 +880,41 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
           {/* Distribuição de Sentimentos */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Distribuição de Sentimentos</h3>
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart
-                data={selectedData.map(hotel => ({
-                  name: hotel.hotelName,
-                  positivo: hotel.positiveSentiment,
-                  neutro: hotel.neutralSentiment,
-                  negativo: hotel.negativeSentiment
-                }))}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip content={<CustomTooltipLocal />} />
-                <Bar dataKey="positivo" stackId="a" fill="#22c55e" name="Positivo" />
-                <Bar dataKey="neutro" stackId="a" fill="#64748b" name="Neutro" />
-                <Bar dataKey="negativo" stackId="a" fill="#ef4444" name="Negativo" />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="space-y-4">
+              {selectedData.map((hotel, index) => (
+                <div key={hotel.hotelId} className="p-4 border rounded-lg">
+                  <h4 className="font-semibold mb-3">{hotel.hotelName}</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">{hotel.positiveSentiment}%</div>
+                      <div className="text-sm text-muted-foreground">Positivo</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-600">{hotel.neutralSentiment}%</div>
+                      <div className="text-sm text-muted-foreground">Neutro</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-red-600">{hotel.negativeSentiment}%</div>
+                      <div className="text-sm text-muted-foreground">Negativo</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex h-4 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-green-500" 
+                      style={{ width: `${hotel.positiveSentiment}%` }}
+                    />
+                    <div 
+                      className="bg-gray-500" 
+                      style={{ width: `${hotel.neutralSentiment}%` }}
+                    />
+                    <div 
+                      className="bg-red-500" 
+                      style={{ width: `${hotel.negativeSentiment}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </Card>
         </TabsContent>
 
@@ -992,26 +1007,36 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                 {/* Gráfico Comparativo das Bandeiras */}
                 <Card className="p-6">
                   <h3 className="text-lg font-semibold mb-4">📊 Performance Comparativa das Bandeiras</h3>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <BarChart
-                      data={bandeirasData.map(b => ({
-                        name: b.name,
-                        avaliacao: b.averageRating,
-                        feedbacks: b.totalFeedbacks / 100, // Dividir por 100 para escala visual
-                        positivo: b.positiveSentiment,
-                        problemas: b.totalProblems
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip content={<CustomTooltipLocal />} />
-                      <Bar dataKey="avaliacao" fill="#8884d8" name="Avaliação Média" />
-                      <Bar dataKey="positivo" fill="#22c55e" name="Sentimento Positivo %" />
-                      <Bar dataKey="feedbacks" fill="#3b82f6" name="Feedbacks (÷100)" />
-                      <Bar dataKey="problemas" fill="#ef4444" name="Total Problemas" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {bandeirasData.map((bandeira, index) => (
+                      <div key={bandeira.name} className="p-6 border rounded-xl bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className="text-3xl">{bandeira.icon}</span>
+                          <h4 className="text-lg font-semibold" style={{ color: bandeira.color }}>
+                            {bandeira.name}
+                          </h4>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Avaliação Média</span>
+                            <span className="text-xl font-bold text-blue-600">{bandeira.averageRating.toFixed(1)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Total Feedbacks</span>
+                            <span className="text-xl font-bold text-purple-600">{bandeira.totalFeedbacks.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Sentimento Positivo</span>
+                            <span className="text-xl font-bold text-green-600">{bandeira.positiveSentiment}%</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Total Problemas</span>
+                            <span className="text-xl font-bold text-red-600">{bandeira.totalProblems}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </Card>
 
                 {/* Análise de Problemas por Bandeira */}
@@ -1186,25 +1211,12 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                 <div>
                   <h4 className="font-semibold mb-4">Departamentos com Mais Feedbacks</h4>
                   {hotel.topSectors.length > 0 && (
-                    <ResponsiveContainer width="100%" height={250}>
-                      <PieChart>
-                        <Pie
-                          data={hotel.topSectors}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, value }) => `${name}: ${value}`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="count"
-                        >
-                          {hotel.topSectors.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<CustomPieTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <DepartmentsChart
+                      data={hotel.topSectors.map(sector => ({
+                        label: sector.name,
+                        value: sector.count
+                      }))}
+                    />
                   )}
                 </div>
               </div>
@@ -1228,19 +1240,13 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                     Departamentos com Mais Feedbacks
                   </h4>
                   {hotel.topSectors.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={hotel.topSectors} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" />
-                        <YAxis dataKey="name" type="category" width={100} />
-                                                 <Tooltip 
-                           formatter={(value: any) => [`${value} feedbacks`, 'Quantidade']}
-                           labelFormatter={(label) => `Departamento: ${label}`}
-                           content={<CustomTooltipLocal />} 
-                         />
-                        <Bar dataKey="count" fill="#3b82f6" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <ProblemsChart
+                      data={hotel.topSectors.map(sector => ({
+                        label: sector.name,
+                        value: sector.count
+                      }))}
+                      maxItems={8}
+                    />
                   ) : (
                     <p className="text-muted-foreground">Nenhum departamento identificado</p>
                   )}
@@ -1280,25 +1286,12 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
               {hotel.topSectors.length > 0 && (
                 <div className="mt-8">
                   <h4 className="font-semibold mb-4">Distribuição Visual dos Departamentos</h4>
-                  <ResponsiveContainer width="100%" height={350}>
-                    <PieChart>
-                      <Pie
-                        data={hotel.topSectors}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                        outerRadius={120}
-                        fill="#8884d8"
-                        dataKey="count"
-                      >
-                        {hotel.topSectors.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<CustomPieTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <DepartmentsChart
+                    data={hotel.topSectors.map(sector => ({
+                      label: sector.name,
+                      value: sector.count
+                    }))}
+                  />
                 </div>
               )}
             </Card>
@@ -1332,15 +1325,12 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
 
                   <div className="mt-6">
                     <h4 className="font-semibold mb-4">Distribuição de Problemas por Apartamento</h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={hotel.apartmentIssues.slice(0, 10)}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                                                  <XAxis dataKey="apartment" />
-                          <YAxis />
-                          <Tooltip content={<CustomTooltipLocal />} />
-                          <Bar dataKey="issues" fill="#ef4444" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <ApartmentsChart
+                      data={hotel.apartmentIssues.slice(0, 10).map(apt => ({
+                        label: apt.apartment,
+                        value: apt.issues
+                      }))}
+                    />
                   </div>
                 </div>
               ) : (
@@ -1363,36 +1353,26 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
                       <TrendingUp className="h-4 w-4 mr-2" />
                       Evolução da Avaliação Média
                     </h4>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={hotel.monthlyTrend}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                                                  <XAxis dataKey="month" />
-                          <YAxis domain={[1, 5]} />
-                          <Tooltip content={<CustomTooltipLocal />} />
-                          <Line 
-                          type="monotone" 
-                          dataKey="rating" 
-                          stroke="#8884d8" 
-                          strokeWidth={3}
-                          dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <ModernChart
+                      type="line"
+                      data={hotel.monthlyTrend.map(trend => ({
+                        label: trend.month,
+                        value: trend.rating
+                      }))}
+                      height={300}
+                    />
                   </div>
                 )}
 
                 {/* Distribuição por Fonte */}
                 <div>
                   <h4 className="font-semibold mb-4">Fontes de Feedback</h4>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={hotel.sourceDistribution.slice(0, 6)}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                                              <XAxis dataKey="source" />
-                        <YAxis />
-                        <Tooltip content={<CustomTooltipLocal />} />
-                        <Bar dataKey="count" fill="#82ca9d" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <SourcesChart
+                    data={hotel.sourceDistribution.slice(0, 6).map(source => ({
+                      label: source.source,
+                      value: source.count
+                    }))}
+                  />
                 </div>
               </div>
             </Card>
