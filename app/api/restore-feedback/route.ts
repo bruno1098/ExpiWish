@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateFeedbackInFirestore } from '@/lib/firestore-service';
-import { getCurrentUserData } from '@/lib/auth-service';
+import { updateFeedbackInFirestoreWithUserData } from '@/lib/firestore-service';
+import { authenticateRequest } from '@/lib/server-auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,14 +13,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificar se usuário está autenticado
-    const userData = await getCurrentUserData();
-    if (!userData) {
+    // Verificar autenticação usando cookies
+    const cookieAuth = await authenticateRequest(request);
+    
+    if (!cookieAuth.authenticated || !cookieAuth.userData) {
       return NextResponse.json(
-        { error: 'Usuário não autenticado' },
+        { error: cookieAuth.error || 'Usuário não autenticado' },
         { status: 401 }
       );
     }
+    
+    const userData = cookieAuth.userData;
 
     // Verificar se é admin
     if (userData.role !== 'admin') {
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest) {
       deletedReason: undefined
     };
 
-    const success = await updateFeedbackInFirestore(feedbackId, updateData);
+    const success = await updateFeedbackInFirestoreWithUserData(feedbackId, updateData, userData);
 
     if (success) {
       
@@ -60,4 +63,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

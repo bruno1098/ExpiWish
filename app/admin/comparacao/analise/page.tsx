@@ -215,7 +215,9 @@ export default function ComparacaoAvancada() {
         
         analyses.forEach(analysis => {
           if (analysis.data && Array.isArray(analysis.data)) {
-            allFeedbacks = [...allFeedbacks, ...analysis.data]
+            // Filtrar feedbacks excluídos
+            const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
+            allFeedbacks = [...allFeedbacks, ...validFeedbacks]
           }
         })
 
@@ -681,13 +683,13 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
             <Select
               value=""
               onValueChange={(value) => {
-                if (selectedHotels.length < 4 && !selectedHotels.includes(value)) {
+                if (!selectedHotels.includes(value)) {
                   setSelectedHotels([...selectedHotels, value])
                 }
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Adicionar hotel (máx. 4)" />
+                <SelectValue placeholder="Adicionar hotel" />
               </SelectTrigger>
               <SelectContent>
                 {hotelsData
@@ -1399,4 +1401,4 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
       </Tabs>
     </div>
   )
-} 
+}

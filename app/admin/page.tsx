@@ -306,6 +306,11 @@ function AdminDashboardContent() {
     if (!data || data.length === 0) return [];
     
     return data.filter((feedback: any) => {
+      // Filtro para remover feedbacks excluídos
+      if (feedback.deleted === true) {
+        return false;
+      }
+      
       // Filtro para remover "não identificados" do dashboard principal
       if (isNotIdentifiedFeedback(feedback)) {
         return false;
@@ -1159,8 +1164,11 @@ function AdminDashboardContent() {
         const apartamentoMap = new Map<string, number>();
         const allFeedbacks: any[] = [];
 
-        // Filtrar por data se necessário
+        // Filtrar por data e feedbacks excluídos
         const filterByDate = (feedback: any) => {
+          // Filtrar feedbacks excluídos
+          if (feedback.deleted === true) return false;
+          
           if (!dateRange.start && !dateRange.end) return true;
           
           const feedbackDate = new Date(feedback.date);
