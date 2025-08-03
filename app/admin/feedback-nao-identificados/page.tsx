@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ArrowLeft, AlertCircle, Eye, Building2, Users, Calendar, Edit3, Trash2, Search, Star, RotateCcw, Download, User } from "lucide-react"
-import { formatDateBR, cn } from "@/lib/utils"
+import { formatDateBR, cn, isValidSectorOrKeyword, isValidProblem } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { getAllAnalyses, saveRecentEdit, getRecentEdits } from "@/lib/firestore-service"
@@ -141,6 +141,27 @@ export default function AdminUnidentifiedFeedbacks() {
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
 
+  // Função para verificar se um feedback ainda deve ser considerado não identificado
+  const shouldBeUnidentified = (feedback: any) => {
+    const hasInvalidKeyword = !isValidSectorOrKeyword(feedback.keyword)
+    const hasInvalidSector = !isValidSectorOrKeyword(feedback.sector)
+    const hasInvalidProblem = !isValidProblem(feedback.problem)
+    
+    const hasExplicitNotIdentified = 
+      feedback.keyword?.toLowerCase().includes('não identificado') ||
+      feedback.sector?.toLowerCase().includes('não identificado') ||
+      feedback.problem?.toLowerCase().includes('não identificado')
+    
+    const comment = feedback.comment?.toLowerCase() || ''
+    const isSpamOrGibberish = 
+      comment.length < 5 ||
+      /^[^a-záéíóúàâêôãõç\s]*$/.test(comment) ||
+      /^[a-z]{1,3}(\1)*$/.test(comment) ||
+      comment.match(/^[a-z]{1,2}([a-z])\1{2,}$/)
+    
+    return hasInvalidKeyword || hasInvalidSector || hasInvalidProblem || hasExplicitNotIdentified || isSpamOrGibberish
+  }
+
   // Verificar se é admin
   useEffect(() => {
     if (userData && userData.role !== 'admin') {
@@ -160,6 +181,8 @@ export default function AdminUnidentifiedFeedbacks() {
       loadData()
     }
   }, [userData])
+
+
 
   const loadHotels = async () => {
     try {
@@ -199,18 +222,13 @@ export default function AdminUnidentifiedFeedbacks() {
           
           if (analysis.data && Array.isArray(analysis.data)) {
             const unidentified = analysis.data.filter((feedback: any) => {
-              const keyword = feedback.keyword?.toLowerCase() || ''
-              const sector = feedback.sector?.toLowerCase() || ''
-              const problem = feedback.problem?.toLowerCase() || ''
+              // Excluir feedbacks deletados
+              if (feedback.deleted === true) {
+                return false
+              }
               
-              return keyword.includes('não identificado') ||
-                     keyword.includes('vazio') ||
-                     keyword === '' ||
-                     sector.includes('não identificado') ||
-                     sector.includes('vazio') ||
-                     sector === '' ||
-                     problem.includes('não identificado') ||
-                     problem === 'não identificado'
+              // Usar a função centralizada para verificar se é não identificado
+              return shouldBeUnidentified(feedback)
             }).map((feedback: any) => ({
               ...feedback,
               hotelId,
@@ -229,6 +247,16 @@ export default function AdminUnidentifiedFeedbacks() {
                 totalUnidentified: unidentified.length,
                 totalEdited: 0, // Será preenchido depois
                 avgRating,
+                lastActivity: undefined
+              }
+            } else {
+              // Mesmo sem feedbacks não identificados, incluir o hotel nas estatísticas
+              statsMap[hotelId] = {
+                hotelId,
+                hotelName,
+                totalUnidentified: 0,
+                totalEdited: 0,
+                avgRating: 0,
                 lastActivity: undefined
               }
             }
@@ -250,9 +278,14 @@ export default function AdminUnidentifiedFeedbacks() {
       // Carregar edições de todos os usuários do Firebase
       const edits = await getRecentEdits(7) // Últimos 7 dias
       
+      console.log('🔍 DEBUG - Edições carregadas:', edits.length)
+      console.log('🔍 DEBUG - Primeira edição:', edits[0])
+      console.log('🔍 DEBUG - hotelNames disponíveis:', hotelNames)
+      
       // Mapear com nomes dos hotéis - usar o nome que vem da edição se disponível
       const editsWithHotelNames = edits.map((edit: any) => {
         const hotelName = edit.hotelName || hotelNames[edit.hotelId] || `Hotel ${edit.hotelId}`
+        console.log(`🔍 DEBUG - Edição ${edit.id}: hotelId=${edit.hotelId}, hotelName=${hotelName}`)
         return {
           ...edit,
           hotelName: hotelName
@@ -266,18 +299,32 @@ export default function AdminUnidentifiedFeedbacks() {
         // Filtrar edições que correspondem a este hotel
         // Verificar tanto hotelId quanto possível mapeamento reverso
         const hotelEdits = editsWithHotelNames.filter(edit => {
+          console.log(`🔍 DEBUG - Filtrando edição: editHotelId=${edit.hotelId}, statHotelId=${stat.hotelId}, editHotelName=${edit.hotelName}, statHotelName=${stat.hotelName}`)
+          
           // Comparação direta de IDs
-          if (edit.hotelId === stat.hotelId) return true
+          if (edit.hotelId === stat.hotelId) {
+            console.log(`🔍 DEBUG - Match por ID direto`)
+            return true
+          }
           
           // Verificar se o nome do hotel corresponde
-          if (edit.hotelName && edit.hotelName === stat.hotelName) return true
+          if (edit.hotelName && edit.hotelName === stat.hotelName) {
+            console.log(`🔍 DEBUG - Match por nome do hotel`)
+            return true
+          }
           
           // Verificar mapeamento reverso nos nomes dos hotéis
           const mappedId = Object.keys(hotelNames).find(id => hotelNames[id] === edit.hotelName)
-          if (mappedId === stat.hotelId) return true
+          if (mappedId === stat.hotelId) {
+            console.log(`🔍 DEBUG - Match por mapeamento reverso: mappedId=${mappedId}`)
+            return true
+          }
           
+          console.log(`🔍 DEBUG - Nenhum match encontrado`)
           return false
         })
+        
+        console.log(`🔍 DEBUG - Edições encontradas para hotel ${stat.hotelName}:`, hotelEdits.length)
         
         return {
           ...stat,
@@ -298,14 +345,22 @@ export default function AdminUnidentifiedFeedbacks() {
       
       const deletedFeedbacks: DeletedFeedback[] = []
       
+      console.log('🔍 DEBUG - Carregando feedbacks excluídos...')
+      
       allAnalyses.forEach((analysis: any) => {
         if (analysis.data && Array.isArray(analysis.data)) {
           analysis.data.forEach((feedback: any) => {
             // Buscar apenas feedbacks marcados como deletados
             if (feedback.deleted) {
+              const hotelId = analysis.hotelDocId || analysis.hotelId || 'unknown'
+              const hotelName = analysis.hotelDisplayName || hotelNames[hotelId] || analysis.hotelName || `Hotel ${hotelId}`
+              
+              console.log(`🔍 DEBUG - Processando análise: hotelId=${hotelId}, hotelName=${hotelName}`)
+              
               deletedFeedbacks.push({
                 ...feedback,
-                hotelName: analysis.hotelName || 'Hotel não identificado'
+                hotelId: hotelId,
+                hotelName: hotelName
               })
             }
           })
@@ -360,8 +415,11 @@ export default function AdminUnidentifiedFeedbacks() {
         duration: 3000,
       })
 
-      // Recarregar lista
-      loadDeletedFeedbacks()
+      // Recarregar listas
+      await Promise.all([
+        loadDeletedFeedbacks(),
+        fetchAllUnidentifiedFeedbacks()
+      ])
 
     } catch (error) {
       console.error('Erro ao restaurar feedback:', error)
@@ -399,7 +457,41 @@ export default function AdminUnidentifiedFeedbacks() {
     ? Object.keys(unidentifiedByHotel) 
     : [selectedHotel]
 
-  const filteredDeletedFeedbacks = deletedFeedbacks.filter(feedback =>
+  // Aplicar filtro por hotel primeiro, depois por termo de busca
+  const deletedFeedbacksByHotel = selectedHotel === 'all'
+    ? deletedFeedbacks
+    : deletedFeedbacks.filter(feedback => {
+        // Comparação mais robusta de IDs de hotéis
+        const feedbackHotelId = String(feedback.hotelId || '').trim()
+        const selectedHotelId = String(selectedHotel || '').trim()
+        
+        console.log(`🔍 DEBUG - Filtrando feedback excluído: feedbackHotelId=${feedbackHotelId}, selectedHotelId=${selectedHotelId}, feedbackHotelName=${feedback.hotelName}`)
+        
+        // Comparação direta
+        if (feedbackHotelId === selectedHotelId) {
+          console.log(`🔍 DEBUG - Match por ID direto no feedback excluído`)
+          return true
+        }
+        
+        // Verificar se o nome do hotel corresponde
+        const selectedHotelName = hotelStats.find(h => h.hotelId === selectedHotel)?.hotelName
+        if (selectedHotelName && feedback.hotelName === selectedHotelName) {
+          console.log(`🔍 DEBUG - Match por nome no feedback excluído: selectedHotelName=${selectedHotelName}`)
+          return true
+        }
+        
+        // Verificar mapeamento reverso nos nomes dos hotéis
+        const mappedId = Object.keys(hotelNames).find(id => hotelNames[id] === feedback.hotelName)
+        if (mappedId === selectedHotel) {
+          console.log(`🔍 DEBUG - Match por mapeamento reverso no feedback excluído: mappedId=${mappedId}`)
+          return true
+        }
+        
+        console.log(`🔍 DEBUG - Nenhum match no feedback excluído`)
+        return false
+      })
+  
+  const filteredDeletedFeedbacks = deletedFeedbacksByHotel.filter(feedback =>
     feedback.comment.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (feedback.hotelName && feedback.hotelName.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (feedback.deletedBy && feedback.deletedBy.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -419,8 +511,43 @@ export default function AdminUnidentifiedFeedbacks() {
     )
   }
 
-  const totalUnidentified = Object.values(unidentifiedByHotel).reduce((sum, feedbacks) => sum + feedbacks.length, 0)
-  const totalHotels = Object.keys(unidentifiedByHotel).length
+  // Calcular estatísticas baseadas nos hotéis filtrados
+  const filteredUnidentifiedData = filteredHotels.reduce((acc, hotelId) => {
+    const feedbacks = unidentifiedByHotel[hotelId] || []
+    acc.push(...feedbacks)
+    return acc
+  }, [] as UnidentifiedFeedback[])
+  
+  const totalUnidentified = filteredUnidentifiedData.length
+  const totalHotels = filteredHotels.length
+  
+  // Calcular edições recentes filtradas
+  const filteredRecentEdits = selectedHotel === 'all' 
+    ? recentEdits 
+    : recentEdits.filter(edit => {
+        // Comparação mais robusta de IDs de hotéis
+        const editHotelId = String(edit.hotelId || '').trim()
+        const selectedHotelId = String(selectedHotel || '').trim()
+        
+        // Comparação direta
+        if (editHotelId === selectedHotelId) return true
+        
+        // Verificar se o nome do hotel corresponde
+        const selectedHotelName = hotelStats.find(h => h.hotelId === selectedHotel)?.hotelName
+        if (selectedHotelName && edit.hotelName === selectedHotelName) return true
+        
+        return false
+      })
+  
+  // Calcular feedbacks excluídos filtrados por hotel (sem considerar termo de busca)
+  const filteredDeletedFeedbacksCount = selectedHotel === 'all'
+    ? deletedFeedbacks.length
+    : deletedFeedbacks.filter(feedback => feedback.hotelId === selectedHotel).length
+  
+  // Calcular estatísticas dos hotéis filtradas
+  const filteredHotelStats = selectedHotel === 'all'
+    ? hotelStats
+    : hotelStats.filter(stat => stat.hotelId === selectedHotel)
 
   return (
     <div className="p-6 space-y-6">
@@ -466,7 +593,7 @@ export default function AdminUnidentifiedFeedbacks() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Edições Recentes</p>
-              <p className="text-2xl font-bold text-green-600">{recentEdits.length}</p>
+              <p className="text-2xl font-bold text-green-600">{filteredRecentEdits.length}</p>
             </div>
             <Edit3 className="h-8 w-8 text-green-500" />
           </div>
@@ -477,7 +604,7 @@ export default function AdminUnidentifiedFeedbacks() {
             <div>
               <p className="text-sm text-muted-foreground">Últimos 7 dias</p>
               <p className="text-2xl font-bold text-purple-600">
-                {recentEdits.filter(edit => {
+                {filteredRecentEdits.filter(edit => {
                   const editDate = new Date(edit.modifiedAt)
                   const sevenDaysAgo = new Date()
                   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
@@ -592,7 +719,7 @@ export default function AdminUnidentifiedFeedbacks() {
                               </Badge>
                               <br />
                               <Badge variant="secondary" className="bg-red-50 text-red-600 text-xs">
-                                {feedback.problem || 'Não identificado'}
+                                {feedback.problem === 'VAZIO' ? 'Sem problemas' : (feedback.problem || 'Não identificado')}
                               </Badge>
                             </div>
                           </TableCell>
@@ -618,7 +745,7 @@ export default function AdminUnidentifiedFeedbacks() {
         </TabsContent>
 
         <TabsContent value="recent-edits" className="space-y-4">
-          {recentEdits.length > 0 ? (
+          {filteredRecentEdits.length > 0 ? (
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4">Histórico de Correções</h3>
               <Table>
@@ -633,7 +760,7 @@ export default function AdminUnidentifiedFeedbacks() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentEdits.map((edit) => (
+                  {filteredRecentEdits.map((edit) => (
                     <TableRow key={`${edit.id}-${edit.modifiedAt}`}>
                       <TableCell>
                         <div className="space-y-1">
@@ -767,7 +894,7 @@ export default function AdminUnidentifiedFeedbacks() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                  {deletedFeedbacks.length}
+                  {filteredDeletedFeedbacksCount}
                 </div>
               </CardContent>
             </Card>
@@ -945,7 +1072,7 @@ export default function AdminUnidentifiedFeedbacks() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {hotelStats.map((stat) => (
+                {filteredHotelStats.map((stat) => (
                   <TableRow key={stat.hotelId}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -1019,4 +1146,4 @@ export default function AdminUnidentifiedFeedbacks() {
       </Card>
     </div>
   )
-} 
+}

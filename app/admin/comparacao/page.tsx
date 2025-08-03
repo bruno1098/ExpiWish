@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { ModernChart, ProblemsChart, HotelsChart, RatingsChart } from '@/components/modern-charts'
 import { useRouter } from "next/navigation"
 import { Hotel, Star, MessageSquare, AlertTriangle, Users, Award, BarChart3, ArrowRight, Search, Filter, Calendar, Home, Eye, ChevronRight, TrendingUp, TrendingDown } from "lucide-react"
 import { getAllAnalyses } from "@/lib/firestore-service"
@@ -250,7 +250,7 @@ export default function HoteisPage() {
         }
         hotelGroups[hotelKey].push(analysis)
         
-        // Consolidar todos os feedbacks para busca (excluindo feedbacks deletados)
+        // Consolidar todos os feedbacks para busca (excluindo feedbacks deletados e "Não identificados")
         if (analysis.data && Array.isArray(analysis.data)) {
           const validFeedbacks = analysis.data
             .filter((feedback: any) => feedback.deleted !== true)
@@ -259,7 +259,8 @@ export default function HoteisPage() {
               hotelId: analysis.hotelId || hotelKey,
               hotelName: analysis.hotelName || hotelKey
             }))
-          consolidatedFeedbacks = [...consolidatedFeedbacks, ...validFeedbacks]
+          const filteredValidFeedbacks = filterValidFeedbacks(validFeedbacks);
+          consolidatedFeedbacks = [...consolidatedFeedbacks, ...filteredValidFeedbacks]
         }
       })
 
@@ -271,9 +272,10 @@ export default function HoteisPage() {
         
         analyses.forEach(analysis => {
           if (analysis.data && Array.isArray(analysis.data)) {
-            // Filtrar feedbacks excluídos
+            // Filtrar feedbacks excluídos e "Não identificados"
             const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
-            allFeedbacks = [...allFeedbacks, ...validFeedbacks]
+            const filteredValidFeedbacks = filterValidFeedbacks(validFeedbacks);
+            allFeedbacks = [...allFeedbacks, ...filteredValidFeedbacks]
           }
         })
 
@@ -949,41 +951,14 @@ export default function HoteisPage() {
                       Top 15 problemas
                     </Badge>
                   </div>
-                  <ResponsiveContainer width="100%" height={400}>
-                    <BarChart 
-                      data={commonProblems.slice(0, 15)} 
-                      margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.6} />
-                      <XAxis 
-                        dataKey="name" 
-                        angle={-45} 
-                        textAnchor="end" 
-                        height={120}
-                        tick={{ fill: '#6b7280', fontSize: 12 }}
-                        stroke="#9ca3af"
-                      />
-                      <YAxis 
-                        tick={{ fill: '#6b7280', fontSize: 12 }}
-                        stroke="#9ca3af"
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar 
-                        dataKey="count" 
-                        fill="url(#purpleGradient)"
-                        radius={[4, 4, 0, 0]}
-                        className="hover:opacity-80 transition-opacity duration-200"
-                        onClick={(data) => setSearchTerm(data.name)}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      <defs>
-                        <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#8b5cf6" />
-                          <stop offset="100%" stopColor="#a855f7" />
-                        </linearGradient>
-                      </defs>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ProblemsChart
+                    data={commonProblems.slice(0, 15).map(problem => ({
+                      label: problem.name,
+                      value: problem.count
+                    }))}
+                    onClick={(item) => setSearchTerm(item.label)}
+                    maxItems={15}
+                  />
                 </div>
               )}
             </Card>
@@ -1042,40 +1017,12 @@ export default function HoteisPage() {
                         </Button>
                       </div>
                     </div>
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart 
-                        data={result.hotels}
-                        margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" opacity={0.8} />
-                        <XAxis 
-                          dataKey="hotelName" 
-                          angle={-45}
-                          textAnchor="end"
-                          height={80}
-                          tick={{ fill: '#6b7280', fontSize: 11 }}
-                          stroke="#9ca3af"
-                        />
-                        <YAxis 
-                          tick={{ fill: '#6b7280', fontSize: 12 }}
-                          stroke="#9ca3af"
-                        />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar 
-                          dataKey="occurrences" 
-                          fill="url(#redGradient)"
-                          radius={[6, 6, 0, 0]}
-                          className="hover:opacity-80 transition-opacity duration-200"
-                          style={{ cursor: 'pointer' }}
-                        />
-                        <defs>
-                          <linearGradient id="redGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#ef4444" />
-                            <stop offset="100%" stopColor="#dc2626" />
-                          </linearGradient>
-                        </defs>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <HotelsChart
+                      data={result.hotels.map(hotel => ({
+                        label: hotel.hotelName,
+                        value: hotel.occurrences
+                      }))}
+                    />
                   </div>
 
                   {/* Detalhes por Hotel */}

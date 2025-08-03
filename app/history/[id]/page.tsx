@@ -257,6 +257,8 @@ const ProblemEditor = ({
   const [problemText, setProblemText] = useState(problem.problem);
   const [keywordInputMode, setKeywordInputMode] = useState(false);
   const [problemInputMode, setProblemInputMode] = useState(false);
+  const [keywordInput, setKeywordInput] = useState('');
+  const [problemInput, setProblemInput] = useState('');
 
   useEffect(() => {
     onUpdate({ keyword, sector, problem: problemText });
@@ -265,6 +267,34 @@ const ProblemEditor = ({
   const handleProblemChange = (value: string) => {
     setProblemText(value);
     if (value !== 'VAZIO') {
+      setProblemInputMode(false);
+    }
+  };
+
+  const handleKeywordInputModeToggle = () => {
+    if (!keywordInputMode) {
+      setKeywordInput(keyword);
+    }
+    setKeywordInputMode(!keywordInputMode);
+  };
+
+  const handleProblemInputModeToggle = () => {
+    if (!problemInputMode) {
+      setProblemInput(problemText);
+    }
+    setProblemInputMode(!problemInputMode);
+  };
+
+  const handleKeywordInputSave = () => {
+    if (keywordInput.trim()) {
+      setKeyword(keywordInput.trim());
+      setKeywordInputMode(false);
+    }
+  };
+
+  const handleProblemInputSave = () => {
+    if (problemInput.trim()) {
+      setProblemText(problemInput.trim());
       setProblemInputMode(false);
     }
   };
@@ -297,13 +327,13 @@ const ProblemEditor = ({
           {keywordInputMode ? (
             <div className="space-y-2">
               <Input
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                value={keywordInput}
+                onChange={(e) => setKeywordInput(e.target.value)}
                 className="text-sm"
                 placeholder="Digite palavra-chave personalizada"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => setKeywordInputMode(false)} className="text-xs">
+                <Button size="sm" onClick={handleKeywordInputSave} className="text-xs">
                   OK
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => {
@@ -329,7 +359,7 @@ const ProblemEditor = ({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setKeywordInputMode(true)}
+                onClick={handleKeywordInputModeToggle}
                 className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
               >
                 + Personalizar
@@ -368,13 +398,13 @@ const ProblemEditor = ({
           {problemInputMode ? (
             <div className="space-y-2">
               <Input
-                value={problemText}
-                onChange={(e) => setProblemText(e.target.value)}
+                value={problemInput}
+                onChange={(e) => setProblemInput(e.target.value)}
                 className="text-sm"
                 placeholder="Digite problema personalizado"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => setProblemInputMode(false)} className="text-xs">
+                <Button size="sm" onClick={handleProblemInputSave} className="text-xs">
                   OK
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => {
@@ -406,7 +436,7 @@ const ProblemEditor = ({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={() => setProblemInputMode(true)}
+                onClick={handleProblemInputModeToggle}
                 className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
               >
                 + Personalizar

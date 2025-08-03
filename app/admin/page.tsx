@@ -50,26 +50,18 @@ import {
 } from "lucide-react";
 import { formatDateBR } from "@/lib/utils";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  AreaChart,
-  Area,
-  ComposedChart,
-  Line,
-  LineChart,
-  ScatterChart,
-  Scatter,
-  ZAxis
+  ResponsiveContainer
 } from "recharts";
+import {
+  ModernChart,
+  ProblemsChart,
+  RatingsChart,
+  DepartmentsChart,
+  HotelsChart,
+  KeywordsChart,
+  ApartmentsChart,
+  SourcesChart
+} from "@/components/modern-charts";
 import { 
   filterValidFeedbacks, 
   isValidProblem, 
@@ -154,61 +146,31 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 // Componente para renderizar gráficos no modal
-const renderChart = (chartType: string, data: any[], onChartClick: (item: any, type: string) => void, type: string) => {
+const renderModernChart = (chartType: string, data: any[], onChartClick: (item: any, type: string) => void, type: string) => {
+  const chartData = data.map(item => ({
+    label: item.name || item.label,
+    value: item.value,
+    name: item.name || item.label
+  }));
+
+  const handleClick = (item: any, index: number) => {
+    onChartClick(item, type);
+  };
+
   if (chartType === 'bar') {
-    return (
-      <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="label" />
-        <YAxis />
-        <RechartsTooltip />
-        <Bar 
-          dataKey="value" 
-          fill="#8884d8"
-          onClick={(_, index) => {
-            const item = data[index];
-            onChartClick(item, type);
-          }}
-        />
-      </BarChart>
-    );
+    return <ModernChart data={chartData} type="bar" onClick={handleClick} />;
   }
   
   if (chartType === 'pie') {
-    return (
-      <PieChart>
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          labelLine={true}
-          label={({ name, value, percent }: any) => `${name}: ${value} (${(percent * 100).toFixed(1)}%)`}
-          outerRadius={150}
-          fill="#8884d8"
-          dataKey="value"
-          nameKey={data[0]?.name ? 'name' : 'label'}
-          onClick={(dataItem, index) => {
-            const item = data[index];
-            onChartClick(item, type);
-          }}
-        >
-          {data.map((_: any, index: number) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <RechartsTooltip />
-        <Legend />
-      </PieChart>
-    );
+    return <ModernChart data={chartData} type="pie" onClick={handleClick} />;
   }
   
-  // Fallback - retorna um gráfico vazio
-  return (
-    <BarChart data={[]}>
-      <XAxis />
-      <YAxis />
-    </BarChart>
-  );
+  if (chartType === 'horizontalBar') {
+    return <ModernChart data={chartData} type="horizontalBar" onClick={handleClick} />;
+  }
+  
+  // Fallback
+  return <ModernChart data={chartData} type="bar" onClick={handleClick} />;
 };
 
 // Componente principal
@@ -2057,20 +2019,10 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={processRatingDistribution()}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="label" />
-                      <YAxis />
-                      <RechartsTooltip />
-                      <Bar 
-                        dataKey="value"
-                        name="Quantidade"
-                        fill="#8884d8"
-                        onClick={(data) => handleChartClick(data, 'rating')}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <RatingsChart 
+                    data={processRatingDistribution()}
+                    onClick={(item) => handleChartClick(item, 'rating')}
+                  />
                 </div>
               </Card>
 
@@ -2092,29 +2044,11 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      layout="vertical"
-                      data={processProblemDistribution().slice(0, 6)}
-                      margin={{
-                        top: 20,
-                        right: 30,
-                        left: 100,
-                        bottom: 5,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="label" type="category" width={90} />
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar 
-                        dataKey="value" 
-                        name="Quantidade" 
-                        fill="#FF8042"
-                        onClick={(data) => handleChartClick(data, 'problem')}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ProblemsChart 
+                    data={processProblemDistribution()}
+                    onClick={(item) => handleChartClick(item, 'problem')}
+                    maxItems={6}
+                  />
                 </div>
               </Card>
 
@@ -2136,29 +2070,11 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      layout="vertical"
-                      data={processKeywordDistribution().slice(0, 8)}
-                      margin={{
-                        top: 20,
-                        right: 30,
-                        left: 120,
-                        bottom: 5,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="label" type="category" width={110} />
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar 
-                        dataKey="value" 
-                        name="Quantidade" 
-                        fill="#00C49F"
-                        onClick={(data) => handleChartClick(data, 'keyword')}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <KeywordsChart 
+                    data={processKeywordDistribution()}
+                    onClick={(item) => handleChartClick(item, 'keyword')}
+                    maxItems={8}
+                  />
                 </div>
               </Card>
 
@@ -2180,30 +2096,10 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={processSectorDistribution()}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={({ name, percent }: any) => `${name ? name.substring(0, 15) + '...' : ''} (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        nameKey="label"
-                        onClick={(data, index) => {
-                          const item = processSectorDistribution()[index];
-                          handleChartClick(item, 'sector');
-                        }}
-                      >
-                        {processSectorDistribution().map((_: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <DepartmentsChart 
+                    data={processSectorDistribution()}
+                    onClick={(item) => handleChartClick(item, 'sector')}
+                  />
                 </div>
               </Card>
             </div>
@@ -2213,23 +2109,15 @@ function AdminDashboardContent() {
               <Card className="p-4">
                                 <h3 className="text-lg font-semibold mb-4">Análise de Apartamentos</h3>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={processApartamentoDistribution().slice(0, 8)}
-                      margin={{
-                        top: 20,
-                        right: 30,
-                        left: 20,
-                        bottom: 5,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar dataKey="value" fill="#FF8042" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ApartmentsChart 
+                    data={processApartamentoDistribution().map(item => ({
+                      label: item.name,
+                      value: item.value,
+                      name: item.name
+                    }))}
+                    onClick={(item) => handleChartClick(item, 'apartamento')}
+                    maxItems={8}
+                  />
                 </div>
                               </Card>
 
@@ -2237,26 +2125,10 @@ function AdminDashboardContent() {
               <Card className="p-4">
                 <h3 className="text-lg font-semibold mb-4">Distribuição por Fonte</h3>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={processSourceDistribution()}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        nameKey="label"
-                      >
-                        {processSourceDistribution().map((_: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip content={<CustomTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <SourcesChart 
+                    data={processSourceDistribution()}
+                    onClick={(item) => handleChartClick(item, 'source')}
+                  />
                 </div>
               </Card>
               </div>
@@ -2285,34 +2157,15 @@ function AdminDashboardContent() {
                 </Button>
               </div>
               <div className="h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart
-                    data={hotelStats.map(stat => ({
-                      name: stat.hotel,
-                      feedbacks: stat.totalFeedbacks,
-                      rating: parseFloat(stat.averageRating),
-                      sentiment: stat.sentiment
-                    }))}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="name" 
-                      angle={-45} 
-                      textAnchor="end" 
-                      height={70}
-                      interval={0}
-                    />
-                    <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                    <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" domain={[0, 5]} />
-                    <YAxis yAxisId="sentiment" orientation="right" stroke="#ff7300" hide />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Bar yAxisId="left" dataKey="feedbacks" name="Total de Feedbacks" fill="#8884d8" onClick={(data) => handleChartClick({label: data.name}, 'hotel')} />
-                    <Line yAxisId="right" type="monotone" dataKey="rating" name="Avaliação Média" stroke="#82ca9d" />
-                    <Line yAxisId="sentiment" type="monotone" dataKey="sentiment" name="Sentimento Positivo (%)" stroke="#ff7300" />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <HotelsChart 
+                  data={hotelStats.map(stat => ({
+                    label: stat.hotel,
+                    value: stat.totalFeedbacks,
+                    rating: parseFloat(stat.averageRating),
+                    sentiment: stat.sentiment
+                  }))}
+                  onClick={(item: any) => handleChartClick({label: item.label}, 'hotel')}
+                />
               </div>
             </Card>
 
@@ -2507,29 +2360,10 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      layout="vertical"
-                      data={processProblemDistribution().slice(0, 15)}
-                      margin={{
-                        top: 20,
-                        right: 30,
-                        left: 120,
-                        bottom: 5,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis dataKey="label" type="category" width={110} />
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar 
-                        dataKey="value" 
-                        name="Quantidade" 
-                        fill="#FF8042"
-                        onClick={(data) => handleChartClick(data, 'problem')}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ProblemsChart 
+                    data={processProblemDistribution().slice(0, 15)}
+                    onClick={(item: any) => handleChartClick(item, 'problem')}
+                  />
                 </div>
               </Card>
 
@@ -2550,35 +2384,10 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[400px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={processProblemDistribution().slice(0, 10)}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={true}
-                        label={({ name, percent }: any) => `${name ? name.substring(0, 15) + '...' : ''} (${(percent * 100).toFixed(0)}%)`}
-                        outerRadius={120}
-                        fill="#8884d8"
-                        dataKey="value"
-                        nameKey="label"
-                        onClick={(data, index) => {
-                          const item = processProblemDistribution()[index];
-                          handleChartClick(item, 'problem');
-                        }}
-                      >
-                        {processProblemDistribution().slice(0, 10).map((_: any, index: number) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Legend
-                        formatter={(value, entry, index) => {
-                          return value.length > 20 ? value.substring(0, 20) + '...' : value;
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <ProblemsChart 
+                    data={processProblemDistribution().slice(0, 10)}
+                    onClick={(item: any) => handleChartClick(item, 'problem')}
+                  />
                 </div>
               </Card>
             </div>
@@ -2685,30 +2494,10 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={processRatingDistribution()}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="label" />
-                      <YAxis />
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar
-                        dataKey="value"
-                        fill="#8884d8"
-                        onClick={(data) => handleChartClick(data, 'rating')}
-                      >
-                        {processRatingDistribution().map((entry: any, index: number) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={
-                              parseInt(entry.label) >= 4 ? '#4CAF50' : 
-                              parseInt(entry.label) >= 3 ? '#FFC107' : 
-                              '#F44336'
-                            } 
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <RatingsChart 
+                    data={processRatingDistribution()}
+                    onClick={(item) => handleChartClick(item, 'rating')}
+                  />
                 </div>
               </Card>
 
@@ -2734,32 +2523,15 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Positivo', value: (getCurrentData() || []).filter(f => f.sentiment === 'positive').length },
-                          { name: 'Negativo', value: (getCurrentData() || []).filter(f => f.sentiment === 'negative').length },
-                          { name: 'Neutro', value: (getCurrentData() || []).filter(f => f.sentiment === 'neutral').length }
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={120}
-                        fill="#8884d8"
-                        paddingAngle={5}
-                        dataKey="value"
-                        label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                        onClick={(data) => handleChartClick(data, 'sentiment')}
-                      >
-                        <Cell fill="#4CAF50" />
-                        <Cell fill="#F44336" />
-                        <Cell fill="#FFC107" />
-                      </Pie>
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <ModernChart 
+                    data={[
+                      { label: 'Positivo', value: (getCurrentData() || []).filter(f => f.sentiment === 'positive').length, name: 'Positivo' },
+                      { label: 'Negativo', value: (getCurrentData() || []).filter(f => f.sentiment === 'negative').length, name: 'Negativo' },
+                      { label: 'Neutro', value: (getCurrentData() || []).filter(f => f.sentiment === 'neutral').length, name: 'Neutro' }
+                    ]}
+                    type="pie"
+                    onClick={(item) => handleChartClick(item, 'sentiment')}
+                  />
                 </div>
               </Card>
             </div>
@@ -2767,28 +2539,10 @@ function AdminDashboardContent() {
             <Card className="p-4">
               <h3 className="text-lg font-semibold mb-4">Volume de Feedbacks por Fonte</h3>
               <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={getTimePeriodData(getCurrentData() || [], 'source').data}
-                    margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="period" />
-                    <YAxis />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <Legend />
-                    {processSourceDistribution().map((source: any, index: number) => (
-                      <Area 
-                        key={source.label}
-                        type="monotone" 
-                        dataKey={source.label} 
-                        stackId="1" 
-                        stroke={COLORS[index % COLORS.length]} 
-                        fill={COLORS[index % COLORS.length]} 
-                      />
-                    ))}
-                  </AreaChart>
-                </ResponsiveContainer>
+                <SourcesChart 
+                  data={processSourceDistribution()}
+                  onClick={(item: any) => handleChartClick(item, 'source')}
+                />
               </div>
               <div className="text-xs text-center text-muted-foreground mt-2">
                 Agrupamento automático: {(() => {
@@ -2817,37 +2571,10 @@ function AdminDashboardContent() {
                 </CardHeader>
                 <CardContent>
                   <div className="h-[400px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={processApartamentoDistribution().slice(0, 15)}
-                        layout="vertical"
-                        margin={{ top: 10, right: 30, left: 60, bottom: 20 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" />
-                        <YAxis 
-                          dataKey="name" 
-                          type="category" 
-                          width={60} 
-                        />
-                        <RechartsTooltip content={<CustomTooltip />} />
-                        <Bar
-                          name="Quantidade de Feedbacks"
-                          dataKey="value"
-                          fill="#8884d8"
-                          onClick={(_, index) => {
-                            const item = processApartamentoDistribution()[index];
-                            handleChartClick(item, 'apartamento');
-                          }}
-                        >
-                          {processApartamentoDistribution().slice(0, 15).map(
-                            (entry: { name: string; value: number }, index: number) => (
-                              <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                            )
-                          )}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <ApartmentsChart 
+                      data={processApartamentoDistribution().slice(0, 15).map(item => ({ label: item.name, value: item.value }))}
+                      onClick={(item: any) => handleChartClick(item, 'apartamento')}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -2862,66 +2589,10 @@ function AdminDashboardContent() {
                 </CardHeader>
                 <CardContent>
                   <div className="h-[400px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ScatterChart
-                        margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis 
-                          type="number" 
-                          dataKey="count" 
-                          name="Quantidade" 
-                          domain={['dataMin', 'dataMax']}
-                          label={{ value: 'Quantidade de Feedbacks', position: 'bottom', offset: 0 }}
-                        />
-                        <YAxis 
-                          type="number" 
-                          dataKey="averageRating" 
-                          name="Avaliação" 
-                          domain={[0, 5]} 
-                          label={{ value: 'Avaliação Média', angle: -90, position: 'insideLeft' }}
-                        />
-                        <ZAxis 
-                          type="number" 
-                          dataKey="sentiment" 
-                          range={[50, 400]} 
-                          name="Sentimento Positivo"
-                        />
-                        <RechartsTooltip 
-                          cursor={{ strokeDasharray: '3 3' }}
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-white/90 backdrop-blur-sm shadow-md p-3 rounded-md border">
-                                  <p className="font-bold">Apartamento {data.apartamento}</p>
-                                  <p className="text-sm">Feedbacks: {data.count}</p>
-                                  <p className="text-sm">Avaliação: {data.averageRating.toFixed(1)} ★</p>
-                                  <p className="text-sm">Sentimento: {data.sentiment}%</p>
-                                  {data.topProblems && data.topProblems.length > 0 && (
-                                    <p className="text-sm">Problema principal: {data.topProblems[0].problem}</p>
-                                  )}
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <Scatter 
-                          name="Apartamentos" 
-                          data={processApartamentoDetailsData()} 
-                          fill="#8884d8"
-                          onClick={(data) => handleChartClick({name: data.apartamento}, 'apartamento')}
-                        >
-                          {processApartamentoDetailsData().map((entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={entry.sentiment >= 70 ? '#4CAF50' : entry.sentiment >= 50 ? '#FFC107' : '#F44336'}
-                            />
-                          ))}
-                        </Scatter>
-                      </ScatterChart>
-                    </ResponsiveContainer>
+                    <ApartmentsChart 
+                      data={processApartamentoDetailsData().map(item => ({ label: item.apartamento, value: item.count }))}
+                      onClick={(item: any) => handleChartClick({name: item.label}, 'apartamento')}
+                    />
                   </div>
                   <div className="flex justify-center mt-2 space-x-4 text-xs">
                     <div className="flex items-center">
@@ -3393,24 +3064,15 @@ function AdminDashboardContent() {
                     Distribuição de Sentimentos
                   </h4>
                   <div className="h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive, fill: '#10B981' },
-                            { name: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral, fill: '#F59E0B' },
-                            { name: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative, fill: '#EF4444' }
-                          ].filter(item => item.value > 0)}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          dataKey="value"
-                          label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                        >
-                        </Pie>
-                        <RechartsTooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <ModernChart 
+                      data={[
+                        { label: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive },
+                        { label: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral },
+                        { label: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative }
+                      ].filter(item => item.value > 0)}
+                      onClick={() => {}}
+                      type="pie"
+                    />
                   </div>
                 </Card>
 
@@ -3423,20 +3085,16 @@ function AdminDashboardContent() {
                     Distribuição de Avaliações
                   </h4>
                   <div className="h-40">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={[
-                        { rating: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
-                        { rating: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
-                        { rating: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
-                        { rating: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
-                        { rating: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
-                      ]}>
-                        <XAxis dataKey="rating" />
-                        <YAxis />
-                        <RechartsTooltip />
-                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <RatingsChart 
+                      data={[
+                        { label: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
+                        { label: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
+                        { label: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
+                        { label: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
+                        { label: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
+                      ]}
+                      onClick={() => {}}
+                    />
                   </div>
                 </Card>
 
@@ -3450,14 +3108,11 @@ function AdminDashboardContent() {
                       Tendência Mensal
                     </h4>
                     <div className="h-40">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={selectedItem.stats.monthlyTrend}>
-                          <XAxis dataKey="month" />
-                          <YAxis />
-                          <RechartsTooltip />
-                          <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={3} dot={{ r: 6 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
+                      <ModernChart 
+                        data={selectedItem.stats.monthlyTrend.map((item: any) => ({ label: item.month, value: item.count }))}
+                        onClick={() => {}}
+                        type="line"
+                      />
                     </div>
                   </Card>
                 )}
@@ -3645,9 +3300,9 @@ function AdminDashboardContent() {
               <div className="space-y-6">
                 {/* Gráfico Grande */}
                 <div className="h-[500px] bg-muted/10 rounded-lg p-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {renderChart(selectedChart.chartType, selectedChart.data, handleChartClick, selectedChart.type)}
-                  </ResponsiveContainer>
+                  <div className="w-full h-full">
+                  {renderModernChart(selectedChart.chartType, selectedChart.data, handleChartClick, selectedChart.type)}
+                </div>
                 </div>
 
                 {/* Dados Tabulares */}

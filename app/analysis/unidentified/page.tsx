@@ -10,7 +10,7 @@ import { formatDateBR, cn } from "@/lib/utils"
 import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from "@/lib/firestore-service"
+import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit, getRecentEdits } from "@/lib/firestore-service"
 import SharedDashboardLayout from "../../shared-layout"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -154,6 +154,40 @@ const scrollbarStyles = `
     background: linear-gradient(90deg, #7f1d1d, #991b1b) !important;
   }
 
+  .feedback-editing {
+    animation: editPulse 3s ease-in-out forwards;
+    background: linear-gradient(90deg, #dcfce7, #bbf7d0) !important;
+    border-left: 4px solid #22c55e !important;
+    position: relative;
+    transition: all 0.3s ease;
+  }
+
+  .dark .feedback-editing {
+    background: linear-gradient(90deg, #14532d, #166534) !important;
+  }
+
+  .feedback-edited-flag {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #22c55e;
+    color: white;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: bold;
+    z-index: 10;
+    animation: flagAppear 0.5s ease-out;
+  }
+
+  .dark .feedback-edited-flag {
+    background: #16a34a;
+  }
+
   @keyframes deleteSlideOut {
     0% {
       opacity: 1;
@@ -178,12 +212,69 @@ const scrollbarStyles = `
     }
   }
 
+  @keyframes editPulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.8);
+      background: linear-gradient(90deg, #dcfce7, #bbf7d0) !important;
+    }
+    15% {
+      transform: scale(1.03);
+      box-shadow: 0 0 0 10px rgba(34, 197, 94, 0.4);
+      background: linear-gradient(90deg, #bbf7d0, #86efac) !important;
+    }
+    30% {
+      transform: scale(1.02);
+      box-shadow: 0 0 0 15px rgba(34, 197, 94, 0.2);
+      background: linear-gradient(90deg, #86efac, #bbf7d0) !important;
+    }
+    60% {
+      transform: scale(1.01);
+      box-shadow: 0 0 0 8px rgba(34, 197, 94, 0.1);
+      background: linear-gradient(90deg, #bbf7d0, #dcfce7) !important;
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+      background: linear-gradient(90deg, #dcfce7, #f3f4f6) !important;
+    }
+  }
+
+  @keyframes flagAppear {
+    0% {
+      opacity: 0;
+      transform: scale(0) rotate(-180deg);
+    }
+    50% {
+      transform: scale(1.2) rotate(-90deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+  }
+
   .feedback-deleted-indicator {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     background: rgba(239, 68, 68, 0.95);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 1000;
+    animation: fadeInOut 2s ease-in-out;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .feedback-edited-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(34, 197, 94, 0.95);
     color: white;
     padding: 12px 24px;
     border-radius: 8px;
@@ -390,13 +481,33 @@ const ProblemEditor = ({
   const [keywordInputMode, setKeywordInputMode] = useState(false);
   const [sectorInputMode, setSectorInputMode] = useState(false);
   const [problemInputMode, setProblemInputMode] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
+
+  // Sincronizar com props quando mudarem
+  useEffect(() => {
+    setKeyword(problem.keyword);
+    setSector(problem.sector);
+    setProblemText(problem.problem);
+    setForceUpdate(prev => prev + 1);
+  }, [problem.keyword, problem.sector, problem.problem]);
 
   useEffect(() => {
     onUpdate({ keyword, sector, problem: problemText });
   }, [keyword, sector, problemText, onUpdate]);
 
+  const handleKeywordChange = (value: string) => {
+    setKeyword(value);
+    setForceUpdate(prev => prev + 1);
+  };
+
+  const handleSectorChange = (value: string) => {
+    setSector(value);
+    setForceUpdate(prev => prev + 1);
+  };
+
   const handleProblemChange = (value: string) => {
     setProblemText(value);
+    setForceUpdate(prev => prev + 1);
     if (value !== 'VAZIO') {
       setProblemInputMode(false);
     }
@@ -430,8 +541,9 @@ const ProblemEditor = ({
           {keywordInputMode ? (
             <div className="space-y-2">
               <Input
+                key={`keyword-input-${forceUpdate}`}
                 value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                onChange={(e) => handleKeywordChange(e.target.value)}
                 className="text-sm"
                 placeholder="Digite palavra-chave personalizada"
               />
@@ -449,7 +561,7 @@ const ProblemEditor = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Select value={keyword} onValueChange={setKeyword}>
+              <Select key={`keyword-${forceUpdate}`} value={keyword} onValueChange={handleKeywordChange}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecione palavra-chave" />
                 </SelectTrigger>
@@ -479,13 +591,18 @@ const ProblemEditor = ({
           {sectorInputMode ? (
             <div className="space-y-2">
               <Input
+                key={`sector-input-${forceUpdate}`}
                 value={sector}
-                onChange={(e) => setSector(e.target.value)}
+                onChange={(e) => handleSectorChange(e.target.value)}
                 className="text-sm"
                 placeholder="Digite departamento personalizado"
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => setSectorInputMode(false)} className="text-xs">
+                <Button size="sm" onClick={() => {
+                  if (sector.trim()) {
+                    setSectorInputMode(false);
+                  }
+                }} className="text-xs">
                   OK
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => {
@@ -498,7 +615,7 @@ const ProblemEditor = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Select value={sector} onValueChange={setSector}>
+              <Select key={`sector-${forceUpdate}`} value={sector} onValueChange={handleSectorChange}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecione departamento" />
                 </SelectTrigger>
@@ -533,8 +650,9 @@ const ProblemEditor = ({
           {problemInputMode ? (
             <div className="space-y-2">
               <Input
+                key={`problem-input-${forceUpdate}`}
                 value={problemText}
-                onChange={(e) => setProblemText(e.target.value)}
+                onChange={(e) => handleProblemChange(e.target.value)}
                 className="text-sm"
                 placeholder="Digite problema personalizado"
               />
@@ -552,7 +670,7 @@ const ProblemEditor = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Select value={problemText} onValueChange={handleProblemChange}>
+              <Select key={`problem-${forceUpdate}`} value={problemText} onValueChange={handleProblemChange}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecione problema" />
                 </SelectTrigger>
@@ -700,6 +818,30 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
       
       // Salvar no Firebase
       await updateFeedbackInFirestore(feedback.id, updatedFeedback)
+      
+      // Salvar no histórico de edições
+      await saveRecentEdit({
+        feedbackId: feedback.id,
+        hotelId: feedback.id.split('_')[0] || 'unknown',
+        hotelName: 'Hotel não identificado',
+        comment: feedback.comment,
+        rating: feedback.rating,
+        date: feedback.date,
+        source: feedback.source || 'Sistema',
+        oldClassification: {
+          keyword: feedback.keyword || '',
+          sector: feedback.sector || '',
+          problem: feedback.problem || ''
+        },
+        newClassification: {
+          keyword: keywords,
+          sector: sectors,
+          problem: problems
+        },
+        modifiedAt: new Date().toISOString(),
+        modifiedBy: 'Colaborador',
+        page: 'unidentified'
+      })
       
       setIsEditing(false)
       
@@ -1036,21 +1178,27 @@ export default function UnidentifiedFeedbacks() {
   const [showDeletedIndicator, setShowDeletedIndicator] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [feedbackToDelete, setFeedbackToDelete] = useState<UnidentifiedFeedback | null>(null)
+  const [editingFeedbacks, setEditingFeedbacks] = useState<Set<string>>(new Set())
+  const [editedFeedbacks, setEditedFeedbacks] = useState<Set<string>>(new Set())
+  const [showEditedIndicator, setShowEditedIndicator] = useState(false)
 
-  const loadRecentAnalyses = () => {
+  const loadRecentAnalyses = async () => {
     try {
-      const stored = localStorage.getItem('recent-analyses')
-      if (stored) {
-        const analyses = JSON.parse(stored)
-        // Filtrar apenas os últimos 10 e dos últimos 7 dias
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-        
-        const filtered = analyses
-          .filter((analysis: RecentAnalysis) => new Date(analysis.modifiedAt) > sevenDaysAgo)
-          .slice(0, 10)
-        
-        setRecentAnalyses(filtered)
+      if (userData?.hotelId) {
+        const recentEdits = await getRecentEdits(7, userData.hotelId)
+        // Mapear os dados do Firebase para a interface RecentAnalysis
+        const recentAnalyses = recentEdits.slice(0, 10).map((edit: any) => ({
+          id: edit.id,
+          comment: edit.comment || '',
+          rating: edit.rating || 0,
+          date: edit.date || '',
+          source: edit.source || 'Sistema',
+          oldClassification: edit.oldClassification || { keyword: '', sector: '', problem: '' },
+          newClassification: edit.newClassification || { keyword: '', sector: '', problem: '' },
+          modifiedAt: edit.modifiedAt || edit.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
+          modifiedBy: edit.modifiedBy || 'Colaborador'
+        }))
+        setRecentAnalyses(recentAnalyses)
       }
     } catch (error) {
       console.error('Erro ao carregar análises recentes:', error)
@@ -1163,6 +1311,17 @@ export default function UnidentifiedFeedbacks() {
     originalFeedback: UnidentifiedFeedback, 
     updatedFeedback: UnidentifiedFeedback
   ) => {
+    // Verificar se houve mudanças reais na classificação
+    const hasChanges = 
+      originalFeedback.keyword !== updatedFeedback.keyword ||
+      originalFeedback.sector !== updatedFeedback.sector ||
+      originalFeedback.problem !== updatedFeedback.problem;
+    
+    if (!hasChanges) {
+      // Se não houve mudanças na classificação, não salvar como edição
+      return;
+    }
+
     const recentAnalysis = {
       id: originalFeedback.id,
       comment: originalFeedback.comment,
@@ -1193,9 +1352,26 @@ export default function UnidentifiedFeedbacks() {
       const stored = localStorage.getItem('recent-analyses')
       const existing = stored ? JSON.parse(stored) : []
       
-      // Remove se já existe e adiciona no início
-      const filtered = existing.filter((analysis: RecentAnalysis) => analysis.id !== recentAnalysis.id)
-      const updated = [recentAnalysis, ...filtered].slice(0, 20) // Manter apenas 20
+      // Verificar se já existe uma edição recente do mesmo feedback (últimos 5 minutos)
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const existingRecentEdit = existing.find((analysis: RecentAnalysis) => 
+        analysis.id === recentAnalysis.id && 
+        analysis.modifiedAt > fiveMinutesAgo
+      );
+      
+      let updated;
+      if (existingRecentEdit) {
+        // Atualizar a edição existente ao invés de criar uma nova
+        updated = existing.map((analysis: RecentAnalysis) => 
+          analysis.id === recentAnalysis.id && analysis.modifiedAt > fiveMinutesAgo
+            ? { ...recentAnalysis, oldClassification: analysis.oldClassification } // Manter a classificação original da primeira edição
+            : analysis
+        );
+      } else {
+        // Remover edições antigas do mesmo feedback e adicionar a nova no início
+        const filtered = existing.filter((analysis: RecentAnalysis) => analysis.id !== recentAnalysis.id)
+        updated = [recentAnalysis, ...filtered].slice(0, 20) // Manter apenas 20
+      }
       
       localStorage.setItem('recent-analyses', JSON.stringify(updated))
       setRecentAnalyses(updated.slice(0, 10))
@@ -1240,13 +1416,76 @@ export default function UnidentifiedFeedbacks() {
       return
     }
     
-    // Remove da lista de não identificados (para casos normais)
-    setUnidentifiedFeedbacks(prev => prev.filter(f => f.id !== updatedFeedback.id))
+    // Verificar se o feedback ainda deve ser considerado não identificado após a edição
+    const hasInvalidKeyword = !isValidSectorOrKeyword(updatedFeedback.keyword);
+    const hasInvalidSector = !isValidSectorOrKeyword(updatedFeedback.sector);
+    const hasInvalidProblem = !isValidProblem(updatedFeedback.problem);
     
-    toast({
-      title: "Feedback Reclassificado",
-      description: "O feedback foi corrigido e agora aparece nos dashboards principais.",
-    })
+    const hasExplicitNotIdentified = 
+      updatedFeedback.keyword?.toLowerCase().includes('não identificado') ||
+      updatedFeedback.sector?.toLowerCase().includes('não identificado') ||
+      updatedFeedback.problem?.toLowerCase().includes('não identificado');
+    
+    const isProblematicComment = 
+      updatedFeedback.comment?.length < 10 ||
+      /^[^a-zA-ZÀ-ÿ]*$/.test(updatedFeedback.comment || '') ||
+      /^(.)\1{4,}/.test(updatedFeedback.comment || '') ||
+      /(test|teste|aaa|bbb|ccc|xxx|yyy|zzz|123|abc)/i.test(updatedFeedback.comment || '');
+    
+    const shouldStillBeUnidentified = 
+      hasInvalidKeyword || hasInvalidSector || hasInvalidProblem || 
+      hasExplicitNotIdentified || isProblematicComment;
+    
+    if (shouldStillBeUnidentified) {
+      // Atualizar o feedback na lista primeiro
+      setUnidentifiedFeedbacks(prev => 
+        prev.map(f => f.id === updatedFeedback.id ? updatedFeedback : f)
+      )
+      
+      // Adicionar animação de edição e flag
+      setEditingFeedbacks(prev => new Set([...Array.from(prev), updatedFeedback.id]))
+      setEditedFeedbacks(prev => new Set([...Array.from(prev), updatedFeedback.id]))
+      
+      // Mostrar indicador de edição
+      setShowEditedIndicator(true)
+      
+      // Remover animação de edição após 3 segundos, mas manter a flag
+      setTimeout(() => {
+        setEditingFeedbacks(prev => {
+          const newSet = new Set(Array.from(prev))
+          newSet.delete(updatedFeedback.id)
+          return newSet
+        })
+      }, 3000)
+      
+      // Esconder indicador após 3 segundos
+      setTimeout(() => {
+        setShowEditedIndicator(false)
+      }, 3000)
+      
+      // Remover a flag de editado após 5 segundos para dar tempo de ver
+      setTimeout(() => {
+        setEditedFeedbacks(prev => {
+          const newSet = new Set(Array.from(prev))
+          newSet.delete(updatedFeedback.id)
+          return newSet
+        })
+      }, 5000)
+      
+      toast({
+        title: "Feedback Atualizado",
+        description: "O feedback foi atualizado mas ainda precisa de mais correções para ser totalmente identificado.",
+        variant: "default"
+      })
+    } else {
+      // Remove da lista de não identificados (feedback totalmente identificado)
+      setUnidentifiedFeedbacks(prev => prev.filter(f => f.id !== updatedFeedback.id))
+      
+      toast({
+        title: "Feedback Reclassificado",
+        description: "O feedback foi corrigido e agora aparece nos dashboards principais.",
+      })
+    }
   }
 
   const toggleDetails = (feedbackId: string) => {
@@ -1480,7 +1719,10 @@ export default function UnidentifiedFeedbacks() {
                 <Table>
                   <TableBody>
                     {unidentifiedFeedbacks.map((feedback) => (
-                      <TableRow key={feedback.id} className={`border-b border-gray-200 dark:border-gray-700 ${deletingFeedbacks.has(feedback.id) ? 'feedback-deleting' : ''}`}>
+                      <TableRow key={feedback.id} className={`border-b border-gray-200 dark:border-gray-700 ${deletingFeedbacks.has(feedback.id) ? 'feedback-deleting' : ''} ${editingFeedbacks.has(feedback.id) ? 'feedback-editing' : ''}`}>
+                        {editedFeedbacks.has(feedback.id) && (
+                          <div className="feedback-edited-flag">✓</div>
+                        )}
                         <TableCell className="w-32">
                           <div className="text-sm font-medium">
                             {formatDateBR(feedback.date)}
@@ -1694,6 +1936,13 @@ export default function UnidentifiedFeedbacks() {
         {showDeletedIndicator && (
           <div className="feedback-deleted-indicator">
             Feedback excluído com sucesso!
+          </div>
+        )}
+        
+        {/* Indicador de edição */}
+        {showEditedIndicator && (
+          <div className="feedback-edited-indicator">
+            Feedback editado com sucesso!
           </div>
         )}
       </SharedDashboardLayout>

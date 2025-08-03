@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { ModernChart, ProblemsChart, HotelsChart, RatingsChart, DepartmentsChart, SourcesChart, ApartmentsChart } from '@/components/modern-charts'
 import { ArrowLeft, AlertTriangle, Brain, Loader2, TrendingDown, Users, Star, Target, Zap } from "lucide-react"
 import { getAllAnalyses } from "@/lib/firestore-service"
 import { useAuth } from "@/lib/auth-context"
@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { getApiKey } from "@/lib/openai-client"
 import type { Feedback, Analysis } from "@/types"
+import { filterValidFeedbacks } from "@/lib/utils"
 
 interface ProblematicHotel {
   hotelId: string
@@ -86,8 +87,8 @@ export default function HoteisProblematicos() {
         
         analyses.forEach(analysis => {
           if (analysis.data && Array.isArray(analysis.data)) {
-            // Filtrar feedbacks excluídos
-            const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
+            // Filtrar feedbacks excluídos e "Não identificados"
+            const validFeedbacks = filterValidFeedbacks(analysis.data.filter((feedback: any) => feedback.deleted !== true));
             allFeedbacks = [...allFeedbacks, ...validFeedbacks]
           }
         })
@@ -595,15 +596,12 @@ Seja específico, prático e focado em recuperação rápida da reputação e sa
                 {/* Gráfico de Problemas */}
                 <div className="mt-4">
                   <h4 className="font-semibold mb-3">Principais Problemas</h4>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={hotel.criticalProblems}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#ef4444" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ProblemsChart
+                    data={hotel.criticalProblems.map(problem => ({
+                      label: problem.name,
+                      value: problem.count
+                    }))}
+                  />
                 </div>
               </Card>
             ))}
@@ -638,25 +636,13 @@ Seja específico, prático e focado em recuperação rápida da reputação e sa
 
                   <div>
                     <h4 className="font-semibold mb-4">Distribuição de Problemas</h4>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <PieChart>
-                        <Pie
-                          data={hotel.criticalProblems}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, value }) => `${name}: ${value}`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="count"
-                        >
-                          {hotel.criticalProblems.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <ModernChart
+                      type="pie"
+                      data={hotel.criticalProblems.map(problem => ({
+                        label: problem.name,
+                        value: problem.count
+                      }))}
+                    />
                   </div>
                 </div>
               </Card>
@@ -695,15 +681,12 @@ Seja específico, prático e focado em recuperação rápida da reputação e sa
 
                     <div className="mt-6">
                       <h4 className="font-semibold mb-4">Distribuição de Problemas por Apartamento</h4>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={hotel.worstApartments}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="apartment" />
-                          <YAxis />
-                          <Tooltip />
-                          <Bar dataKey="problems" fill="#ef4444" />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <ApartmentsChart
+                        data={hotel.worstApartments.map(apt => ({
+                          label: apt.apartment,
+                          value: apt.problems
+                        }))}
+                      />
                     </div>
                   </div>
                 ) : (

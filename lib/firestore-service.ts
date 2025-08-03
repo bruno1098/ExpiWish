@@ -540,7 +540,7 @@ export const saveRecentEdit = async (editData: any) => {
 }
 
 // Função para obter edições recentes do Firebase
-export const getRecentEdits = async (limitDays: number = 7) => {
+export const getRecentEdits = async (limitDays: number = 7, hotelId?: string) => {
   try {
     const editsRef = collection(db, "recent_edits")
     
@@ -558,7 +558,14 @@ export const getRecentEdits = async (limitDays: number = 7) => {
       .filter((edit: any) => {
         // Filtrar pelos últimos X dias
         const editDate = new Date(edit.modifiedAt)
-        return editDate >= pastDate
+        const isWithinDateRange = editDate >= pastDate
+        
+        // Se hotelId foi fornecido, filtrar também por hotel
+        if (hotelId) {
+          return isWithinDateRange && edit.hotelId === hotelId
+        }
+        
+        return isWithinDateRange
       })
       .sort((a: any, b: any) => {
         // Ordenar por data mais recente primeiro

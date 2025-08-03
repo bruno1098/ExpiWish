@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts'
+import { ModernChart, ProblemsChart, HotelsChart, RatingsChart, DepartmentsChart, SourcesChart, ApartmentsChart, KeywordsChart } from '@/components/modern-charts'
 import { ArrowLeft, Hotel, Star, MessageSquare, AlertTriangle, Users, TrendingUp, Calendar, MapPin, Eye, ChevronDown, ChevronUp, Filter, ThumbsUp, ThumbsDown, Minus, Building2, Tag } from "lucide-react"
 import { getAllAnalyses } from "@/lib/firestore-service"
 import { useAuth } from "@/lib/auth-context"
@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useRouter, useParams } from "next/navigation"
 import dynamic from 'next/dynamic'
 import type { Feedback, Analysis } from "@/types"
-import { formatDateBR } from "@/lib/utils"
+import { formatDateBR, filterValidFeedbacks } from "@/lib/utils"
 
 interface HotelDetailData {
   hotelId: string
@@ -42,8 +42,6 @@ interface HotelDetailData {
   neutralFeedbacks: Feedback[]
   lastUpdate: string
 }
-
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82ca9d']
 
 // Função helper para filtrar problemas válidos (igual ao dashboard)
 const isValidProblem = (problem: string): boolean => {
@@ -155,8 +153,8 @@ export default function HotelDetalhes() {
       
       hotelAnalyses.forEach((analysis: any) => {
         if (analysis.data && Array.isArray(analysis.data)) {
-          // Filtrar feedbacks excluídos
-          const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
+          // Filtrar feedbacks excluídos e "Não identificados"
+          const validFeedbacks = filterValidFeedbacks(analysis.data.filter((feedback: any) => feedback.deleted !== true));
           allFeedbacks = [...allFeedbacks, ...validFeedbacks]
         }
       })
@@ -634,33 +632,21 @@ export default function HotelDetalhes() {
                   </Badge>
                 )}
               </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={selectedSentiment === 'all' ? [
-                      { name: 'Positivo', value: hotelData.positiveSentiment, fill: '#22c55e' },
-                      { name: 'Neutro', value: hotelData.neutralSentiment, fill: '#64748b' },
-                      { name: 'Negativo', value: hotelData.negativeSentiment, fill: '#ef4444' }
-                    ] : [
-                      { 
-                        name: selectedSentiment === 'positive' ? 'Positivo' : 
-                              selectedSentiment === 'negative' ? 'Negativo' : 'Neutro',
-                        value: 100,
-                        fill: selectedSentiment === 'positive' ? '#22c55e' : 
-                              selectedSentiment === 'negative' ? '#ef4444' : '#64748b'
-                      }
-                    ]}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}%`}
-                    outerRadius={100}
-                    dataKey="value"
-                  >
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <ModernChart
+                type="pie"
+                data={selectedSentiment === 'all' ? [
+                  { label: 'Positivo', value: hotelData.positiveSentiment },
+                  { label: 'Neutro', value: hotelData.neutralSentiment },
+                  { label: 'Negativo', value: hotelData.negativeSentiment }
+                ] : [
+                  { 
+                    label: selectedSentiment === 'positive' ? 'Positivo' : 
+                           selectedSentiment === 'negative' ? 'Negativo' : 'Neutro',
+                    value: 100
+                  }
+                ]}
+                height={300}
+              />
             </Card>
 
             {/* Top Departamentos */}
@@ -671,38 +657,18 @@ export default function HotelDetalhes() {
                   <Badge variant="outline" className="ml-2 text-xs">Filtrado</Badge>
                 )}
               </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={(() => {
+              <DepartmentsChart
+                data={(() => {
                   const filteredData = getFilteredData()
-                  return selectedSentiment !== 'all' && filteredData 
+                  const sectors = selectedSentiment !== 'all' && filteredData 
                     ? filteredData.filteredTopSectors 
                     : hotelData.topSectors
-                })()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                  <XAxis 
-                    dataKey="name" 
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                    stroke="#6b7280"
-                  />
-                  <YAxis 
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                    stroke="#6b7280"
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'rgba(17, 24, 39, 0.95)',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#f9fafb'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    fill="#8b5cf6" 
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+                  return sectors.map(sector => ({
+                    label: sector.name,
+                    value: sector.count
+                  }))
+                })()}
+              />
             </Card>
           </div>
 
@@ -714,8 +680,8 @@ export default function HotelDetalhes() {
                 <Badge variant="outline" className="ml-2 text-xs">Filtrado</Badge>
               )}
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={(() => {
+            <SourcesChart
+              data={(() => {
                 const filteredData = getFilteredData()
                 if (selectedSentiment !== 'all' && filteredData) {
                   // Recalcular distribuição por fonte com dados filtrados
@@ -726,36 +692,15 @@ export default function HotelDetalhes() {
                     }
                   })
                   return Object.entries(sourceCounts)
-                    .map(([source, count]) => ({ source, count }))
-                    .sort((a, b) => b.count - a.count)
+                    .map(([source, count]) => ({ label: source, value: count }))
+                    .sort((a, b) => b.value - a.value)
                 }
-                return hotelData.sourceDistribution
-              })()}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                <XAxis 
-                  dataKey="source" 
-                  tick={{ fill: '#6b7280', fontSize: 12 }}
-                  stroke="#6b7280"
-                />
-                <YAxis 
-                  tick={{ fill: '#6b7280', fontSize: 12 }}
-                  stroke="#6b7280"
-                />
-                <Tooltip 
-                  contentStyle={{
-                    backgroundColor: 'rgba(17, 24, 39, 0.95)',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#f9fafb'
-                  }}
-                />
-                <Bar 
-                  dataKey="count" 
-                  fill="#10b981" 
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+                return hotelData.sourceDistribution.map(item => ({
+                  label: item.source,
+                  value: item.count
+                }))
+              })()}
+            />
           </Card>
         </TabsContent>
 
@@ -1010,43 +955,19 @@ export default function HotelDetalhes() {
                   Detalhes
                 </Button>
               </div>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart 
-                  data={(() => {
-                    const filteredData = getFilteredData()
-                    return (selectedSentiment !== 'all' && filteredData 
-                      ? filteredData.filteredTopProblems 
-                      : hotelData.topProblems
-                    ).slice(0, 8)
-                  })()}
-                  layout="vertical"
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                  <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 12 }} stroke="#6b7280" />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    width={120} 
-                    tick={{ fontSize: 12, fill: '#6b7280' }}
-                    stroke="#6b7280"
-                  />
-                  <Tooltip 
-                    formatter={(value: any) => [`${value} ocorrências`, 'Quantidade']}
-                    labelFormatter={(label) => `Problema: ${label}`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(17, 24, 39, 0.95)',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#f9fafb'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    fill="#ef4444" 
-                    radius={[0, 4, 4, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <ProblemsChart
+                data={(() => {
+                  const filteredData = getFilteredData()
+                  const problems = (selectedSentiment !== 'all' && filteredData 
+                    ? filteredData.filteredTopProblems 
+                    : hotelData.topProblems
+                  ).slice(0, 8)
+                  return problems.map(problem => ({
+                    label: problem.name,
+                    value: problem.count
+                  }))
+                })()}
+              />
             </Card>
           </div>
 
@@ -1527,43 +1448,19 @@ export default function HotelDetalhes() {
                 <Building2 className="h-4 w-4" />
                 Distribuição por Departamento
               </h4>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart 
-                  data={(() => {
-                    const filteredData = getFilteredData()
-                    return (selectedSentiment !== 'all' && filteredData 
-                      ? filteredData.filteredTopSectors 
-                      : hotelData.topSectors
-                    ).slice(0, 10)
-                  })()}
-                  layout="vertical"
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                  <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 12 }} stroke="#6b7280" />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    width={120} 
-                    tick={{ fontSize: 12, fill: '#6b7280' }}
-                    stroke="#6b7280"
-                  />
-                  <Tooltip 
-                    formatter={(value: any) => [`${value} feedbacks`, 'Quantidade']}
-                    labelFormatter={(label) => `Departamento: ${label}`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(17, 24, 39, 0.95)',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#f9fafb'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    fill="#3b82f6" 
-                    radius={[0, 4, 4, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <DepartmentsChart
+                data={(() => {
+                  const filteredData = getFilteredData()
+                  const sectors = (selectedSentiment !== 'all' && filteredData 
+                    ? filteredData.filteredTopSectors 
+                    : hotelData.topSectors
+                  ).slice(0, 10)
+                  return sectors.map(sector => ({
+                    label: sector.name,
+                    value: sector.count
+                  }))
+                })()}
+              />
             </div>
 
             {/* Lista Detalhada de Departamentos */}
@@ -1611,61 +1508,36 @@ export default function HotelDetalhes() {
                 <Tag className="h-4 w-4" />
                 Principais Palavras-chave
               </h4>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart 
-                  data={(() => {
-                    const filteredData = getFilteredData()
-                    const keywordsToShow = selectedSentiment !== 'all' && filteredData 
-                      ? (() => {
-                          // Recalcular keywords para dados filtrados
-                          const keywordCounts: Record<string, number> = {}
-                          filteredData.filteredFeedbacks.forEach(f => {
-                            if (f.keyword && f.keyword.trim() !== '') {
-                              f.keyword.split(';').forEach((keyword: string) => {
-                                const trimmedKeyword = keyword.trim()
-                                if (trimmedKeyword && trimmedKeyword.length > 2) {
-                                  keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1
-                                }
-                              })
-                            }
-                          })
-                          return Object.entries(keywordCounts)
-                            .map(([name, count]) => ({ name, count }))
-                            .sort((a, b) => b.count - a.count)
-                            .slice(0, 10)
-                        })()
-                      : hotelData.topKeywords.slice(0, 10)
+              <KeywordsChart
+                data={(() => {
+                  const filteredData = getFilteredData()
+                  const keywordsToShow = selectedSentiment !== 'all' && filteredData 
+                    ? (() => {
+                        // Recalcular keywords para dados filtrados
+                        const keywordCounts: Record<string, number> = {}
+                        filteredData.filteredFeedbacks.forEach(f => {
+                          if (f.keyword && f.keyword.trim() !== '') {
+                            f.keyword.split(';').forEach((keyword: string) => {
+                              const trimmedKeyword = keyword.trim()
+                              if (trimmedKeyword && trimmedKeyword.length > 2) {
+                                keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1
+                              }
+                            })
+                          }
+                        })
+                        return Object.entries(keywordCounts)
+                          .map(([name, count]) => ({ name, count }))
+                          .sort((a, b) => b.count - a.count)
+                          .slice(0, 10)
+                      })()
+                    : hotelData.topKeywords.slice(0, 10)
 
-                    return keywordsToShow
-                  })()}
-                  layout="vertical"
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                  <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 12 }} stroke="#6b7280" />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    width={120} 
-                    tick={{ fontSize: 12, fill: '#6b7280' }}
-                    stroke="#6b7280"
-                  />
-                  <Tooltip 
-                    formatter={(value: any) => [`${value} ocorrências`, 'Quantidade']}
-                    labelFormatter={(label) => `Palavra-chave: ${label}`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(17, 24, 39, 0.95)',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#f9fafb'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="count" 
-                    fill="#10b981" 
-                    radius={[0, 4, 4, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+                  return keywordsToShow.map(keyword => ({
+                    label: keyword.name,
+                    value: keyword.count
+                  }))
+                })()}
+              />
             </div>
 
             {/* Lista Detalhada de Palavras-chave */}
@@ -1801,39 +1673,19 @@ export default function HotelDetalhes() {
                   <Badge variant="outline" className="ml-2 text-xs">Filtrado</Badge>
                 )}
               </h4>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={(() => {
+              <ApartmentsChart
+                data={(() => {
                   const filteredData = getFilteredData()
-                  return (selectedSentiment !== 'all' && filteredData 
+                  const apartments = (selectedSentiment !== 'all' && filteredData 
                     ? filteredData.filteredApartmentDetails 
                     : hotelData.apartmentDetails
                   ).slice(0, 10)
-                })()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                  <XAxis 
-                    dataKey="apartment" 
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                    stroke="#6b7280"
-                  />
-                  <YAxis 
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                    stroke="#6b7280"
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'rgba(17, 24, 39, 0.95)',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#f9fafb'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="feedbacks" 
-                    fill="#8b5cf6" 
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+                  return apartments.map(apt => ({
+                    label: apt.apartment,
+                    value: apt.feedbacks
+                  }))
+                })()}
+              />
             </div>
           </Card>
         </TabsContent>
@@ -1842,21 +1694,13 @@ export default function HotelDetalhes() {
           {hotelData.monthlyTrend.length > 0 && (
             <Card className="p-6">
               <h3 className="text-lg font-semibold mb-4">Evolução da Avaliação Média</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={hotelData.monthlyTrend}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis domain={[1, 5]} />
-                  <Tooltip />
-                  <Line 
-                    type="monotone" 
-                    dataKey="rating" 
-                    stroke="#8884d8" 
-                    strokeWidth={3}
-                    dot={{ fill: '#8884d8', strokeWidth: 2, r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <ModernChart
+                type="line"
+                data={hotelData.monthlyTrend.map(trend => ({
+                  label: trend.month,
+                  value: trend.rating
+                }))}
+              />
             </Card>
           )}
 
