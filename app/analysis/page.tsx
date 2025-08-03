@@ -51,9 +51,10 @@ import {
   CalendarDays
 } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
-import { getAllAnalyses, updateFeedbackInFirestore } from '@/lib/firestore-service'
+import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
 import SharedDashboardLayout from "../shared-layout"
 import { useToast } from "@/components/ui/use-toast"
+import { useAuth } from "@/lib/auth-context"
 import { cn, formatDateBR } from "@/lib/utils"
 import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/lib/utils"
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns"
@@ -268,6 +269,80 @@ const scrollbarStyles = `
     from { transform: scale(0.95) translateY(-10px); opacity: 0; }
     to { transform: scale(1) translateY(0); opacity: 1; }
   }
+
+  /* Animações para edição de feedback */
+  .feedback-editing {
+    animation: editPulse 3s ease-in-out forwards;
+    background: linear-gradient(90deg, #dcfce7, #bbf7d0) !important;
+    border-left: 4px solid #22c55e !important;
+    position: relative;
+    transition: all 0.3s ease;
+  }
+
+  .dark .feedback-editing {
+    background: linear-gradient(90deg, #14532d, #166534) !important;
+  }
+
+  .feedback-edited-flag {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #22c55e;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 10;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  }
+
+  .feedback-edited-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(34, 197, 94, 0.95);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    z-index: 1000;
+    animation: fadeInOut 3s ease-in-out;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  @keyframes editPulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.8);
+      background: linear-gradient(90deg, #dcfce7, #bbf7d0) !important;
+    }
+    15% {
+      transform: scale(1.03);
+      box-shadow: 0 0 0 10px rgba(34, 197, 94, 0.4);
+      background: linear-gradient(90deg, #bbf7d0, #86efac) !important;
+    }
+    30% {
+      transform: scale(1.02);
+      box-shadow: 0 0 0 15px rgba(34, 197, 94, 0.2);
+      background: linear-gradient(90deg, #86efac, #bbf7d0) !important;
+    }
+    60% {
+      transform: scale(1.01);
+      box-shadow: 0 0 0 8px rgba(34, 197, 94, 0.1);
+      background: linear-gradient(90deg, #bbf7d0, #dcfce7) !important;
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+      background: linear-gradient(90deg, #dcfce7, #f3f4f6) !important;
+    }
+  }
 `;
 
 // Mapa de cores para sentimentos
@@ -456,10 +531,11 @@ const StatsCard = ({ icon: Icon, title, value, change, color }: {
 );
 
 // Componente para Modal de Comentário Completo
-const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback }: { 
+const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData }: { 
   feedback: Feedback, 
   onFeedbackUpdated?: (updatedFeedback: Feedback) => void,
-  onDeleteFeedback?: (feedback: Feedback) => void 
+  onDeleteFeedback?: (feedback: Feedback) => void,
+  userData?: any
 }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
@@ -583,6 +659,30 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback }: {
       
       // Salvar no Firebase
       await updateFeedbackInFirestore(feedback.id, updatedFeedback)
+      
+      // Salvar no histórico de edições
+      await saveRecentEdit({
+        feedbackId: feedback.id,
+        hotelId: feedback.hotelId || feedback.id.split('_')[0] || 'unknown',
+        hotelName: userData?.hotelName || feedback.hotel || 'Hotel não identificado',
+        comment: feedback.comment,
+        rating: feedback.rating,
+        date: feedback.date,
+        source: feedback.source || 'Sistema',
+        oldClassification: {
+          keyword: feedback.keyword || '',
+          sector: feedback.sector || '',
+          problem: feedback.problem || ''
+        },
+        newClassification: {
+          keyword: keywords,
+          sector: sectors,
+          problem: problems
+        },
+        modifiedAt: new Date().toISOString(),
+        modifiedBy: userData?.email || 'Colaborador',
+        page: 'analysis'
+      })
       
       setIsEditing(false)
       
@@ -1008,6 +1108,8 @@ const ProblemEditor = ({
   const [problemInputMode, setProblemInputMode] = useState(false);
   const [keywordInput, setKeywordInput] = useState('');
   const [problemInput, setProblemInput] = useState('');
+  const [keywordJustEdited, setKeywordJustEdited] = useState(false);
+  const [problemJustEdited, setProblemJustEdited] = useState(false);
 
   useEffect(() => {
     onUpdate({ keyword, sector, problem: problemText });
@@ -1022,30 +1124,56 @@ const ProblemEditor = ({
 
   const handleKeywordInputModeToggle = () => {
     if (!keywordInputMode) {
-      setKeywordInput(keyword);
+      // Sempre usar o valor atual como ponto de partida para edição
+      setKeywordInput(keyword || '');
     }
     setKeywordInputMode(!keywordInputMode);
   };
 
   const handleProblemInputModeToggle = () => {
     if (!problemInputMode) {
-      setProblemInput(problemText);
+      // Sempre usar o valor atual como ponto de partida para edição
+      setProblemInput(problemText || '');
     }
     setProblemInputMode(!problemInputMode);
   };
 
   const handleKeywordInputSave = () => {
-    if (keywordInput.trim()) {
-      setKeyword(keywordInput.trim());
+    const trimmedValue = keywordInput.trim();
+    if (trimmedValue) {
+      setKeyword(trimmedValue);
+      // Só sair do modo de input se o valor estiver na lista de opções predefinidas
+      const isPreDefined = commonKeywords.includes(trimmedValue);
+      setKeywordInputMode(!isPreDefined);
+      
+      // Mostrar feedback visual de sucesso
+      setKeywordJustEdited(true);
+      setTimeout(() => setKeywordJustEdited(false), 2000);
+      
+      onUpdate({ keyword: trimmedValue, sector, problem: problemText });
+    } else {
+      // Se o valor estiver vazio, manter no modo de edição
+      setKeywordInput(keyword || '');
     }
-    setKeywordInputMode(false);
   };
 
   const handleProblemInputSave = () => {
-    if (problemInput.trim()) {
-      setProblemText(problemInput.trim());
+    const trimmedValue = problemInput.trim();
+    if (trimmedValue) {
+      setProblemText(trimmedValue);
+      // Só sair do modo de input se o valor estiver na lista de opções predefinidas
+      const isPreDefined = commonProblems.includes(trimmedValue);
+      setProblemInputMode(!isPreDefined);
+      
+      // Mostrar feedback visual de sucesso
+      setProblemJustEdited(true);
+      setTimeout(() => setProblemJustEdited(false), 2000);
+      
+      onUpdate({ keyword, sector, problem: trimmedValue });
+    } else {
+      // Se o valor estiver vazio, manter no modo de edição
+      setProblemInput(problemText || '');
     }
-    setProblemInputMode(false);
   };
 
   return (
@@ -1078,15 +1206,40 @@ const ProblemEditor = ({
               <Input
                 value={keywordInput}
                 onChange={(e) => setKeywordInput(e.target.value)}
-                className="text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleKeywordInputSave();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setKeywordInput(keyword);
+                    setKeywordInputMode(false);
+                  }
+                }}
+                className={cn(
+                  "text-sm transition-all duration-300",
+                  keywordJustEdited 
+                    ? "border-green-300 dark:border-green-700 focus:ring-green-200 dark:focus:ring-green-800" 
+                    : "focus:ring-blue-200 dark:focus:ring-blue-800"
+                )}
                 placeholder="Digite palavra-chave personalizada"
+                autoFocus
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleKeywordInputSave} className="text-xs">
-                  OK
+                <Button 
+                  size="sm" 
+                  onClick={handleKeywordInputSave} 
+                  className={cn(
+                    "text-xs transition-all duration-300",
+                    keywordJustEdited 
+                      ? "bg-green-600 hover:bg-green-700 text-white" 
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  )}
+                >
+                  {keywordJustEdited ? '✓ Salvo' : 'OK'}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => {
-                  setKeywordInput('');
+                  setKeywordInput(keyword);
                   setKeywordInputMode(false);
                 }} className="text-xs">
                   Cancelar
@@ -1095,23 +1248,49 @@ const ProblemEditor = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Select value={keyword} onValueChange={setKeyword}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Selecione palavra-chave" />
-                </SelectTrigger>
-                <SelectContent>
-                  {commonKeywords.map((kw) => (
-                    <SelectItem key={kw} value={kw}>{kw}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Se o valor atual não está na lista predefinida, mostrar como input readonly */}
+              {!commonKeywords.includes(keyword) && keyword ? (
+                <div className="relative">
+                  <Input
+                    value={keyword}
+                    readOnly
+                    className={cn(
+                      "text-sm font-medium transition-all duration-500",
+                      keywordJustEdited 
+                        ? "bg-green-100 dark:bg-green-950/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200 shadow-md ring-2 ring-green-200 dark:ring-green-800" 
+                        : "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300"
+                    )}
+                  />
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                    {keywordJustEdited && (
+                      <div className="text-green-600 dark:text-green-400 text-xs font-bold animate-pulse">
+                        ✓
+                      </div>
+                    )}
+                    <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                      Personalizado
+                    </Badge>
+                  </div>
+                </div>
+              ) : (
+                <Select value={keyword} onValueChange={setKeyword}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Selecione palavra-chave" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {commonKeywords.map((kw) => (
+                      <SelectItem key={kw} value={kw}>{kw}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={handleKeywordInputModeToggle}
                 className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
               >
-                + Personalizar
+                {!commonKeywords.includes(keyword) && keyword ? '✏️ Editar' : '+ Personalizar'}
               </Button>
             </div>
           )}
@@ -1149,15 +1328,40 @@ const ProblemEditor = ({
               <Input
                 value={problemInput}
                 onChange={(e) => setProblemInput(e.target.value)}
-                className="text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleProblemInputSave();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setProblemInput(problemText);
+                    setProblemInputMode(false);
+                  }
+                }}
+                className={cn(
+                  "text-sm transition-all duration-300",
+                  problemJustEdited 
+                    ? "border-green-300 dark:border-green-700 focus:ring-green-200 dark:focus:ring-green-800" 
+                    : "focus:ring-blue-200 dark:focus:ring-blue-800"
+                )}
                 placeholder="Digite problema personalizado"
+                autoFocus
               />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleProblemInputSave} className="text-xs">
-                  OK
+                <Button 
+                  size="sm" 
+                  onClick={handleProblemInputSave} 
+                  className={cn(
+                    "text-xs transition-all duration-300",
+                    problemJustEdited 
+                      ? "bg-green-600 hover:bg-green-700 text-white" 
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  )}
+                >
+                  {problemJustEdited ? '✓ Salvo' : 'OK'}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => {
-                  setProblemInput('');
+                  setProblemInput(problemText);
                   setProblemInputMode(false);
                 }} className="text-xs">
                   Cancelar
@@ -1166,29 +1370,55 @@ const ProblemEditor = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Select value={problemText} onValueChange={handleProblemChange}>
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Selecione problema" />
-                </SelectTrigger>
-                <SelectContent>
-                  {commonProblems.map((prob) => (
-                    <SelectItem key={prob} value={prob}>
-                      {prob === 'VAZIO' ? (
-                        <span className="italic text-gray-500">Sem problemas</span>
-                      ) : (
-                        prob
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Se o valor atual não está na lista predefinida, mostrar como input readonly */}
+              {!commonProblems.includes(problemText) && problemText ? (
+                <div className="relative">
+                  <Input
+                    value={problemText}
+                    readOnly
+                    className={cn(
+                      "text-sm font-medium transition-all duration-500",
+                      problemJustEdited 
+                        ? "bg-green-100 dark:bg-green-950/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200 shadow-md ring-2 ring-green-200 dark:ring-green-800" 
+                        : "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
+                    )}
+                  />
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+                    {problemJustEdited && (
+                      <div className="text-green-600 dark:text-green-400 text-xs font-bold animate-pulse">
+                        ✓
+                      </div>
+                    )}
+                    <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                      Personalizado
+                    </Badge>
+                  </div>
+                </div>
+              ) : (
+                <Select value={problemText} onValueChange={handleProblemChange}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Selecione problema" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {commonProblems.map((prob) => (
+                      <SelectItem key={prob} value={prob}>
+                        {prob === 'VAZIO' ? (
+                          <span className="italic text-gray-500">Sem problemas</span>
+                        ) : (
+                          prob
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={handleProblemInputModeToggle}
                 className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
               >
-                + Personalizar
+                {!commonProblems.includes(problemText) && problemText ? '✏️ Editar' : '+ Personalizar'}
               </Button>
             </div>
           )}
@@ -1228,6 +1458,8 @@ export default function AnalysisPage() {
 }
 
 function AnalysisPageContent() {
+  const { userData } = useAuth()
+  
   // Estados principais
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
   const [filteredFeedbacks, setFilteredFeedbacks] = useState<Feedback[]>([])
@@ -1247,6 +1479,12 @@ function AnalysisPageContent() {
   // Estados para animação de exclusão
   const [deletingFeedbacks, setDeletingFeedbacks] = useState<Set<string>>(new Set())
   const [showDeletedIndicator, setShowDeletedIndicator] = useState(false)
+  
+  // Estados para animação de edição
+  const [editingFeedbacks, setEditingFeedbacks] = useState<Set<string>>(new Set())
+  const [editedFeedbacks, setEditedFeedbacks] = useState<Set<string>>(new Set())
+  const [showEditedIndicator, setShowEditedIndicator] = useState(false)
+  const [forceUpdate, setForceUpdate] = useState(0)
   
   // Estados para modal de confirmação de exclusão
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -1368,12 +1606,47 @@ function AnalysisPageContent() {
         setShowDeletedIndicator(false)
       }, 2000)
     } else {
-      // Atualizar feedback editado normalmente
+      // Atualizar feedback editado com animação
       setFilteredFeedbacks(prevFiltered => 
         prevFiltered.map(f => 
           f.id === updatedFeedback.id ? updatedFeedback : f
         )
       )
+      
+      // Adicionar animação de edição
+      setEditingFeedbacks(prev => new Set([...Array.from(prev), updatedFeedback.id]))
+      
+      // Adicionar flag de editado
+      setEditedFeedbacks(prev => new Set([...Array.from(prev), updatedFeedback.id]))
+      
+      // Mostrar indicador de edição
+      setShowEditedIndicator(true)
+      
+      // Remover animação após 3 segundos
+      setTimeout(() => {
+        setEditingFeedbacks(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(updatedFeedback.id)
+          return newSet
+        })
+      }, 3000)
+      
+      // Remover flag de editado após 5 segundos
+      setTimeout(() => {
+        setEditedFeedbacks(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(updatedFeedback.id)
+          return newSet
+        })
+      }, 5000)
+      
+      // Esconder indicador após 3 segundos
+      setTimeout(() => {
+        setShowEditedIndicator(false)
+      }, 3000)
+      
+      // Forçar re-render
+      setForceUpdate(prev => prev + 1)
     }
     
     console.log('✅ Feedback atualizado na lista:', updatedFeedback.id, updatedFeedback.deleted ? '(deletado)' : '(editado)')
@@ -1880,10 +2153,17 @@ function AnalysisPageContent() {
                       <div 
                         key={feedback.id} 
                         className={cn(
-                          "flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px]",
-                          deletingFeedbacks.has(feedback.id) && "feedback-deleting"
+                          "flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px] relative",
+                          deletingFeedbacks.has(feedback.id) && "feedback-deleting",
+                          editingFeedbacks.has(feedback.id) && "feedback-editing"
                         )}
                       >
+                        {/* Flag de editado */}
+                        {editedFeedbacks.has(feedback.id) && (
+                          <div className="feedback-edited-flag">
+                            ✓
+                          </div>
+                        )}
                         <div className="w-24 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-xs flex items-center">
                           <span className="font-medium text-gray-600 dark:text-gray-400">
                             {formatDateBR(feedback.date)}
@@ -1979,7 +2259,7 @@ function AnalysisPageContent() {
                           </div>
                         </div>
                         <div className="w-12 py-4 px-3 text-center flex items-center justify-center">
-                          <CommentModal feedback={feedback} onFeedbackUpdated={handleFeedbackUpdated} onDeleteFeedback={handleDeleteFeedback} />
+                          <CommentModal feedback={feedback} onFeedbackUpdated={handleFeedbackUpdated} onDeleteFeedback={handleDeleteFeedback} userData={userData} />
                         </div>
                       </div>
                     ))}
@@ -2035,6 +2315,20 @@ function AnalysisPageContent() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+        
+        {/* Indicador de feedback editado */}
+        {showEditedIndicator && (
+          <div className="feedback-edited-indicator">
+            ✓ Feedback editado com sucesso!
+          </div>
+        )}
+        
+        {/* Indicador de feedback excluído */}
+        {showDeletedIndicator && (
+          <div className="feedback-deleted-indicator">
+            🗑️ Feedback excluído com sucesso!
           </div>
         )}
       </TooltipProvider>
