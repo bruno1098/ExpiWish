@@ -33,6 +33,8 @@ export type Feedback = {
   apartamento?: string
   allProblems?: ProblemAnalysis[]
   deleted?: boolean // Campo para marcar feedbacks excluídos
+  edited?: boolean // Campo para marcar feedbacks editados
+  importId?: string // ID da importação/análise
 }
 
 import { User as FirebaseUser } from "firebase/auth";

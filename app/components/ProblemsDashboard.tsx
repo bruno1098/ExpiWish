@@ -262,7 +262,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                     className="max-w-sm"
                   />
                 </div>
-                <div className="h-[400px]">
+                <div className="h-[480px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart 
                       data={problemTableData
@@ -501,7 +501,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                   <CardTitle className="text-base">Problemas por Palavra-chave</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[400px]">
+                  <div className="h-[480px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart 
                         data={keywordData}
@@ -562,4 +562,4 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
       </CardContent>
     </Card>
   );
-} 
+}

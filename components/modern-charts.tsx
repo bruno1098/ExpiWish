@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -41,7 +41,78 @@ const MODERN_COLORS = {
     'rgba(6, 182, 212, 0.8)',    // Cyan
     'rgba(236, 72, 153, 0.8)',   // Pink
     'rgba(34, 197, 94, 0.8)',    // Green
+    'rgba(251, 113, 133, 0.8)',  // Rose
+    'rgba(168, 85, 247, 0.8)',   // Purple
+    'rgba(14, 165, 233, 0.8)',   // Sky Blue
+    'rgba(34, 211, 238, 0.8)',   // Light Blue
+    'rgba(52, 211, 153, 0.8)',   // Teal
+    'rgba(132, 204, 22, 0.8)',   // Lime
+    'rgba(251, 191, 36, 0.8)',   // Yellow
+    'rgba(251, 146, 60, 0.8)',   // Orange
+    'rgba(248, 113, 113, 0.8)',  // Light Red
+    'rgba(196, 181, 253, 0.8)',  // Light Purple
+    'rgba(147, 197, 253, 0.8)',  // Light Blue 2
+    'rgba(110, 231, 183, 0.8)',  // Light Green
+    'rgba(254, 215, 170, 0.8)',  // Peach
+    'rgba(252, 165, 165, 0.8)',  // Light Pink
+    'rgba(167, 139, 250, 0.8)',  // Medium Purple
+    'rgba(96, 165, 250, 0.8)',   // Medium Blue
+    'rgba(74, 222, 128, 0.8)',   // Medium Green
+    'rgba(251, 207, 232, 0.8)',  // Very Light Pink
+    'rgba(196, 164, 132, 0.8)',  // Brown
+    'rgba(156, 163, 175, 0.8)',  // Gray
+    'rgba(75, 85, 99, 0.8)',     // Dark Gray
+    'rgba(220, 38, 127, 0.8)',   // Deep Pink
+    'rgba(147, 51, 234, 0.8)',   // Deep Purple
+    'rgba(29, 78, 216, 0.8)',    // Deep Blue
+    'rgba(5, 150, 105, 0.8)',    // Deep Green
+    'rgba(217, 119, 6, 0.8)',    // Deep Orange
+    'rgba(185, 28, 28, 0.8)',    // Deep Red
+    'rgba(120, 113, 108, 0.8)',  // Stone
+    'rgba(87, 83, 78, 0.8)',     // Dark Stone
+    'rgba(254, 240, 138, 0.8)',  // Light Yellow
+    'rgba(187, 247, 208, 0.8)',  // Very Light Green
+    'rgba(165, 243, 252, 0.8)',  // Very Light Cyan
+    'rgba(233, 213, 255, 0.8)',  // Very Light Purple
+    'rgba(254, 202, 202, 0.8)',  // Very Light Red
+    'rgba(255, 237, 213, 0.8)',  // Very Light Orange
+    'rgba(219, 234, 254, 0.8)',  // Very Light Blue
+    'rgba(240, 253, 244, 0.8)',  // Very Light Green 2
+    'rgba(67, 56, 202, 0.8)',    // Indigo Dark
+    'rgba(91, 33, 182, 0.8)',    // Purple Dark
+    'rgba(190, 18, 60, 0.8)',    // Rose Dark
+    'rgba(15, 118, 110, 0.8)',   // Teal Dark
+    'rgba(101, 163, 13, 0.8)',   // Lime Dark
+    'rgba(202, 138, 4, 0.8)',    // Yellow Dark
   ],
+  // Cores específicas por categoria
+  categories: {
+    department: {
+      background: 'rgba(99, 102, 241, 0.8)',   // Indigo para departamentos
+      border: 'rgba(99, 102, 241, 1)',
+      hover: 'rgba(99, 102, 241, 0.9)'
+    },
+    keyword: {
+      background: 'rgba(16, 185, 129, 0.8)',   // Emerald para palavras-chave
+      border: 'rgba(16, 185, 129, 1)',
+      hover: 'rgba(16, 185, 129, 0.9)'
+    },
+    language: {
+      background: 'rgba(245, 158, 11, 0.8)',   // Amber para idiomas
+      border: 'rgba(245, 158, 11, 1)',
+      hover: 'rgba(245, 158, 11, 0.9)'
+    },
+    source: {
+      background: 'rgba(139, 92, 246, 0.8)',   // Violet para fontes
+      border: 'rgba(139, 92, 246, 1)',
+      hover: 'rgba(139, 92, 246, 0.9)'
+    },
+    rating: {
+      background: 'rgba(59, 130, 246, 0.8)',   // Azul para avaliações
+      border: 'rgba(59, 130, 246, 1)',
+      hover: 'rgba(59, 130, 246, 0.9)'
+    }
+  },
   borders: [
     'rgba(99, 102, 241, 1)',
     'rgba(16, 185, 129, 1)',
@@ -51,6 +122,49 @@ const MODERN_COLORS = {
     'rgba(6, 182, 212, 1)',
     'rgba(236, 72, 153, 1)',
     'rgba(34, 197, 94, 1)',
+    'rgba(251, 113, 133, 1)',
+    'rgba(168, 85, 247, 1)',
+    'rgba(14, 165, 233, 1)',
+    'rgba(34, 211, 238, 1)',
+    'rgba(52, 211, 153, 1)',
+    'rgba(132, 204, 22, 1)',
+    'rgba(251, 191, 36, 1)',
+    'rgba(251, 146, 60, 1)',
+    'rgba(248, 113, 113, 1)',
+    'rgba(196, 181, 253, 1)',
+    'rgba(147, 197, 253, 1)',
+    'rgba(110, 231, 183, 1)',
+    'rgba(254, 215, 170, 1)',
+    'rgba(252, 165, 165, 1)',
+    'rgba(167, 139, 250, 1)',
+    'rgba(96, 165, 250, 1)',
+    'rgba(74, 222, 128, 1)',
+    'rgba(251, 207, 232, 1)',
+    'rgba(196, 164, 132, 1)',
+    'rgba(156, 163, 175, 1)',
+    'rgba(75, 85, 99, 1)',
+    'rgba(220, 38, 127, 1)',
+    'rgba(147, 51, 234, 1)',
+    'rgba(29, 78, 216, 1)',
+    'rgba(5, 150, 105, 1)',
+    'rgba(217, 119, 6, 1)',
+    'rgba(185, 28, 28, 1)',
+    'rgba(120, 113, 108, 1)',
+    'rgba(87, 83, 78, 1)',
+    'rgba(254, 240, 138, 1)',
+    'rgba(187, 247, 208, 1)',
+    'rgba(165, 243, 252, 1)',
+    'rgba(233, 213, 255, 1)',
+    'rgba(254, 202, 202, 1)',
+    'rgba(255, 237, 213, 1)',
+    'rgba(219, 234, 254, 1)',
+    'rgba(240, 253, 244, 1)',
+    'rgba(67, 56, 202, 1)',
+    'rgba(91, 33, 182, 1)',
+    'rgba(190, 18, 60, 1)',
+    'rgba(15, 118, 110, 1)',
+    'rgba(101, 163, 13, 1)',
+    'rgba(202, 138, 4, 1)',
   ],
   gradients: [
     'linear-gradient(135deg, rgba(99, 102, 241, 0.8) 0%, rgba(139, 92, 246, 0.8) 100%)',
@@ -76,69 +190,83 @@ const MODERN_COLORS = {
 };
 
 // Configurações padrão para todos os gráficos
-const defaultOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'top' as const,
-      labels: {
+// Função para detectar se está no modo escuro
+const isDarkMode = () => {
+  if (typeof window !== 'undefined') {
+    return document.documentElement.classList.contains('dark');
+  }
+  return false;
+};
+
+// Função para obter opções baseadas no tema
+const getThemeAwareOptions = () => {
+  const isDark = isDarkMode();
+  
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          usePointStyle: true,
+          padding: 20,
+          font: {
+            size: 12,
+            family: 'Inter, system-ui, sans-serif',
+            weight: '500',
+          },
+          color: isDark ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.8)',
+        },
+      },
+      tooltip: {
+        backgroundColor: isDark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+        titleColor: isDark ? 'white' : 'black',
+        bodyColor: isDark ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.8)',
+        borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 12,
+        titleFont: {
+          size: 14,
+          weight: '600',
+        },
+        bodyFont: {
+          size: 13,
+        },
+        displayColors: true,
         usePointStyle: true,
-        padding: 20,
-        font: {
-          size: 12,
-          family: 'Inter, system-ui, sans-serif',
-          weight: '500',
+      },
+    },
+    scales: {
+      x: {
+        grid: {
+          display: true,
+          color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+        },
+        ticks: {
+          font: {
+            size: 11,
+            family: 'Inter, system-ui, sans-serif',
+          },
+          color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)',
+        },
+      },
+      y: {
+        grid: {
+          display: true,
+          color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+        },
+        ticks: {
+          font: {
+            size: 11,
+            family: 'Inter, system-ui, sans-serif',
+          },
+          color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)',
         },
       },
     },
-    tooltip: {
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      titleColor: 'white',
-      bodyColor: 'white',
-      borderColor: 'rgba(255, 255, 255, 0.1)',
-      borderWidth: 1,
-      cornerRadius: 8,
-      padding: 12,
-      titleFont: {
-        size: 14,
-        weight: '600',
-      },
-      bodyFont: {
-        size: 13,
-      },
-      displayColors: true,
-      usePointStyle: true,
-    },
-  },
-  scales: {
-    x: {
-      grid: {
-        display: true,
-        color: 'rgba(0, 0, 0, 0.05)',
-      },
-      ticks: {
-        font: {
-          size: 11,
-          family: 'Inter, system-ui, sans-serif',
-        },
-        color: 'rgba(0, 0, 0, 0.7)',
-      },
-    },
-    y: {
-      grid: {
-        display: true,
-        color: 'rgba(0, 0, 0, 0.05)',
-      },
-      ticks: {
-        font: {
-          size: 11,
-          family: 'Inter, system-ui, sans-serif',
-        },
-        color: 'rgba(0, 0, 0, 0.7)',
-      },
-    },
-  },
+  };
 };
 
 interface ChartData {
@@ -156,6 +284,7 @@ interface ModernChartProps {
   showValues?: boolean;
   maxItems?: number;
   isSentiment?: boolean;
+  categoryType?: 'department' | 'keyword' | 'language' | 'source' | 'rating';
 }
 
 export function ModernChart({ 
@@ -166,14 +295,36 @@ export function ModernChart({
   height = 300, 
   showValues = false,
   maxItems,
-  isSentiment 
+  isSentiment,
+  categoryType 
 }: ModernChartProps) {
+  const [themeKey, setThemeKey] = useState(0);
+
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          setThemeKey(prev => prev + 1);
+        }
+      });
+    });
+
+    if (typeof window !== 'undefined') {
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+    }
+
+    return () => observer.disconnect();
+  }, []);
   // Limitar dados se necessário
   const limitedData = maxItems ? data.slice(0, maxItems) : data;
   
   // Detectar automaticamente se é um gráfico de sentimento
   const isAutoSentiment = !isSentiment && limitedData.some(item => {
-    const label = (item.name || item.label || '').toLowerCase();
+    const labelValue = item.name || item.label || '';
+    const label = typeof labelValue === 'string' ? labelValue.toLowerCase() : String(labelValue).toLowerCase();
     return label.includes('positiv') || label.includes('negativ') || label.includes('neutr') ||
            label.includes('positive') || label.includes('negative') || label.includes('neutral');
   });
@@ -193,6 +344,47 @@ export function ModernChart({
     return isBackground ? MODERN_COLORS.primary[0] : MODERN_COLORS.borders[0];
   };
   
+  // Função para obter cores por categoria
+  const getCategoryColors = () => {
+    if (shouldUseSentimentColors) {
+      return {
+        background: limitedData.map(item => getSentimentColor(item.name || item.label || '', true)),
+        border: limitedData.map(item => getSentimentColor(item.name || item.label || '', false)),
+        hover: limitedData.map(item => getSentimentColor(item.name || item.label || '', true).replace('0.8', '0.9'))
+      };
+    }
+    
+    if (categoryType && MODERN_COLORS.categories[categoryType]) {
+      const categoryColors = MODERN_COLORS.categories[categoryType];
+      return {
+        background: type === 'pie' || type === 'doughnut' 
+          ? MODERN_COLORS.primary.slice(0, limitedData.length) // Usar cores diferentes para pizza
+          : categoryColors.background,
+        border: type === 'pie' || type === 'doughnut'
+          ? MODERN_COLORS.borders.slice(0, limitedData.length) // Usar bordas diferentes para pizza
+          : categoryColors.border,
+        hover: type === 'pie' || type === 'doughnut'
+          ? MODERN_COLORS.primary.slice(0, limitedData.length).map(color => color.replace('0.8', '0.9')) // Hover diferentes para pizza
+          : categoryColors.hover
+      };
+    }
+    
+    // Cores padrão
+    return {
+      background: type === 'pie' || type === 'doughnut' 
+        ? MODERN_COLORS.primary.slice(0, limitedData.length)
+        : MODERN_COLORS.primary[0],
+      border: type === 'pie' || type === 'doughnut'
+        ? MODERN_COLORS.borders.slice(0, limitedData.length)
+        : MODERN_COLORS.borders[0],
+      hover: type === 'pie' || type === 'doughnut'
+        ? MODERN_COLORS.primary.slice(0, limitedData.length).map(color => color.replace('0.8', '0.9'))
+        : MODERN_COLORS.primary[0].replace('0.8', '0.9')
+    };
+  };
+  
+  const colors = getCategoryColors();
+
   // Preparar dados para Chart.js
   const chartData = {
     labels: limitedData.map(item => {
@@ -204,24 +396,12 @@ export function ModernChart({
       {
         label: title || 'Dados',
         data: limitedData.map(item => item.value),
-        backgroundColor: shouldUseSentimentColors
-          ? limitedData.map(item => getSentimentColor(item.name || item.label || '', true))
-          : (type === 'pie' || type === 'doughnut' 
-            ? MODERN_COLORS.primary.slice(0, limitedData.length)
-            : MODERN_COLORS.primary[0]),
-        borderColor: shouldUseSentimentColors
-          ? limitedData.map(item => getSentimentColor(item.name || item.label || '', false))
-          : (type === 'pie' || type === 'doughnut'
-            ? MODERN_COLORS.borders.slice(0, limitedData.length)
-            : MODERN_COLORS.borders[0]),
+        backgroundColor: colors.background,
+        borderColor: colors.border,
         borderWidth: 2,
         borderRadius: type === 'bar' || type === 'horizontalBar' ? 6 : 0,
         borderSkipped: false,
-        hoverBackgroundColor: shouldUseSentimentColors
-          ? limitedData.map(item => getSentimentColor(item.name || item.label || '', true).replace('0.8', '0.9'))
-          : (type === 'pie' || type === 'doughnut'
-            ? MODERN_COLORS.primary.slice(0, limitedData.length).map(color => color.replace('0.8', '0.9'))
-            : MODERN_COLORS.primary[0].replace('0.8', '0.9')),
+        hoverBackgroundColor: colors.hover,
         hoverBorderWidth: 3,
       },
     ],
@@ -229,7 +409,7 @@ export function ModernChart({
 
   // Configurações específicas por tipo de gráfico
   const getOptions = (): any => {
-    const baseOptions = { ...defaultOptions };
+    const baseOptions = { ...getThemeAwareOptions() };
     
     if (type === 'horizontalBar') {
       return {
@@ -264,6 +444,7 @@ export function ModernChart({
     }
     
     if (type === 'pie' || type === 'doughnut') {
+      const isDark = isDarkMode();
       return {
         responsive: true,
         maintainAspectRatio: false,
@@ -278,25 +459,7 @@ export function ModernChart({
                 family: 'Inter, system-ui, sans-serif',
                 weight: '500',
               },
-              generateLabels: (chart: any) => {
-                const data = chart.data;
-                if (data.labels.length && data.datasets.length) {
-                  return data.labels.map((label: string, i: number) => {
-                    const value = data.datasets[0].data[i];
-                    const total = data.datasets[0].data.reduce((a: number, b: number) => a + b, 0);
-                    const percentage = ((value / total) * 100).toFixed(1);
-                    return {
-                      text: `${label} (${percentage}%)`,
-                      fillStyle: data.datasets[0].backgroundColor[i],
-                      strokeStyle: data.datasets[0].borderColor[i],
-                      lineWidth: 2,
-                      pointStyle: 'circle',
-                      index: i,
-                    };
-                  });
-                }
-                return [];
-              },
+              color: isDark ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.8)',
             },
           },
           tooltip: {
@@ -320,6 +483,7 @@ export function ModernChart({
     }
     
     if (type === 'line') {
+      const isDark = isDarkMode();
       return {
         ...baseOptions,
         elements: {
@@ -331,7 +495,7 @@ export function ModernChart({
             radius: 6,
             hoverRadius: 8,
             borderWidth: 2,
-            backgroundColor: 'white',
+            backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'white',
           },
         },
         plugins: {
@@ -381,21 +545,23 @@ export function ModernChart({
     
     switch (type) {
       case 'horizontalBar':
-        return <Bar data={chartData} options={options} />;
+        return <Bar key={themeKey} data={chartData} options={options} />;
       case 'pie':
-        return <Pie data={chartData} options={options} />;
+        return <Pie key={themeKey} data={chartData} options={options} />;
       case 'doughnut':
-        return <Doughnut data={chartData} options={options} />;
+        return <Doughnut key={themeKey} data={chartData} options={options} />;
       case 'line':
-        return <Line data={chartData} options={options} />;
+        return <Line key={themeKey} data={chartData} options={options} />;
       default:
-        return <Bar data={chartData} options={options} />;
+        return <Bar key={themeKey} data={chartData} options={options} />;
     }
   };
 
   return (
-    <div className="w-full" style={{ height: `${height}px` }}>
-      {renderChart()}
+    <div className="w-full flex items-center justify-center p-4" style={{ minHeight: `${height + 80}px` }}>
+      <div className="w-full max-w-full" style={{ height: `${height}px` }}>
+        {renderChart()}
+      </div>
     </div>
   );
 }
@@ -427,7 +593,7 @@ export function RatingsChart({ data, onClick }: {
       data={data}
       type="bar"
       onClick={onClick}
-      height={300}
+      height={350}
     />
   );
 }
@@ -442,7 +608,8 @@ export function DepartmentsChart({ data, onClick }: {
       data={data}
       type="doughnut"
       onClick={onClick}
-      height={350}
+      height={400}
+      categoryType="department"
     />
   );
 }
@@ -475,6 +642,7 @@ export function KeywordsChart({ data, onClick, maxItems = 10 }: {
       onClick={onClick}
       height={Math.max(300, maxItems * 35)}
       maxItems={maxItems}
+      categoryType="keyword"
     />
   );
 }
@@ -490,23 +658,71 @@ export function ApartmentsChart({ data, onClick, maxItems = 8 }: {
       data={data}
       type="bar"
       onClick={onClick}
-      height={300}
+      height={350}
       maxItems={maxItems}
     />
   );
 }
 
 // Componente específico para gráfico de fontes (pizza)
-export function SourcesChart({ data, onClick }: {
+export function SourcesChart({ data, onClick, categoryType }: {
   data: ChartData[];
   onClick?: (item: ChartData, index: number) => void;
+  categoryType?: 'department' | 'keyword' | 'language' | 'source';
 }) {
   return (
     <ModernChart
       data={data}
       type="pie"
       onClick={onClick}
-      height={300}
+      height={400}
+      categoryType={categoryType || "source"}
+    />
+  );
+}
+
+// Componente para gráfico de tendência de problemas
+export function ProblemsTrendChart({ data, onClick }: {
+  data: ChartData[];
+  onClick?: (item: ChartData, index: number) => void;
+}) {
+  return (
+    <ModernChart 
+      data={data} 
+      type="line" 
+      onClick={onClick}
+      height={350}
+    />
+  );
+}
+
+// Componente para gráfico de problemas por sentimento
+export function ProblemsBySentimentChart({ data, onClick }: {
+  data: ChartData[];
+  onClick?: (item: ChartData, index: number) => void;
+}) {
+  return (
+    <ModernChart 
+      data={data} 
+      type="bar" 
+      onClick={onClick}
+      isSentiment={true}
+      height={350}
+    />
+  );
+}
+
+// Componente para gráfico de distribuição de problemas por categoria
+export function ProblemsDistributionChart({ data, onClick }: {
+  data: ChartData[];
+  onClick?: (item: ChartData, index: number) => void;
+}) {
+  return (
+    <ModernChart 
+      data={data} 
+      type="doughnut" 
+      onClick={onClick}
+      height={350}
     />
   );
 }
