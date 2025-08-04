@@ -1371,7 +1371,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[300px]">
+              <div className="h-[430px]">
                 <RatingsChart 
                   data={processRatingDistribution(filteredData)}
                   onClick={(item: any, index: number) => {
@@ -1402,7 +1402,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[300px]">
+              <div className="h-[480px]">
                 <ModernChart 
                   data={[
                     { label: 'Positivo', value: filteredData.filter(f => f.sentiment === 'positive').length },
@@ -1434,7 +1434,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[300px]">
+              <div className="h-[450px]">
                 <KeywordsChart 
                   data={processKeywordDistribution(filteredData).slice(0, 8)}
                   onClick={(item: any, index: number) => {
@@ -1461,7 +1461,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[300px]">
+              <div className="h-[480px]">
                 <ModernChart 
                   type="pie"
                   data={processSectorDistribution()}
@@ -1492,7 +1492,7 @@ function DashboardContent() {
                 Ver Detalhes
               </Button>
             </div>
-            <div className="h-[400px]">
+            <div className="h-[480px]">
               <ProblemsChart 
                 data={processProblemDistribution(filteredData)}
                 onClick={(item: any, index: number) => {
@@ -1523,7 +1523,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[300px]">
+              <div className="h-[480px]">
                 <ModernChart 
                   type="pie"
                   data={processLanguageDistribution(filteredData)}
@@ -1557,7 +1557,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[300px]">
+              <div className="h-[480px]">
                 <ModernChart 
                   type="bar"
                   data={processSourceDistribution(filteredData).map((source: any) => {
@@ -1578,24 +1578,13 @@ function DashboardContent() {
           {/* Volume de Feedbacks por Fonte */}
           <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <h3 className="text-lg font-semibold mb-4">Volume de Feedbacks por Fonte</h3>
-            <div className="h-[300px]">
+            <div className="h-[480px]">
               <SourcesChart 
-                data={getTimePeriodData(filteredData, 'source').data}
+                data={processSourceDistribution(filteredData)}
                 onClick={(item: any, index: number) => {
                   handleChartClick(item, 'source');
                 }}
               />
-            </div>
-            <div className="text-xs text-center text-muted-foreground mt-2">
-              Agrupamento automático: {(() => {
-                const { period } = getTimePeriodData(filteredData, 'source');
-                switch(period) {
-                  case 'day': return 'por dia (dados recentes)';
-                  case 'week': return 'por semana (dados de algumas semanas)';
-                  case 'month': return 'por mês (dados de vários meses)';
-                  default: return 'por período';
-                }
-              })()}
             </div>
           </Card>
         </TabsContent>
@@ -1620,7 +1609,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[400px]">
+              <div className="h-[480px]">
                 <ApartmentsChart 
                   data={processApartamentoDistribution().slice(0, 15)}
                   onClick={(item: any, index: number) => {
@@ -1647,7 +1636,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[400px]">
+              <div className="h-[480px]">
                 <ModernChart 
                   type="bar"
                   data={processApartamentoScatterData().map((item: any) => ({
@@ -1765,7 +1754,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[300px]">
+              <div className="h-[430px]">
                 <RatingsChart 
                   data={processRatingDistribution(filteredData)}
                   onClick={(item: any, index: number) => {
@@ -1796,7 +1785,7 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[300px]">
+              <div className="h-[480px]">
                 <ModernChart 
                   type="pie"
                   data={[
@@ -1815,7 +1804,7 @@ function DashboardContent() {
           {/* Evolução das Avaliações ao Longo do Tempo */}
           <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <h3 className="text-lg font-semibold mb-4">Evolução das Avaliações ao Longo do Tempo</h3>
-            <div className="h-[400px]">
+            <div className="h-[480px]">
               <ModernChart 
                 type="bar"
                 data={getTimePeriodData(filteredData, 'rating').data.map((item: any) => ({

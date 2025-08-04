@@ -50,9 +50,6 @@ import {
 } from "lucide-react";
 import { formatDateBR } from "@/lib/utils";
 import {
-  ResponsiveContainer
-} from "recharts";
-import {
   ModernChart,
   ProblemsChart,
   RatingsChart,
@@ -2018,8 +2015,9 @@ function AdminDashboardContent() {
                     Ver Detalhes
                   </Button>
                 </div>
-                <div className="h-[300px]">
+                <div className="h-[430px]">
                   <RatingsChart 
+                    key={`ratings-chart-${Date.now()}`}
                     data={processRatingDistribution()}
                     onClick={(item) => handleChartClick(item, 'rating')}
                   />
@@ -2043,8 +2041,9 @@ function AdminDashboardContent() {
                     Ver Detalhes
                   </Button>
                 </div>
-                <div className="h-[300px]">
+                <div className="h-[430px]">
                   <ProblemsChart 
+                    key={`problems-chart-${Date.now()}`}
                     data={processProblemDistribution()}
                     onClick={(item) => handleChartClick(item, 'problem')}
                     maxItems={6}
@@ -2069,8 +2068,9 @@ function AdminDashboardContent() {
                     Ver Detalhes
                   </Button>
                 </div>
-                <div className="h-[300px]">
+                <div className="h-[450px]">
                   <KeywordsChart 
+                    key={`keywords-chart-${Date.now()}`}
                     data={processKeywordDistribution()}
                     onClick={(item) => handleChartClick(item, 'keyword')}
                     maxItems={8}
@@ -2095,8 +2095,9 @@ function AdminDashboardContent() {
                     Ver Detalhes
                   </Button>
                 </div>
-                <div className="h-[300px]">
+                <div className="h-[480px]">
                   <DepartmentsChart 
+                    key={`departments-chart-${Date.now()}`}
                     data={processSectorDistribution()}
                     onClick={(item) => handleChartClick(item, 'sector')}
                   />
@@ -2108,8 +2109,9 @@ function AdminDashboardContent() {
               {/* Análise de Apartamentos */}
               <Card className="p-4">
                                 <h3 className="text-lg font-semibold mb-4">Análise de Apartamentos</h3>
-                <div className="h-[300px]">
+                <div className="h-[430px]">
                   <ApartmentsChart 
+                    key={`apartments-chart-${Date.now()}`}
                     data={processApartamentoDistribution().map(item => ({
                       label: item.name,
                       value: item.value,
@@ -2124,8 +2126,9 @@ function AdminDashboardContent() {
               {/* Distribuição por Fonte */}
               <Card className="p-4">
                 <h3 className="text-lg font-semibold mb-4">Distribuição por Fonte</h3>
-                <div className="h-[300px]">
+                <div className="h-[480px]">
                   <SourcesChart 
+                    key={`sources-chart-${Date.now()}`}
                     data={processSourceDistribution()}
                     onClick={(item) => handleChartClick(item, 'source')}
                   />
@@ -2156,8 +2159,9 @@ function AdminDashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[400px]">
+              <div className="h-[480px]">
                 <HotelsChart 
+                  key={`hotels-chart-${Date.now()}`}
                   data={hotelStats.map(stat => ({
                     label: stat.hotel,
                     value: stat.totalFeedbacks,
@@ -2359,7 +2363,7 @@ function AdminDashboardContent() {
                     Ver Detalhes
                   </Button>
                 </div>
-                <div className="h-[400px]">
+                <div className="h-[480px]">
                   <ProblemsChart 
                     data={processProblemDistribution().slice(0, 15)}
                     onClick={(item: any) => handleChartClick(item, 'problem')}
@@ -2383,7 +2387,7 @@ function AdminDashboardContent() {
                     Ver Detalhes
                   </Button>
                 </div>
-                <div className="h-[400px]">
+                <div className="h-[480px]">
                   <ProblemsChart 
                     data={processProblemDistribution().slice(0, 10)}
                     onClick={(item: any) => handleChartClick(item, 'problem')}
@@ -2493,7 +2497,7 @@ function AdminDashboardContent() {
                     Ver Detalhes
                   </Button>
                 </div>
-                <div className="h-[300px]">
+                <div className="h-[430px]">
                   <RatingsChart 
                     data={processRatingDistribution()}
                     onClick={(item) => handleChartClick(item, 'rating')}
@@ -2522,7 +2526,7 @@ function AdminDashboardContent() {
                     Ver Detalhes
                   </Button>
                 </div>
-                <div className="h-[300px]">
+                <div className="h-[480px]">
                   <ModernChart 
                     data={[
                       { label: 'Positivo', value: (getCurrentData() || []).filter(f => f.sentiment === 'positive').length, name: 'Positivo' },
@@ -2538,7 +2542,7 @@ function AdminDashboardContent() {
 
             <Card className="p-4">
               <h3 className="text-lg font-semibold mb-4">Volume de Feedbacks por Fonte</h3>
-              <div className="h-[300px]">
+              <div className="h-[480px]">
                 <SourcesChart 
                   data={processSourceDistribution()}
                   onClick={(item: any) => handleChartClick(item, 'source')}
@@ -2570,7 +2574,7 @@ function AdminDashboardContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[400px]">
+                  <div className="h-[480px]">
                     <ApartmentsChart 
                       data={processApartamentoDistribution().slice(0, 15).map(item => ({ label: item.name, value: item.value }))}
                       onClick={(item: any) => handleChartClick(item, 'apartamento')}
@@ -2588,7 +2592,7 @@ function AdminDashboardContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[400px]">
+                  <div className="h-[480px]">
                     <ApartmentsChart 
                       data={processApartamentoDetailsData().map(item => ({ label: item.apartamento, value: item.count }))}
                       onClick={(item: any) => handleChartClick({name: item.label}, 'apartamento')}
