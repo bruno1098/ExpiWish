@@ -57,7 +57,10 @@ import {
   HotelsChart,
   KeywordsChart,
   ApartmentsChart,
-  SourcesChart
+  SourcesChart,
+  ProblemsTrendChart,
+  ProblemsBySentimentChart,
+  ProblemsDistributionChart
 } from "@/components/modern-charts";
 import { 
   filterValidFeedbacks, 
@@ -429,15 +432,45 @@ function AdminDashboardContent() {
     const department = feedback.department?.toLowerCase()?.trim() || '';
     const sector = feedback.sector?.toLowerCase()?.trim() || '';
     
-    // Verifica se o feedback é marcado como "não identificado"
-    return keyword.includes('não identificado') ||
-           problem.includes('não identificado') ||
-           department.includes('não identificado') ||
-           sector.includes('não identificado') ||
-           problem === 'não identificado' ||
-           keyword === 'não identificado' ||
-           department === 'não identificado' ||
-           sector === 'não identificado';
+    // Verificar se há problemas válidos no feedback
+     const problems = problem.split(',').map((p: string) => p.trim());
+     const hasValidProblems = problems.some((p: string) => {
+       const normalizedProblem = p.toLowerCase().trim();
+      const invalidProblems = [
+        'VAZIO', 
+        'sem problemas', 
+        'nao identificado', 
+        'não identificado',
+        'sem problema',
+        'nenhum problema',
+        'ok',
+        'tudo ok',
+        'sem',
+        'n/a',
+        'na',
+        '-',
+        ''
+      ];
+      return !invalidProblems.includes(normalizedProblem) && 
+             !normalizedProblem.includes('vazio') &&
+             !normalizedProblem.includes('sem problemas') &&
+             normalizedProblem.length > 2;
+    });
+    
+    // Se há problemas válidos, não considerar como "não identificado"
+    if (hasValidProblems) {
+      return false;
+    }
+    
+    // Só considerar "não identificado" se TODOS os campos importantes forem inválidos
+    const isKeywordInvalid = keyword.includes('não identificado') || keyword === 'não identificado' || keyword === '';
+    const isProblemInvalid = problem.includes('não identificado') || problem === 'não identificado' || problem === '';
+    const isDepartmentInvalid = department.includes('não identificado') || department === 'não identificado' || department === '';
+    const isSectorInvalid = sector.includes('não identificado') || sector === 'não identificado' || sector === '';
+    
+    // Considerar não identificado apenas se a maioria dos campos for inválida
+    const invalidCount = [isKeywordInvalid, isProblemInvalid, isDepartmentInvalid, isSectorInvalid].filter(Boolean).length;
+    return invalidCount >= 3; // Se 3 ou mais campos forem inválidos
   };
 
   // Função centralizada para obter dados consistentes
@@ -533,10 +566,12 @@ function AdminDashboardContent() {
         filteredFeedbacks = dataToUse.filter((feedback: any) => {
           if (feedback.sector && typeof feedback.sector === 'string') {
             // Usar a mesma lógica de divisão por ';' que o processSectorDistribution
-            return feedback.sector.split(';').map((s: string) => s.trim()).includes(sectorLabel);
+            const sectors = feedback.sector.split(';').map((s: string) => s.trim());
+            return sectors.includes(sectorLabel) && sectors.every((s: string) => s !== 'VAZIO');
           }
           if (feedback.department && typeof feedback.department === 'string') {
-            return feedback.department.split(';').map((d: string) => d.trim()).includes(sectorLabel);
+            const departments = feedback.department.split(';').map((d: string) => d.trim());
+            return departments.includes(sectorLabel) && departments.every((d: string) => d !== 'VAZIO');
           }
           return false;
         });
@@ -696,6 +731,24 @@ function AdminDashboardContent() {
            normalizedProblem.length > 2; // Evitar problemas muito curtos
   };
 
+  // Função para validar problemas considerando o contexto (permite VAZIO quando há outros problemas)
+  const isValidProblemWithContext = (problem: string, allProblems: string[]): boolean => {
+    if (!problem || typeof problem !== 'string') return false;
+    
+    const normalizedProblem = problem.toLowerCase().trim();
+    
+    // Se for VAZIO, só é válido se houver outros problemas válidos no mesmo feedback
+    if (normalizedProblem === 'vazio') {
+      const otherValidProblems = allProblems.filter(p => 
+        p.toLowerCase().trim() !== 'vazio' && isValidProblem(p)
+      );
+      return otherValidProblems.length > 0;
+    }
+    
+    // Para outros problemas, usar a validação normal
+    return isValidProblem(problem);
+  };
+
   // Função para determinar o período de agrupamento automaticamente
   const getTimePeriodData = (data: any[], sourceField: string = 'language') => {
     if (!data || data.length === 0) return { period: 'day', data: [] };
@@ -783,17 +836,29 @@ function AdminDashboardContent() {
     
     dataToUse.forEach(feedback => {
       if (feedback.problem) {
-        feedback.problem.split(';').forEach((problem: string) => {
-          const trimmedProblem = problem.trim();
-          if (trimmedProblem && isValidProblem(trimmedProblem)) {
-            problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
-          }
-        });
+        const allProblems = feedback.problem.split(';').map((p: string) => p.trim());
+        
+        // Verificar se o feedback tem pelo menos um problema válido (incluindo VAZIO se acompanhado)
+        const hasValidProblems = allProblems.some((problem: string) => 
+          isValidProblemWithContext(problem, allProblems)
+        );
+        
+        // Se o feedback tem problemas válidos, contar todos os problemas válidos exceto VAZIO
+        if (hasValidProblems) {
+          allProblems.forEach((problem: string) => {
+            const trimmedProblem = problem.trim();
+            // Contar apenas problemas válidos que não sejam VAZIO
+            if (trimmedProblem && 
+                isValidProblem(trimmedProblem) && 
+                trimmedProblem.toLowerCase() !== 'vazio') {
+              problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
+            }
+          });
+        }
       }
     });
     
     return Object.entries(problemCounts)
-      .filter(([problem]) => isValidProblem(problem)) // Dupla verificação
       .map(([problem, count]) => ({ label: problem, value: count }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 20);
@@ -835,28 +900,75 @@ function AdminDashboardContent() {
   };
 
   const processSectorDistribution = (data?: any[]) => {
-    const sectorCounts: Record<string, number> = {};
-    
     // Usar dados fornecidos ou função centralizada para garantir consistência
     const dataToUse = data && data.length > 0 ? data : getCurrentData();
-
+    
+    // Contar feedbacks por departamento
+    const sectorCounts: Record<string, number> = {};
+    
     (dataToUse || []).forEach(feedback => {
-      if (feedback.sector) {
-        feedback.sector.split(';').forEach((sector: string) => {
-          const trimmedSector = sector.trim();
-          if (trimmedSector) {
-            sectorCounts[trimmedSector] = (sectorCounts[trimmedSector] || 0) + 1;
+      if (feedback.problem && feedback.sector) {
+        const allProblems = feedback.problem.split(';').map((p: string) => p.trim());
+        const allSectors = feedback.sector.split(';').map((s: string) => s.trim());
+        
+        // Verificar se há problemas válidos neste feedback (incluindo VAZIO se acompanhado)
+        const hasValidProblems = allProblems.some((problem: string) => 
+          isValidProblemWithContext(problem, allProblems)
+        );
+        
+        // Se o feedback tem problemas válidos, contar para cada departamento válido
+        if (hasValidProblems) {
+          allSectors.forEach((sector: string) => {
+            const trimmedSector = sector.trim();
+            if (trimmedSector && trimmedSector !== 'VAZIO') {
+              sectorCounts[trimmedSector] = (sectorCounts[trimmedSector] || 0) + 1;
+            }
+          });
+        }
+      }
+    });
+    
+    return Object.entries(sectorCounts)
+      .map(([sector, count]) => ({ label: sector, value: count }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+  };
+
+  // Nova função melhorada para contar problemas por departamento
+  const processDepartmentProblemsDistribution = (data?: any[]) => {
+    const dataToUse = data && data.length > 0 ? data : getCurrentData();
+    
+    // Contar problemas específicos por departamento
+    const departmentProblems: Record<string, number> = {};
+    
+    (dataToUse || []).forEach(feedback => {
+      if (feedback.problem && feedback.sector) {
+        const allProblems = feedback.problem.split(';').map((p: string) => p.trim());
+        const allSectors = feedback.sector.split(';').map((s: string) => s.trim());
+        
+        // Para cada problema válido, contar em cada departamento válido
+        allProblems.forEach((problem: string) => {
+          const trimmedProblem = problem.trim();
+          if (trimmedProblem && trimmedProblem !== 'VAZIO' && trimmedProblem.toLowerCase() !== 'sem problemas') {
+            allSectors.forEach((sector: string) => {
+              const trimmedSector = sector.trim();
+              if (trimmedSector && trimmedSector !== 'VAZIO') {
+                departmentProblems[trimmedSector] = (departmentProblems[trimmedSector] || 0) + 1;
+              }
+            });
           }
         });
       }
     });
     
-    const result = Object.entries(sectorCounts)
-      .map(([sector, count]) => ({ label: sector, value: count }))
+    return Object.entries(departmentProblems)
+      .map(([department, problemCount]) => ({ 
+        label: department, 
+        value: problemCount,
+        name: department
+      }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 15);
-
-    return result;
   };
 
   const processKeywordDistribution = (data?: any[]) => {
@@ -880,6 +992,73 @@ function AdminDashboardContent() {
       .map(([keyword, count]) => ({ label: keyword, value: count }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 20);
+  };
+
+  // Função para processar problemas por apartamento
+  const processApartamentoProblemsDistribution = () => {
+    const dataToUse = getCurrentData();
+    if (!dataToUse) return [];
+
+    const apartamentoProblems = new Map<string, number>();
+
+    dataToUse.forEach((feedback: any) => {
+      if (!feedback.apartamento) return;
+
+      let hasValidProblems = false;
+
+      // Processar problemas do feedback
+      if (feedback.problems && Array.isArray(feedback.problems)) {
+        feedback.problems.forEach((problem: string) => {
+          if (isValidProblem(problem)) {
+            hasValidProblems = true;
+          }
+        });
+      } else if (feedback.problem && typeof feedback.problem === 'string') {
+        const problems = feedback.problem.split(';').map((p: string) => p.trim());
+        problems.forEach((problem: string) => {
+          if (isValidProblem(problem)) {
+            hasValidProblems = true;
+          }
+        });
+      }
+
+      // Se o apartamento tem problemas válidos, incrementar contador
+      if (hasValidProblems) {
+        const apartamento = feedback.apartamento.toString();
+        apartamentoProblems.set(apartamento, (apartamentoProblems.get(apartamento) || 0) + 1);
+      }
+    });
+
+    return Array.from(apartamentoProblems.entries())
+      .map(([apartamento, count]) => ({ name: apartamento, value: count }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+  };
+
+  const processApartamentosPorHotel = () => {
+    const dataToUse = getCurrentData();
+    if (!dataToUse) return [];
+
+    const hotelApartamentos: Record<string, Set<string>> = {};
+    
+    dataToUse.forEach((feedback: any) => {
+      if (feedback.hotel && feedback.apartamento) {
+        const hotel = feedback.hotel.toString();
+        const apartamento = feedback.apartamento.toString();
+        
+        if (!hotelApartamentos[hotel]) {
+          hotelApartamentos[hotel] = new Set();
+        }
+        hotelApartamentos[hotel].add(apartamento);
+      }
+    });
+
+    return Object.entries(hotelApartamentos)
+      .map(([hotel, apartamentosSet]) => ({ 
+        name: hotel, 
+        value: apartamentosSet.size 
+      }))
+      .sort((a, b) => b.value - a.value);
   };
 
   const processApartamentoDetailsData = () => {
@@ -1990,6 +2169,8 @@ function AdminDashboardContent() {
             <TabsTrigger value="overview">Visão Geral</TabsTrigger>
             <TabsTrigger value="hotels">Hotéis</TabsTrigger>
             <TabsTrigger value="problems">Problemas</TabsTrigger>
+            <TabsTrigger value="departments">Departamentos</TabsTrigger>
+            <TabsTrigger value="keywords">Palavras-chave</TabsTrigger>
             <TabsTrigger value="ratings">Avaliações</TabsTrigger>
             <TabsTrigger value="apartamentos">Apartamentos</TabsTrigger>
             <TabsTrigger value="hoteisApartamentos">Hotéis e Apartamentos</TabsTrigger>
@@ -2134,6 +2315,7 @@ function AdminDashboardContent() {
                   />
                 </div>
               </Card>
+
               </div>
           </TabsContent>
 
@@ -2388,8 +2570,56 @@ function AdminDashboardContent() {
                   </Button>
                 </div>
                 <div className="h-[480px]">
-                  <ProblemsChart 
+                  <ProblemsDistributionChart 
                     data={processProblemDistribution().slice(0, 10)}
+                    onClick={(item: any) => handleChartClick(item, 'problem')}
+                  />
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Departamentos com Mais Problemas</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'sector',
+                      'Departamentos com Mais Problemas',
+                      processDepartmentProblemsDistribution(),
+                      'bar'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
+                <div className="h-[480px]">
+                  <DepartmentsChart 
+                    data={processDepartmentProblemsDistribution()}
+                    onClick={(item: any) => handleChartClick(item, 'sector')}
+                  />
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Tendência de Problemas</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'problem',
+                      'Tendência de Problemas ao Longo do Tempo',
+                      processProblemDistribution().slice(0, 8),
+                      'line'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
+                <div className="h-[480px]">
+                  <ProblemsTrendChart 
+                    data={processProblemDistribution().slice(0, 8)}
                     onClick={(item: any) => handleChartClick(item, 'problem')}
                   />
                 </div>
@@ -2562,8 +2792,259 @@ function AdminDashboardContent() {
             </Card>
           </TabsContent>
 
+          {/* Departamentos */}
+          <TabsContent value="departments" className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Departamentos com Mais Problemas */}
+              <Card className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Ranking de Problemas por Departamento</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'sector',
+                      'Ranking de Problemas por Departamento',
+                      processDepartmentProblemsDistribution(),
+                      'bar'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
+                <div className="h-[480px]">
+                  <DepartmentsChart 
+                    data={processDepartmentProblemsDistribution()}
+                    onClick={(item: any) => handleChartClick(item, 'sector')}
+                  />
+                </div>
+              </Card>
+
+              {/* Distribuição de Feedbacks por Departamento */}
+              <Card className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Distribuição de Feedbacks por Departamento</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'sector',
+                      'Distribuição de Feedbacks por Departamento',
+                      processSectorDistribution(),
+                      'pie'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
+                <div className="h-[480px]">
+                  <ModernChart 
+                    data={processSectorDistribution().map(item => ({ ...item, name: item.label }))}
+                    type="pie"
+                    onClick={(item: any) => handleChartClick(item, 'sector')}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Tabela detalhada de departamentos */}
+            <Card className="p-4">
+              <h3 className="text-lg font-semibold mb-4">Análise Detalhada por Departamento</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="py-2 px-4 bg-muted border-b text-left">Departamento</th>
+                      <th className="py-2 px-4 bg-muted border-b text-center">Total de Problemas</th>
+                      <th className="py-2 px-4 bg-muted border-b text-center">Total de Feedbacks</th>
+                      <th className="py-2 px-4 bg-muted border-b text-center">% Problemas/Feedbacks</th>
+                      <th className="py-2 px-4 bg-muted border-b text-center">Principais Problemas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {processDepartmentProblemsDistribution()
+                      .slice(0, 15)
+                      .map((dept: any, index: number) => {
+                        const dataToUse = getCurrentData();
+                        const totalFeedbacks = processSectorDistribution().find(s => s.label === dept.label)?.value || 0;
+                        const problemPercentage = totalFeedbacks > 0 ? ((dept.value / totalFeedbacks) * 100).toFixed(1) : '0';
+                        
+                        // Buscar principais problemas deste departamento
+                        const departmentProblems = (dataToUse || [])
+                          .filter((item: any) => {
+                            if (item.sector && typeof item.sector === 'string') {
+                              return item.sector.split(';').map((s: string) => s.trim()).includes(dept.label);
+                            }
+                            return false;
+                          })
+                          .flatMap((item: any) => {
+                            if (item.problem && typeof item.problem === 'string') {
+                              return item.problem.split(';').map((p: string) => p.trim()).filter((p: string) => p && p !== 'VAZIO' && p.toLowerCase() !== 'sem problemas');
+                            }
+                            return [];
+                          })
+                          .reduce((acc: Record<string, number>, problem: string) => {
+                            acc[problem] = (acc[problem] || 0) + 1;
+                            return acc;
+                          }, {} as Record<string, number>);
+                        
+                        const topProblems = Object.entries(departmentProblems)
+                          .sort((a, b) => (b[1] as number) - (a[1] as number))
+                          .slice(0, 3)
+                          .map(([problem, count]) => `${problem} (${count})`);
+                        
+                        return (
+                          <tr key={dept.label} className="hover:bg-muted/50">
+                            <td className="py-2 px-4 border-b font-medium">{dept.label}</td>
+                            <td className="py-2 px-4 border-b text-center">
+                              <Badge variant="destructive">{dept.value}</Badge>
+                            </td>
+                            <td className="py-2 px-4 border-b text-center">{totalFeedbacks}</td>
+                            <td className="py-2 px-4 border-b text-center">{problemPercentage}%</td>
+                            <td className="py-2 px-4 border-b text-sm">
+                              {topProblems.length > 0 ? topProblems.join(', ') : 'Nenhum problema identificado'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </TabsContent>
+
+          {/* Palavras-chave */}
+          <TabsContent value="keywords" className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Palavras-chave Mais Frequentes */}
+              <Card className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Palavras-chave Mais Frequentes</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'keyword',
+                      'Palavras-chave Mais Frequentes',
+                      processKeywordDistribution(),
+                      'bar'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
+                <div className="h-[480px]">
+                  <KeywordsChart 
+                    data={processKeywordDistribution()}
+                    onClick={(item: any) => handleChartClick(item, 'keyword')}
+                  />
+                </div>
+              </Card>
+
+              {/* Nuvem de Palavras-chave */}
+              <Card className="p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Distribuição de Palavras-chave</h3>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewChart(
+                      'keyword',
+                      'Distribuição de Palavras-chave',
+                      processKeywordDistribution().slice(0, 10),
+                      'pie'
+                    )}
+                  >
+                    Ver Detalhes
+                  </Button>
+                </div>
+                <div className="h-[480px]">
+                  <ModernChart 
+                    data={processKeywordDistribution().slice(0, 10).map(item => ({ ...item, name: item.label }))}
+                    type="pie"
+                    onClick={(item: any) => handleChartClick(item, 'keyword')}
+                  />
+                </div>
+              </Card>
+            </div>
+
+            {/* Tabela de palavras-chave */}
+            <Card className="p-4">
+              <h3 className="text-lg font-semibold mb-4">Lista de Palavras-chave</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="py-2 px-4 bg-muted border-b text-left">Palavra-chave</th>
+                      <th className="py-2 px-4 bg-muted border-b text-center">Frequência</th>
+                      <th className="py-2 px-4 bg-muted border-b text-center">% do Total</th>
+                      <th className="py-2 px-4 bg-muted border-b text-center">Departamentos Principais</th>
+                      <th className="py-2 px-4 bg-muted border-b text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {processKeywordDistribution()
+                      .slice(0, 20)
+                      .map((keyword: any, index: number) => {
+                        const dataToUse = getCurrentData();
+                        const totalKeywords = processKeywordDistribution().reduce((sum, k) => sum + k.value, 0);
+                        const percentage = totalKeywords > 0 ? ((keyword.value / totalKeywords) * 100).toFixed(1) : '0';
+                        
+                        // Buscar departamentos relacionados a esta palavra-chave
+                        const keywordDepartments = (dataToUse || [])
+                          .filter((item: any) => {
+                            if (item.keyword && typeof item.keyword === 'string') {
+                              return item.keyword.split(';').map((k: string) => k.trim()).includes(keyword.label);
+                            }
+                            return false;
+                          })
+                          .flatMap((item: any) => {
+                            if (item.sector && typeof item.sector === 'string') {
+                              return item.sector.split(';').map((s: string) => s.trim()).filter((s: string) => s && s !== 'VAZIO');
+                            }
+                            return [];
+                          })
+                          .reduce((acc: Record<string, number>, sector: string) => {
+                            acc[sector] = (acc[sector] || 0) + 1;
+                            return acc;
+                          }, {} as Record<string, number>);
+                        
+                        const topDepartments = Object.entries(keywordDepartments)
+                          .sort((a, b) => (b[1] as number) - (a[1] as number))
+                          .slice(0, 2)
+                          .map(([dept, count]) => `${dept} (${count})`);
+                        
+                        return (
+                          <tr key={keyword.label} className="hover:bg-muted/50">
+                            <td className="py-2 px-4 border-b font-medium">{keyword.label}</td>
+                            <td className="py-2 px-4 border-b text-center">
+                              <Badge variant="secondary">{keyword.value}</Badge>
+                            </td>
+                            <td className="py-2 px-4 border-b text-center">{percentage}%</td>
+                            <td className="py-2 px-4 border-b text-sm">
+                              {topDepartments.length > 0 ? topDepartments.join(', ') : 'Nenhum departamento identificado'}
+                            </td>
+                            <td className="py-2 px-4 border-b text-center">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleChartClick(keyword, 'keyword')}
+                              >
+                                Ver Feedbacks
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </TabsContent>
+
           {/* Apartamentos */}
           <TabsContent value="apartamentos" className="space-y-4">
+            {/* Primeira linha - 2 gráficos lado a lado */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Distribuição por apartamento */}
               <Card className="p-4">
@@ -2583,33 +3064,65 @@ function AdminDashboardContent() {
                 </CardContent>
               </Card>
 
-              {/* Mapa de calor de avaliações */}
+              {/* Problemas por Apartamento */}
               <Card className="p-4">
                 <CardHeader>
-                  <CardTitle>Avaliação Média por Apartamento</CardTitle>
+                  <CardTitle>Problemas por Apartamento</CardTitle>
                   <CardDescription>
-                    Comparação das avaliações e sentimentos por apartamento
+                    Apartamentos com mais problemas identificados
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[480px]">
-                    <ApartmentsChart 
-                      data={processApartamentoDetailsData().map(item => ({ label: item.apartamento, value: item.count }))}
-                      onClick={(item: any) => handleChartClick({name: item.label}, 'apartamento')}
+                    <ModernChart 
+                      type="bar"
+                      data={processApartamentoProblemsDistribution().map(item => ({ 
+                        label: `Apt ${item.name}`, 
+                        value: item.value 
+                      }))}
+                      onClick={(item: any) => {
+                        const apartamento = item.label.replace('Apt ', '');
+                        handleChartClick({name: apartamento}, 'apartamento');
+                      }}
                     />
                   </div>
                   <div className="flex justify-center mt-2 space-x-4 text-xs">
                     <div className="flex items-center">
-                      <div className="w-3 h-3 bg-[#4CAF50] rounded-full mr-1"></div>
-                      <span>Sentimento Positivo Alto</span>
+                      <div className="w-3 h-3 bg-[#ef4444] rounded-full mr-1"></div>
+                      <span>Quantidade de Problemas</span>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Segunda linha - 1 gráfico grande */}
+            <div className="grid grid-cols-1 gap-4">
+              {/* Apartamentos por Hotel */}
+              <Card className="p-4">
+                <CardHeader>
+                  <CardTitle>Apartamentos por Hotel</CardTitle>
+                  <CardDescription>
+                    Quantidade de apartamentos únicos por hotel
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[480px]">
+                    <ModernChart 
+                      type="bar"
+                      data={processApartamentosPorHotel().map(item => ({ 
+                        label: item.name, 
+                        value: item.value 
+                      }))}
+                      onClick={(item: any) => {
+                        handleChartClick({name: item.label}, 'hotel');
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-center mt-2 space-x-4 text-xs">
                     <div className="flex items-center">
-                      <div className="w-3 h-3 bg-[#FFC107] rounded-full mr-1"></div>
-                      <span>Sentimento Neutro</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-[#F44336] rounded-full mr-1"></div>
-                      <span>Sentimento Negativo</span>
+                      <div className="w-3 h-3 bg-[#3b82f6] rounded-full mr-1"></div>
+                      <span>Quantidade de Apartamentos</span>
                     </div>
                   </div>
                 </CardContent>
@@ -2642,13 +3155,21 @@ function AdminDashboardContent() {
                       {processApartamentoDetailsData().slice(0, 20).map((ap, index) => (
                         <tr key={index} className={index % 2 === 0 ? "bg-muted/20" : ""}>
                           <td className="py-2 px-3 border-b font-medium">
-                            {ap.apartamento}
+                            <div className="flex items-center">
+                              <Building2 className="h-4 w-4 text-blue-500 mr-2" />
+                              <span className="font-semibold text-lg">{ap.apartamento}</span>
+                            </div>
                           </td>
                           <td className="py-2 px-3 border-b text-center text-sm">
-                            {ap.mainHotel}
+                            <Badge variant="outline" className="font-medium">
+                              {ap.mainHotel}
+                            </Badge>
                           </td>
                           <td className="py-2 px-3 border-b text-center">
-                            {ap.count}
+                            <div className="flex items-center justify-center">
+                              <MessageSquare className="h-4 w-4 text-blue-500 mr-1" />
+                              <span className="font-bold text-lg">{ap.count.toLocaleString()}</span>
+                            </div>
                           </td>
                           <td className="py-2 px-3 border-b text-center">
                             <div className="flex items-center justify-center">
@@ -2664,8 +3185,14 @@ function AdminDashboardContent() {
                           </td>
                           <td className="py-2 px-3 border-b text-center">
                             <div className="flex justify-center">
-                              <Badge variant={ap.sentiment >= 70 ? "default" : ap.sentiment >= 50 ? "outline" : "destructive"}>
-                                {ap.sentiment}%
+                              <Badge 
+                                className={
+                                  ap.sentiment >= 70 ? "bg-green-500 text-white hover:bg-green-600" : 
+                                  ap.sentiment >= 50 ? "bg-yellow-500 text-white hover:bg-yellow-600" : 
+                                  "bg-red-500 text-white hover:bg-red-600"
+                                }
+                              >
+                                {ap.sentiment.toFixed(1)}%
                               </Badge>
                             </div>
                           </td>

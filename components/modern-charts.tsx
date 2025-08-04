@@ -85,6 +85,34 @@ const MODERN_COLORS = {
     'rgba(101, 163, 13, 0.8)',   // Lime Dark
     'rgba(202, 138, 4, 0.8)',    // Yellow Dark
   ],
+  // Cores específicas por categoria
+  categories: {
+    department: {
+      background: 'rgba(99, 102, 241, 0.8)',   // Indigo para departamentos
+      border: 'rgba(99, 102, 241, 1)',
+      hover: 'rgba(99, 102, 241, 0.9)'
+    },
+    keyword: {
+      background: 'rgba(16, 185, 129, 0.8)',   // Emerald para palavras-chave
+      border: 'rgba(16, 185, 129, 1)',
+      hover: 'rgba(16, 185, 129, 0.9)'
+    },
+    language: {
+      background: 'rgba(245, 158, 11, 0.8)',   // Amber para idiomas
+      border: 'rgba(245, 158, 11, 1)',
+      hover: 'rgba(245, 158, 11, 0.9)'
+    },
+    source: {
+      background: 'rgba(139, 92, 246, 0.8)',   // Violet para fontes
+      border: 'rgba(139, 92, 246, 1)',
+      hover: 'rgba(139, 92, 246, 0.9)'
+    },
+    rating: {
+      background: 'rgba(59, 130, 246, 0.8)',   // Azul para avaliações
+      border: 'rgba(59, 130, 246, 1)',
+      hover: 'rgba(59, 130, 246, 0.9)'
+    }
+  },
   borders: [
     'rgba(99, 102, 241, 1)',
     'rgba(16, 185, 129, 1)',
@@ -256,6 +284,7 @@ interface ModernChartProps {
   showValues?: boolean;
   maxItems?: number;
   isSentiment?: boolean;
+  categoryType?: 'department' | 'keyword' | 'language' | 'source' | 'rating';
 }
 
 export function ModernChart({ 
@@ -266,7 +295,8 @@ export function ModernChart({
   height = 300, 
   showValues = false,
   maxItems,
-  isSentiment 
+  isSentiment,
+  categoryType 
 }: ModernChartProps) {
   const [themeKey, setThemeKey] = useState(0);
 
@@ -293,7 +323,8 @@ export function ModernChart({
   
   // Detectar automaticamente se é um gráfico de sentimento
   const isAutoSentiment = !isSentiment && limitedData.some(item => {
-    const label = (item.name || item.label || '').toLowerCase();
+    const labelValue = item.name || item.label || '';
+    const label = typeof labelValue === 'string' ? labelValue.toLowerCase() : String(labelValue).toLowerCase();
     return label.includes('positiv') || label.includes('negativ') || label.includes('neutr') ||
            label.includes('positive') || label.includes('negative') || label.includes('neutral');
   });
@@ -313,6 +344,47 @@ export function ModernChart({
     return isBackground ? MODERN_COLORS.primary[0] : MODERN_COLORS.borders[0];
   };
   
+  // Função para obter cores por categoria
+  const getCategoryColors = () => {
+    if (shouldUseSentimentColors) {
+      return {
+        background: limitedData.map(item => getSentimentColor(item.name || item.label || '', true)),
+        border: limitedData.map(item => getSentimentColor(item.name || item.label || '', false)),
+        hover: limitedData.map(item => getSentimentColor(item.name || item.label || '', true).replace('0.8', '0.9'))
+      };
+    }
+    
+    if (categoryType && MODERN_COLORS.categories[categoryType]) {
+      const categoryColors = MODERN_COLORS.categories[categoryType];
+      return {
+        background: type === 'pie' || type === 'doughnut' 
+          ? MODERN_COLORS.primary.slice(0, limitedData.length) // Usar cores diferentes para pizza
+          : categoryColors.background,
+        border: type === 'pie' || type === 'doughnut'
+          ? MODERN_COLORS.borders.slice(0, limitedData.length) // Usar bordas diferentes para pizza
+          : categoryColors.border,
+        hover: type === 'pie' || type === 'doughnut'
+          ? MODERN_COLORS.primary.slice(0, limitedData.length).map(color => color.replace('0.8', '0.9')) // Hover diferentes para pizza
+          : categoryColors.hover
+      };
+    }
+    
+    // Cores padrão
+    return {
+      background: type === 'pie' || type === 'doughnut' 
+        ? MODERN_COLORS.primary.slice(0, limitedData.length)
+        : MODERN_COLORS.primary[0],
+      border: type === 'pie' || type === 'doughnut'
+        ? MODERN_COLORS.borders.slice(0, limitedData.length)
+        : MODERN_COLORS.borders[0],
+      hover: type === 'pie' || type === 'doughnut'
+        ? MODERN_COLORS.primary.slice(0, limitedData.length).map(color => color.replace('0.8', '0.9'))
+        : MODERN_COLORS.primary[0].replace('0.8', '0.9')
+    };
+  };
+  
+  const colors = getCategoryColors();
+
   // Preparar dados para Chart.js
   const chartData = {
     labels: limitedData.map(item => {
@@ -324,24 +396,12 @@ export function ModernChart({
       {
         label: title || 'Dados',
         data: limitedData.map(item => item.value),
-        backgroundColor: shouldUseSentimentColors
-          ? limitedData.map(item => getSentimentColor(item.name || item.label || '', true))
-          : (type === 'pie' || type === 'doughnut' 
-            ? MODERN_COLORS.primary.slice(0, limitedData.length)
-            : MODERN_COLORS.primary[0]),
-        borderColor: shouldUseSentimentColors
-          ? limitedData.map(item => getSentimentColor(item.name || item.label || '', false))
-          : (type === 'pie' || type === 'doughnut'
-            ? MODERN_COLORS.borders.slice(0, limitedData.length)
-            : MODERN_COLORS.borders[0]),
+        backgroundColor: colors.background,
+        borderColor: colors.border,
         borderWidth: 2,
         borderRadius: type === 'bar' || type === 'horizontalBar' ? 6 : 0,
         borderSkipped: false,
-        hoverBackgroundColor: shouldUseSentimentColors
-          ? limitedData.map(item => getSentimentColor(item.name || item.label || '', true).replace('0.8', '0.9'))
-          : (type === 'pie' || type === 'doughnut'
-            ? MODERN_COLORS.primary.slice(0, limitedData.length).map(color => color.replace('0.8', '0.9'))
-            : MODERN_COLORS.primary[0].replace('0.8', '0.9')),
+        hoverBackgroundColor: colors.hover,
         hoverBorderWidth: 3,
       },
     ],
@@ -549,6 +609,7 @@ export function DepartmentsChart({ data, onClick }: {
       type="doughnut"
       onClick={onClick}
       height={400}
+      categoryType="department"
     />
   );
 }
@@ -581,6 +642,7 @@ export function KeywordsChart({ data, onClick, maxItems = 10 }: {
       onClick={onClick}
       height={Math.max(300, maxItems * 35)}
       maxItems={maxItems}
+      categoryType="keyword"
     />
   );
 }
@@ -603,9 +665,10 @@ export function ApartmentsChart({ data, onClick, maxItems = 8 }: {
 }
 
 // Componente específico para gráfico de fontes (pizza)
-export function SourcesChart({ data, onClick }: {
+export function SourcesChart({ data, onClick, categoryType }: {
   data: ChartData[];
   onClick?: (item: ChartData, index: number) => void;
+  categoryType?: 'department' | 'keyword' | 'language' | 'source';
 }) {
   return (
     <ModernChart
@@ -613,6 +676,53 @@ export function SourcesChart({ data, onClick }: {
       type="pie"
       onClick={onClick}
       height={400}
+      categoryType={categoryType || "source"}
+    />
+  );
+}
+
+// Componente para gráfico de tendência de problemas
+export function ProblemsTrendChart({ data, onClick }: {
+  data: ChartData[];
+  onClick?: (item: ChartData, index: number) => void;
+}) {
+  return (
+    <ModernChart 
+      data={data} 
+      type="line" 
+      onClick={onClick}
+      height={350}
+    />
+  );
+}
+
+// Componente para gráfico de problemas por sentimento
+export function ProblemsBySentimentChart({ data, onClick }: {
+  data: ChartData[];
+  onClick?: (item: ChartData, index: number) => void;
+}) {
+  return (
+    <ModernChart 
+      data={data} 
+      type="bar" 
+      onClick={onClick}
+      isSentiment={true}
+      height={350}
+    />
+  );
+}
+
+// Componente para gráfico de distribuição de problemas por categoria
+export function ProblemsDistributionChart({ data, onClick }: {
+  data: ChartData[];
+  onClick?: (item: ChartData, index: number) => void;
+}) {
+  return (
+    <ModernChart 
+      data={data} 
+      type="doughnut" 
+      onClick={onClick}
+      height={350}
     />
   );
 }

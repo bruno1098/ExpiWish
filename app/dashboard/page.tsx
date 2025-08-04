@@ -8,7 +8,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { ModernChart, ProblemsChart, HotelsChart, RatingsChart, DepartmentsChart, SourcesChart, ApartmentsChart, KeywordsChart } from '@/components/modern-charts';
+import { ModernChart, ProblemsChart, HotelsChart, RatingsChart, DepartmentsChart, SourcesChart, ApartmentsChart, KeywordsChart, ProblemsTrendChart } from '@/components/modern-charts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -846,6 +846,40 @@ function DashboardContent() {
       .slice(0, 15);
   };
 
+  // Nova função melhorada para contar problemas por departamento
+  const processDepartmentProblemsDistribution = () => {
+    const departmentProblems: Record<string, number> = {};
+    
+    filteredData.forEach(feedback => {
+      if (feedback.problem && feedback.sector) {
+        const allProblems = feedback.problem.split(';').map((p: string) => p.trim());
+        const allSectors = feedback.sector.split(';').map((s: string) => s.trim());
+        
+        // Para cada problema válido, contar em cada departamento válido
+        allProblems.forEach((problem: string) => {
+          const trimmedProblem = problem.trim();
+          if (trimmedProblem && trimmedProblem !== 'VAZIO' && trimmedProblem.toLowerCase() !== 'sem problemas') {
+            allSectors.forEach((sector: string) => {
+              const trimmedSector = sector.trim();
+              if (trimmedSector && trimmedSector !== 'VAZIO') {
+                departmentProblems[trimmedSector] = (departmentProblems[trimmedSector] || 0) + 1;
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    return Object.entries(departmentProblems)
+      .map(([department, problemCount]) => ({ 
+        label: department, 
+        value: problemCount,
+        name: department
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+  };
+
   const processApartamentoDistribution = () => {
     const apartamentoCounts: Record<string, number> = {};
     
@@ -945,6 +979,59 @@ function DashboardContent() {
       sentiment: detail.sentiment,
       topProblems: detail.topProblems
     }));
+  };
+
+  // Função para processar problemas por apartamento
+  const processApartamentoProblemsDistribution = () => {
+    const apartamentoProblems: Record<string, number> = {};
+    
+    filteredData.forEach(feedback => {
+      if (feedback.apartamento && feedback.problem) {
+        const apartamento = feedback.apartamento.toString();
+        const allProblems = feedback.problem.split(';').map((p: string) => p.trim());
+        
+        // Para cada problema válido, contar no apartamento
+        allProblems.forEach((problem: string) => {
+          const trimmedProblem = problem.trim();
+          if (trimmedProblem && trimmedProblem !== 'VAZIO' && trimmedProblem.toLowerCase() !== 'sem problemas' && isValidProblem(trimmedProblem)) {
+            apartamentoProblems[apartamento] = (apartamentoProblems[apartamento] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    return Object.entries(apartamentoProblems)
+      .map(([apartamento, problemCount]) => ({ 
+        label: `Apto ${apartamento}`, 
+        value: problemCount,
+        name: apartamento
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+  };
+
+  const processApartamentosPorHotel = () => {
+    const hotelApartamentos: Record<string, Set<string>> = {};
+    
+    filteredData.forEach(feedback => {
+      if (feedback.hotel && feedback.apartamento) {
+        const hotel = feedback.hotel.toString();
+        const apartamento = feedback.apartamento.toString();
+        
+        if (!hotelApartamentos[hotel]) {
+          hotelApartamentos[hotel] = new Set();
+        }
+        hotelApartamentos[hotel].add(apartamento);
+      }
+    });
+
+    return Object.entries(hotelApartamentos)
+      .map(([hotel, apartamentosSet]) => ({ 
+        label: hotel, 
+        value: apartamentosSet.size,
+        name: hotel
+      }))
+      .sort((a, b) => b.value - a.value);
   };
 
   // Componente para renderizar gráficos no modal
@@ -1345,6 +1432,8 @@ function DashboardContent() {
         <TabsList>
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="problems">Problemas</TabsTrigger>
+          <TabsTrigger value="departments">Departamentos</TabsTrigger>
+          <TabsTrigger value="keywords">Palavras-chave</TabsTrigger>
           <TabsTrigger value="ratings">Avaliações</TabsTrigger>
           <TabsTrigger value="languages">Idiomas</TabsTrigger>
           <TabsTrigger value="sources">Fontes dos Comentários</TabsTrigger>
@@ -1472,28 +1561,156 @@ function DashboardContent() {
               </div>
             </Card>
           </div>
+
+          {/* Tabela de palavras-chave */}
+          <Card className="p-4">
+            <h3 className="text-lg font-semibold mb-4">Lista de Palavras-chave</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="py-2 px-4 bg-muted border-b text-left">Palavra-chave</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">Frequência</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">% do Total</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">Departamentos Principais</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processKeywordDistribution(filteredData)
+                    .slice(0, 15)
+                    .map((keyword: any, index: number) => {
+                      const totalKeywords = processKeywordDistribution(filteredData).reduce((sum, k) => sum + k.value, 0);
+                      const percentage = totalKeywords > 0 ? ((keyword.value / totalKeywords) * 100).toFixed(1) : '0';
+                      
+                      // Buscar departamentos relacionados a esta palavra-chave
+                      const keywordDepartments = filteredData
+                        .filter((item: any) => {
+                          if (item.keyword && typeof item.keyword === 'string') {
+                            return item.keyword.split(';').map((k: string) => k.trim()).includes(keyword.label);
+                          }
+                          return false;
+                        })
+                        .flatMap((item: any) => {
+                          if (item.sector && typeof item.sector === 'string') {
+                            return item.sector.split(';').map((s: string) => s.trim()).filter((s: string) => s && s !== 'VAZIO');
+                          }
+                          return [];
+                        })
+                        .reduce((acc: Record<string, number>, sector: string) => {
+                          acc[sector] = (acc[sector] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>);
+                      
+                      const topDepartments = Object.entries(keywordDepartments)
+                        .sort((a, b) => (b[1] as number) - (a[1] as number))
+                        .slice(0, 2)
+                        .map(([dept, count]) => `${dept} (${count})`);
+                      
+                      return (
+                        <tr key={keyword.label} className="hover:bg-muted/50">
+                          <td className="py-2 px-4 border-b font-medium">{keyword.label}</td>
+                          <td className="py-2 px-4 border-b text-center">
+                            <Badge variant="secondary">{keyword.value}</Badge>
+                          </td>
+                          <td className="py-2 px-4 border-b text-center">{percentage}%</td>
+                          <td className="py-2 px-4 border-b text-sm">
+                            {topDepartments.length > 0 ? topDepartments.join(', ') : 'Nenhum departamento identificado'}
+                          </td>
+                          <td className="py-2 px-4 border-b text-center">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleChartClick(keyword, 'keyword')}
+                            >
+                              Ver Feedbacks
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </TabsContent>
 
         {/* Problemas */}
         <TabsContent value="problems" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Principais Problemas */}
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Principais Problemas</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'problem',
+                    'Principais Problemas Identificados',
+                    processProblemDistribution(filteredData),
+                    'bar'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+              <div className="h-[430px]">
+                <ProblemsChart 
+                  data={processProblemDistribution(filteredData)}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'problem');
+                  }}
+                />
+              </div>
+            </Card>
+
+            {/* Tendência de Problemas */}
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Tendência de Problemas</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'problem',
+                    'Tendência de Problemas ao Longo do Tempo',
+                    processProblemDistribution(filteredData).slice(0, 8),
+                    'line'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+              <div className="h-[430px]">
+                <ProblemsTrendChart 
+                  data={processProblemDistribution(filteredData).slice(0, 8)}
+                  onClick={(item: any) => handleChartClick(item, 'problem')}
+                />
+              </div>
+            </Card>
+          </div>
+
+          {/* Distribuição de Problemas */}
           <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Principais Problemas Identificados</h3>
+              <h3 className="text-lg font-semibold">Distribuição de Problemas</h3>
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={() => handleViewChart(
                   'problem',
-                  'Principais Problemas Identificados',
+                  'Distribuição de Problemas',
                   processProblemDistribution(filteredData),
-                  'bar'
+                  'pie'
                 )}
               >
                 Ver Detalhes
               </Button>
             </div>
             <div className="h-[480px]">
-              <ProblemsChart 
+              <ModernChart 
+                type="pie"
                 data={processProblemDistribution(filteredData)}
                 onClick={(item: any, index: number) => {
                   handleChartClick(item, 'problem');
@@ -1501,6 +1718,225 @@ function DashboardContent() {
               />
             </div>
           </Card>
+           {/* Tendência de Problemas ao Longo do Tempo */}
+          <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Tendência de Problemas ao Longo do Tempo</h3>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleViewChart(
+                  'problem',
+                  'Tendência de Problemas ao Longo do Tempo',
+                  processProblemDistribution(filteredData).slice(0, 8),
+                  'line'
+                )}
+              >
+                Ver Detalhes
+              </Button>
+            </div>
+            <div className="h-[480px]">
+              <ProblemsTrendChart 
+                data={processProblemDistribution(filteredData).slice(0, 8)}
+                onClick={(item: any) => handleChartClick(item, 'problem')}
+              />
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* Departamentos */}
+        <TabsContent value="departments" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Ranking de Problemas por Departamento */}
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Ranking de Problemas por Departamento</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'sector',
+                    'Ranking de Problemas por Departamento',
+                    processDepartmentProblemsDistribution(),
+                    'bar'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+              <div className="h-[480px]">
+                <DepartmentsChart 
+                  data={processDepartmentProblemsDistribution()}
+                  onClick={(item: any) => handleChartClick(item, 'sector')}
+                />
+              </div>
+            </Card>
+
+            {/* Distribuição de Feedbacks por Departamento */}
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Distribuição de Feedbacks por Departamento</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'sector',
+                    'Distribuição de Feedbacks por Departamento',
+                    processSectorDistribution(),
+                    'pie'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+              <div className="h-[480px]">
+                <ModernChart 
+                  data={processSectorDistribution().map(item => ({ ...item, name: item.label }))}
+                  type="pie"
+                  onClick={(item: any) => handleChartClick(item, 'sector')}
+                />
+              </div>
+            </Card>
+          </div>
+
+          {/* Tabela de departamentos */}
+          <Card className="p-4">
+            <h3 className="text-lg font-semibold mb-4">Análise Detalhada por Departamento</h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="py-2 px-4 bg-muted border-b text-left">Departamento</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">Total de Problemas</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">Total de Feedbacks</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">% de Problemas</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">Principais Problemas</th>
+                    <th className="py-2 px-4 bg-muted border-b text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processDepartmentProblemsDistribution()
+                    .slice(0, 15)
+                    .map((department: any, index: number) => {
+                      // Calcular feedbacks totais para este departamento
+                      const departmentFeedbacks = filteredData.filter((item: any) => {
+                        if (item.sector && typeof item.sector === 'string') {
+                          return item.sector.split(';').map((s: string) => s.trim()).includes(department.label);
+                        }
+                        return false;
+                      }).length;
+                      
+                      const problemPercentage = departmentFeedbacks > 0 ? ((department.value / departmentFeedbacks) * 100).toFixed(1) : '0';
+                      
+                      // Buscar principais problemas deste departamento
+                      const departmentProblems = filteredData
+                        .filter((item: any) => {
+                          if (item.sector && typeof item.sector === 'string') {
+                            return item.sector.split(';').map((s: string) => s.trim()).includes(department.label);
+                          }
+                          return false;
+                        })
+                        .flatMap((item: any) => {
+                          if (item.problem && typeof item.problem === 'string') {
+                            return item.problem.split(';').map((p: string) => p.trim()).filter((p: string) => p && p !== 'VAZIO' && p.toLowerCase() !== 'sem problemas');
+                          }
+                          return [];
+                        })
+                        .reduce((acc: Record<string, number>, problem: string) => {
+                          acc[problem] = (acc[problem] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>);
+                      
+                      const topProblems = Object.entries(departmentProblems)
+                        .sort((a, b) => (b[1] as number) - (a[1] as number))
+                        .slice(0, 2)
+                        .map(([problem, count]) => `${problem} (${count})`);
+                      
+                      return (
+                        <tr key={department.label} className="hover:bg-muted/50">
+                          <td className="py-2 px-4 border-b font-medium">{department.label}</td>
+                          <td className="py-2 px-4 border-b text-center">
+                            <Badge variant="destructive">{department.value}</Badge>
+                          </td>
+                          <td className="py-2 px-4 border-b text-center">
+                            <Badge variant="secondary">{departmentFeedbacks}</Badge>
+                          </td>
+                          <td className="py-2 px-4 border-b text-center">{problemPercentage}%</td>
+                          <td className="py-2 px-4 border-b text-sm">
+                            {topProblems.length > 0 ? topProblems.join(', ') : 'Nenhum problema identificado'}
+                          </td>
+                          <td className="py-2 px-4 border-b text-center">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleChartClick(department, 'sector')}
+                            >
+                              Ver Feedbacks
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* Palavras-chave */}
+        <TabsContent value="keywords" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Palavras-chave Mais Frequentes */}
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Palavras-chave Mais Frequentes</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'keyword',
+                    'Palavras-chave Mais Frequentes',
+                    processKeywordDistribution(filteredData),
+                    'bar'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+              <div className="h-[480px]">
+                <KeywordsChart 
+                  data={processKeywordDistribution(filteredData)}
+                  onClick={(item: any) => handleChartClick(item, 'keyword')}
+                />
+              </div>
+            </Card>
+
+            {/* Distribuição de Palavras-chave */}
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Distribuição de Palavras-chave</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'keyword',
+                    'Distribuição de Palavras-chave',
+                    processKeywordDistribution(filteredData).slice(0, 10),
+                    'pie'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+              <div className="h-[480px]">
+                <ModernChart 
+                  data={processKeywordDistribution(filteredData).slice(0, 10).map(item => ({ ...item, name: item.label }))}
+                  type="pie"
+                  onClick={(item: any) => handleChartClick(item, 'keyword')}
+                />
+              </div>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Idiomas */}
@@ -1530,11 +1966,88 @@ function DashboardContent() {
                   onClick={(item: any, index: number) => {
                     handleChartClick(item, 'language');
                   }}
+                  categoryType="language"
                 />
               </div>
             </Card>
 
             {/* Avaliação Média por Idioma */}
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Avaliação Média por Idioma</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'language',
+                    'Avaliação Média por Idioma',
+                    processLanguageDistribution(filteredData).map((lang: any) => {
+                      const feedbacksDoIdioma = filteredData.filter((f: any) => f.language === lang.label);
+                      const avgRating = feedbacksDoIdioma.length > 0 
+                        ? feedbacksDoIdioma.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedbacksDoIdioma.length 
+                        : 0;
+                      return { label: lang.label, value: avgRating };
+                    }),
+                    'bar'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+              <div className="h-[480px]">
+                <ModernChart 
+                  type="bar"
+                  data={processLanguageDistribution(filteredData).map((lang: any) => {
+                    const feedbacksDoIdioma = filteredData.filter((f: any) => f.language === lang.label);
+                    const avgRating = feedbacksDoIdioma.length > 0 
+                      ? feedbacksDoIdioma.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedbacksDoIdioma.length 
+                      : 0;
+                    return { label: lang.label, value: parseFloat(avgRating.toFixed(1)) };
+                  })}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'language');
+                  }}
+                  categoryType="language"
+                />
+              </div>
+            </Card>
+          </div>
+
+         
+        </TabsContent>
+
+        {/* Fontes dos Comentários */}
+        <TabsContent value="sources" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Volume de Feedbacks por Fonte */}
+            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Volume de Feedbacks por Fonte</h3>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleViewChart(
+                    'source',
+                    'Volume de Feedbacks por Fonte',
+                    processSourceDistribution(filteredData),
+                    'pie'
+                  )}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+              <div className="h-[480px]">
+                <SourcesChart 
+                  data={processSourceDistribution(filteredData)}
+                  onClick={(item: any, index: number) => {
+                    handleChartClick(item, 'source');
+                  }}
+                  categoryType="source"
+                />
+              </div>
+            </Card>
+
+            {/* Avaliação Média por Fonte */}
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Avaliação Média por Fonte</h3>
@@ -1570,20 +2083,31 @@ function DashboardContent() {
                   onClick={(item: any, index: number) => {
                     handleChartClick(item, 'source');
                   }}
+                  categoryType="source"
                 />
               </div>
             </Card>
           </div>
 
-          {/* Volume de Feedbacks por Fonte */}
+          {/* Distribuição de Sentimentos por Fonte */}
           <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-            <h3 className="text-lg font-semibold mb-4">Volume de Feedbacks por Fonte</h3>
+            <h3 className="text-lg font-semibold mb-4">Distribuição de Sentimentos por Fonte</h3>
             <div className="h-[480px]">
-              <SourcesChart 
-                data={processSourceDistribution(filteredData)}
+              <ModernChart 
+                type="bar"
+                data={processSourceDistribution(filteredData).map((source: any) => {
+                  const feedbacksDaFonte = filteredData.filter((f: any) => f.source === source.label);
+                  const positivos = feedbacksDaFonte.filter((f: any) => f.sentiment === 'positive').length;
+                  const negativos = feedbacksDaFonte.filter((f: any) => f.sentiment === 'negative').length;
+                  const neutros = feedbacksDaFonte.filter((f: any) => f.sentiment === 'neutral').length;
+                  const total = feedbacksDaFonte.length;
+                  const sentimentScore = total > 0 ? ((positivos - negativos) / total * 100) : 0;
+                  return { label: source.label, value: parseFloat(sentimentScore.toFixed(1)) };
+                })}
                 onClick={(item: any, index: number) => {
                   handleChartClick(item, 'source');
                 }}
+                categoryType="source"
               />
             </div>
           </Card>
@@ -1591,7 +2115,7 @@ function DashboardContent() {
 
         {/* Apartamentos */}
         <TabsContent value="apartamentos" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
             {/* Distribuição por apartamento */}
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
@@ -1619,17 +2143,17 @@ function DashboardContent() {
               </div>
             </Card>
 
-            {/* Mapa de calor de avaliações */}
+            {/* Problemas por Apartamento */}
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Avaliação Média por Apartamento</h3>
+                <h3 className="text-lg font-semibold">Problemas por Apartamento</h3>
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => handleViewChart(
                     'apartamento',
-                    'Avaliação Média por Apartamento',
-                    processApartamentoScatterData(),
+                    'Problemas por Apartamento',
+                    processApartamentoProblemsDistribution(),
                     'bar'
                   )}
                 >
@@ -1639,28 +2163,16 @@ function DashboardContent() {
               <div className="h-[480px]">
                 <ModernChart 
                   type="bar"
-                  data={processApartamentoScatterData().map((item: any) => ({
-                    label: `Apt ${item.apartamento}`,
-                    value: item.averageRating
-                  }))}
+                  data={processApartamentoProblemsDistribution()}
                   onClick={(item: any, index: number) => {
-                    const originalData = processApartamentoScatterData()[index];
-                    handleChartClick({name: originalData.apartamento}, 'apartamento');
+                    handleChartClick({name: item.name}, 'apartamento');
                   }}
                 />
               </div>
               <div className="flex justify-center mt-2 space-x-4 text-xs">
                 <div className="flex items-center">
-                  <div className="w-3 h-3 bg-[#4CAF50] rounded-full mr-1"></div>
-                  <span>Sentimento Positivo Alto</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-[#FFC107] rounded-full mr-1"></div>
-                  <span>Sentimento Neutro</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-[#F44336] rounded-full mr-1"></div>
-                  <span>Sentimento Negativo</span>
+                  <div className="w-3 h-3 bg-[#EF4444] rounded-full mr-1"></div>
+                  <span>Quantidade de Problemas por Apartamento</span>
                 </div>
               </div>
             </Card>
@@ -1685,10 +2197,16 @@ function DashboardContent() {
                   {processApartamentoDetails().slice(0, 20).map((ap, index) => (
                     <tr key={index} className={index % 2 === 0 ? "bg-muted/20" : ""}>
                       <td className="py-2 px-3 border-b font-medium">
-                        {ap.apartamento}
+                        <div className="flex items-center">
+                          <Building2 className="h-4 w-4 text-blue-500 mr-2" />
+                          <span className="font-semibold text-lg">{ap.apartamento}</span>
+                        </div>
                       </td>
                       <td className="py-2 px-3 border-b text-center">
-                        {ap.count}
+                        <div className="flex items-center justify-center">
+                          <MessageSquare className="h-4 w-4 text-blue-500 mr-1" />
+                          <span className="font-bold text-lg">{ap.count.toLocaleString()}</span>
+                        </div>
                       </td>
                       <td className="py-2 px-3 border-b text-center">
                         <div className="flex items-center justify-center">
@@ -1704,8 +2222,14 @@ function DashboardContent() {
                       </td>
                       <td className="py-2 px-3 border-b text-center">
                         <div className="flex justify-center">
-                          <Badge variant={ap.sentiment >= 70 ? "default" : ap.sentiment >= 50 ? "outline" : "destructive"}>
-                            {ap.sentiment}%
+                          <Badge 
+                            className={
+                              ap.sentiment >= 70 ? "bg-green-500 text-white hover:bg-green-600" : 
+                              ap.sentiment >= 50 ? "bg-yellow-500 text-white hover:bg-yellow-600" : 
+                              "bg-red-500 text-white hover:bg-red-600"
+                            }
+                          >
+                            {ap.sentiment.toFixed(1)}%
                           </Badge>
                         </div>
                       </td>

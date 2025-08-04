@@ -131,6 +131,8 @@ const scrollbarStyles = `
     flex-direction: column;
     height: 100%;
     position: relative;
+    contain: layout style paint;
+    isolation: isolate;
   }
   
   .fixed-header {
@@ -152,6 +154,50 @@ const scrollbarStyles = `
     flex: 1;
     overflow: auto;
     min-height: 0;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+    z-index: 1;
+  }
+  
+  /* Previne o scroll da página quando dentro da tabela */
+  .scrollable-body:focus-within {
+    overscroll-behavior: none;
+  }
+  
+  /* Melhora a performance do scroll */
+  .scrollable-body * {
+    will-change: auto;
+  }
+  
+  /* Previne bounce/elastic scroll no macOS */
+  .scrollable-body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    overscroll-behavior-x: auto;
+  }
+  
+  /* Garante que o scroll fique contido na área da tabela */
+  .table-with-fixed-header {
+    touch-action: pan-y;
+    overflow: hidden;
+  }
+  
+  /* Melhora a responsividade do scroll */
+  .scrollable-body:hover {
+    overscroll-behavior: none;
+  }
+  
+  /* Previne interferência com scroll da página */
+  .scrollable-body::-webkit-scrollbar {
+    width: 16px !important;
+    height: 16px !important;
+  }
+  
+  /* Garante que o container da tabela não interfira com o scroll da página */
+  .table-with-fixed-header:hover {
+    overscroll-behavior: contain;
   }
   
   /* Utility para line-clamp */
@@ -287,7 +333,7 @@ const scrollbarStyles = `
     position: absolute;
     top: 8px;
     right: 8px;
-    background: #22c55e;
+    background: #3b82f6;
     color: white;
     border-radius: 50%;
     width: 24px;
@@ -298,7 +344,7 @@ const scrollbarStyles = `
     font-size: 12px;
     font-weight: bold;
     z-index: 10;
-    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
   }
 
   .feedback-edited-indicator {
@@ -1471,10 +1517,12 @@ function AnalysisPageContent() {
   const [sectorFilter, setSectorFilter] = useState("all")
   const [keywordFilter, setKeywordFilter] = useState("all")
   const [problemFilter, setProblemFilter] = useState("all")
+  const [importFilter, setImportFilter] = useState("all")
 
   const [searchTerm, setSearchTerm] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [quickDateFilter, setQuickDateFilter] = useState("all")
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   // Estados para animação de exclusão
   const [deletingFeedbacks, setDeletingFeedbacks] = useState<Set<string>>(new Set())
@@ -1574,7 +1622,20 @@ function AnalysisPageContent() {
   }
 
   // Função para atualizar um feedback específico na lista
-  const handleFeedbackUpdated = (updatedFeedback: Feedback) => {
+  const handleFeedbackUpdated = async (updatedFeedback: Feedback) => {
+    // Marcar como editado no Firebase se não foi deletado
+    if (!updatedFeedback.deleted) {
+      try {
+        await updateFeedbackInFirestore(updatedFeedback.id, { 
+          ...updatedFeedback, 
+          edited: true 
+        })
+        updatedFeedback.edited = true
+      } catch (error) {
+        console.error('Erro ao marcar feedback como editado:', error)
+      }
+    }
+    
     setFeedbacks(prevFeedbacks => 
       prevFeedbacks.map(f => 
         f.id === updatedFeedback.id ? updatedFeedback : f
@@ -1704,6 +1765,32 @@ function AnalysisPageContent() {
     }
   }
 
+  // Função para obter datas de importação únicas
+  const getImportDates = () => {
+    const importDatesMap = new Map()
+    
+    analyses.forEach(analysis => {
+      if (analysis.importDate) {
+        const date = analysis.importDate.toDate ? analysis.importDate.toDate() : new Date(analysis.importDate)
+        const dateStr = format(date, 'dd/MM/yyyy', { locale: ptBR })
+        const hotelName = analysis.hotelName || analysis.hotelDisplayName || 'Hotel'
+        
+        if (!importDatesMap.has(analysis.id)) {
+          importDatesMap.set(analysis.id, {
+            id: analysis.id,
+            label: `${dateStr} - ${hotelName}`,
+            date: date
+          })
+        }
+      }
+    })
+    
+    // Converter para array e ordenar por data (mais recente primeiro)
+    return Array.from(importDatesMap.values()).sort((a, b) => {
+      return b.date.getTime() - a.date.getTime()
+    })
+  }
+
   // Função para recarregar dados do Firebase
   const reloadData = async () => {
     try {
@@ -1715,14 +1802,16 @@ function AnalysisPageContent() {
       const allFeedbacks: Feedback[] = []
       allAnalyses.forEach((analysis) => {
         if (analysis.data && Array.isArray(analysis.data)) {
-          // Adicionar informações da importação a cada feedback
-          const feedbacksWithImportInfo = analysis.data.map((feedback: Feedback) => ({
-            ...feedback,
-            importId: analysis.id,
-            importDate: analysis.importDate,
-            hotelName: analysis.hotelName || analysis.hotelDisplayName
-          }))
-          allFeedbacks.push(...feedbacksWithImportInfo)
+          // Filtrar feedbacks excluídos e adicionar informações da importação
+          const validFeedbacks = analysis.data
+            .filter((feedback: any) => feedback.deleted !== true)
+            .map((feedback: Feedback) => ({
+              ...feedback,
+              importId: analysis.id,
+              importDate: analysis.importDate,
+              hotelName: analysis.hotelName || analysis.hotelDisplayName
+            }))
+          allFeedbacks.push(...validFeedbacks)
         }
       })
       
@@ -1744,6 +1833,16 @@ function AnalysisPageContent() {
     }
   }
 
+  // Função para atualizar dados com feedback visual
+  const handleRefreshData = async () => {
+    try {
+      setIsRefreshing(true)
+      await reloadData()
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   // Aplicar filtros
   useEffect(() => {
     let filtered = feedbacks.filter((feedback) => {
@@ -1753,6 +1852,7 @@ function AnalysisPageContent() {
       const matchesSector = sectorFilter === "all" || feedback.sector.toLowerCase().includes(sectorFilter.toLowerCase())
       const matchesKeyword = keywordFilter === "all" || feedback.keyword.toLowerCase().includes(keywordFilter.toLowerCase())
       const matchesProblem = problemFilter === "all" || feedback.problem?.toLowerCase().includes(problemFilter.toLowerCase())
+      const matchesImport = importFilter === "all" || feedback.importId === importFilter
       
       // Filtro de data por range
       let matchesDateRange = true
@@ -1767,7 +1867,7 @@ function AnalysisPageContent() {
       }
       const matchesSearch = !searchTerm || feedback.comment.toLowerCase().includes(searchTerm.toLowerCase())
 
-      return isNotDeleted && matchesSentiment && matchesSector && matchesKeyword && matchesProblem && matchesDateRange && matchesSearch
+      return isNotDeleted && matchesSentiment && matchesSector && matchesKeyword && matchesProblem && matchesImport && matchesDateRange && matchesSearch
     })
 
     // Ordenar por data de importação para agrupar visualmente
@@ -1778,7 +1878,7 @@ function AnalysisPageContent() {
     })
 
     setFilteredFeedbacks(filtered)
-  }, [feedbacks, sentimentFilter, sectorFilter, keywordFilter, problemFilter, dateRange, searchTerm])
+  }, [feedbacks, sentimentFilter, sectorFilter, keywordFilter, problemFilter, importFilter, dateRange, searchTerm])
 
   // Calcular estatísticas (excluindo feedbacks deletados)
   const activeFeedbacks = feedbacks.filter(f => !f.deleted)
@@ -1800,6 +1900,7 @@ function AnalysisPageContent() {
     setSectorFilter("all")
     setKeywordFilter("all")
     setProblemFilter("all")
+    setImportFilter("all")
     setDateRange(undefined)
     setQuickDateFilter("")
     setSearchTerm("")
@@ -1907,115 +2008,262 @@ function AnalysisPageContent() {
             <h3 className="text-lg font-semibold">Filtros de Análise</h3>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            {/* Busca por texto */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar nos comentários..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+          <div className="space-y-6">
+            {/* Grid responsivo de filtros */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+              {/* Busca por texto */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Buscar Comentários</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Digite para buscar..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
 
-            {/* Filtro por sentimento */}
-            <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sentimento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os sentimentos</SelectItem>
-                <SelectItem value="positive">Positivo</SelectItem>
-                <SelectItem value="neutral">Neutro</SelectItem>
-                <SelectItem value="negative">Negativo</SelectItem>
-              </SelectContent>
-            </Select>
+              {/* Filtro por sentimento */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Sentimento</label>
+                <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar sentimento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os sentimentos</SelectItem>
+                    <SelectItem value="positive">Positivo</SelectItem>
+                    <SelectItem value="neutral">Neutro</SelectItem>
+                    <SelectItem value="negative">Negativo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Filtro por departamento */}
-            <Select value={sectorFilter} onValueChange={setSectorFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Departamento" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os departamentos</SelectItem>
-                {sectors.map((sector) => (
-                  <SelectItem key={sector} value={sector}>{sector}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {/* Filtro por departamento */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Departamento</label>
+                <Select value={sectorFilter} onValueChange={setSectorFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar departamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os departamentos</SelectItem>
+                    {sectors.map((sector) => (
+                      <SelectItem key={sector} value={sector}>{sector}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Filtro por palavra-chave */}
-            <Select value={keywordFilter} onValueChange={setKeywordFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Palavra-chave" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as palavras-chave</SelectItem>
-                {keywords.slice(0, 20).map((keyword) => (
-                  <SelectItem key={keyword} value={keyword}>{keyword}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {/* Filtro por palavra-chave */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Palavra-chave</label>
+                <Select value={keywordFilter} onValueChange={setKeywordFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar palavra-chave" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as palavras-chave</SelectItem>
+                    {keywords.slice(0, 20).map((keyword) => (
+                      <SelectItem key={keyword} value={keyword}>{keyword}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Filtro por problema */}
-            <Select value={problemFilter} onValueChange={setProblemFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Problema" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os problemas</SelectItem>
-                {problems.slice(0, 20).map((problem) => (
-                  <SelectItem key={problem} value={problem}>{problem}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {/* Filtro por problema */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Problema</label>
+                <Select value={problemFilter} onValueChange={setProblemFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar problema" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os problemas</SelectItem>
+                    {problems.slice(0, 20).map((problem) => (
+                      <SelectItem key={problem} value={problem}>{problem}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Filtros pré-definidos de data */}
-            <Select value={quickDateFilter} onValueChange={applyQuickDateFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Período" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os períodos</SelectItem>
-                <SelectItem value="7days">Últimos 7 dias</SelectItem>
-                <SelectItem value="30days">Últimos 30 dias</SelectItem>
-                <SelectItem value="thisMonth">Este mês</SelectItem>
-                <SelectItem value="lastMonth">Mês passado</SelectItem>
-              </SelectContent>
-            </Select>
+              {/* Filtros pré-definidos de data */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Período Rápido</label>
+                <Select value={quickDateFilter} onValueChange={applyQuickDateFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os períodos</SelectItem>
+                    <SelectItem value="7days">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30days">Últimos 30 dias</SelectItem>
+                    <SelectItem value="thisMonth">Este mês</SelectItem>
+                    <SelectItem value="lastMonth">Mês passado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Calendário para seleção de intervalo */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="justify-start text-left font-normal">
-                  <CalendarDays className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })} -{" "}
-                        {format(dateRange.to, "dd/MM/yyyy", { locale: ptBR })}
-                      </>
-                    ) : (
-                      format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })
-                    )
-                  ) : (
-                    "Selecionar período"
-                  )}
+              {/* Calendário para seleção de intervalo */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Período Personalizado</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <CalendarDays className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })} -{" "}
+                            {format(dateRange.to, "dd/MM/yyyy", { locale: ptBR })}
+                          </>
+                        ) : (
+                          format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })
+                        )
+                      ) : (
+                        "Selecionar período"
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Filtro por data de importação */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Data de Importação</label>
+                <Select value={importFilter} onValueChange={setImportFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar importação" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as importações</SelectItem>
+                    {getImportDates().map((importDate) => (
+                      <SelectItem key={importDate.id} value={importDate.id}>
+                        {importDate.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Botão de atualizar */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Atualizar Dados</label>
+                <Button 
+                  onClick={handleRefreshData} 
+                  disabled={isRefreshing}
+                  variant="outline"
+                  className="w-full flex items-center gap-2"
+                >
+                  <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                  {isRefreshing ? "Atualizando..." : "Atualizar"}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                  locale={ptBR}
-                />
-              </PopoverContent>
-            </Popover>
+              </div>
+            </div>
+            
+            {/* Indicador de filtros ativos */}
+            {(sentimentFilter !== "all" || sectorFilter !== "all" || keywordFilter !== "all" || problemFilter !== "all" || dateRange?.from || dateRange?.to || searchTerm || importFilter !== "all") && (
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-medium text-muted-foreground">Filtros Ativos:</span>
+                  </div>
+                  
+                  {/* Botão para remover todos os filtros - só aparece quando há filtros ativos */}
+                  <Button 
+                    onClick={clearFilters}
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Limpar Tudo
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {searchTerm && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <Search className="h-3 w-3" />
+                      Busca: "{searchTerm}"
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => setSearchTerm('')}
+                      />
+                    </Badge>
+                  )}
+                  {sentimentFilter !== "all" && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      Sentimento: {sentimentFilter === 'positive' ? 'Positivo' : sentimentFilter === 'negative' ? 'Negativo' : 'Neutro'}
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => setSentimentFilter('all')}
+                      />
+                    </Badge>
+                  )}
+                  {sectorFilter !== "all" && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      Departamento: {sectorFilter}
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => setSectorFilter('all')}
+                      />
+                    </Badge>
+                  )}
+                  {keywordFilter !== "all" && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      Palavra-chave: {keywordFilter}
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => setKeywordFilter('all')}
+                      />
+                    </Badge>
+                  )}
+                  {problemFilter !== "all" && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      Problema: {problemFilter}
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => setProblemFilter('all')}
+                      />
+                    </Badge>
+                  )}
+                  {(dateRange?.from || dateRange?.to) && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      <CalendarDays className="h-3 w-3" />
+                      Período: {dateRange?.from ? format(dateRange.from, "dd/MM/yyyy", { locale: ptBR }) : ''}
+                      {dateRange?.to && ` - ${format(dateRange.to, "dd/MM/yyyy", { locale: ptBR })}`}
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => setDateRange(undefined)}
+                      />
+                    </Badge>
+                  )}
+                  {importFilter !== "all" && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      Importação: {getImportDates().find(d => d.id === importFilter)?.label}
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => setImportFilter('all')}
+                      />
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Indicador de resultados filtrados */}
@@ -2023,12 +2271,6 @@ function AnalysisPageContent() {
             <span>
               Mostrando <strong>{filteredFeedbacks.length}</strong> de <strong>{feedbacks.length}</strong> feedbacks
             </span>
-            {(sentimentFilter !== "all" || sectorFilter !== "all" || keywordFilter !== "all" || problemFilter !== "all" || dateRange?.from || dateRange?.to || searchTerm) && (
-              <Badge variant="secondary" className="flex items-center gap-2">
-                <Filter className="h-3 w-3" />
-                Filtros ativos
-              </Badge>
-            )}
           </div>
         </Card>
 
@@ -2049,7 +2291,7 @@ function AnalysisPageContent() {
             </div>
           </div>
           
-          <div className="table-with-fixed-header" style={{ height: 'calc(100vh - 300px)', minHeight: '500px' }}>
+          <div className="table-with-fixed-header" style={{ height: 'calc(100vh - 200px)', minHeight: '700px' }}>
             {/* Header fixo */}
             <div className="fixed-header">
               <div className="overflow-hidden">
@@ -2159,7 +2401,7 @@ function AnalysisPageContent() {
                         )}
                       >
                         {/* Flag de editado */}
-                        {editedFeedbacks.has(feedback.id) && (
+                        {feedback.edited && (
                           <div className="feedback-edited-flag">
                             ✓
                           </div>
