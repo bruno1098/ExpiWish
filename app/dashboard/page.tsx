@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Feedback } from "@/types";
+import { ChartDetailModal } from '@/components/chart-detail-modal';
 import { 
   Star, 
   Filter, 
@@ -99,8 +100,8 @@ function DashboardContent() {
   const [selectedHotel, setSelectedHotel] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<DetailData | null>(null);
   
-  // Estados para o painel lateral interativo
-  const [detailPanelOpen, setDetailPanelOpen] = useState(false);
+  // Estados para o modal de detalhes do gráfico
+  const [chartDetailOpen, setChartDetailOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<{
     type: string;
     value: string;
@@ -578,8 +579,7 @@ function DashboardContent() {
       },
       percentage: filteredData.length > 0 ? ((filteredFeedbacks.length / filteredData.length) * 100).toFixed(1) : 0,
       recentFeedbacks: filteredFeedbacks
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 5),
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       topKeywords: type !== 'keyword' ? getTopKeywordsForItem(filteredFeedbacks) : [],
       topProblems: type !== 'problem' ? getTopProblemsForItem(filteredFeedbacks) : [],
       monthlyTrend: getMonthlyTrendForItem(filteredFeedbacks)
@@ -592,7 +592,7 @@ function DashboardContent() {
       feedbacks: filteredFeedbacks,
       stats
     });
-    setDetailPanelOpen(true);
+    setChartDetailOpen(true);
   };
 
   // Funções auxiliares para estatísticas
@@ -608,7 +608,6 @@ function DashboardContent() {
     });
     return Object.entries(keywordCounts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
       .map(([keyword, count]) => ({ keyword, count }));
   };
 
@@ -626,7 +625,6 @@ function DashboardContent() {
     });
     return Object.entries(problemCounts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
       .map(([problem, count]) => ({ problem, count }));
   };
 
@@ -2405,7 +2403,7 @@ function DashboardContent() {
 
       {/* Painel Lateral Interativo Premium */}
       <div className={`fixed inset-y-0 right-0 z-50 w-[42rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
-        detailPanelOpen ? 'translate-x-0' : 'translate-x-full'
+        'translate-x-full'
       }`}>
         {selectedItem && (
           <div className="h-full flex flex-col">
@@ -2440,7 +2438,7 @@ function DashboardContent() {
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => setDetailPanelOpen(false)}
+                    onClick={() => setChartDetailOpen(false)}
                     className="text-white hover:bg-white/20 h-10 w-10 rounded-full p-0"
                   >
                     <X className="h-5 w-5" />
@@ -2612,10 +2610,10 @@ function DashboardContent() {
       </div>
 
       {/* Overlay Premium para fechar o painel */}
-      {detailPanelOpen && (
+      {false && (
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-all duration-500" 
-          onClick={() => setDetailPanelOpen(false)}
+          onClick={() => setChartDetailOpen(false)}
         />
       )}
 
@@ -2790,6 +2788,8 @@ function DashboardContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ChartDetailModal isOpen={chartDetailOpen} selectedItem={selectedItem} onOpenChange={setChartDetailOpen} />
 
       {/* Modal de Filtros Premium */}
       {filtersOpen && (

@@ -49,7 +49,8 @@ import {
   BarChart3
 } from "lucide-react";
 import { formatDateBR } from "@/lib/utils";
-import {
+import { ChartDetailModal } from '@/components/chart-detail-modal';
+import { 
   ModernChart,
   ProblemsChart,
   RatingsChart,
@@ -619,8 +620,7 @@ function AdminDashboardContent() {
       },
       percentage: dataToUse ? ((filteredFeedbacks.length / dataToUse.length) * 100).toFixed(1) : 0,
       recentFeedbacks: filteredFeedbacks
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 5),
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       topKeywords: type !== 'keyword' ? getTopKeywordsForItem(filteredFeedbacks) : [],
       topProblems: type !== 'problem' ? getTopProblemsForItem(filteredFeedbacks) : [],
       topHotels: type !== 'hotel' ? getTopHotelsForItem(filteredFeedbacks) : [],
@@ -1768,7 +1768,9 @@ function AdminDashboardContent() {
                 )}
               </Button>
 
-              {/* Modal de Filtros Premium */}
+              <ChartDetailModal isOpen={detailPanelOpen} selectedItem={selectedItem} onOpenChange={setDetailPanelOpen} />
+
+      {/* Modal de Filtros Premium */}
               {filtersOpen && analysisData && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setFiltersOpen(false)}>
                   {/* Overlay Premium */}
@@ -3488,7 +3490,7 @@ function AdminDashboardContent() {
 
       {/* Painel Lateral Interativo Moderno */}
       <div className={`fixed inset-y-0 right-0 z-50 w-[42rem] bg-background border-l border-border shadow-2xl transform transition-all duration-500 ease-in-out ${
-        detailPanelOpen ? 'translate-x-0' : 'translate-x-full'
+        'translate-x-full'
       }`}>
         {selectedItem && (
           <div className="h-full flex flex-col">
@@ -3715,7 +3717,7 @@ function AdminDashboardContent() {
       </div>
 
       {/* Overlay Premium para fechar o painel */}
-      {detailPanelOpen && (
+      {false && (
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-all duration-500" 
           onClick={() => setDetailPanelOpen(false)}
