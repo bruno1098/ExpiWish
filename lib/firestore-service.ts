@@ -21,6 +21,20 @@ const generateNumericId = (): string => {
   return Math.floor(10000 + Math.random() * 90000).toString();
 };
 
+// Função para gerar ID baseado em data para facilitar localização
+const generateDateBasedId = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  
+  // Formato: YYYYMMDD_HHMMSS
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+};
+
 // Função para normalizar nome do hotel para usar como ID do documento
 const normalizeHotelName = (hotelName: string): string => {
   return hotelName
@@ -71,8 +85,8 @@ export const saveAnalysis = async (analysisData: Omit<AnalysisData, 'importDate'
       cleanData.isTestEnvironment = true;
     }
     
-    // Gerar ID numérico de 5 dígitos
-    const feedbackId = generateNumericId();
+    // Gerar ID baseado em data para facilitar localização e backup
+    const feedbackId = generateDateBasedId();
     
     // Estrutura correta: analyse/{hotelId}/feedbacks/{feedbackId}
     const feedbackDocRef = doc(
@@ -203,10 +217,15 @@ export const getAllAnalyses = async (hotelId?: string) => {
       }
     }
     
-    // Filtrar resultados por ambiente de teste
-    const filteredResults = results.filter((doc: AnalysisDoc) => 
-      isTestEnv || doc.isTestEnvironment !== true
-    );
+    // Filtrar resultados por ambiente de teste e análises não excluídas
+    const filteredResults = results.filter((doc: AnalysisDoc) => {
+      // Filtrar por ambiente de teste
+      const testFilter = isTestEnv || doc.isTestEnvironment !== true;
+      // Filtrar análises não excluídas
+      const deletedFilter = !(doc as any).deleted;
+      
+      return testFilter && deletedFilter;
+    });
 
     return filteredResults;
   } catch (error) {
@@ -579,6 +598,119 @@ export const getRecentEdits = async (limitDays: number = 7, hotelId?: string) =>
   }
 }
 
+// Função para atualizar uma análise específica no Firebase
+export const updateAnalysisInFirestore = async (
+  analysisId: string, 
+  updateData: any,
+  hotelId?: string
+): Promise<boolean> => {
+  try {
+    let targetHotelId: string | undefined = hotelId;
+    
+    // Se hotelId não foi fornecido, buscar em todos os hotéis
+    if (!targetHotelId) {
+      const hotels = await listAllHotels();
+      
+      for (const hotel of hotels) {
+        const feedbackDocRef = doc(
+          db, 
+          COLLECTION_ANALYSE, 
+          hotel.docId, 
+          SUBCOLLECTION_FEEDBACKS, 
+          analysisId
+        );
+        
+        const docSnap = await getDoc(feedbackDocRef);
+        
+        if (docSnap.exists()) {
+          targetHotelId = hotel.docId;
+          break;
+        }
+      }
+    } else {
+      // Normalizar o hotelId se fornecido como nome
+      targetHotelId = normalizeHotelName(targetHotelId);
+    }
+    
+    if (!targetHotelId) {
+      throw new Error('Análise não encontrada');
+    }
+    
+    // Atualizar o documento
+    const feedbackDocRef = doc(
+      db, 
+      COLLECTION_ANALYSE, 
+      targetHotelId, 
+      SUBCOLLECTION_FEEDBACKS, 
+      analysisId
+    );
+    
+    await updateDoc(feedbackDocRef, {
+      ...updateData,
+      lastModified: Timestamp.now()
+    });
+    
+    console.log(`Análise ${analysisId} atualizada com sucesso`);
+    return true;
+  } catch (error) {
+    console.error('Erro ao atualizar análise:', error);
+    throw error;
+  }
+};
+
+// Função para excluir uma análise específica
+export const deleteAnalysis = async (analysisId: string, hotelId?: string) => {
+  try {
+    let targetHotelId: string | undefined = hotelId;
+    
+    // Se hotelId não foi fornecido, buscar em todos os hotéis
+    if (!targetHotelId) {
+      const hotels = await listAllHotels();
+      
+      for (const hotel of hotels) {
+        const feedbackDocRef = doc(
+          db, 
+          COLLECTION_ANALYSE, 
+          hotel.docId, 
+          SUBCOLLECTION_FEEDBACKS, 
+          analysisId
+        );
+        
+        const docSnap = await getDoc(feedbackDocRef);
+        
+        if (docSnap.exists()) {
+          targetHotelId = hotel.docId;
+          break;
+        }
+      }
+    } else {
+      // Normalizar o hotelId se fornecido como nome
+      targetHotelId = normalizeHotelName(targetHotelId);
+    }
+    
+    if (!targetHotelId) {
+      throw new Error('Análise não encontrada');
+    }
+    
+    // Deletar o documento
+    const feedbackDocRef = doc(
+      db, 
+      COLLECTION_ANALYSE, 
+      targetHotelId, 
+      SUBCOLLECTION_FEEDBACKS, 
+      analysisId
+    );
+    
+    await deleteDoc(feedbackDocRef);
+    
+    console.log(`Análise ${analysisId} excluída com sucesso`);
+    return true;
+  } catch (error) {
+    console.error('Erro ao excluir análise:', error);
+    throw error;
+  }
+};
+
 // Função para limpar edições antigas (usar apenas para debug/teste)
 export const clearRecentEdits = async () => {
   try {
@@ -603,6 +735,7 @@ if (typeof window !== 'undefined') {
     normalizeHotelName,
     clearRecentEdits,
     getRecentEdits,
-    saveRecentEdit
+    saveRecentEdit,
+    deleteAnalysis
   };
 }
