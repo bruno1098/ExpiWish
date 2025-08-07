@@ -10,6 +10,10 @@ export interface AnalysisData {
   data: any[]; // Dados do XLSX
   analysis: any; // Resultado da análise do GPT
   isTestEnvironment?: boolean; // Propriedade opcional para ambiente de teste
+  deleted?: boolean; // Flag para análises excluídas
+  deletedAt?: string; // Data de exclusão
+  deletedBy?: string; // Usuário que excluiu
+  deletedReason?: string; // Motivo da exclusão
 }
 
 // Nova estrutura hierárquica: analyse/{hotelId}/feedbacks/{feedbackId}
@@ -19,6 +23,20 @@ const SUBCOLLECTION_FEEDBACKS = 'feedbacks';
 // Função para gerar ID numérico de 5 dígitos
 const generateNumericId = (): string => {
   return Math.floor(10000 + Math.random() * 90000).toString();
+};
+
+// Função para gerar ID único no formato ddmmaa_hora
+const generateUniqueId = () => {
+  const now = new Date();
+  const day = now.getDate().toString().padStart(2, '0');
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const year = now.getFullYear().toString().slice(-2); // Últimos 2 dígitos do ano
+  const hour = now.getHours().toString().padStart(2, '0');
+  const minute = now.getMinutes().toString().padStart(2, '0');
+  const second = now.getSeconds().toString().padStart(2, '0');
+  
+  // Formato: ddmmaa_hhmmss
+  return `${day}${month}${year}_${hour}${minute}${second}`;
 };
 
 // Função para normalizar nome do hotel para usar como ID do documento
@@ -71,8 +89,8 @@ export const saveAnalysis = async (analysisData: Omit<AnalysisData, 'importDate'
       cleanData.isTestEnvironment = true;
     }
     
-    // Gerar ID numérico de 5 dígitos
-    const feedbackId = generateNumericId();
+    // Gerar ID no formato ddmmaa_hhmmss
+    const feedbackId = generateUniqueId();
     
     // Estrutura correta: analyse/{hotelId}/feedbacks/{feedbackId}
     const feedbackDocRef = doc(
@@ -110,6 +128,7 @@ export const getAllAnalyses = async (hotelId?: string) => {
       isTestEnvironment?: boolean;
       hotelDocId?: string;
       hotelDisplayName?: string;
+      deleted?: boolean;
     }
     
     const results: AnalysisDoc[] = [];
@@ -203,9 +222,9 @@ export const getAllAnalyses = async (hotelId?: string) => {
       }
     }
     
-    // Filtrar resultados por ambiente de teste
+    // Filtrar resultados por ambiente de teste e análises não excluídas
     const filteredResults = results.filter((doc: AnalysisDoc) => 
-      isTestEnv || doc.isTestEnvironment !== true
+      (isTestEnv || doc.isTestEnvironment !== true) && !doc.deleted
     );
 
     return filteredResults;
@@ -215,15 +234,66 @@ export const getAllAnalyses = async (hotelId?: string) => {
   }
 };
 
-// Função para obter análise por ID na nova estrutura
+// Função para obter análise por ID - busca apenas no hotel do usuário logado
 export const getAnalysisById = async (id: string) => {
   if (!id) {
     throw new Error('ID não fornecido');
   }
   
   try {
+    const userData = await getCurrentUserData();
     
-    // Como agora a estrutura é hierárquica, precisamos buscar em todos os hotéis
+    if (!userData || !userData.hotelId) {
+      throw new Error('Usuário não autenticado ou hotel não identificado');
+    }
+
+    const hotelDocId = normalizeHotelName(userData.hotelName || '');
+    
+    const feedbackDocRef = doc(
+      db, 
+      COLLECTION_ANALYSE, 
+      hotelDocId, 
+      SUBCOLLECTION_FEEDBACKS, 
+      id
+    );
+    
+    const docSnap = await getDoc(feedbackDocRef);
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      
+      if (!data) {
+        throw new Error('Documento existe mas não contém dados');
+      }
+      
+      return {
+        id: docSnap.id,
+        ...data
+      };
+    }
+
+    throw new Error('Análise não encontrada no seu hotel');
+  } catch (error) {
+    console.error('Erro ao obter análise:', error);
+    throw error;
+  }
+};
+
+// Função para obter análise por ID - busca em todos os hotéis (apenas para admins)
+export const getAnalysisByIdAdmin = async (id: string) => {
+  if (!id) {
+    throw new Error('ID não fornecido');
+  }
+  
+  try {
+    const userData = await getCurrentUserData();
+    
+    // Verificar se é admin
+    if (userData?.role !== 'admin') {
+      throw new Error('Acesso negado: apenas administradores podem buscar em todos os hotéis');
+    }
+    
+    // Buscar em todos os hotéis
     const hotels = await listAllHotels();
     
     for (const hotel of hotels) {
@@ -238,7 +308,6 @@ export const getAnalysisById = async (id: string) => {
       const docSnap = await getDoc(feedbackDocRef);
       
       if (docSnap.exists()) {
-        
         const data = docSnap.data();
         
         if (!data) {
@@ -593,6 +662,141 @@ export const clearRecentEdits = async () => {
   }
 }
 
+// Função para marcar análise como excluída
+export const deleteAnalysisInFirestore = async (
+  analysisId: string,
+  reason?: string
+): Promise<boolean> => {
+  try {
+    const userData = await getCurrentUserData();
+    if (!userData || !userData.hotelId) {
+      throw new Error('Usuário não autenticado ou hotel não identificado');
+    }
+
+    return await deleteAnalysisInFirestoreWithUserData(analysisId, userData, reason);
+  } catch (error) {
+    console.error('Erro ao excluir análise:', error);
+    throw error;
+  }
+};
+
+// Versão para uso em API routes (servidor)
+export const deleteAnalysisInFirestoreWithUserData = async (
+  analysisId: string,
+  userData: UserData,
+  reason?: string
+): Promise<boolean> => {
+  try {
+    console.log('🔍 Iniciando exclusão de análise:', { analysisId, userEmail: userData.email });
+    
+    if (!userData || !userData.hotelId) {
+      throw new Error('Usuário não autenticado ou hotel não identificado');
+    }
+
+    const hotelDocId = normalizeHotelName(userData.hotelName || '');
+    console.log('🏨 Hotel normalizado:', hotelDocId);
+    
+    // Buscar a análise APENAS no hotel do usuário logado
+    const analysisDocRef = doc(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS, analysisId);
+    const analysisDoc = await getDoc(analysisDocRef);
+    
+    if (!analysisDoc.exists()) {
+      console.error('❌ Análise não encontrada no hotel do usuário:', analysisId);
+      throw new Error('Análise não encontrada no seu hotel');
+    }
+    
+    const currentData = analysisDoc.data();
+    console.log('📄 Dados atuais da análise:', { id: analysisId, hotel: hotelDocId, deleted: currentData?.deleted });
+    
+    // Verificar se já foi excluída
+    if (currentData?.deleted === true) {
+      console.log('⚠️ Análise já foi excluída anteriormente');
+      throw new Error('Esta análise já foi excluída');
+    }
+    
+    // Marcar como excluída
+    const updateData = {
+      deleted: true,
+      deletedAt: new Date().toISOString(),
+      deletedBy: userData.email,
+      deletedReason: reason || 'Análise removida pelo usuário',
+      lastModified: Timestamp.now()
+    };
+    
+    console.log('💾 Atualizando documento com dados:', updateData);
+    await updateDoc(analysisDocRef, updateData);
+    
+    console.log('✅ Análise excluída com sucesso:', analysisId);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Erro ao excluir análise no Firebase:', error);
+    throw error;
+  }
+};
+
+// Função para verificar análises duplicadas
+export const checkForDuplicateAnalyses = async () => {
+  try {
+    console.log('🔍 Verificando análises duplicadas...');
+    
+    const hotels = await listAllHotels();
+    const allAnalyses: any[] = [];
+    
+    for (const hotel of hotels) {
+      const feedbacksRef = collection(db, COLLECTION_ANALYSE, hotel.docId, SUBCOLLECTION_FEEDBACKS);
+      const querySnapshot = await getDocs(feedbacksRef);
+      
+      querySnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        allAnalyses.push({
+           id: doc.id,
+           hotelId: hotel.docId,
+           hotelName: hotel.hotelName,
+           importDate: data.importDate,
+           deleted: data.deleted,
+           data: data.data
+         });
+      });
+    }
+    
+    console.log(`📊 Total de análises encontradas: ${allAnalyses.length}`);
+    
+    // Agrupar por data de importação para identificar possíveis duplicatas
+    const groupedByDate = allAnalyses.reduce((acc, analysis) => {
+      const dateKey = analysis.importDate?.toDate?.()?.toISOString() || 'unknown';
+      if (!acc[dateKey]) {
+        acc[dateKey] = [];
+      }
+      acc[dateKey].push(analysis);
+      return acc;
+    }, {});
+    
+    // Identificar grupos com múltiplas análises
+    const duplicates = Object.entries(groupedByDate)
+      .filter(([date, analyses]: [string, any]) => analyses.length > 1)
+      .map(([date, analyses]: [string, any]) => ({ date, analyses }));
+    
+    if (duplicates.length > 0) {
+      console.log('⚠️ Possíveis duplicatas encontradas:');
+      duplicates.forEach(({ date, analyses }) => {
+        console.log(`📅 Data: ${date}`);
+        analyses.forEach((analysis: any) => {
+          console.log(`  - ID: ${analysis.id}, Hotel: ${analysis.hotelName}, Excluída: ${analysis.deleted}`);
+        });
+      });
+    } else {
+      console.log('✅ Nenhuma duplicata encontrada');
+    }
+    
+    return { total: allAnalyses.length, duplicates };
+    
+  } catch (error) {
+    console.error('❌ Erro ao verificar duplicatas:', error);
+    throw error;
+  }
+};
+
 // Disponibilizar funções globalmente para testes no console
 if (typeof window !== 'undefined') {
   (window as any).firebaseUtils = {
@@ -603,6 +807,7 @@ if (typeof window !== 'undefined') {
     normalizeHotelName,
     clearRecentEdits,
     getRecentEdits,
-    saveRecentEdit
+    saveRecentEdit,
+    checkForDuplicateAnalyses
   };
 }

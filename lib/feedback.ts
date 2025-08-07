@@ -258,10 +258,9 @@ const processAggregatedData = (allFeedbacks: Feedback[]) => {
   // Processar tendência de sentimento
   const sentimentTrend = processSentimentTrend(allFeedbacks);
   
-  // Obter feedbacks recentes
+  // Obter feedbacks recentes (todos os feedbacks ordenados por data)
   const recentFeedbacks = [...allFeedbacks]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 5);
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   
   // Retornar objeto que corresponde exatamente ao tipo StatsData
   return {
