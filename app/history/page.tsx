@@ -11,9 +11,9 @@ import { formatDateBR } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { RequireAuth } from '@/lib/auth-context';
 import SharedDashboardLayout from "../shared-layout";
-import { History, Calendar, Star, Eye, Trash2 } from 'lucide-react';
+import { History, Calendar, Star, Eye, Trash2, AlertTriangle, X } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import DeleteAnalysisModal from '@/app/components/DeleteAnalysisModal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 
 
@@ -22,7 +22,8 @@ function HistoryPageContent() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [analysisToDelete, setAnalysisToDelete] = useState<any>(null);
+  const [analysisToDelete, setAnalysisToDelete] = useState<{id: string, date: string} | null>(null);
+  const [deletingInProgress, setDeletingInProgress] = useState(false);
   const router = useRouter();
   const { userData } = useAuth();
   const { toast } = useToast();
@@ -61,59 +62,71 @@ function HistoryPageContent() {
     router.push(`/history/${id}`);
   };
 
-  const handleDeleteAnalysis = (analysis: any) => {
-    setAnalysisToDelete(analysis);
+  const handleDeleteAnalysis = (analysisId: string, analysisDate: string) => {
+    setAnalysisToDelete({ id: analysisId, date: analysisDate });
     setDeleteModalOpen(true);
   };
 
-  const confirmDeleteAnalysis = async (reason?: string) => {
+  const confirmDeleteAnalysis = async () => {
     if (!analysisToDelete) return;
-
+    
+    setDeletingInProgress(true);
     setDeletingId(analysisToDelete.id);
-
+    
     try {
+      // Chamar API para marcar análise como excluída
       const response = await fetch('/api/delete-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           analysisId: analysisToDelete.id,
-          reason 
+          reason: 'Análise removida pelo usuário'
         }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao excluir análise');
+        // Verificar se é erro específico de análise já excluída
+        if (responseData.error?.includes('já foi excluída')) {
+          toast({
+            title: "Análise Já Excluída",
+            description: "Esta análise já foi removida anteriormente.",
+            variant: "destructive",
+          });
+          // Remover da lista local mesmo assim
+          setAnalyses(prev => prev.filter(analysis => analysis.id !== analysisToDelete.id));
+          return;
+        }
+        throw new Error(responseData.error || 'Falha ao excluir análise');
       }
 
-      // Remover a análise da lista local
+      // Remover da lista local
       setAnalyses(prev => prev.filter(analysis => analysis.id !== analysisToDelete.id));
-
+      
       toast({
-        title: "Sucesso",
-        description: "Análise excluída com sucesso.",
+        title: "Análise Excluída",
+        description: "A análise foi removida com sucesso e não aparecerá mais nos dashboards.",
       });
-
-      // Fechar modal
-      setDeleteModalOpen(false);
-      setAnalysisToDelete(null);
-
-    } catch (error) {
+      
+    } catch (error: any) {
       console.error('Erro ao excluir análise:', error);
       toast({
-        title: "Erro",
-        description: error instanceof Error ? error.message : "Erro ao excluir análise",
-        variant: "destructive",
+        title: "Erro ao Excluir",
+        description: error.message || "Não foi possível excluir a análise. Tente novamente.",
+        variant: "destructive"
       });
     } finally {
       setDeletingId(null);
+      setDeletingInProgress(false);
+      setDeleteModalOpen(false);
+      setAnalysisToDelete(null);
     }
   };
 
-  const handleCloseDeleteModal = () => {
-    if (deletingId) return; // Não permitir fechar durante exclusão
+  const cancelDelete = () => {
     setDeleteModalOpen(false);
     setAnalysisToDelete(null);
   };
@@ -130,6 +143,65 @@ function HistoryPageContent() {
   }
 
   return (
+    <>
+      {/* Modal de Confirmação de Exclusão */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center pb-4">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+              <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
+            </div>
+            <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              Excluir Análise
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              {analysisToDelete && (
+                <>
+                  Tem certeza que deseja excluir a análise de{' '}
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">
+                    {analysisToDelete.date}
+                  </span>
+                  ?
+                  <br />
+                  <span className="text-red-600 dark:text-red-400 font-medium mt-2 block">
+                    Esta ação não pode ser desfeita.
+                  </span>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={cancelDelete}
+              disabled={deletingInProgress}
+              className="w-full sm:w-auto"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteAnalysis}
+              disabled={deletingInProgress}
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700 focus:ring-red-500"
+            >
+              {deletingInProgress ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir Análise
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     <div className="p-6 max-w-7xl mx-auto">
       <div className="space-y-2 mb-6">
         <div className="flex items-center gap-3">
@@ -201,7 +273,14 @@ function HistoryPageContent() {
                 </TableHeader>
                 <TableBody>
                   {analyses.map((analysis) => (
-                    <TableRow key={analysis.id}>
+                    <TableRow 
+                      key={analysis.id}
+                      className={`transition-all duration-500 ${
+                        deletingId === analysis.id 
+                          ? 'opacity-50 bg-red-50 dark:bg-red-950/20 animate-pulse' 
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                      }`}
+                    >
                       <TableCell>
                         <span className="font-medium">
                           {formatDate(analysis.importDate)}
@@ -241,12 +320,12 @@ function HistoryPageContent() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeleteAnalysis(analysis)}
+                            onClick={() => handleDeleteAnalysis(analysis.id, formatDate(analysis.importDate))}
                             disabled={deletingId === analysis.id}
-                            className="h-8 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="h-8 px-3 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
                           >
                             {deletingId === analysis.id ? (
-                              <div className="animate-spin rounded-full h-3 w-3 border-t border-red-600" />
+                              <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-red-600" />
                             ) : (
                               <Trash2 className="h-3 w-3" />
                             )}
@@ -261,15 +340,8 @@ function HistoryPageContent() {
           </Card>
         </TabsContent>
       </Tabs>
-      
-      <DeleteAnalysisModal
-         isOpen={deleteModalOpen}
-         onClose={handleCloseDeleteModal}
-         onConfirm={confirmDeleteAnalysis}
-         analysisName={analysisToDelete ? `Análise de ${formatDate(analysisToDelete.importDate)} - ${analysisToDelete.hotelDisplayName || analysisToDelete.hotelName}` : undefined}
-         isDeleting={!!deletingId}
-       />
     </div>
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAnalysisById, updateAnalysisInFirestore } from '@/lib/firestore-service';
+import { deleteAnalysisInFirestoreWithUserData } from '@/lib/firestore-service';
 import { authenticateRequest } from '@/lib/server-auth';
 
 export async function POST(request: NextRequest) {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     
     const userData = cookieAuth.userData;
 
-    // Marcar análise como excluída em vez de deletar permanentemente
+    // Marcar análise como excluída no Firestore
     const updateData = {
       deleted: true,
       deletedAt: new Date().toISOString(),
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       deletedReason: reason || 'Análise removida pelo usuário'
     };
 
-    const success = await updateAnalysisInFirestore(analysisId, updateData, userData.hotelId);
+    const success = await deleteAnalysisInFirestoreWithUserData(analysisId, userData, reason);
 
     if (success) {
       return NextResponse.json({ 
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
         analysisId 
       });
     } else {
-      throw new Error('Falha ao atualizar análise no Firestore');
+      throw new Error('Falha ao excluir análise no Firestore');
     }
 
   } catch (error: any) {

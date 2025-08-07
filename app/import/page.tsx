@@ -25,13 +25,18 @@ const DELAY_BETWEEN_BATCHES = 50;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Função para gerar ID único
+// Função para gerar ID único no formato ddmmaa_hora
 const generateUniqueId = () => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  // Fallback para ambientes que não suportam crypto.randomUUID
-  return 'id-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now().toString(36);
+  const now = new Date();
+  const day = now.getDate().toString().padStart(2, '0');
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const year = now.getFullYear().toString().slice(-2); // Últimos 2 dígitos do ano
+  const hour = now.getHours().toString().padStart(2, '0');
+  const minute = now.getMinutes().toString().padStart(2, '0');
+  const second = now.getSeconds().toString().padStart(2, '0');
+  
+  // Formato: ddmmaa_hhmmss
+  return `${day}${month}${year}_${hour}${minute}${second}`;
 };
 
 // Componente loading simples
