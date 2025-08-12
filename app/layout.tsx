@@ -6,6 +6,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as SonnerToaster } from 'sonner';
 import { AuthProvider } from '@/lib/auth-context';
 import { AnalyticsTracker } from '@/components/analytics-tracker';
+import { MaintenancePage } from '@/components/maintenance-page';
+import { shouldShowMaintenance } from '@/lib/maintenance-config';
 import './dark-theme.css'
 
 const inter = Inter({ subsets: ['latin'] });
@@ -25,6 +27,9 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Verificar se deve mostrar página de manutenção
+  const isMaintenanceMode = shouldShowMaintenance();
+
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
@@ -55,7 +60,11 @@ export default function RootLayout({
         >
           <AuthProvider>
             <AnalyticsTracker />
-            {children}
+            {isMaintenanceMode ? (
+              <MaintenancePage />
+            ) : (
+              children
+            )}
             <SonnerToaster 
               position="top-right" 
               richColors 
