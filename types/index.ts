@@ -23,6 +23,7 @@ export type Feedback = {
   sector: string
   problem: string
   hotel: string
+  hotelName?: string
   source: string
   language: string
   score?: number

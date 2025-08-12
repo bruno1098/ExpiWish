@@ -3,9 +3,8 @@
 // Para desativar, altere para false
 
 export const MAINTENANCE_CONFIG = {
-  // Controle principal do modo manutenção
-  // Para ATIVAR: true | Para DESATIVAR: false
-  MAINTENANCE_MODE: true,
+
+  MAINTENANCE_MODE: false,
   
   // Mensagens personalizáveis
   TITLE: 'Sistema em Manutenção',

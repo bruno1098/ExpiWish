@@ -661,17 +661,15 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
   }
 
   const handleAddProblem = () => {
-    if (editedProblems.length < 3) {
-      setEditedProblems([
-        ...editedProblems,
-        { 
-          id: `problem-${Date.now()}-${editedProblems.length}`,
-          keyword: 'Comodidade', 
-          sector: 'Produto', 
-          problem: 'VAZIO' 
-        }
-      ])
-    }
+    setEditedProblems([
+      ...editedProblems,
+      { 
+        id: `problem-${Date.now()}-${editedProblems.length}`,
+        keyword: 'Comodidade', 
+        sector: 'Produto', 
+        problem: 'VAZIO' 
+      }
+    ])
   }
 
   const handleSaveChanges = async () => {
@@ -696,11 +694,17 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
       // Atualizar no localStorage
       const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
       if (storedFeedbacks) {
-        const feedbacks = JSON.parse(storedFeedbacks)
-        const updatedFeedbacks = feedbacks.map((f: Feedback) => 
-          f.id === feedback.id ? updatedFeedback : f
-        )
-        localStorage.setItem('analysis-feedbacks', JSON.stringify(updatedFeedbacks))
+        // Verificar se os dados são do hotel atual antes de atualizar
+        const storedHotelId = localStorage.getItem('current-hotel-id')
+        if (storedHotelId === userData?.hotelId) {
+          const feedbacks = JSON.parse(storedFeedbacks)
+          const updatedFeedbacks = feedbacks.map((f: Feedback) => 
+            f.id === feedback.id ? updatedFeedback : f
+          )
+          localStorage.setItem('analysis-feedbacks', JSON.stringify(updatedFeedbacks))
+        } else {
+          console.log('Dados do localStorage são de outro hotel, não atualizando')
+        }
       }
       
       // Salvar no Firebase
@@ -1009,17 +1013,15 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
                     />
                   ))}
 
-                  {editedProblems.length < 3 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleAddProblem}
-                      className="w-full border-dashed border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Adicionar Problema ({editedProblems.length}/3)
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddProblem}
+                    className="w-full border-dashed border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Problema ({editedProblems.length})
+                  </Button>
                 </div>
               ) : (
                 // Modo visualização para múltiplos problemas
@@ -1541,6 +1543,21 @@ function AnalysisPageContent() {
   const searchParams = useSearchParams()
   const id = searchParams.get('id')
   const { toast } = useToast()
+
+  // Limpar localStorage quando o hotel muda
+  useEffect(() => {
+    if (userData?.hotelId) {
+      const storedHotelId = localStorage.getItem('current-hotel-id')
+      if (storedHotelId && storedHotelId !== userData.hotelId) {
+        console.log('Hotel mudou, limpando localStorage...')
+        localStorage.removeItem('analysis-feedbacks')
+        localStorage.removeItem('analysis-data')
+        localStorage.setItem('current-hotel-id', userData.hotelId)
+      } else if (!storedHotelId) {
+        localStorage.setItem('current-hotel-id', userData.hotelId)
+      }
+    }
+  }, [userData?.hotelId])
 
   // Carregar dados do Firebase na inicialização
   useEffect(() => {

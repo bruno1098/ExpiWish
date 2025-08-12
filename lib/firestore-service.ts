@@ -25,7 +25,7 @@ const generateNumericId = (): string => {
   return Math.floor(10000 + Math.random() * 90000).toString();
 };
 
-// Função para gerar ID único no formato ddmmaa_hora
+// Função para gerar ID único mais robusta com milissegundos
 const generateUniqueId = () => {
   const now = new Date();
   const day = now.getDate().toString().padStart(2, '0');
@@ -34,9 +34,118 @@ const generateUniqueId = () => {
   const hour = now.getHours().toString().padStart(2, '0');
   const minute = now.getMinutes().toString().padStart(2, '0');
   const second = now.getSeconds().toString().padStart(2, '0');
+  const millisecond = now.getMilliseconds().toString().padStart(3, '0');
   
-  // Formato: ddmmaa_hhmmss
-  return `${day}${month}${year}_${hour}${minute}${second}`;
+  // Formato: ddmmaa_hhmmss_mmm (incluindo milissegundos)
+  return `${day}${month}${year}_${hour}${minute}${second}_${millisecond}`;
+};
+
+// Função utilitária para gerar IDs únicos mais robustos que evitem duplicações
+export const generateRobustUniqueId = (prefix?: string) => {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  const baseId = generateUniqueId();
+  
+  // Combinar timestamp, ID base e número aleatório para máxima unicidade
+  const robustId = `${baseId}_${timestamp}_${random}`;
+  
+  return prefix ? `${prefix}_${robustId}` : robustId;
+};
+
+// Função para detectar e corrigir IDs duplicados em análises existentes no Firebase
+export const detectAndFixDuplicateIds = async () => {
+  try {
+    console.log('🔍 Iniciando detecção de IDs duplicados...');
+    
+    const analysesRef = collection(db, COLLECTION_ANALYSE);
+    const snapshot = await getDocs(analysesRef);
+    
+    const duplicateReport = {
+      totalHotels: 0,
+      duplicatesFound: 0,
+      duplicatesFixed: 0,
+      errors: [] as string[]
+    };
+    
+    for (const hotelDoc of snapshot.docs) {
+      duplicateReport.totalHotels++;
+      const hotelId = hotelDoc.id;
+      
+      try {
+        // Buscar todos os feedbacks deste hotel
+        const feedbacksRef = collection(db, COLLECTION_ANALYSE, hotelId, SUBCOLLECTION_FEEDBACKS);
+        const feedbacksSnapshot = await getDocs(feedbacksRef);
+        
+        const feedbackIds = new Map<string, string[]>();
+        
+        // Agrupar feedbacks por ID base (sem milissegundos)
+        feedbacksSnapshot.docs.forEach(doc => {
+          const fullId = doc.id;
+          // Extrair ID base removendo milissegundos e timestamp se existirem
+          const baseId = fullId.split('_').slice(0, 2).join('_'); // ddmmaa_hhmmss
+          
+          if (!feedbackIds.has(baseId)) {
+            feedbackIds.set(baseId, []);
+          }
+          feedbackIds.get(baseId)!.push(fullId);
+        });
+        
+        // Identificar e corrigir duplicatas
+         for (const [baseId, ids] of Array.from(feedbackIds.entries())) {
+          if (ids.length > 1) {
+            duplicateReport.duplicatesFound += ids.length - 1;
+            console.log(`⚠️ Duplicatas encontradas para ${hotelId}/${baseId}:`, ids);
+            
+            // Manter o primeiro, renomear os outros
+            for (let i = 1; i < ids.length; i++) {
+              const oldId = ids[i];
+              const newId = generateRobustUniqueId('fixed');
+              
+              try {
+                // Buscar dados do documento antigo
+                const oldDocRef = doc(db, COLLECTION_ANALYSE, hotelId, SUBCOLLECTION_FEEDBACKS, oldId);
+                const oldDocSnap = await getDoc(oldDocRef);
+                
+                if (oldDocSnap.exists()) {
+                  const data = oldDocSnap.data();
+                  
+                  // Criar novo documento com ID único
+                  const newDocRef = doc(db, COLLECTION_ANALYSE, hotelId, SUBCOLLECTION_FEEDBACKS, newId);
+                  await setDoc(newDocRef, {
+                    ...data,
+                    originalId: oldId,
+                    fixedAt: new Date().toISOString(),
+                    fixReason: 'Duplicate ID detected and fixed'
+                  });
+                  
+                  // Deletar documento antigo
+                  await deleteDoc(oldDocRef);
+                  
+                  duplicateReport.duplicatesFixed++;
+                  console.log(`✅ Duplicata corrigida: ${oldId} → ${newId}`);
+                }
+              } catch (error) {
+                const errorMsg = `Erro ao corrigir duplicata ${oldId}: ${error}`;
+                duplicateReport.errors.push(errorMsg);
+                console.error(errorMsg);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        const errorMsg = `Erro ao processar hotel ${hotelId}: ${error}`;
+        duplicateReport.errors.push(errorMsg);
+        console.error(errorMsg);
+      }
+    }
+    
+    console.log('📊 Relatório de correção de duplicatas:', duplicateReport);
+    return duplicateReport;
+    
+  } catch (error) {
+    console.error('❌ Erro na detecção de duplicatas:', error);
+    throw error;
+  }
 };
 
 // Função para normalizar nome do hotel para usar como ID do documento

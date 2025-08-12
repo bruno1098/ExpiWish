@@ -784,17 +784,15 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
   }
 
   const handleAddProblem = () => {
-    if (editedProblems.length < 3) {
-      setEditedProblems([
-        ...editedProblems,
-        { 
-          id: `problem-${Date.now()}-${editedProblems.length}`,
-          keyword: 'Comodidade', 
-          sector: 'Produto', 
-          problem: 'VAZIO' 
-        }
-      ])
-    }
+    setEditedProblems([
+      ...editedProblems,
+      { 
+        id: `problem-${Date.now()}-${editedProblems.length}`,
+        keyword: 'Comodidade', 
+        sector: 'Produto', 
+        problem: 'VAZIO' 
+      }
+    ])
   }
 
   const handleSaveChanges = async () => {
@@ -1049,16 +1047,14 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
                   />
                 ))}
 
-                {editedProblems.length < 3 && (
-                  <Button
-                    variant="outline"
-                    onClick={handleAddProblem}
-                    className="w-full border-dashed border-2 h-12 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Adicionar Problema ({editedProblems.length}/3)
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  onClick={handleAddProblem}
+                  className="w-full border-dashed border-2 h-12 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Problema ({editedProblems.length})
+                </Button>
               </div>
             ) : (
               // Modo de visualização
@@ -1206,6 +1202,17 @@ export default function UnidentifiedFeedbacks() {
   }
 
   useEffect(() => {
+    // Limpar localStorage quando o usuário muda para evitar dados de outros hotéis
+    if (userData?.hotelId) {
+      const storedHotelId = localStorage.getItem('current-hotel-id')
+      if (storedHotelId && storedHotelId !== userData.hotelId) {
+        // Hotel mudou, limpar dados antigos
+        localStorage.removeItem('analysis-feedbacks')
+        console.log('Dados do localStorage limpos devido à mudança de hotel')
+      }
+      localStorage.setItem('current-hotel-id', userData.hotelId)
+    }
+    
     fetchUnidentifiedFeedbacks()
     loadRecentAnalyses()
     
@@ -1230,7 +1237,15 @@ export default function UnidentifiedFeedbacks() {
         try {
           const parsedFeedbacks = JSON.parse(storedFeedbacks)
           
-          feedbacksToAnalyze = parsedFeedbacks
+          // Verificar se os dados do localStorage são do hotel atual
+          const storedHotelId = localStorage.getItem('current-hotel-id')
+          if (storedHotelId === userData?.hotelId) {
+            feedbacksToAnalyze = parsedFeedbacks
+            console.log('Dados carregados do localStorage para o hotel atual')
+          } else {
+            console.log('Dados do localStorage são de outro hotel, ignorando')
+            localStorage.removeItem('analysis-feedbacks')
+          }
         } catch (error) {
           console.error('Erro ao parsear localStorage:', error)
         }
@@ -1238,8 +1253,14 @@ export default function UnidentifiedFeedbacks() {
       
       // Se não tem dados no localStorage, buscar do Firebase
       if (feedbacksToAnalyze.length === 0) {
+        // Garantir que apenas dados do hotel atual sejam carregados
+        if (!userData?.hotelId) {
+          console.error('Hotel ID não encontrado para o usuário')
+          setLoading(false)
+          return
+        }
         
-        const allAnalyses = await getAllAnalyses()
+        const allAnalyses = await getAllAnalyses(userData.hotelId)
         allAnalyses.forEach((analysis: any) => {
           if (analysis.data && Array.isArray(analysis.data)) {
             feedbacksToAnalyze.push(...analysis.data)

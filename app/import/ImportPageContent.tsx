@@ -36,7 +36,7 @@ const REQUEST_DELAY = 50;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Função para gerar ID único no formato ddmmaa_hora
+// Função para gerar ID único no formato ddmmaa_hhmmss_mmm
 const generateUniqueId = () => {
   const now = new Date();
   const day = now.getDate().toString().padStart(2, '0');
@@ -45,9 +45,10 @@ const generateUniqueId = () => {
   const hour = now.getHours().toString().padStart(2, '0');
   const minute = now.getMinutes().toString().padStart(2, '0');
   const second = now.getSeconds().toString().padStart(2, '0');
+  const millisecond = now.getMilliseconds().toString().padStart(3, '0');
   
-  // Formato: ddmmaa_hhmmss
-  return `${day}${month}${year}_${hour}${minute}${second}`;
+  // Formato: ddmmaa_hhmmss_mmm
+  return `${day}${month}${year}_${hour}${minute}${second}_${millisecond}`;
 };
 
 // Mensagens motivadoras baseadas no progresso
@@ -906,6 +907,10 @@ function ImportPageContent() {
       // Salvar dados no localStorage para a tela de análise
       localStorage.setItem('analysis-feedbacks', JSON.stringify(feedbacks));
       localStorage.setItem('analysis-data', JSON.stringify(analysisToSave));
+      // Salvar ID do hotel atual para validação posterior
+      if (userData?.hotelId) {
+        localStorage.setItem('current-hotel-id', userData.hotelId);
+      }
 
       setProgress(100);
       setCurrentStep("Concluído!");

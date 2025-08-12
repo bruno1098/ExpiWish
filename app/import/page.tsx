@@ -25,7 +25,7 @@ const DELAY_BETWEEN_BATCHES = 50;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Função para gerar ID único no formato ddmmaa_hora
+// Função para gerar ID único no formato ddmmaa_hhmmss_mmm
 const generateUniqueId = () => {
   const now = new Date();
   const day = now.getDate().toString().padStart(2, '0');
@@ -34,9 +34,10 @@ const generateUniqueId = () => {
   const hour = now.getHours().toString().padStart(2, '0');
   const minute = now.getMinutes().toString().padStart(2, '0');
   const second = now.getSeconds().toString().padStart(2, '0');
+  const millisecond = now.getMilliseconds().toString().padStart(3, '0');
   
-  // Formato: ddmmaa_hhmmss
-  return `${day}${month}${year}_${hour}${minute}${second}`;
+  // Formato: ddmmaa_hhmmss_mmm
+  return `${day}${month}${year}_${hour}${minute}${second}_${millisecond}`;
 };
 
 // Componente loading simples

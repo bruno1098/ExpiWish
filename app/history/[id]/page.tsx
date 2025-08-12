@@ -530,17 +530,15 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: any, onSave: (updat
   }
 
   const handleAddProblem = () => {
-    if (editedProblems.length < 3) {
-      setEditedProblems([
-        ...editedProblems,
-        { 
-          id: `problem-${Date.now()}-${editedProblems.length}`,
-          keyword: 'Comodidade', 
-          sector: 'Produto', 
-          problem: 'VAZIO' 
-        }
-      ])
-    }
+    setEditedProblems([
+      ...editedProblems,
+      { 
+        id: `problem-${Date.now()}-${editedProblems.length}`,
+        keyword: 'Comodidade', 
+        sector: 'Produto', 
+        problem: 'VAZIO' 
+      }
+    ])
   }
 
   const handleSaveChanges = async () => {
@@ -771,16 +769,14 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: any, onSave: (updat
                   />
                 ))}
 
-                {editedProblems.length < 3 && (
-                  <Button
-                    variant="outline"
-                    onClick={handleAddProblem}
-                    className="w-full border-dashed border-2 h-12 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Adicionar Problema ({editedProblems.length}/3)
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  onClick={handleAddProblem}
+                  className="w-full border-dashed border-2 h-12 text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Problema ({editedProblems.length})
+                </Button>
               </div>
             ) : (
               // Modo de visualização

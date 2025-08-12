@@ -151,8 +151,9 @@ const OFFICIAL_KEYWORDS = [
   "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval",
   "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações",
   "Ar-condicionado", "Elevador", "Frigobar", "Infraestrutura",
+
   "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina",
-  "Tecnologia - Wi-fi", "Tecnologia - TV", "Comodidade", "Estacionamento",
+  "Tecnologia - Wi-fi", "Tecnologia - TV", "Experiência", "Estacionamento",
   "Atendimento", "Acessibilidade", "Reserva de cadeiras (pool)", "Processo",
   "Custo-benefício", "Comunicação", "Check-in - Atendimento", "Check-out - Atendimento",
   "Concierge", "Cotas", "Reservas", "Água", "Recreação",
@@ -202,10 +203,10 @@ function validateKeyword(keyword: string): string {
   
   // Log para monitoramento de termos não cobertos (apenas em desenvolvimento)
   if (process.env.NODE_ENV === 'development') {
-    console.log(`⚠️ Keyword não mapeada: "${keyword}" (normalizada: "${normalized}") - usando fallback "Comodidade"`);
+    console.log(`⚠️ Keyword não mapeada: "${keyword}" (normalizada: "${normalized}") - usando fallback "Experiência"`);
   }
   
-  return "Comodidade"; // Fallback
+  return "Experiência"; // Fallback
 }
 
 // Função para validar departamento
@@ -233,7 +234,7 @@ function validateDepartment(department: string, keyword: string): string {
     "Piscina": "Lazer",
     "Tecnologia - Wi-fi": "TI",
     "Tecnologia - TV": "TI",
-    "Comodidade": "Produto",
+    "Experiência": "Produto",
     "Estacionamento": "Operações",
     "Atendimento": "Operações",
     "Acessibilidade": "Operações",
@@ -317,15 +318,15 @@ export async function POST(request: NextRequest) {
     if (!texto || texto.trim() === '') {
       return NextResponse.json({
         rating: 3,
-        keyword: 'Comodidade',
+        keyword: 'Experiência',
         sector: 'Produto',
         problem: 'VAZIO',
         problems: [{
-          keyword: 'Comodidade',
+          keyword: 'Experiência',
           sector: 'Produto', 
           problem: 'VAZIO'
         }],
-        legacyFormat: 'Comodidade, Produto, VAZIO'
+        legacyFormat: 'Experiência, Produto, VAZIO'
       });
     }
 
@@ -347,15 +348,15 @@ export async function POST(request: NextRequest) {
     if (isOnlyNumbers || isOnlySpecialChars || isTooShort) {
       const defaultResponse = {
         rating: 3,
-        keyword: 'Comodidade',
+        keyword: 'Experiência',
         sector: 'Produto',
         problem: 'VAZIO',
         problems: [{
-          keyword: 'Comodidade',
+          keyword: 'Experiência',
           sector: 'Produto',
           problem: 'VAZIO'
         }],
-        legacyFormat: 'Comodidade, Produto, VAZIO'
+        legacyFormat: 'Experiência, Produto, VAZIO'
       };
       
       // Cache resultado padrão
@@ -423,7 +424,7 @@ export async function POST(request: NextRequest) {
 **⚠️ ATENÇÃO ESPECIAL - COMENTÁRIOS IRRELEVANTES:**
 ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLIDO:
 
-**PADRÕES DE COMENTÁRIOS IRRELEVANTES (retornar: keyword="Comodidade", department="Produto", problem="Não identificado"):**
+**PADRÕES DE COMENTÁRIOS IRRELEVANTES (retornar: keyword="Experiência", department="Produto", problem="Não identificado"):**
 - Referências vagas: "conforme meu relato acima", "como mencionado anteriormente", "conforme já disse", "já informei"
 - Textos de preenchimento: "VICE ACIMA", "VIDE ACIMA", "ver acima", "idem acima", "igual acima"
 - Comentários vazios de contexto: "mesmo problema", "igual anterior", "mesma situação", "idem"
@@ -433,7 +434,7 @@ ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLI
 - Redirecionamentos: "ver comentário anterior", "conforme informado", "como relatado"
 
 **SE IDENTIFICAR QUALQUER PADRÃO ACIMA:**
-- Retorne SEMPRE: keyword="Comodidade", department="Produto", problem="Não identificado"
+- Retorne SEMPRE: keyword="Experiência", department="Produto", problem="Não identificado"
 - NÃO tente analisar o conteúdo
 - NÃO busque por problemas ou sentimentos
 
@@ -441,7 +442,7 @@ ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLI
 1. **LEIA** cuidadosamente todo o comentário
 2. **DETECTE PRIMEIRO A&B** - Procure palavras relacionadas a alimentação:
    - Palavras-chave: "food", "comida", "meal", "dinner", "lunch", "breakfast", "pasta", "restaurant", "bar", "drink", "coffee", "garçom", "waiter"
-   - Se encontrar QUALQUER uma → use departamento A&B (NUNCA "Produto" ou "Comodidade")
+   - Se encontrar QUALQUER uma → use departamento A&B (NUNCA "Produto" ou "Experiência")
 3. **IDENTIFIQUE** apenas problemas reais:
    - Faltas: "não tinha", "faltou", "senti falta", "sem..."
    - Críticas: "muito alto", "ruim", "inadequado", "pequeno demais"
@@ -457,13 +458,13 @@ ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLI
   * Qualquer menção a "food", "comida", "meal", "dinner", "lunch", "breakfast", "café da manhã" → use A&B
   * "restaurant", "restaurante", "bar", "garçom", "waiter", "service" (em contexto de comida) → use A&B
   * "pasta", "drink", "beverage", "coffee", "tea" e ingredientes/pratos → use A&B
-  * NUNCA use "Comodidade" para problemas de comida - SEMPRE use A&B
+  * NUNCA use "Experiência" para problemas de comida - SEMPRE use A&B
 - SEMPRE seguir EXATAMENTE a tabela de mapeamento abaixo
 - Se Palavra-chave = "Estacionamento" → Departamento DEVE ser "Operações"  
 - Se Palavra-chave = "Enxoval" → Departamento DEVE ser "Governança"
 - E assim por diante seguindo a tabela RIGOROSAMENTE
 - Se houver elogios **e** problemas ➜ foque APENAS nos **problemas**
-- Se houver **apenas elogios** ➜ retorne: keyword="Comodidade", department="Produto", problem="VAZIO"
+- Se houver **apenas elogios** ➜ retorne: keyword="Experiência", department="Produto", problem="VAZIO"
 - Para problemas use termos ESPECÍFICOS e PADRONIZADOS:
   * Se for serviço lento: "Demora no Atendimento"
   * Se for quarto pequeno: "Espaço Insuficiente" 
@@ -490,7 +491,7 @@ ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLI
 "mesmo problema" → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
 "teste" → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
 "..." → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
-Sempre tente aproximar o maximo possivel os comentarios com os departamentos e palavra chave, use Não identificado somente em casos extremos, quando tiver elogios nao use Não identificado, use Produto e Comodidade
+Sempre tente aproximar o maximo possivel os comentarios com os departamentos e palavra chave, use Não identificado somente em casos extremos, quando tiver elogios nao use Não identificado, use Produto e Experiência
 
 **COMENTÁRIOS VÁLIDOS (análise normal):**
 "Senti falta de água nas áreas comuns" → keyword="Água", department="A&B", problem="Falta de Disponibilidade"
@@ -538,7 +539,7 @@ Sempre tente aproximar o maximo possivel os comentarios com os departamentos e p
 | Recreação                  | Lazer                    |
 | Tecnologia - Wi-fi         | TI                       |
 | Tecnologia - TV            | TI                       |
-| Comodidade                 | Produto                  |
+| Experiência                | Produto                  |
 | Estacionamento             | Operações                |
 | Atendimento                | Operações                |
 | Acessibilidade             | Operações                |
@@ -592,7 +593,7 @@ Comentário: "${texto}"`;
     if (result.issues && Array.isArray(result.issues)) {
       for (const issue of result.issues.slice(0, 3)) {
         // Validar e normalizar cada campo
-        const validatedKeyword = validateKeyword(issue.keyword || "Comodidade");
+        const validatedKeyword = validateKeyword(issue.keyword || "Experiência");
         const validatedDepartment = validateDepartment(issue.department || "Produto", validatedKeyword);
         const validatedProblem = validateProblem(issue.problem || "");
         
@@ -607,7 +608,7 @@ Comentário: "${texto}"`;
     // Se não conseguiu processar nenhum problema, usar padrão
     if (processedProblems.length === 0) {
       processedProblems.push({
-        keyword: "Comodidade",
+        keyword: "Experiência",
         sector: "Produto", 
         problem: ""
       });
@@ -615,7 +616,7 @@ Comentário: "${texto}"`;
 
     // Compatibilidade total com formato anterior
     const firstProblem = processedProblems[0] || {
-      keyword: 'Comodidade',
+      keyword: 'Experiência',
       sector: 'Produto', 
       problem: 'VAZIO'
     };
@@ -687,4 +688,4 @@ Comentário: "${texto}"`;
       { status: 500 }
     );
   }
-} 
+}
