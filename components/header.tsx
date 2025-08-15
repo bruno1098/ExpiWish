@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu"
 import { ReactNode } from "react"
+import Image from "next/image"
 
 export default function Header({ children }: { children?: ReactNode }) {
   const { userData } = useAuth()
@@ -61,9 +62,66 @@ export default function Header({ children }: { children?: ReactNode }) {
     return <Shield className="w-3 h-3" />
   }
 
+  // Função para obter a logo do hotel baseado no nome
+  const getHotelLogo = (hotelName: string) => {
+    if (!hotelName) return null
+    
+    // Normaliza o nome do hotel para comparação
+    const normalizedName = hotelName.trim()
+    
+    const logoMap: { [key: string]: string } = {
+      "Wish Foz do Iguaçu": "/logo-novo-horizontal-wish-foz-do-iguacu.png",
+      "Wish Natal": "/logo-novo-horizontal-wish-natal.png",
+      "Wish Serrano": "/logo-novo-horizontal-wish-serrano.png",
+      "Marupiara by Wish": "/marupiara-by-wish-azul.png",
+      "Prodigy Gramado by Wish": "/prodigy-gramado-by-wish-vermelho.png",
+      "Prodigy SDU by Wish": "/prodigy-sdu-by-wish-vermelho.png",
+      // Variações alternativas para Prodigy SDU
+      "Prodigy SDU": "/prodigy-sdu-by-wish-vermelho.png",
+      "prodigy sdu by wish": "/prodigy-sdu-by-wish-vermelho.png",
+      "PRODIGY SDU BY WISH": "/prodigy-sdu-by-wish-vermelho.png",
+      "Prodigy Santos Dumont": "/prodigy-sdu-by-wish-vermelho.png",
+      "prodigy santos dumont": "/prodigy-sdu-by-wish-vermelho.png",
+      "PRODIGY SANTOS DUMONT": "/prodigy-sdu-by-wish-vermelho.png",
+      "Confins": "/Confins.png",
+      "Galeão": "/Galeão.png",
+      "Bahia": "/Logo Bahia.png"
+    }
+    
+    // Debug: Log para verificar o nome do hotel recebido
+    console.log('🏨 getHotelLogo - Nome recebido:', `"${normalizedName}"`)
+    console.log('🏨 getHotelLogo - Chaves disponíveis:', Object.keys(logoMap))
+    
+    // Busca exata primeiro
+    if (logoMap[normalizedName]) {
+      console.log('✅ getHotelLogo - Match exato encontrado:', logoMap[normalizedName])
+      return logoMap[normalizedName]
+    }
+    
+    // Busca case-insensitive como fallback
+    const lowerName = normalizedName.toLowerCase()
+    for (const [key, value] of Object.entries(logoMap)) {
+      if (key.toLowerCase() === lowerName) {
+        console.log('✅ getHotelLogo - Match case-insensitive encontrado:', value)
+        return value
+      }
+    }
+    
+    // Busca parcial para casos como "Prodigy Gramado" sem "by Wish"
+    for (const [key, value] of Object.entries(logoMap)) {
+      if (key.toLowerCase().includes(lowerName) || lowerName.includes(key.toLowerCase())) {
+        console.log('✅ getHotelLogo - Match parcial encontrado:', value)
+        return value
+      }
+    }
+    
+    console.log('❌ getHotelLogo - Nenhum logo encontrado para:', `"${normalizedName}"`)
+    return null
+  }
+
   return (
     <header className="bg-gradient-to-r from-white via-slate-50 to-white dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="flex h-16 items-center px-4 lg:px-6 xl:px-8 gap-4">
+      <div className="flex h-24 items-center px-8 lg:px-6 xl:px-10 gap-4">
         {children}
         
         {/* Área central com informações do usuário e hotel */}
@@ -90,47 +148,80 @@ export default function Header({ children }: { children?: ReactNode }) {
                       {userData.role === 'admin' ? 'Admin' : 'Colaborador'}
                     </div>
                   </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date().toLocaleDateString('pt-BR', { 
-                      weekday: 'long', 
-                      day: 'numeric', 
-                      month: 'long' 
-                    })}
-                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {new Date().toLocaleDateString('pt-BR', { 
+                        weekday: 'long', 
+                        day: 'numeric', 
+                        month: 'long' 
+                      })}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {userData.hotelName}
+                      </span>
+                      {(userData as any).stars && (
+                        <div className="flex items-center gap-0.5">
+                          {renderStars((userData as any).stars).slice(0, (userData as any).stars).map((star, i) => (
+                            <Star key={i} className="w-2 h-2 text-yellow-400 fill-yellow-400" />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-2 h-2 text-gray-400" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        BI Qualidade • Grupo Wish
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
               
               {/* Divisor */}
               <div className="w-px h-8 bg-gradient-to-b from-transparent via-gray-300 to-transparent dark:via-gray-600"></div>
               
-              {/* Informações do hotel */}
-              <div className="flex items-center gap-3">
+              {/* Logo do hotel */}
+              <div className="flex items-center justify-center">
                 <div className="relative">
-                  <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg">
-                    <Building2 className="w-5 h-5 text-white" />
-                  </div>
-                  {(userData as any).stars && (
-                    <div className="absolute -top-1 -right-1 bg-yellow-400 rounded-full px-1.5 py-0.5 text-xs font-bold text-yellow-900">
-                      {(userData as any).stars}★
+                  {userData.role !== 'admin' && getHotelLogo(userData.hotelName) ? (
+                    <div className="w-64 h-16 rounded-xl overflow-hidden shadow-md bg-white/80 backdrop-blur-sm flex items-center justify-center p-2">
+                      <Image 
+                        src={getHotelLogo(userData.hotelName)!} 
+                        alt={`Logo ${userData.hotelName}`}
+                        width={140}
+                        height={56}
+                        className="object-contain w-full h-full"
+                        style={{
+                          filter: 'contrast(1.05) saturate(1.05)'
+                        }}
+                        onError={(e) => {
+                          console.error('❌ Erro ao carregar logo:', getHotelLogo(userData.hotelName), 'para hotel:', userData.hotelName)
+                          e.currentTarget.style.display = 'none'
+                        }}
+                        onLoad={() => {
+                          console.log('✅ Logo carregado com sucesso:', getHotelLogo(userData.hotelName))
+                        }}
+                      />
+                    </div>
+                  ) : userData.role === 'admin' ? (
+                    <div className="w-64 h-16 rounded-xl overflow-hidden shadow-md bg-white/80 backdrop-blur-sm flex items-center justify-center p-2">
+                      <Image 
+                        src="/adminLogo.png" 
+                        alt="Logo Administrador"
+                        width={140}
+                        height={56}
+                        className="object-contain w-full h-full"
+                        style={{
+                          filter: 'contrast(1.05) saturate(1.05)'
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center shadow-md">
+                      <Building2 className="w-5 h-5 text-white" />
                     </div>
                   )}
-                </div>
-                
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm lg:text-base font-semibold text-gray-700 dark:text-gray-200">
-                      {userData.hotelName}
-                    </span>
-                    {(userData as any).stars && (
-                      <div className="flex items-center gap-0.5">
-                        {renderStars((userData as any).stars)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                    <MapPin className="w-3 h-3" />
-                    <span>BI Qualidade • Grupo Wish</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -149,43 +240,73 @@ export default function Header({ children }: { children?: ReactNode }) {
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full opacity-0 hover:opacity-100 transition-opacity duration-300"></div>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuContent align="end" className="w-80 p-2">
             <DropdownMenuLabel className="pb-2">Minha Conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {userData && (
               <>
-                <DropdownMenuItem className="text-sm p-3 cursor-default">
-                  <div className="flex items-center gap-3 w-full">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                      <User className="w-5 h-5 text-white" />
+                <DropdownMenuItem className="text-sm p-4 cursor-default rounded-lg mb-2">
+                  <div className="flex items-center gap-4 w-full">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                      <User className="w-6 h-6 text-white" />
                     </div>
                     <div className="flex flex-col flex-1">
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      <span className="font-semibold text-gray-900 dark:text-gray-100 text-base">
                         {userData.name || userData.email.split('@')[0]}
                       </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
                         {userData.email}
                       </span>
                     </div>
                   </div>
                 </DropdownMenuItem>
                 
-                <DropdownMenuItem className="text-sm p-3 cursor-default">
-                  <div className="flex items-center gap-3 w-full">
-                    <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center">
-                      <Building2 className="w-5 h-5 text-white" />
-                    </div>
+                <DropdownMenuItem className="text-sm p-4 cursor-default rounded-lg mb-2">
+                  <div className="flex items-center gap-4 w-full">
+                    {userData.role !== 'admin' && getHotelLogo(userData.hotelName) ? (
+                      <div className="w-16 h-12 rounded-lg overflow-hidden shadow-md flex items-center justify-center bg-white">
+                        <Image 
+                          src={getHotelLogo(userData.hotelName)!} 
+                          alt={`Logo ${userData.hotelName}`}
+                          width={64}
+                          height={48}
+                          className="object-contain w-full h-full scale-110 transform"
+                          style={{
+                            filter: 'contrast(1.1) saturate(1.1)',
+                            objectPosition: 'center'
+                          }}
+                        />
+                      </div>
+                    ) : userData.role === 'admin' ? (
+                      <div className="w-16 h-12 rounded-lg overflow-hidden shadow-md flex items-center justify-center bg-white">
+                        <Image 
+                          src="/adminLogo.png" 
+                          alt="Logo Administrador"
+                          width={64}
+                          height={48}
+                          className="object-contain w-full h-full scale-110 transform"
+                          style={{
+                            filter: 'contrast(1.1) saturate(1.1)',
+                            objectPosition: 'center'
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center">
+                        <Building2 className="w-6 h-6 text-white" />
+                      </div>
+                    )}
                     <div className="flex flex-col flex-1">
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      <span className="font-semibold text-gray-900 dark:text-gray-100 text-base">
                         {userData.hotelName}
                       </span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mt-1">
                         {(userData as any).stars && (
                           <div className="flex items-center gap-0.5">
                             {renderStars((userData as any).stars)}
                           </div>
                         )}
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
                           Grupo Wish
                         </span>
                       </div>
@@ -193,16 +314,16 @@ export default function Header({ children }: { children?: ReactNode }) {
                   </div>
                 </DropdownMenuItem>
                 
-                <DropdownMenuItem className="text-sm p-3 cursor-default">
-                  <div className="flex items-center gap-3 w-full">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getRoleBadgeStyle(userData.role)}`}>
+                <DropdownMenuItem className="text-sm p-4 cursor-default rounded-lg mb-2">
+                  <div className="flex items-center gap-4 w-full">
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${getRoleBadgeStyle(userData.role)}`}>
                       {getRoleIcon(userData.role)}
                     </div>
                     <div className="flex flex-col flex-1">
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      <span className="font-semibold text-gray-900 dark:text-gray-100 text-base">
                         {userData.role === 'admin' ? 'Administrador' : 'Colaborador'}
                       </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
                         BI Qualidade • Sistema de Gestão
                       </span>
                     </div>
@@ -212,7 +333,7 @@ export default function Header({ children }: { children?: ReactNode }) {
                 <DropdownMenuSeparator />
               </>
             )}
-            <DropdownMenuItem onClick={handleLogout} className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+            <DropdownMenuItem onClick={handleLogout} className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 p-4 rounded-lg mt-2">
               <LogOut className="mr-2 h-4 w-4" />
               <span>Sair</span>
             </DropdownMenuItem>

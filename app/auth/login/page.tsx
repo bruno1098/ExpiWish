@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser, getCurrentUserData, sendEmailVerification, canUserAccess } from "@/lib/auth-service";
+import { getAllAnalyses } from "@/lib/firestore-service";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Lock, User, BarChart3, TrendingUp, Shield, Eye, EyeOff } from "lucide-react";
+import HotelLoadingScreen from "@/components/hotel-loading-screen";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,32 +19,79 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showHotelLoading, setShowHotelLoading] = useState(false);
+  const [loggedUserData, setLoggedUserData] = useState<any>(null);
+
+  // Função para carregar dados do dashboard assincronamente
+  const loadDashboardData = async (userData: any) => {
+    try {
+      if (userData?.hotelId) {
+        // Carregar dados em background durante a animação
+        await getAllAnalyses(userData.hotelId);
+        // Os dados serão carregados novamente no dashboard, mas o cache do Firebase ajudará
+      }
+    } catch (error) {
+      console.error('Erro ao pré-carregar dados do dashboard:', error);
+    }
+  };
   const router = useRouter();
   const { isAuthenticated, userData, loading: authLoading } = useAuth();
 
-  // Redirecionar se já estiver logado
+  // Reset dos estados quando o componente é montado
   useEffect(() => {
-    if (!authLoading && isAuthenticated && userData) {
-      const redirectPath = userData.role === 'admin' ? '/admin' : '/dashboard';
-      console.log(`🔄 Usuário já logado (${userData.role}), redirecionando para: ${redirectPath}`);
-      router.replace(redirectPath);
-    }
-  }, [isAuthenticated, userData, authLoading, router]);
+    setShowHotelLoading(false);
+    setLoggedUserData(null);
+  }, []);
 
-  // Mostrar loading enquanto verifica autenticação
-  if (authLoading) {
+  // Reset dos estados quando o usuário não está autenticado
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      setShowHotelLoading(false);
+      setLoggedUserData(null);
+    }
+  }, [isAuthenticated, authLoading]);
+
+  // Função para lidar com o fim do carregamento
+  const handleLoadingComplete = () => {
+    // Redirecionar baseado no papel do usuário
+    if (loggedUserData?.role === 'admin') {
+      router.push('/admin');
+    } else {
+      router.push('/dashboard');
+    }
+  };
+
+  // Redirecionamento automático se já estiver logado
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && userData && !showHotelLoading) {
+      // Ativar a tela de carregamento imediatamente
+      setShowHotelLoading(true);
+      setLoggedUserData(userData);
+      
+      // Simular carregamento de dados e redirecionar após a animação
+      setTimeout(() => {
+        if (userData.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/dashboard');
+        }
+      }, 3000); // Tempo suficiente para a animação de carregamento
+    }
+  }, [isAuthenticated, userData, authLoading, router, showHotelLoading]);
+
+  // Mostrar tela de carregamento personalizada se ativada
+  if (showHotelLoading && loggedUserData) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-indigo-950">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 w-16 h-16 border-4 border-purple-400/20 border-b-purple-400 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-        </div>
-      </div>
+      <HotelLoadingScreen
+        hotelName={loggedUserData.hotelName || ''}
+        isVisible={true}
+        onLoadingComplete={handleLoadingComplete}
+      />
     );
   }
 
   // Não renderizar a página de login se usuário já estiver logado
-  if (isAuthenticated) {
+  if (isAuthenticated && !showHotelLoading) {
     return null;
   }
 
@@ -95,8 +144,23 @@ export default function LoginPage() {
         return;
       }
 
-      // Login bem-sucedido - o redirecionamento será feito automaticamente pelo useAuth()
+      // Login bem-sucedido - mostrar tela de carregamento personalizada
       toast.success("Login realizado com sucesso");
+      
+      // Armazenar dados do usuário para a tela de carregamento
+      const hotelLoadingData = {
+        ...userData,
+        uid: user.uid,
+        hotelName: userData.role === 'admin' ? 'admin' : userData.hotelName
+      };
+      setLoggedUserData(hotelLoadingData);
+      
+      // Usar setTimeout para garantir que o estado seja atualizado
+      setTimeout(() => {
+        setShowHotelLoading(true);
+        // Carregar dados do dashboard assincronamente durante a tela de carregamento
+        loadDashboardData(hotelLoadingData);
+      }, 100);
       
     } catch (error: any) {
       console.error("❌ Erro ao fazer login:", error);
@@ -126,7 +190,9 @@ export default function LoginPage() {
       setError(error.message || "Falha ao fazer login. Verifique suas credenciais.");
       toast.error(error.message || "Falha ao fazer login. Verifique suas credenciais.");
     } finally {
-      setLoading(false);
+      if (!showHotelLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -316,6 +382,8 @@ export default function LoginPage() {
         <div className="absolute top-3/4 right-1/4 w-0.5 h-0.5 sm:w-1 sm:h-1 bg-purple-400 rounded-full animate-ping opacity-30" style={{ animationDelay: '2s' }}></div>
         <div className="absolute top-1/2 left-3/4 w-1 h-1 sm:w-1.5 sm:h-1.5 bg-pink-400 rounded-full animate-ping opacity-25" style={{ animationDelay: '4s' }}></div>
       </div>
+
+      {/* Tela de carregamento personalizada removida daqui - agora renderizada no início */}
     </div>
   );
 }

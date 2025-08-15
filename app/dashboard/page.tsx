@@ -147,6 +147,76 @@ function DashboardContent() {
   // Estado para controlar a abertura do painel de filtros
   const [filtersOpen, setFiltersOpen] = useState(false);
   
+  // Função para processar dados das análises
+  const processAnalysesData = (analyses: any[]) => {
+    if (analyses && analyses.length > 0) {
+      // Filtrar análises que têm todos os campos necessários
+      const validAnalyses = analyses.filter((a: any) => 
+        a && typeof a === 'object' && 
+        'id' in a && 
+        'hotelId' in a && 
+        'hotelName' in a && 
+        'importDate' in a && 
+        'data' in a && 
+        'analysis' in a
+      );
+
+      if (validAnalyses.length > 0) {
+        // Usar a análise mais recente como base
+        let combinedAnalysis = { ...validAnalyses[0] } as AnalysisData;
+        
+        // Coletar todos os dados de feedback de todas as análises
+        let allFeedbacks: any[] = [];
+        
+        validAnalyses.forEach((analysis: any) => {
+          if (analysis.data && Array.isArray(analysis.data)) {
+            // Filtrar feedbacks excluídos
+            const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
+            
+            // Como as análises já foram filtradas por hotelId na consulta do Firestore,
+            // podemos incluir todos os feedbacks válidos desta análise
+            allFeedbacks = [...allFeedbacks, ...validFeedbacks];
+          }
+        });
+        
+        // Se temos feedbacks para mostrar
+        if (allFeedbacks.length > 0) {
+          // Atualizar a análise com os dados filtrados para o hotel específico
+          combinedAnalysis.data = allFeedbacks;
+          
+          // Recalcular as estatísticas com base apenas nos feedbacks do hotel
+          combinedAnalysis.analysis = {
+            ...combinedAnalysis.analysis,
+            totalFeedbacks: allFeedbacks.length,
+            averageRating: allFeedbacks.reduce((acc, item) => acc + (item.rating || 0), 0) / allFeedbacks.length,
+            positiveSentiment: Math.round((allFeedbacks.filter(item => item.sentiment === 'positive').length / allFeedbacks.length) * 100),
+            
+            // Distribuições recalculadas apenas para o hotel do usuário
+            hotelDistribution: processHotelDistribution(allFeedbacks),
+            sourceDistribution: processSourceDistribution(allFeedbacks),
+            languageDistribution: processLanguageDistribution(allFeedbacks),
+            ratingDistribution: processRatingDistribution(allFeedbacks),
+            problemDistribution: processProblemDistribution(allFeedbacks),
+            keywordDistribution: processKeywordDistribution(allFeedbacks),
+            // Usar os feedbacks filtrados como feedbacks recentes
+            recentFeedbacks: allFeedbacks.sort((a: any, b: any) => 
+              new Date(b.date).getTime() - new Date(a.date).getTime()
+            ).slice(0, 10)
+          };
+          
+          setAnalysisData(combinedAnalysis);
+           setSelectedHotel(userData?.hotelName || '');
+        } else {
+          setAnalysisData(null);
+        }
+      } else {
+        setAnalysisData(null);
+      }
+    } else {
+      setAnalysisData(null);
+    }
+  };
+  
   // Controlar scroll quando modal de filtros está aberto
   useEffect(() => {
     if (filtersOpen) {
@@ -293,73 +363,8 @@ function DashboardContent() {
         if (userData?.hotelId) {
           // Buscar análises específicas para o hotel do usuário
           const analyses = await getAllAnalyses(userData.hotelId);
-          
-          if (analyses && analyses.length > 0) {
-            // Filtrar análises que têm todos os campos necessários
-            const validAnalyses = analyses.filter((a: any) => 
-              a && typeof a === 'object' && 
-              'id' in a && 
-              'hotelId' in a && 
-              'hotelName' in a && 
-              'importDate' in a && 
-              'data' in a && 
-              'analysis' in a
-            );
+          processAnalysesData(analyses);
 
-            if (validAnalyses.length > 0) {
-              // Usar a análise mais recente como base
-              let combinedAnalysis = { ...validAnalyses[0] } as AnalysisData;
-              
-              // Coletar todos os dados de feedback de todas as análises
-              let allFeedbacks: any[] = [];
-              
-              validAnalyses.forEach((analysis: any) => {
-                if (analysis.data && Array.isArray(analysis.data)) {
-                  // Filtrar feedbacks excluídos
-                  const validFeedbacks = analysis.data.filter((feedback: any) => feedback.deleted !== true);
-                  
-                  // Como as análises já foram filtradas por hotelId na consulta do Firestore,
-                  // podemos incluir todos os feedbacks válidos desta análise
-                  allFeedbacks = [...allFeedbacks, ...validFeedbacks];
-                }
-              });
-              
-              // Se temos feedbacks para mostrar
-              if (allFeedbacks.length > 0) {
-                // Atualizar a análise com os dados filtrados para o hotel específico
-                combinedAnalysis.data = allFeedbacks;
-                
-                // Recalcular as estatísticas com base apenas nos feedbacks do hotel
-                combinedAnalysis.analysis = {
-                  ...combinedAnalysis.analysis,
-                  totalFeedbacks: allFeedbacks.length,
-                  averageRating: allFeedbacks.reduce((acc, item) => acc + (item.rating || 0), 0) / allFeedbacks.length,
-                  positiveSentiment: Math.round((allFeedbacks.filter(item => item.sentiment === 'positive').length / allFeedbacks.length) * 100),
-                  
-                  // Distribuições recalculadas apenas para o hotel do usuário
-                  hotelDistribution: processHotelDistribution(allFeedbacks),
-                  sourceDistribution: processSourceDistribution(allFeedbacks),
-                  languageDistribution: processLanguageDistribution(allFeedbacks),
-                  ratingDistribution: processRatingDistribution(allFeedbacks),
-                  problemDistribution: processProblemDistribution(allFeedbacks),
-                  keywordDistribution: processKeywordDistribution(allFeedbacks),
-                  // Usar os feedbacks filtrados como feedbacks recentes
-                  recentFeedbacks: allFeedbacks.sort((a: any, b: any) => 
-                    new Date(b.date).getTime() - new Date(a.date).getTime()
-                  ).slice(0, 10)
-                };
-                
-                setAnalysisData(combinedAnalysis);
-                setSelectedHotel(userData.hotelName);
-              } else {
-                setAnalysisData(null);
-              }
-            } else {
-              setAnalysisData(null);
-            }
-          } else {
-            setAnalysisData(null);
-          }
         } else {
           setAnalysisData(null);
         }

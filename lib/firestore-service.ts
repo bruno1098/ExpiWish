@@ -222,11 +222,32 @@ export const saveAnalysis = async (analysisData: Omit<AnalysisData, 'importDate'
   }
 };
 
+// Cache para otimizar carregamento
+let analysesCache: any = null;
+let cacheTimestamp: number = 0;
+const CACHE_DURATION = 30000; // 30 segundos
+
+// Função para limpar o cache (útil após atualizações)
+export const clearAnalysesCache = () => {
+  analysesCache = null;
+  cacheTimestamp = 0;
+  console.log('🗑️ Cache de análises limpo');
+};
+
 // Função para obter todas as análises da nova estrutura hierárquica
 export const getAllAnalyses = async (hotelId?: string) => {
   try {
     const userData = await getCurrentUserData();
     const isAdmin = userData?.role === 'admin';
+    
+    // Verificar cache apenas para admins (que carregam mais dados)
+    const now = Date.now();
+    if (isAdmin && analysesCache && (now - cacheTimestamp) < CACHE_DURATION) {
+      console.log('📦 Usando dados do cache para melhor performance');
+      return hotelId ? analysesCache.filter((a: any) => a.hotelDocId === hotelId) : analysesCache;
+    }
+    
+    console.log('🔄 Buscando dados atualizados do Firestore...');
     
     // Verificar ambiente de teste
     const isTestEnv = typeof window !== 'undefined' && localStorage.getItem('isTestEnvironment') === 'true';
@@ -335,6 +356,13 @@ export const getAllAnalyses = async (hotelId?: string) => {
     const filteredResults = results.filter((doc: AnalysisDoc) => 
       (isTestEnv || doc.isTestEnvironment !== true) && !doc.deleted
     );
+
+    // Atualizar cache apenas para admins
+    if (isAdmin) {
+      analysesCache = filteredResults;
+      cacheTimestamp = Date.now();
+      console.log(`💾 Cache atualizado com ${filteredResults.length} análises`);
+    }
 
     return filteredResults;
   } catch (error) {
@@ -513,10 +541,8 @@ const discoverHotelsInNewStructure = async (): Promise<string[]> => {
     
     console.log(`Hotéis encontrados na coleção hotels: ${Array.from(hotelNames).join(', ')}`);
     
-    // Verificar quais desses hotéis existem na nova estrutura
-    const existingHotels: string[] = [];
-    
-    for (const hotelId of Array.from(hotelNames)) {
+    // Verificar quais desses hotéis existem na nova estrutura usando Promise.all para melhor performance
+    const hotelChecks = Array.from(hotelNames).map(async (hotelId) => {
       try {
         const feedbacksRef = collection(
           db, 
@@ -526,17 +552,17 @@ const discoverHotelsInNewStructure = async (): Promise<string[]> => {
         );
         
         const snapshot = await getDocs(feedbacksRef);
-        if (!snapshot.empty) {
-          existingHotels.push(hotelId);
-          
-        } else {
-          
-        }
+        return snapshot.empty ? null : hotelId;
       } catch (error) {
-        
+        console.warn(`Erro ao verificar hotel ${hotelId}:`, error);
+        return null;
       }
-    }
+    });
 
+    const results = await Promise.all(hotelChecks);
+    const existingHotels = results.filter((hotelId): hotelId is string => hotelId !== null);
+    
+    console.log(`✅ Hotéis com dados encontrados: ${existingHotels.join(', ')}`);
     return existingHotels;
   } catch (error) {
     console.error('Erro ao descobrir hotéis:', error);
