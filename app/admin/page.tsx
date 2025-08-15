@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getAllAnalyses } from "@/lib/firestore-service";
-import { RequireAdmin } from "@/lib/auth-context";
+import { RequireAdmin, useAuth } from "@/lib/auth-context";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -178,6 +179,7 @@ const renderModernChart = (chartType: string, data: any[], onChartClick: (item: 
 function AdminDashboardContent() {
   const router = useRouter();
   const { toast } = useToast();
+  const { isAuthenticated, userData, loading: authLoading } = useAuth();
   
   // Estados principais
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
@@ -434,14 +436,15 @@ function AdminDashboardContent() {
     const sector = feedback.sector?.toLowerCase()?.trim() || '';
     
     // Verificar se há problemas válidos no feedback
-     const problems = problem.split(',').map((p: string) => p.trim());
-     const hasValidProblems = problems.some((p: string) => {
-       const normalizedProblem = p.toLowerCase().trim();
+    const problems = problem.split(',').map((p: string) => p.trim());
+    const hasValidProblems = problems.some((p: string) => {
+      const normalizedProblem = p.toLowerCase().trim();
       const invalidProblems = [
         'VAZIO', 
         'sem problemas', 
         'nao identificado', 
         'não identificado',
+        'Não identificado',
         'sem problema',
         'nenhum problema',
         'ok',
@@ -463,15 +466,29 @@ function AdminDashboardContent() {
       return false;
     }
     
-    // Só considerar "não identificado" se TODOS os campos importantes forem inválidos
-    const isKeywordInvalid = keyword.includes('não identificado') || keyword === 'não identificado' || keyword === '';
-    const isProblemInvalid = problem.includes('não identificado') || problem === 'não identificado' || problem === '';
-    const isDepartmentInvalid = department.includes('não identificado') || department === 'não identificado' || department === '';
-    const isSectorInvalid = sector.includes('não identificado') || sector === 'não identificado' || sector === '';
+    // Verificar se há keywords válidas
+    const keywords = keyword.split(',').map((k: string) => k.trim());
+    const hasValidKeywords = keywords.some((k: string) => {
+      const normalizedKeyword = k.toLowerCase().trim();
+      return normalizedKeyword !== 'não identificado' && 
+             normalizedKeyword !== 'nao identificado' &&
+             normalizedKeyword !== '' &&
+             normalizedKeyword.length > 2;
+    });
     
-    // Considerar não identificado apenas se a maioria dos campos for inválida
-    const invalidCount = [isKeywordInvalid, isProblemInvalid, isDepartmentInvalid, isSectorInvalid].filter(Boolean).length;
-    return invalidCount >= 3; // Se 3 ou mais campos forem inválidos
+    // Se há keywords válidas, não considerar como "não identificado"
+    if (hasValidKeywords) {
+      return false;
+    }
+    
+    // Só considerar "não identificado" se EXPLICITAMENTE marcado como tal
+    const hasExplicitNotIdentified = 
+      keyword.includes('não identificado') ||
+      problem.includes('não identificado') ||
+      department.includes('não identificado') ||
+      sector.includes('não identificado');
+    
+    return hasExplicitNotIdentified;
   };
 
   // Função centralizada para obter dados consistentes
@@ -1239,12 +1256,18 @@ function AdminDashboardContent() {
 
   // Função para buscar dados administrativos
   const fetchData = async () => {
-    setIsLoading(true);
+    const startTime = performance.now();
     try {
+      console.log('🚀 Iniciando carregamento do dashboard administrativo...');
       
-      // Carregar todos os hotéis
-      const hotelsRef = collection(db, "hotels");
-      const hotelsSnapshot = await getDocs(hotelsRef);
+      // Carregar hotéis e análises em paralelo para melhor performance
+      const dataLoadStart = performance.now();
+      const [hotelsSnapshot, analyses] = await Promise.all([
+        getDocs(collection(db, "hotels")),
+        getAllAnalyses()
+      ]);
+      const dataLoadTime = performance.now() - dataLoadStart;
+      
       const hotelsData = hotelsSnapshot.docs.map(doc => {
         const data = doc.data();
         return {
@@ -1253,9 +1276,7 @@ function AdminDashboardContent() {
         };
       });
       setHotels(hotelsData);
-      
-      // Buscar análises usando a nova estrutura
-      const analyses = await getAllAnalyses();
+      console.log(`📊 Carregados ${hotelsData.length} hotéis e ${analyses?.length || 0} análises em ${dataLoadTime.toFixed(2)}ms`);
 
       if (analyses && analyses.length > 0) {
         // Calcular a data mais recente dos feedbacks para a análise combinada
@@ -1264,7 +1285,7 @@ function AdminDashboardContent() {
         );
         
         const mostRecentFeedbackDate = allDates.length > 0 
-          ? new Date(Math.max(...allDates.map(date => date.getTime())))
+          ? new Date(Math.max(...allDates.map((date: Date) => date.getTime())))
           : new Date();
 
         // Criar análise combinada
@@ -1419,11 +1440,21 @@ function AdminDashboardContent() {
         setAnalysisData(combinedAnalysis);
         setFilteredData(null);
         setIsFilterApplied(false);
+        
+        // Salvar dados no cache após carregamento bem-sucedido
+        saveToCache(combinedAnalysis, hotelsData);
       }
       
-      setIsLoading(false);
+      // Simular um pequeno atraso para garantir uma transição suave
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const totalTime = performance.now() - startTime;
+      console.log(`✅ Dashboard carregado com sucesso em ${totalTime.toFixed(2)}ms`);
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
+      const errorTime = performance.now() - startTime;
+      console.log(`❌ Erro no carregamento após ${errorTime.toFixed(2)}ms`);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -1571,10 +1602,112 @@ function AdminDashboardContent() {
     });
   };
 
-  // Effect para carregar dados - apenas na inicialização
+  // Função para limpar cache do localStorage
+  const clearDashboardCache = useCallback(() => {
+    try {
+      localStorage.removeItem('admin-dashboard-cache');
+      localStorage.removeItem('admin-dashboard-timestamp');
+      console.log('🗑️ Cache do dashboard limpo');
+    } catch (error) {
+      console.error('Erro ao limpar cache:', error);
+    }
+  }, []);
+
+  // Função para carregar dados do cache
+  const loadFromCache = useCallback(() => {
+    try {
+      const cachedData = localStorage.getItem('admin-dashboard-cache');
+      const cacheTimestamp = localStorage.getItem('admin-dashboard-timestamp');
+      
+      if (cachedData && cacheTimestamp) {
+        const cacheAge = Date.now() - parseInt(cacheTimestamp);
+        const maxCacheAge = 5 * 60 * 1000; // 5 minutos
+        
+        if (cacheAge < maxCacheAge) {
+          const parsedData = JSON.parse(cachedData);
+          console.log('📦 Carregando dados do cache (idade:', Math.round(cacheAge / 1000), 'segundos)');
+          
+          setAnalysisData(parsedData.analysisData);
+          setHotels(parsedData.hotels);
+          
+          // Mostrar toast informativo sobre cache
+          toast({
+            title: "Dashboard carregado do cache",
+            description: "Dados carregados rapidamente do cache local.",
+          });
+          
+          return true;
+        } else {
+          console.log('🕒 Cache expirado, removendo...');
+          clearDashboardCache();
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Erro ao carregar cache:', error);
+      clearDashboardCache();
+      return false;
+    }
+  }, [clearDashboardCache, toast]);
+
+  // Função para salvar dados no cache
+  const saveToCache = useCallback((analysisData: AnalysisData, hotels: Hotel[]) => {
+    try {
+      const cacheData = {
+        analysisData,
+        hotels,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem('admin-dashboard-cache', JSON.stringify(cacheData));
+      localStorage.setItem('admin-dashboard-timestamp', Date.now().toString());
+      console.log('💾 Dados salvos no cache');
+    } catch (error) {
+      console.error('Erro ao salvar cache:', error);
+      // Se falhar ao salvar, limpar cache corrompido
+      clearDashboardCache();
+    }
+  }, [clearDashboardCache]);
+
+  // Effect para carregar dados - com cache otimizado
   useEffect(() => {
-    fetchData();
-  }, []); // Remover dateRange para evitar reload desnecessário
+    // Só carregar dados quando a autenticação estiver completa e o usuário for admin
+    if (authLoading || !isAuthenticated || userData?.role !== 'admin') {
+      return;
+    }
+
+    const loadData = async () => {
+      setIsLoading(true);
+      
+      try {
+        // Primeiro, tentar carregar do cache
+        const cacheLoaded = loadFromCache();
+        
+        if (!cacheLoaded) {
+          // Se não há cache, buscar dados do Firebase
+          await fetchData();
+          // Notificar sucesso no carregamento
+          toast({
+            title: "Dashboard carregado",
+            description: "Dados de todos os hotéis foram carregados com sucesso.",
+          });
+        } else {
+          // Se carregou do cache, também definir isLoading como false
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        toast({
+          title: "Erro no carregamento",
+          description: "Houve um problema ao carregar os dados. Tente novamente.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [authLoading, isAuthenticated, userData, loadFromCache, toast]); // Dependências otimizadas
 
   // Calcular totais baseados nos dados filtrados
   const totalFeedbacks = globalFilteredData?.length || 0;
@@ -1610,35 +1743,59 @@ function AdminDashboardContent() {
     return formatDateBR(dateString);
   };
 
-  // Renderização condicional
-  if (isLoading) {
+  // Renderização condicional - removida a segunda tela de carregamento
+  // O carregamento agora é gerenciado apenas pelo HotelLoadingScreen no login
+
+  // Função para forçar recarregamento dos dados
+  const forceReload = useCallback(async () => {
+    clearDashboardCache();
+    setIsLoading(true);
+    try {
+      await fetchData();
+      toast({
+        title: "Dashboard atualizado",
+        description: "Dados recarregados com sucesso do servidor.",
+      });
+    } catch (error) {
+      console.error('Erro ao recarregar dados:', error);
+      toast({
+        title: "Erro na atualização",
+        description: "Houve um problema ao recarregar os dados.",
+        variant: "destructive",
+      });
+    }
+  }, [clearDashboardCache, toast]);
+
+  // Mostrar estado de carregamento enquanto os dados estão sendo buscados ou autenticação está em andamento
+  if (isLoading || authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="p-8 text-center">
+        <div className="flex flex-col items-center justify-center space-y-4">
+          <div className="relative">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-8 w-8 bg-background rounded-full" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold">Carregando Dashboard Administrativo</h2>
+            <p className="text-muted-foreground">
+              Buscando dados de todos os hotéis e processando análises...
+            </p>
+            <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0ms'}} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
+              </div>
+              <span>Carregamento otimizado em andamento...</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (!analysisData) {
-    return (
-      <div className="p-8 text-center">
-        <h2 className="text-2xl font-bold mb-4">Nenhum dado encontrado</h2>
-        <p className="text-muted-foreground mb-6">
-          Não há dados de feedback disponíveis para análise.
-        </p>
-        
-        <Button onClick={runDiagnostics} variant="outline" className="mb-4">
-          Executar Diagnóstico
-        </Button>
-        
-        {debugInfo && (
-          <div className="mt-4 p-4 bg-muted text-left rounded text-sm overflow-auto max-h-96">
-            <pre>{debugInfo}</pre>
-          </div>
-        )}
-      </div>
-    );
-  }
 
   // Função para processar e limpar dados com duplicatas separados por ";"
   const cleanDataWithSeparator = (text: string | null | undefined): string => {
@@ -1733,11 +1890,26 @@ function AdminDashboardContent() {
     <>
       <div className="p-6 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-bold">Painel Administrativo</h2>
-            <p className="text-muted-foreground">
-              Visão geral consolidada de todos os hotéis do grupo
-            </p>
+          <div className="flex items-center gap-4">
+            {/* Logo da Empresa */}
+            <div className="flex-shrink-0">
+              <div className="relative h-16 w-16">
+                <Image 
+                  src="/adminLogo.png" 
+                  alt="Logo Grupo Wish" 
+                  fill
+                  className="object-contain filter drop-shadow-lg"
+                  priority
+                  sizes="64px"
+                />
+              </div>
+            </div>
+            <div>
+              <h2 className="text-3xl font-bold">Painel Administrativo</h2>
+              <p className="text-muted-foreground">
+                Visão geral consolidada de todos os hotéis do grupo
+              </p>
+            </div>
           </div>
           
           <div className="flex flex-wrap gap-2 md:gap-4 items-center">
@@ -2067,8 +2239,9 @@ function AdminDashboardContent() {
             <Button 
               variant="outline"
               size="sm"
-              onClick={fetchData}
+              onClick={forceReload}
               disabled={isLoading}
+              title="Força o recarregamento dos dados, limpando o cache"
             >
               {isLoading ? (
                 <>

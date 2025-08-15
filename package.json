@@ -57,6 +57,7 @@
     "eslint": "8.49.0",
     "eslint-config-next": "13.5.1",
     "firebase": "^11.8.1",
+    "framer-motion": "^12.23.12",
     "input-otp": "^1.2.4",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.446.0",

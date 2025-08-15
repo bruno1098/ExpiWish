@@ -82,6 +82,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Remover cookie quando usuário faz logout
         removeCookie('firebase-auth-token');
         devAuth("🍪 Cookie de autenticação removido");
+        
+        // Limpar cache do dashboard administrativo no logout
+        try {
+          localStorage.removeItem('admin-dashboard-cache');
+          localStorage.removeItem('admin-dashboard-timestamp');
+          devAuth("🗑️ Cache do dashboard administrativo limpo no logout");
+        } catch (error) {
+          devError("Erro ao limpar cache no logout:", error);
+        }
+        
         setIsAuthenticated(false);
         setUserData(null);
       }
