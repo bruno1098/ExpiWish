@@ -1441,6 +1441,12 @@ function AdminDashboardContent() {
         setFilteredData(null);
         setIsFilterApplied(false);
         
+        // Atualizar dados filtrados imediatamente após carregar do Firebase
+        if (combinedAnalysis?.data) {
+          const filtered = applyGlobalFilters(combinedAnalysis.data);
+          setGlobalFilteredData(filtered);
+        }
+        
         // Salvar dados no cache após carregamento bem-sucedido
         saveToCache(combinedAnalysis, hotelsData);
       }
@@ -1629,6 +1635,12 @@ function AdminDashboardContent() {
           
           setAnalysisData(parsedData.analysisData);
           setHotels(parsedData.hotels);
+          
+          // Atualizar dados filtrados imediatamente após carregar do cache
+          if (parsedData.analysisData?.data) {
+            const filtered = applyGlobalFilters(parsedData.analysisData.data);
+            setGlobalFilteredData(filtered);
+          }
           
           // Mostrar toast informativo sobre cache
           toast({
