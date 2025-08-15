@@ -240,15 +240,6 @@ export const getAllAnalyses = async (hotelId?: string) => {
     const userData = await getCurrentUserData();
     const isAdmin = userData?.role === 'admin';
     
-    // Verificar cache apenas para admins (que carregam mais dados)
-    const now = Date.now();
-    if (isAdmin && analysesCache && (now - cacheTimestamp) < CACHE_DURATION) {
-      console.log('📦 Usando dados do cache para melhor performance');
-      return hotelId ? analysesCache.filter((a: any) => a.hotelDocId === hotelId) : analysesCache;
-    }
-    
-    console.log('🔄 Buscando dados atualizados do Firestore...');
-    
     // Verificar ambiente de teste
     const isTestEnv = typeof window !== 'undefined' && localStorage.getItem('isTestEnvironment') === 'true';
 
@@ -356,13 +347,6 @@ export const getAllAnalyses = async (hotelId?: string) => {
     const filteredResults = results.filter((doc: AnalysisDoc) => 
       (isTestEnv || doc.isTestEnvironment !== true) && !doc.deleted
     );
-
-    // Atualizar cache apenas para admins
-    if (isAdmin) {
-      analysesCache = filteredResults;
-      cacheTimestamp = Date.now();
-      console.log(`💾 Cache atualizado com ${filteredResults.length} análises`);
-    }
 
     return filteredResults;
   } catch (error) {
