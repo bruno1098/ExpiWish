@@ -435,14 +435,15 @@ function AdminDashboardContent() {
     const sector = feedback.sector?.toLowerCase()?.trim() || '';
     
     // Verificar se há problemas válidos no feedback
-     const problems = problem.split(',').map((p: string) => p.trim());
-     const hasValidProblems = problems.some((p: string) => {
-       const normalizedProblem = p.toLowerCase().trim();
+    const problems = problem.split(',').map((p: string) => p.trim());
+    const hasValidProblems = problems.some((p: string) => {
+      const normalizedProblem = p.toLowerCase().trim();
       const invalidProblems = [
         'VAZIO', 
         'sem problemas', 
         'nao identificado', 
         'não identificado',
+        'Não identificado',
         'sem problema',
         'nenhum problema',
         'ok',
@@ -464,15 +465,29 @@ function AdminDashboardContent() {
       return false;
     }
     
-    // Só considerar "não identificado" se TODOS os campos importantes forem inválidos
-    const isKeywordInvalid = keyword.includes('não identificado') || keyword === 'não identificado' || keyword === '';
-    const isProblemInvalid = problem.includes('não identificado') || problem === 'não identificado' || problem === '';
-    const isDepartmentInvalid = department.includes('não identificado') || department === 'não identificado' || department === '';
-    const isSectorInvalid = sector.includes('não identificado') || sector === 'não identificado' || sector === '';
+    // Verificar se há keywords válidas
+    const keywords = keyword.split(',').map((k: string) => k.trim());
+    const hasValidKeywords = keywords.some((k: string) => {
+      const normalizedKeyword = k.toLowerCase().trim();
+      return normalizedKeyword !== 'não identificado' && 
+             normalizedKeyword !== 'nao identificado' &&
+             normalizedKeyword !== '' &&
+             normalizedKeyword.length > 2;
+    });
     
-    // Considerar não identificado apenas se a maioria dos campos for inválida
-    const invalidCount = [isKeywordInvalid, isProblemInvalid, isDepartmentInvalid, isSectorInvalid].filter(Boolean).length;
-    return invalidCount >= 3; // Se 3 ou mais campos forem inválidos
+    // Se há keywords válidas, não considerar como "não identificado"
+    if (hasValidKeywords) {
+      return false;
+    }
+    
+    // Só considerar "não identificado" se EXPLICITAMENTE marcado como tal
+    const hasExplicitNotIdentified = 
+      keyword.includes('não identificado') ||
+      problem.includes('não identificado') ||
+      department.includes('não identificado') ||
+      sector.includes('não identificado');
+    
+    return hasExplicitNotIdentified;
   };
 
   // Função centralizada para obter dados consistentes
