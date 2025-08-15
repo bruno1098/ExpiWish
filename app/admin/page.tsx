@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getAllAnalyses } from "@/lib/firestore-service";
-import { RequireAdmin } from "@/lib/auth-context";
+import { RequireAdmin, useAuth } from "@/lib/auth-context";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -179,6 +179,7 @@ const renderModernChart = (chartType: string, data: any[], onChartClick: (item: 
 function AdminDashboardContent() {
   const router = useRouter();
   const { toast } = useToast();
+  const { isAuthenticated, userData, loading: authLoading } = useAuth();
   
   // Estados principais
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
@@ -1628,7 +1629,6 @@ function AdminDashboardContent() {
           
           setAnalysisData(parsedData.analysisData);
           setHotels(parsedData.hotels);
-          setIsLoading(false);
           
           // Mostrar toast informativo sobre cache
           toast({
@@ -1671,32 +1671,41 @@ function AdminDashboardContent() {
 
   // Effect para carregar dados - com cache otimizado
   useEffect(() => {
+    // Só carregar dados quando a autenticação estiver completa e o usuário for admin
+    if (authLoading || !isAuthenticated || userData?.role !== 'admin') {
+      return;
+    }
+
     const loadData = async () => {
-      // Primeiro, tentar carregar do cache
-      const cacheLoaded = loadFromCache();
+      setIsLoading(true);
       
-      if (!cacheLoaded) {
-        setIsLoading(true);
-        try {
+      try {
+        // Primeiro, tentar carregar do cache
+        const cacheLoaded = loadFromCache();
+        
+        if (!cacheLoaded) {
+          // Se não há cache, buscar dados do Firebase
           await fetchData();
           // Notificar sucesso no carregamento
           toast({
             title: "Dashboard carregado",
             description: "Dados de todos os hotéis foram carregados com sucesso.",
           });
-        } catch (error) {
-          console.error('Erro ao carregar dados:', error);
-          toast({
-            title: "Erro no carregamento",
-            description: "Houve um problema ao carregar os dados. Tente novamente.",
-            variant: "destructive",
-          });
         }
+      } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        toast({
+          title: "Erro no carregamento",
+          description: "Houve um problema ao carregar os dados. Tente novamente.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
     };
     
     loadData();
-  }, [loadFromCache, toast]); // Dependências otimizadas
+  }, [authLoading, isAuthenticated, userData, loadFromCache, toast]); // Dependências otimizadas
 
   // Calcular totais baseados nos dados filtrados
   const totalFeedbacks = globalFilteredData?.length || 0;
@@ -1755,8 +1764,8 @@ function AdminDashboardContent() {
     }
   }, [clearDashboardCache, toast]);
 
-  // Mostrar estado de carregamento enquanto os dados estão sendo buscados
-  if (isLoading) {
+  // Mostrar estado de carregamento enquanto os dados estão sendo buscados ou autenticação está em andamento
+  if (isLoading || authLoading) {
     return (
       <div className="p-8 text-center">
         <div className="flex flex-col items-center justify-center space-y-4">
