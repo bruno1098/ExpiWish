@@ -1439,6 +1439,9 @@ function AdminDashboardContent() {
         setAnalysisData(combinedAnalysis);
         setFilteredData(null);
         setIsFilterApplied(false);
+        
+        // Salvar dados no cache após carregamento bem-sucedido
+        saveToCache(combinedAnalysis, hotelsData);
       }
       
       // Simular um pequeno atraso para garantir uma transição suave
@@ -1598,29 +1601,102 @@ function AdminDashboardContent() {
     });
   };
 
-  // Effect para carregar dados - apenas na inicialização
+  // Função para limpar cache do localStorage
+  const clearDashboardCache = useCallback(() => {
+    try {
+      localStorage.removeItem('admin-dashboard-cache');
+      localStorage.removeItem('admin-dashboard-timestamp');
+      console.log('🗑️ Cache do dashboard limpo');
+    } catch (error) {
+      console.error('Erro ao limpar cache:', error);
+    }
+  }, []);
+
+  // Função para carregar dados do cache
+  const loadFromCache = useCallback(() => {
+    try {
+      const cachedData = localStorage.getItem('admin-dashboard-cache');
+      const cacheTimestamp = localStorage.getItem('admin-dashboard-timestamp');
+      
+      if (cachedData && cacheTimestamp) {
+        const cacheAge = Date.now() - parseInt(cacheTimestamp);
+        const maxCacheAge = 5 * 60 * 1000; // 5 minutos
+        
+        if (cacheAge < maxCacheAge) {
+          const parsedData = JSON.parse(cachedData);
+          console.log('📦 Carregando dados do cache (idade:', Math.round(cacheAge / 1000), 'segundos)');
+          
+          setAnalysisData(parsedData.analysisData);
+          setHotels(parsedData.hotels);
+          setIsLoading(false);
+          
+          // Mostrar toast informativo sobre cache
+          toast({
+            title: "Dashboard carregado do cache",
+            description: "Dados carregados rapidamente do cache local.",
+          });
+          
+          return true;
+        } else {
+          console.log('🕒 Cache expirado, removendo...');
+          clearDashboardCache();
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Erro ao carregar cache:', error);
+      clearDashboardCache();
+      return false;
+    }
+  }, [clearDashboardCache, toast]);
+
+  // Função para salvar dados no cache
+  const saveToCache = useCallback((analysisData: AnalysisData, hotels: Hotel[]) => {
+    try {
+      const cacheData = {
+        analysisData,
+        hotels,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem('admin-dashboard-cache', JSON.stringify(cacheData));
+      localStorage.setItem('admin-dashboard-timestamp', Date.now().toString());
+      console.log('💾 Dados salvos no cache');
+    } catch (error) {
+      console.error('Erro ao salvar cache:', error);
+      // Se falhar ao salvar, limpar cache corrompido
+      clearDashboardCache();
+    }
+  }, [clearDashboardCache]);
+
+  // Effect para carregar dados - com cache otimizado
   useEffect(() => {
-    setIsLoading(true);
-    // Adicionar um pequeno delay para melhorar a experiência do usuário
     const loadData = async () => {
-      try {
-        await fetchData();
-        // Notificar sucesso no carregamento
-        toast({
-          title: "Dashboard carregado",
-          description: "Dados de todos os hotéis foram carregados com sucesso.",
-        });
-      } catch (error) {
-        console.error('Erro ao carregar dados:', error);
-        toast({
-          title: "Erro no carregamento",
-          description: "Houve um problema ao carregar os dados. Tente novamente.",
-          variant: "destructive",
-        });
+      // Primeiro, tentar carregar do cache
+      const cacheLoaded = loadFromCache();
+      
+      if (!cacheLoaded) {
+        setIsLoading(true);
+        try {
+          await fetchData();
+          // Notificar sucesso no carregamento
+          toast({
+            title: "Dashboard carregado",
+            description: "Dados de todos os hotéis foram carregados com sucesso.",
+          });
+        } catch (error) {
+          console.error('Erro ao carregar dados:', error);
+          toast({
+            title: "Erro no carregamento",
+            description: "Houve um problema ao carregar os dados. Tente novamente.",
+            variant: "destructive",
+          });
+        }
       }
     };
+    
     loadData();
-  }, []); // Remover dateRange para evitar reload desnecessário
+  }, [loadFromCache, toast]); // Dependências otimizadas
 
   // Calcular totais baseados nos dados filtrados
   const totalFeedbacks = globalFilteredData?.length || 0;
@@ -1659,6 +1735,26 @@ function AdminDashboardContent() {
   // Renderização condicional - removida a segunda tela de carregamento
   // O carregamento agora é gerenciado apenas pelo HotelLoadingScreen no login
 
+  // Função para forçar recarregamento dos dados
+  const forceReload = useCallback(async () => {
+    clearDashboardCache();
+    setIsLoading(true);
+    try {
+      await fetchData();
+      toast({
+        title: "Dashboard atualizado",
+        description: "Dados recarregados com sucesso do servidor.",
+      });
+    } catch (error) {
+      console.error('Erro ao recarregar dados:', error);
+      toast({
+        title: "Erro na atualização",
+        description: "Houve um problema ao recarregar os dados.",
+        variant: "destructive",
+      });
+    }
+  }, [clearDashboardCache, toast]);
+
   // Mostrar estado de carregamento enquanto os dados estão sendo buscados
   if (isLoading) {
     return (
@@ -1681,7 +1777,7 @@ function AdminDashboardContent() {
                 <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
                 <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
               </div>
-              <span>Isso pode levar alguns segundos</span>
+              <span>Carregamento otimizado em andamento...</span>
             </div>
           </div>
         </div>
@@ -2132,8 +2228,9 @@ function AdminDashboardContent() {
             <Button 
               variant="outline"
               size="sm"
-              onClick={fetchData}
+              onClick={forceReload}
               disabled={isLoading}
+              title="Força o recarregamento dos dados, limpando o cache"
             >
               {isLoading ? (
                 <>
