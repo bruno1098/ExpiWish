@@ -68,16 +68,10 @@ export default function LoginPage() {
       setShowHotelLoading(true);
       setLoggedUserData(userData);
       
-      // Simular carregamento de dados e redirecionar após a animação
-      setTimeout(() => {
-        if (userData.role === 'admin') {
-          router.push('/admin');
-        } else {
-          router.push('/dashboard');
-        }
-      }, 3000); // Tempo suficiente para a animação de carregamento
+      // Carregar dados do dashboard assincronamente durante a tela de carregamento
+      loadDashboardData(userData);
     }
-  }, [isAuthenticated, userData, authLoading, router, showHotelLoading]);
+  }, [isAuthenticated, userData, authLoading, showHotelLoading]);
 
   // Mostrar tela de carregamento personalizada se ativada
   if (showHotelLoading && loggedUserData) {

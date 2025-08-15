@@ -1691,6 +1691,9 @@ function AdminDashboardContent() {
             title: "Dashboard carregado",
             description: "Dados de todos os hotéis foram carregados com sucesso.",
           });
+        } else {
+          // Se carregou do cache, também definir isLoading como false
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -1699,11 +1702,10 @@ function AdminDashboardContent() {
           description: "Houve um problema ao carregar os dados. Tente novamente.",
           variant: "destructive",
         });
-      } finally {
         setIsLoading(false);
       }
     };
-    
+
     loadData();
   }, [authLoading, isAuthenticated, userData, loadFromCache, toast]); // Dependências otimizadas
 
