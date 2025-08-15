@@ -1569,7 +1569,7 @@ function AnalysisPageContent() {
         
         // Combinar todos os feedbacks de todas as análises
         const allFeedbacks: Feedback[] = []
-        allAnalyses.forEach((analysis) => {
+        allAnalyses.forEach((analysis: Analysis) => {
           if (analysis.data && Array.isArray(analysis.data)) {
             // Filtrar feedbacks excluídos e adicionar informações da importação
             const validFeedbacks = analysis.data
@@ -1817,7 +1817,7 @@ function AnalysisPageContent() {
       
       // Combinar todos os feedbacks de todas as análises
       const allFeedbacks: Feedback[] = []
-      allAnalyses.forEach((analysis) => {
+      allAnalyses.forEach((analysis: Analysis) => {
         if (analysis.data && Array.isArray(analysis.data)) {
           // Filtrar feedbacks excluídos e adicionar informações da importação
           const validFeedbacks = analysis.data
