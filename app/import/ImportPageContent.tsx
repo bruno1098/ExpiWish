@@ -248,6 +248,10 @@ function ImportPageContent() {
   // Estados para o AlertDialog de API Key
   const [showApiKeyAlert, setShowApiKeyAlert] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  
+  // Estados para o modal de confirmação de nome do arquivo
+  const [showFileNameConfirmation, setShowFileNameConfirmation] = useState(false);
+  const [fileToConfirm, setFileToConfirm] = useState<File | null>(null);
 
   useEffect(() => {
     const checkTestEnvironment = async () => {
@@ -281,7 +285,15 @@ function ImportPageContent() {
         setShowApiKeyAlert(false);
         const fileToProcess = pendingFile;
         setPendingFile(null);
-        processFileWithAccountHotel(fileToProcess);
+        
+        // Verificar se precisa de confirmação de nome do arquivo
+        const hotelName = userData?.hotelName || '';
+        if (!validateFileName(fileToProcess.name, hotelName)) {
+          setFileToConfirm(fileToProcess);
+          setShowFileNameConfirmation(true);
+        } else {
+          processFileWithAccountHotel(fileToProcess);
+        }
       }
     };
     
@@ -338,6 +350,27 @@ function ImportPageContent() {
     return apiKey && apiKey.trim() !== '';
   };
 
+  // Função para validar o nome do arquivo
+  const validateFileName = (fileName: string, hotelName: string): boolean => {
+    if (!hotelName) return false;
+    
+    // Converter para lowercase para comparação case-insensitive
+    const fileNameLower = fileName.toLowerCase();
+    const hotelNameLower = hotelName.toLowerCase();
+    
+    // Verificar se o nome do hotel está presente no nome do arquivo
+    // Também aceitar variações comuns como "wish", "hotel", etc.
+    const hotelKeywords = [
+      hotelNameLower,
+      'wish',
+      'hotel',
+      'feedback',
+     
+    ];
+    
+    return hotelKeywords.some(keyword => fileNameLower.includes(keyword));
+  };
+
   const onDrop = async (files: File[]) => {
     if (files.length === 0) return;
     setAcceptedFiles(files);
@@ -358,7 +391,17 @@ function ImportPageContent() {
       return;
     }
 
-    processFileWithAccountHotel(files[0]);
+    const file = files[0];
+    const hotelName = userData?.hotelName || '';
+    
+    // Validar o nome do arquivo
+    if (!validateFileName(file.name, hotelName)) {
+      setFileToConfirm(file);
+      setShowFileNameConfirmation(true);
+      return;
+    }
+
+    processFileWithAccountHotel(file);
   };
 
   // Funções para lidar com o AlertDialog de API Key
@@ -371,6 +414,21 @@ function ImportPageContent() {
   const handleCancelApiKeyAlert = () => {
     setShowApiKeyAlert(false);
     setPendingFile(null);
+  };
+
+  // Funções para lidar com o modal de confirmação de nome do arquivo
+  const handleConfirmFileName = () => {
+    if (fileToConfirm) {
+      setShowFileNameConfirmation(false);
+      const file = fileToConfirm;
+      setFileToConfirm(null);
+      processFileWithAccountHotel(file);
+    }
+  };
+
+  const handleCancelFileNameConfirmation = () => {
+    setShowFileNameConfirmation(false);
+    setFileToConfirm(null);
   };
 
   const processFileWithAccountHotel = async (file: File) => {
@@ -1670,6 +1728,38 @@ function ImportPageContent() {
               <Settings className="h-4 w-4" />
               Ir para Configurações
             </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog para confirmação de nome do arquivo */}
+      <AlertDialog open={showFileNameConfirmation} onOpenChange={setShowFileNameConfirmation}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-600" />
+              Confirmação de Importação
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <p>
+                Tem certeza que deseja importar o arquivo <strong>{fileToConfirm?.name}</strong>?
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Você está logado com o hotel <strong>{userData?.hotelName}</strong>.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-3">
+            <AlertDialogCancel onClick={handleCancelFileNameConfirmation} className="sm:order-1">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmFileName}
+              className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white sm:order-2"
+            >
+              <Upload className="h-4 w-4" />
+              Confirmar Importação
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
