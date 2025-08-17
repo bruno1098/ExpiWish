@@ -408,37 +408,48 @@ const ratingIcons: Record<number, string> = {
 }
 
 const sentimentBadges = {
-  positive: "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-800",
-  neutral: "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-800",
-  negative: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-300 dark:border-red-800"
+  positive: "bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/40 dark:to-green-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700 shadow-sm",
+  neutral: "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 shadow-sm",
+  negative: "bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/40 dark:to-rose-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700 shadow-sm"
 }
 
-const SentimentBadge = ({ sentiment }: { sentiment: string }) => (
-  <Badge variant="outline" className={cn(
-    "px-3 py-1.5 rounded-full text-sm font-medium border",
-    sentimentBadges[sentiment as keyof typeof sentimentBadges]
-  )}>
-    {sentiment === 'positive' ? 'Positivo' : sentiment === 'negative' ? 'Negativo' : 'Neutro'}
-  </Badge>
-)
+const SentimentBadge = ({ sentiment }: { sentiment: string }) => {
+  const getSentimentIcon = () => {
+    switch (sentiment) {
+      case 'positive': return '😊'
+      case 'negative': return '😞'
+      default: return '😐'
+    }
+  }
 
-// Definir mapeamento de departamentos para cores
+  return (
+    <Badge variant="outline" className={cn(
+      "px-3 py-1.5 rounded-full text-sm font-semibold border transition-all duration-200 hover:scale-105 hover:shadow-md",
+      sentimentBadges[sentiment as keyof typeof sentimentBadges]
+    )}>
+      <span className="mr-1.5">{getSentimentIcon()}</span>
+      {sentiment === 'positive' ? 'Positivo' : sentiment === 'negative' ? 'Negativo' : 'Neutro'}
+    </Badge>
+  )
+}
+
+// Definir mapeamento de departamentos para cores com gradientes elegantes
 const sectorColors: Record<string, string> = {
-  'A&B': 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-200 border-blue-300 dark:border-blue-800',
-  'Governança': 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-200 border-red-300 dark:border-red-800',
-  'Manutenção': 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-200 border-orange-300 dark:border-orange-800',
-  'Manutenção - Quarto': 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-200 border-orange-300 dark:border-orange-800',
-  'Manutenção - Banheiro': 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-200 border-orange-300 dark:border-orange-800',
-  'Manutenção - Instalações': 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-200 border-orange-300 dark:border-orange-800',
-  'Lazer': 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-200 border-green-300 dark:border-green-800',
-  'TI': 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-200 border-purple-300 dark:border-purple-800',
-  'Operações': 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-200 border-yellow-300 dark:border-yellow-800',
-  'Produto': 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-200 border-indigo-300 dark:border-indigo-800',
-  'Marketing': 'bg-pink-50 dark:bg-pink-900/30 text-pink-600 dark:text-pink-200 border-pink-300 dark:border-pink-800',
-  'Comercial': 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-200 border-cyan-300 dark:border-cyan-800',
-  'Qualidade': 'bg-slate-50 dark:bg-slate-900/30 text-slate-600 dark:text-slate-200 border-slate-300 dark:border-slate-800',
-  'Recepção': 'bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-200 border-teal-300 dark:border-teal-800',
-  'Programa de vendas': 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-200 border-amber-300 dark:border-amber-800'
+  'A&B': 'bg-gradient-to-r from-blue-50 to-sky-50 dark:from-blue-900/40 dark:to-sky-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 shadow-sm',
+  'Governança': 'bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/40 dark:to-rose-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700 shadow-sm',
+  'Manutenção': 'bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/40 dark:to-amber-900/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700 shadow-sm',
+  'Manutenção - Quarto': 'bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/40 dark:to-amber-900/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700 shadow-sm',
+  'Manutenção - Banheiro': 'bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/40 dark:to-amber-900/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700 shadow-sm',
+  'Manutenção - Instalações': 'bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/40 dark:to-amber-900/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700 shadow-sm',
+  'Lazer': 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/40 dark:to-green-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700 shadow-sm',
+  'TI': 'bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/40 dark:to-violet-900/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700 shadow-sm',
+  'Operações': 'bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/40 dark:to-amber-900/40 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700 shadow-sm',
+  'Produto': 'bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/40 dark:to-blue-900/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-700 shadow-sm',
+  'Marketing': 'bg-gradient-to-r from-pink-50 to-rose-50 dark:from-pink-900/40 dark:to-rose-900/40 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-700 shadow-sm',
+  'Comercial': 'bg-gradient-to-r from-cyan-50 to-teal-50 dark:from-cyan-900/40 dark:to-teal-900/40 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-700 shadow-sm',
+  'Qualidade': 'bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900/40 dark:to-gray-900/40 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 shadow-sm',
+  'Recepção': 'bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/40 dark:to-emerald-900/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-700 shadow-sm',
+  'Programa de vendas': 'bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/40 dark:to-yellow-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700 shadow-sm'
 };
 
 // Lista de departamentos disponíveis
@@ -519,18 +530,19 @@ const commonKeywords = [
 
 // Função para obter a cor com base no departamento
 const getSectorColor = (sector: string) => {
-  return sectorColors[sector.trim()] || 'bg-gray-50 dark:bg-gray-900/30 text-gray-600 dark:text-gray-200 border-gray-300 dark:border-gray-800';
+  return sectorColors[sector.trim()] || 'bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-900/40 dark:to-slate-900/40 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 shadow-sm';
 };
 
-// Componente para badges de palavra-chave
+// Componente para badges de palavra-chave com design elegante
 const KeywordBadge = ({ keyword, sector }: { keyword: string, sector: string }) => {
   const colorClass = getSectorColor(sector);
   
   return (
     <Badge variant="outline" className={cn(
-      "text-sm px-3 py-1.5 rounded-full border font-medium",
+      "text-sm px-3 py-1.5 rounded-full border font-semibold transition-all duration-200 hover:scale-105 hover:shadow-md cursor-default",
       colorClass
     )}>
+      <span className="mr-1">🏷️</span>
       {keyword}
     </Badge>
   );
@@ -546,42 +558,62 @@ interface Analysis {
   [key: string]: any;
 }
 
-// Componente de estatísticas resumidas
-const StatsCard = ({ icon: Icon, title, value, change, color }: {
+// Componente de estatísticas resumidas modernizado
+const StatsCard = ({ icon: Icon, title, value, change, color, gradient }: {
   icon: any;
   title: string;
   value: string | number;
   change?: { value: number; positive: boolean };
   color: string;
+  gradient: string;
 }) => (
-  <Card className="p-6 hover:shadow-lg transition-shadow duration-200">
-    <div className="flex items-center justify-between">
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <p className="text-3xl font-bold text-foreground">{value}</p>
+  <Card className="relative overflow-hidden bg-white/80 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
+    <div className={cn("absolute inset-0 opacity-5", gradient)} />
+    <div className="relative p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div className={cn("p-3 rounded-xl shadow-lg", gradient)}>
+          <Icon className="h-6 w-6 text-white" />
+        </div>
         {change && (
           <div className={cn(
-            "flex items-center gap-1 text-sm font-medium",
-            change.positive ? "text-green-600" : "text-red-600"
+            "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold",
+            change.positive 
+              ? "bg-green-100 text-green-700 border border-green-200" 
+              : "bg-red-100 text-red-700 border border-red-200"
           )}>
-            {change.positive ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+            {change.positive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
             <span>{Math.abs(change.value)}%</span>
           </div>
         )}
       </div>
-      <div className={cn("p-3 rounded-full", color)}>
-        <Icon className="h-6 w-6 text-white" />
+      
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">{title}</p>
+        <p className="text-3xl font-bold text-gray-900 leading-none">{value}</p>
       </div>
+      
+      <div className={cn("absolute bottom-0 left-0 right-0 h-1", gradient)} />
     </div>
   </Card>
 );
 
 // Componente para Modal de Comentário Completo
-const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData }: { 
+const CommentModal = ({ 
+  feedback, 
+  onFeedbackUpdated, 
+  onDeleteFeedback, 
+  userData,
+  allFeedbacks = [],
+  currentIndex = 0,
+  onNavigate
+}: { 
   feedback: Feedback, 
   onFeedbackUpdated?: (updatedFeedback: Feedback) => void,
   onDeleteFeedback?: (feedback: Feedback) => void,
-  userData?: any
+  userData?: any,
+  allFeedbacks?: Feedback[],
+  currentIndex?: number,
+  onNavigate?: (index: number) => void
 }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
@@ -589,19 +621,30 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false)
+  const [editedMetadata, setEditedMetadata] = useState({
+    sentiment: '',
+    rating: 0,
+    language: '',
+    source: '',
+    apartamento: ''
+  })
+  
+  // Usar o feedback correto baseado no currentIndex
+  const currentFeedback = allFeedbacks.length > 0 && allFeedbacks[currentIndex] ? allFeedbacks[currentIndex] : feedback
   
   useEffect(() => {
     // Inicializar problemas para edição
-    if (feedback.allProblems && feedback.allProblems.length > 0) {
-      setEditedProblems(feedback.allProblems.map((problem, index) => ({
+    if (currentFeedback.allProblems && currentFeedback.allProblems.length > 0) {
+      setEditedProblems(currentFeedback.allProblems.map((problem, index) => ({
         id: `problem-${Date.now()}-${index}`,
         ...problem
       })))
     } else {
       // Converter formato antigo para novo
-      const keywords = feedback.keyword.split(';').map(k => k.trim())
-      const sectors = feedback.sector.split(';').map(s => s.trim())
-      const problems = feedback.problem ? feedback.problem.split(';').map(p => p.trim()) : ['']
+      const keywords = currentFeedback.keyword.split(';').map(k => k.trim())
+      const sectors = currentFeedback.sector.split(';').map(s => s.trim())
+      const problems = currentFeedback.problem ? currentFeedback.problem.split(';').map(p => p.trim()) : ['']
       
       const maxLength = Math.max(keywords.length, sectors.length, problems.length)
       const problemsArray = []
@@ -617,10 +660,41 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
       
       setEditedProblems(problemsArray)
     }
-  }, [feedback, isEditing])
+  }, [currentFeedback, isEditing])
+  
+  // Função para navegar entre feedbacks
+  const handleNavigate = (direction: 'prev' | 'next') => {
+    if (!onNavigate || !allFeedbacks.length) return
+    
+    const newIndex = direction === 'prev' 
+      ? Math.max(0, currentIndex - 1)
+      : Math.min(allFeedbacks.length - 1, currentIndex + 1)
+    
+    onNavigate(newIndex)
+  }
+
+  // Inicializar metadados para edição
+  useEffect(() => {
+    setEditedMetadata({
+      sentiment: currentFeedback.sentiment || '',
+      rating: currentFeedback.rating || 0,
+      language: currentFeedback.language || '',
+      source: currentFeedback.source || '',
+      apartamento: currentFeedback.apartamento || ''
+    })
+  }, [currentFeedback])
+
+  // Atualizar feedback quando o índice mudar
+  useEffect(() => {
+    if (allFeedbacks.length > 0 && allFeedbacks[currentIndex]) {
+      // Reset do estado de edição quando navegar
+      setIsEditing(false)
+      setIsEditingMetadata(false)
+    }
+  }, [currentIndex, allFeedbacks])
   
   const copyComment = () => {
-    navigator.clipboard.writeText(feedback.comment)
+    navigator.clipboard.writeText(currentFeedback.comment)
     toast({
       title: "Comentário Copiado",
       description: "O comentário foi copiado para a área de transferência.",
@@ -672,6 +746,69 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
     ])
   }
 
+  const handleStartEditMetadata = () => {
+    setIsEditingMetadata(true)
+  }
+
+  const handleCancelEditMetadata = () => {
+    setIsEditingMetadata(false)
+    // Resetar para os valores originais
+    setEditedMetadata({
+      sentiment: currentFeedback.sentiment || '',
+      rating: currentFeedback.rating || 0,
+      language: currentFeedback.language || '',
+      source: currentFeedback.source || '',
+      apartamento: currentFeedback.apartamento || ''
+    })
+  }
+
+  const handleSaveMetadata = async () => {
+    setIsSaving(true)
+    
+    try {
+      const updatedFeedback = {
+        ...currentFeedback,
+        sentiment: editedMetadata.sentiment,
+        rating: editedMetadata.rating,
+        language: editedMetadata.language,
+        source: editedMetadata.source,
+        apartamento: editedMetadata.apartamento
+      }
+
+      await updateFeedbackInFirestore(currentFeedback.id, updatedFeedback)
+      
+      if (onFeedbackUpdated) {
+        onFeedbackUpdated(updatedFeedback)
+      }
+
+      if (userData?.email) {
+        await saveRecentEdit({
+          userEmail: userData.email,
+          feedbackId: currentFeedback.id || '',
+          editType: 'metadata',
+          changes: editedMetadata,
+          timestamp: new Date()
+        })
+      }
+
+      setIsEditingMetadata(false)
+      
+      toast({
+        title: "Metadados Atualizados",
+        description: "Os metadados do feedback foram salvos com sucesso.",
+      })
+    } catch (error) {
+      console.error('Erro ao salvar metadados:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar os metadados. Tente novamente.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const handleSaveChanges = async () => {
     setIsSaving(true)
     
@@ -715,10 +852,10 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
         feedbackId: feedback.id,
         hotelId: feedback.hotelId || feedback.id.split('_')[0] || 'unknown',
         hotelName: userData?.hotelName || feedback.hotel || 'Hotel não identificado',
-        comment: feedback.comment,
-        rating: feedback.rating,
-        date: feedback.date,
-        source: feedback.source || 'Sistema',
+        comment: currentFeedback.comment,
+        rating: currentFeedback.rating,
+        date: currentFeedback.date,
+        source: currentFeedback.source || 'Sistema',
         oldClassification: {
           keyword: feedback.keyword || '',
           sector: feedback.sector || '',
@@ -775,69 +912,145 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
           size="sm" 
           className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200 hover:scale-110"
           title="Ver detalhes do comentário"
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setIsOpen(true)
+            // Sincronizar currentModalIndex com o índice real do feedback
+            const realIndex = allFeedbacks.findIndex(f => f.id === feedback.id)
+            if (realIndex !== -1 && onNavigate) {
+              onNavigate(realIndex)
+            }
+          }}
         >
           <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden flex flex-col bg-gradient-to-br from-white via-gray-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-blue-900/20 border-2 border-blue-100 dark:border-blue-800/30 shadow-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden flex flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-900 dark:via-gray-900 dark:to-blue-950/30 border-0 shadow-2xl backdrop-blur-sm">
+        <DialogHeader className="sr-only">
           <DialogTitle>Detalhes do Comentário</DialogTitle>
         </DialogHeader>
-        {/* Header redesenhado */}
-        <div className="relative flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-          {/* Botão X - Posicionado corretamente */}
+        
+        {/* Header moderno e elegante - Altura reduzida */}
+        <div className="relative flex-shrink-0 bg-gradient-to-r from-blue-50 via-slate-50 to-gray-50 dark:from-slate-950 dark:via-blue-950 dark:to-indigo-950 border-b border-gray-200 dark:border-gray-700">
+          {/* Botão fechar elegante */}
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => setIsOpen(false)}
-            className="absolute right-4 top-4 h-8 w-8 p-0 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200 z-10 group"
+            className="absolute right-4 top-4 h-8 w-8 p-0 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 transition-all duration-300 z-10 group border border-gray-300 dark:border-white/20"
             title="Fechar"
           >
-            <X className="h-4 w-4 text-gray-500 group-hover:text-red-600 transition-colors" />
+            <X className="h-4 w-4 text-gray-600 dark:text-white/80 group-hover:text-gray-800 dark:group-hover:text-white transition-colors" />
           </Button>
 
-          <div className="p-6 pr-16">
-            {/* Título principal */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-500 shadow-lg">
-                <Star className="h-6 w-6 text-white" />
+          <div className="p-4 pr-16">
+            {/* Cabeçalho principal com design moderno */}
+            <div className="flex items-start gap-4">
+              {/* Ícone principal com gradiente */}
+              <div className="relative">
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+                  <MessageSquare className="h-6 w-6 text-white" />
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Feedback Detalhado
-                </h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star 
-                        key={star} 
-                        className={`h-3.5 w-3.5 ${star <= feedback.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} 
-                      />
-                    ))}
+              
+              <div className="flex-1">
+                {/* Título e subtítulo */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Análise de Feedback
+                    </h2>
+                    
+                    {/* Botões de navegação */}
+                    {allFeedbacks && allFeedbacks.length > 1 && onNavigate && (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleNavigate('prev')}
+                          disabled={currentIndex === 0}
+                          className="h-8 px-3 text-xs bg-white/80 hover:bg-white dark:bg-white/10 dark:hover:bg-white/20 border-gray-300 dark:border-white/20"
+                        >
+                          ← Anterior
+                        </Button>
+                        
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300 px-2">
+                          {currentIndex + 1} de {allFeedbacks.length}
+                        </span>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleNavigate('next')}
+                          disabled={currentIndex === allFeedbacks.length - 1}
+                          className="h-8 px-3 text-xs bg-white/80 hover:bg-white dark:bg-white/10 dark:hover:bg-white/20 border-gray-300 dark:border-white/20"
+                        >
+                          Próximo →
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-                    {feedback.rating}/5
-                  </span>
+                  
+                  <p className="text-gray-600 dark:text-blue-100/80 text-sm">
+                    Detalhamento completo da avaliação do cliente
+                  </p>
+                </div>
+                
+                {/* Métricas principais */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Rating com estrelas */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-white/10 rounded-lg border border-gray-200 dark:border-white/20">
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star 
+                          key={star} 
+                          className={`h-4 w-4 transition-all duration-200 ${
+                            star <= currentFeedback.rating 
+                              ? 'text-yellow-500 fill-yellow-500' 
+                              : 'text-gray-300 dark:text-white/30'
+                          }`} 
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {currentFeedback.rating}/5
+                    </span>
+                  </div>
+                  
+                  {/* Sentimento */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-white/10 rounded-lg border border-gray-200 dark:border-white/20">
+                    <div className={`w-2.5 h-2.5 rounded-full ${
+                      currentFeedback.sentiment === 'positive' ? 'bg-green-500' :
+                currentFeedback.sentiment === 'negative' ? 'bg-red-500' : 'bg-yellow-500'
+                    }`}></div>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      {currentFeedback.sentiment === 'positive' ? 'Positivo' :
+                currentFeedback.sentiment === 'negative' ? 'Negativo' : 'Neutro'}
+                    </span>
+                  </div>
+                  
+                  {/* Data */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-white/10 rounded-lg border border-gray-200 dark:border-white/20">
+                    <Calendar className="h-4 w-4 text-gray-600 dark:text-blue-200" />
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      {formatDate(currentFeedback.date)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-
-            {/* Status e ações */}
-            <div className="flex items-center justify-between">
+            
+            {/* Barra de ações */}
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-white/10">
               <div className="flex items-center gap-3">
                 {isEditing && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full border border-blue-200 dark:border-blue-700 animate-pulse">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-500/20 text-blue-800 dark:text-blue-100 rounded-lg border border-blue-200 dark:border-blue-400/30">
                     <Edit3 className="h-4 w-4" />
-                    <span className="text-sm font-medium">Editando</span>
+                    <span className="text-sm font-medium">Modo Edição Ativo</span>
                   </div>
                 )}
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  {formatDate(feedback.date)}
-                </div>
               </div>
 
-              {/* Botões de ação */}
+              {/* Botões de ação modernos */}
               <div className="flex items-center gap-2">
                 {!isEditing ? (
                   <>
@@ -846,16 +1059,16 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
                       size="sm"
                       onClick={handleDeleteFeedback}
                       disabled={isDeleting}
-                      className="flex items-center gap-2 bg-white hover:bg-red-50 dark:bg-gray-800 dark:hover:bg-red-900/20 border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 transition-all duration-200 hover:shadow-md"
+                      className="flex items-center gap-1.5 text-xs bg-red-50 hover:bg-red-100 border-red-200 hover:border-red-300 text-red-700 hover:text-red-800 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:border-red-400/30 dark:hover:border-red-400/50 dark:text-red-100 dark:hover:text-white transition-all duration-300"
                     >
                       {isDeleting ? (
                         <>
-                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                           Excluindo...
                         </>
                       ) : (
                         <>
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                           Excluir
                         </>
                       )}
@@ -864,12 +1077,52 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
                       variant="outline"
                       size="sm"
                       onClick={handleStartEdit}
-                      className="flex items-center gap-2 bg-white hover:bg-blue-50 dark:bg-gray-800 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 transition-all duration-200 hover:shadow-md"
+                      className="flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 border-blue-200 hover:border-blue-300 text-blue-700 hover:text-blue-800 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:border-blue-400/30 dark:hover:border-blue-400/50 dark:text-blue-100 dark:hover:text-white transition-all duration-300"
                     >
-                      <Edit3 className="h-4 w-4" />
+                      <Edit3 className="h-3.5 w-3.5" />
                       Editar Análise
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStartEditMetadata}
+                      className="flex items-center gap-1.5 text-xs bg-purple-50 hover:bg-purple-100 border-purple-200 hover:border-purple-300 text-purple-700 hover:text-purple-800 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 dark:border-purple-400/30 dark:hover:border-purple-400/50 dark:text-purple-100 dark:hover:text-white transition-all duration-300"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Editar Metadados
+                    </Button>
                   </>
+                ) : isEditingMetadata ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelEditMetadata}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 text-xs bg-gray-50 hover:bg-gray-100 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-800 dark:bg-gray-500/10 dark:hover:bg-gray-500/20 dark:border-gray-400/30 dark:hover:border-gray-400/50 dark:text-gray-100 dark:hover:text-white transition-all duration-300"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveMetadata}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white shadow-md hover:shadow-lg transition-all duration-300 border-0"
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-3.5 w-3.5" />
+                          Salvar Metadados
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <Button
@@ -877,26 +1130,26 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
                       size="sm"
                       onClick={handleCancelEdit}
                       disabled={isSaving || isDeleting}
-                      className="flex items-center gap-2 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 transition-all duration-200"
+                      className="flex items-center gap-1.5 text-xs bg-gray-50 hover:bg-gray-100 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-800 dark:bg-gray-500/10 dark:hover:bg-gray-500/20 dark:border-gray-400/30 dark:hover:border-gray-400/50 dark:text-gray-100 dark:hover:text-white transition-all duration-300"
                     >
-                      <Minus className="h-4 w-4" />
+                      <Minus className="h-3.5 w-3.5" />
                       Cancelar
                     </Button>
                     <Button
                       size="sm"
                       onClick={handleSaveChanges}
                       disabled={isSaving || isDeleting}
-                      className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                      className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all duration-300 border-0"
                     >
                       {isSaving ? (
                         <>
-                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                           Salvando...
                         </>
                       ) : (
                         <>
-                          <Save className="h-4 w-4" />
-                          Salvar Alterações
+                          <Save className="h-3.5 w-3.5" />
+                          Salvar
                         </>
                       )}
                     </Button>
@@ -910,7 +1163,7 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
         {/* Conteúdo com scroll */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-6 space-y-6">
-          {/* Informações do Feedback - Design melhorado */}
+            {/* Informações do Feedback - Design melhorado */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-700/30 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
@@ -918,7 +1171,7 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Data</p>
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(feedback.date)}</p>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(currentFeedback.date)}</p>
               </div>
             </div>
             
@@ -926,12 +1179,30 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
               <div className="w-10 h-10 rounded-lg bg-yellow-500 flex items-center justify-center">
                 <Star className="h-5 w-5 text-white fill-current" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avaliação</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-base text-yellow-500">{ratingIcons[feedback.rating] || "N/A"}</span>
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">{feedback.rating}/5</span>
-                </div>
+                {isEditingMetadata ? (
+                  <Select value={editedMetadata.rating?.toString()} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, rating: parseInt(value) }))}>
+                    <SelectTrigger className="w-full h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 3, 4, 5].map(rating => (
+                        <SelectItem key={rating} value={rating.toString()}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-yellow-500">{ratingIcons[rating]}</span>
+                            <span>{rating}/5</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-base text-yellow-500">{ratingIcons[currentFeedback.rating] || "N/A"}</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.rating}/5</span>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -939,11 +1210,25 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
               <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
                 <MessageSquare className="h-5 w-5 text-white" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sentimento</p>
-                <SentimentBadge sentiment={feedback.sentiment} />
+                {isEditingMetadata ? (
+                  <Select value={editedMetadata.sentiment} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, sentiment: value }))}>
+                    <SelectTrigger className="w-full h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="positive">Positivo</SelectItem>
+                      <SelectItem value="neutral">Neutro</SelectItem>
+                      <SelectItem value="negative">Negativo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <SentimentBadge sentiment={currentFeedback.sentiment} />
+                )}
               </div>
             </div>
+          </div>
           </div>
 
           {/* Comentário Principal - Design melhorado */}
@@ -952,7 +1237,7 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Comentário do Cliente</h3>
                 <Badge variant="outline" className="text-xs">
-                  {feedback.comment.length} caracteres
+                  {currentFeedback.comment.length} caracteres
                 </Badge>
               </div>
               <Button 
@@ -967,7 +1252,7 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
             </div>
             <div className="p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
               <p className="text-sm leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300 font-medium">
-                {feedback.comment}
+                {currentFeedback.comment}
               </p>
             </div>
           </div>
@@ -978,7 +1263,7 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
               <div className="flex items-center gap-2">
                 <h4 className="font-semibold text-gray-900 dark:text-white">Análise da Inteligência Artificial</h4>
                 <Badge variant="secondary" className="text-xs">
-                  IA OpenAI
+                  IA
                 </Badge>
               </div>
               {isEditing && (
@@ -1107,30 +1392,71 @@ const CommentModal = ({ feedback, onFeedbackUpdated, onDeleteFeedback, userData 
           </div>
 
           {/* Informações Adicionais - Design melhorado */}
-          {(feedback.source || feedback.language || feedback.apartamento) && (
+          {(currentFeedback.source || currentFeedback.language || currentFeedback.apartamento) && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-800 dark:to-slate-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              {feedback.source && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Fonte</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{feedback.source}</p>
-                </div>
-              )}
-              {feedback.language && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Idioma</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{feedback.language}</p>
-                </div>
-              )}
-              {feedback.apartamento && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Apartamento</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{feedback.apartamento}</p>
-                </div>
-              )}
+              {currentFeedback.source && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fonte</p>
+                {isEditingMetadata ? (
+                  <Select value={editedMetadata.source} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, source: value }))}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Booking">Booking</SelectItem>
+                      <SelectItem value="Airbnb">Airbnb</SelectItem>
+                      <SelectItem value="Google">Google</SelectItem>
+                      <SelectItem value="TripAdvisor">TripAdvisor</SelectItem>
+                      <SelectItem value="Expedia">Expedia</SelectItem>
+                      <SelectItem value="Hotels.com">Hotels.com</SelectItem>
+                      <SelectItem value="Outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.source}</p>
+                )}
+              </div>
+            )}
+            {currentFeedback.language && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Idioma</p>
+                {isEditingMetadata ? (
+                  <Select value={editedMetadata.language} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, language: value }))}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pt">Português</SelectItem>
+                      <SelectItem value="en">Inglês</SelectItem>
+                      <SelectItem value="es">Espanhol</SelectItem>
+                      <SelectItem value="fr">Francês</SelectItem>
+                      <SelectItem value="de">Alemão</SelectItem>
+                      <SelectItem value="it">Italiano</SelectItem>
+                      <SelectItem value="other">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.language}</p>
+                )}
+              </div>
+            )}
+              {currentFeedback.apartamento && (
+                 <div>
+                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Apartamento</p>
+                   {isEditingMetadata ? (
+                     <Input 
+                       value={editedMetadata.apartamento} 
+                       onChange={(e) => setEditedMetadata(prev => ({ ...prev, apartamento: e.target.value }))}
+                       className="h-8 text-sm"
+                       placeholder="Número do apartamento"
+                     />
+                   ) : (
+                     <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.apartamento}</p>
+                   )}
+                 </div>
+               )}
             </div>
           )}
-          
-          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -1539,6 +1865,9 @@ function AnalysisPageContent() {
   // Estados para modal de confirmação de exclusão
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [feedbackToDelete, setFeedbackToDelete] = useState<Feedback | null>(null)
+  
+  // Estado para navegação entre feedbacks
+  const [currentModalIndex, setCurrentModalIndex] = useState(0)
 
   const searchParams = useSearchParams()
   const id = searchParams.get('id')
@@ -1984,69 +2313,91 @@ function AnalysisPageContent() {
           </div>
         </div>
 
-        {/* Cards de Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Cards de Estatísticas Modernizados */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           <StatsCard
             icon={MessageSquare}
             title="Total de Feedbacks"
             value={stats.total}
             color="bg-blue-500"
+            gradient="bg-gradient-to-br from-blue-500 to-blue-600"
+            change={{ value: 12, positive: true }}
           />
           <StatsCard
             icon={TrendingUp}
             title="Positivos"
             value={stats.positive}
             color="bg-green-500"
+            gradient="bg-gradient-to-br from-green-500 to-emerald-600"
+            change={{ value: 8, positive: true }}
           />
           <StatsCard
             icon={Minus}
             title="Neutros"
             value={stats.neutral}
             color="bg-yellow-500"
+            gradient="bg-gradient-to-br from-yellow-500 to-orange-500"
           />
           <StatsCard
             icon={ArrowDown}
             title="Negativos"
             value={stats.negative}
             color="bg-red-500"
+            gradient="bg-gradient-to-br from-red-500 to-rose-600"
+            change={{ value: 5, positive: false }}
           />
           <StatsCard
             icon={Star}
             title="Média Geral"
             value={`${stats.averageRating}★`}
             color="bg-purple-500"
+            gradient="bg-gradient-to-br from-purple-500 to-indigo-600"
+            change={{ value: 3, positive: true }}
           />
         </div>
 
-        {/* Filtros e Busca */}
-        <Card className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <Filter className="h-5 w-5 text-blue-500" />
-            <h3 className="text-lg font-semibold">Filtros de Análise</h3>
-          </div>
-          
-          <div className="space-y-6">
+        {/* Filtros e Busca Modernizados */}
+        <Card className="relative overflow-hidden bg-white/90 backdrop-blur-sm border-0 shadow-xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50 opacity-50" />
+          <div className="relative p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                <Filter className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Filtros de Análise</h3>
+                <p className="text-sm text-gray-600">Refine sua busca para encontrar insights específicos</p>
+              </div>
+            </div>
+           
+             <div className="space-y-6">
             {/* Grid responsivo de filtros */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-              {/* Busca por texto */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Buscar Comentários</label>
+              {/* Busca por texto modernizada */}
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Search className="h-4 w-4 text-blue-500" />
+                  Buscar Comentários
+                </label>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
-                    placeholder="Digite para buscar..."
+                    placeholder="Digite para buscar insights..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-white/80 backdrop-blur-sm"
                   />
                 </div>
               </div>
 
-              {/* Filtro por sentimento */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Sentimento</label>
+              {/* Filtro por sentimento modernizado */}
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-green-500" />
+                  Sentimento
+                </label>
                 <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 bg-white/80 backdrop-blur-sm">
                     <SelectValue placeholder="Selecionar sentimento" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2058,11 +2409,14 @@ function AnalysisPageContent() {
                 </Select>
               </div>
 
-              {/* Filtro por departamento */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Departamento</label>
+              {/* Filtro por departamento modernizado */}
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Users className="h-4 w-4 text-purple-500" />
+                  Departamento
+                </label>
                 <Select value={sectorFilter} onValueChange={setSectorFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-white/80 backdrop-blur-sm">
                     <SelectValue placeholder="Selecionar departamento" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2074,11 +2428,14 @@ function AnalysisPageContent() {
                 </Select>
               </div>
 
-              {/* Filtro por palavra-chave */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Palavra-chave</label>
+              {/* Filtro por palavra-chave modernizado */}
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-orange-500" />
+                  Palavra-chave
+                </label>
                 <Select value={keywordFilter} onValueChange={setKeywordFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-gray-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all duration-200 bg-white/80 backdrop-blur-sm">
                     <SelectValue placeholder="Selecionar palavra-chave" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2108,9 +2465,12 @@ function AnalysisPageContent() {
 
               {/* Filtros pré-definidos de data */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Período Rápido</label>
+                <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  Período Rápido
+                </label>
                 <Select value={quickDateFilter} onValueChange={applyQuickDateFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white/50 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200">
                     <SelectValue placeholder="Selecionar período" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2125,10 +2485,13 @@ function AnalysisPageContent() {
 
               {/* Calendário para seleção de intervalo */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Período Personalizado</label>
+                <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <CalendarDays className="h-4 w-4" />
+                  Período Personalizado
+                </label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <Button variant="outline" className="w-full justify-start text-left font-normal bg-white/50 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200">
                       <CalendarDays className="mr-2 h-4 w-4" />
                       {dateRange?.from ? (
                         dateRange.to ? (
@@ -2160,9 +2523,12 @@ function AnalysisPageContent() {
 
               {/* Filtro por data de importação */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Data de Importação</label>
+                <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Download className="h-4 w-4" />
+                  Data de Importação
+                </label>
                 <Select value={importFilter} onValueChange={setImportFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white/50 border-gray-200 hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200">
                     <SelectValue placeholder="Selecionar importação" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2178,18 +2544,22 @@ function AnalysisPageContent() {
 
               {/* Botão de atualizar */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Atualizar Dados</label>
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-blue-500" />
+                  Atualizar Dados
+                </label>
                 <Button 
                   onClick={handleRefreshData} 
                   disabled={isRefreshing}
                   variant="outline"
-                  className="w-full flex items-center gap-2"
+                  className="w-full flex items-center gap-2 h-10 border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 shadow-sm hover:shadow-md"
                 >
                   <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
                   {isRefreshing ? "Atualizando..." : "Atualizar"}
                 </Button>
               </div>
             </div>
+          </div>
             
             {/* Indicador de filtros ativos */}
             {(sentimentFilter !== "all" || sectorFilter !== "all" || keywordFilter !== "all" || problemFilter !== "all" || dateRange?.from || dateRange?.to || searchTerm || importFilter !== "all") && (
@@ -2292,17 +2662,22 @@ function AnalysisPageContent() {
         </Card>
 
         {/* Tabela de Feedbacks */}
-        <Card className="overflow-hidden">
-          <div className="p-4 border-b bg-muted/50">
+        <Card className="overflow-hidden shadow-lg border-0 bg-white dark:bg-gray-900">
+          <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-blue-500" />
-                <h3 className="text-lg font-semibold">Feedbacks Analisados</h3>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500 rounded-lg">
+                  <MessageSquare className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Análise de Feedbacks</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Visualização detalhada dos comentários processados</p>
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span>Header fixo • Scrollbars visíveis • Compacto</span>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Otimizado"></span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Sistema Otimizado</span>
                 </div>
               </div>
             </div>
@@ -2312,30 +2687,37 @@ function AnalysisPageContent() {
             {/* Header fixo */}
             <div className="fixed-header">
               <div className="overflow-hidden">
-                <div className="flex bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900">
-                  <div className="w-24 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
+                <div className="flex bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 dark:from-gray-950 dark:via-blue-950 dark:to-indigo-950 shadow-lg">
+                  <div className="w-24 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <Calendar className="h-4 w-4 mr-2 text-blue-300" />
                     Data
                   </div>
-                  <div className="w-64 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
+                  <div className="w-64 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <MessageSquare className="h-4 w-4 mr-2 text-blue-300" />
                     Comentário
                   </div>
-                  <div className="w-24 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm text-center flex items-center justify-center">
+                  <div className="w-24 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm text-center flex items-center justify-center">
+                    <Star className="h-4 w-4 mr-2 text-yellow-300" />
                     Nota
                   </div>
-                  <div className="w-28 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm text-center flex items-center justify-center">
+                  <div className="w-28 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm text-center flex items-center justify-center">
+                    <TrendingUp className="h-4 w-4 mr-2 text-green-300" />
                     Sentimento
                   </div>
-                  <div className="w-48 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
+                  <div className="w-48 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <Users className="h-4 w-4 mr-2 text-purple-300" />
                     Departamento
                   </div>
-                  <div className="w-52 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
+                  <div className="w-52 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <BarChart3 className="h-4 w-4 mr-2 text-orange-300" />
                     Palavra-chave
                   </div>
-                  <div className="w-44 py-4 px-3 border-r border-slate-700 dark:border-slate-800 font-semibold text-white text-sm flex items-center">
+                  <div className="w-44 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <Filter className="h-4 w-4 mr-2 text-red-300" />
                     Problema
                   </div>
-                  <div className="w-12 py-4 px-3 font-semibold text-white text-sm text-center flex items-center justify-center">
-                    Ações
+                  <div className="w-12 py-5 px-4 font-bold text-white text-sm text-center flex items-center justify-center">
+                    <Eye className="h-4 w-4 text-gray-300" />
                   </div>
                 </div>
               </div>
@@ -2408,7 +2790,10 @@ function AnalysisPageContent() {
                           
                           {/* Feedbacks do grupo */}
                           <div className="divide-y divide-gray-200 dark:divide-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                            {groupFeedbacks.map((feedback) => (
+                            {groupFeedbacks.map((feedback, feedbackIndex) => {
+                              // Encontrar o índice real do feedback na lista filtrada
+                              const realIndex = filteredFeedbacks.findIndex(f => f.id === feedback.id);
+                              return (
                       <div 
                         key={feedback.id} 
                         className={cn(
@@ -2518,10 +2903,29 @@ function AnalysisPageContent() {
                           </div>
                         </div>
                         <div className="w-12 py-4 px-3 text-center flex items-center justify-center">
-                          <CommentModal feedback={feedback} onFeedbackUpdated={handleFeedbackUpdated} onDeleteFeedback={handleDeleteFeedback} userData={userData} />
+                          <CommentModal 
+                            feedback={feedback} 
+                            onFeedbackUpdated={handleFeedbackUpdated} 
+                            onDeleteFeedback={handleDeleteFeedback} 
+                            userData={userData}
+                            allFeedbacks={filteredFeedbacks}
+                            currentIndex={currentModalIndex >= 0 && currentModalIndex < filteredFeedbacks.length ? currentModalIndex : realIndex}
+                            onNavigate={(newIndex) => {
+                              // Garantir que o newIndex está dentro dos limites dos feedbacks filtrados
+                              if (newIndex >= 0 && newIndex < filteredFeedbacks.length) {
+                                setCurrentModalIndex(newIndex)
+                                // Forçar re-render do modal com o novo feedback
+                                const newFeedback = filteredFeedbacks[newIndex]
+                                if (newFeedback) {
+                                  // O modal será atualizado automaticamente através das props
+                                }
+                              }
+                            }}
+                          />
                         </div>
                       </div>
-                    ))}
+                              );
+                            })}
                   </div>
                         </div>
                       ))

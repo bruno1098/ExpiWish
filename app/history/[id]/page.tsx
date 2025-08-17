@@ -226,15 +226,16 @@ const getSectorColor = (sector: string) => {
   return sectorColors[sector?.trim()] || 'bg-gray-50 dark:bg-gray-900/30 text-gray-600 dark:text-gray-200 border-gray-300 dark:border-gray-800';
 };
 
-// Componente para badges de palavra-chave
+// Componente para badges de palavra-chave com design elegante
 const KeywordBadge = ({ keyword, sector }: { keyword: string, sector: string }) => {
   const colorClass = getSectorColor(sector);
   
   return (
     <Badge variant="outline" className={cn(
-      "text-sm px-2 py-1 rounded-full border font-medium",
+      "text-sm px-3 py-1.5 rounded-full border font-semibold transition-all duration-200 hover:scale-105 hover:shadow-md cursor-default",
       colorClass
     )}>
+      <span className="mr-1">🏷️</span>
       {keyword}
     </Badge>
   );

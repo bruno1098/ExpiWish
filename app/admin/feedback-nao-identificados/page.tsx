@@ -117,9 +117,10 @@ const KeywordBadge = ({ keyword, sector }: { keyword: string, sector: string }) 
   
   return (
     <Badge variant="outline" className={cn(
-      "text-sm px-2 py-1 rounded-full border font-medium",
+      "text-sm px-3 py-1.5 rounded-full border font-semibold transition-all duration-200 hover:scale-105 hover:shadow-md cursor-default",
       colorClass
     )}>
+      <span className="mr-1">🏷️</span>
       {keyword}
     </Badge>
   );
@@ -386,9 +387,21 @@ export default function AdminUnidentifiedFeedbacks() {
   }
 
   const getSentimentBadge = (rating: number) => {
-    if (rating >= 4) return <Badge className="bg-green-100 text-green-800">Positivo</Badge>
-    if (rating <= 2) return <Badge className="bg-red-100 text-red-800">Negativo</Badge>
-    return <Badge className="bg-yellow-100 text-yellow-800">Neutro</Badge>
+    if (rating >= 4) return (
+      <Badge className="bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-700 border-emerald-200 px-3 py-1.5 rounded-full font-semibold transition-all duration-200 hover:scale-105 hover:shadow-md">
+        <span className="mr-1.5">😊</span>Positivo
+      </Badge>
+    )
+    if (rating <= 2) return (
+      <Badge className="bg-gradient-to-r from-red-50 to-rose-50 text-red-700 border-red-200 px-3 py-1.5 rounded-full font-semibold transition-all duration-200 hover:scale-105 hover:shadow-md">
+        <span className="mr-1.5">😞</span>Negativo
+      </Badge>
+    )
+    return (
+      <Badge className="bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-200 px-3 py-1.5 rounded-full font-semibold transition-all duration-200 hover:scale-105 hover:shadow-md">
+        <span className="mr-1.5">😐</span>Neutro
+      </Badge>
+    )
   }
 
   const restoreFeedback = async (feedbackId: string) => {
