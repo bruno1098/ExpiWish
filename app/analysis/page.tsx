@@ -2321,7 +2321,6 @@ function AnalysisPageContent() {
             value={stats.total}
             color="bg-blue-500"
             gradient="bg-gradient-to-br from-blue-500 to-blue-600"
-            change={{ value: 12, positive: true }}
           />
           <StatsCard
             icon={TrendingUp}
@@ -2329,7 +2328,6 @@ function AnalysisPageContent() {
             value={stats.positive}
             color="bg-green-500"
             gradient="bg-gradient-to-br from-green-500 to-emerald-600"
-            change={{ value: 8, positive: true }}
           />
           <StatsCard
             icon={Minus}
@@ -2344,7 +2342,6 @@ function AnalysisPageContent() {
             value={stats.negative}
             color="bg-red-500"
             gradient="bg-gradient-to-br from-red-500 to-rose-600"
-            change={{ value: 5, positive: false }}
           />
           <StatsCard
             icon={Star}
@@ -2352,7 +2349,6 @@ function AnalysisPageContent() {
             value={`${stats.averageRating}★`}
             color="bg-purple-500"
             gradient="bg-gradient-to-br from-purple-500 to-indigo-600"
-            change={{ value: 3, positive: true }}
           />
         </div>
 

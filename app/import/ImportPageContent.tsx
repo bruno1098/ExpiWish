@@ -362,9 +362,7 @@ function ImportPageContent() {
     // Também aceitar variações comuns como "wish", "hotel", etc.
     const hotelKeywords = [
       hotelNameLower,
-      'wish',
-      'hotel',
-      'feedback',
+      'aaa',
      
     ];
     
