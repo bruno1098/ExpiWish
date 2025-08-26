@@ -249,6 +249,11 @@ function ImportPageContent() {
   const [showApiKeyAlert, setShowApiKeyAlert] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   
+  // Estados para verificação de duplicatas
+  const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [showDuplicatesDialog, setShowDuplicatesDialog] = useState(false);
+
+  
   // Estados para o modal de confirmação de nome do arquivo
   const [showFileNameConfirmation, setShowFileNameConfirmation] = useState(false);
   const [fileToConfirm, setFileToConfirm] = useState<File | null>(null);
@@ -427,6 +432,238 @@ function ImportPageContent() {
   const handleCancelFileNameConfirmation = () => {
     setShowFileNameConfirmation(false);
     setFileToConfirm(null);
+  };
+
+  // Função para detectar comentários duplicados
+  const detectDuplicates = (data: any[]) => {
+    const textMap = new Map<string, any[]>();
+    const duplicateGroups: any[] = [];
+    
+    // Agrupar por texto do comentário (normalizado)
+    data.forEach((item, index) => {
+      if (item.texto && typeof item.texto === 'string') {
+        // Normalizar o texto: remover espaços extras, converter para minúsculas
+        const normalizedText = item.texto.trim().toLowerCase().replace(/\s+/g, ' ');
+        
+        if (!textMap.has(normalizedText)) {
+          textMap.set(normalizedText, []);
+        }
+        textMap.get(normalizedText)!.push({ ...item, originalIndex: index });
+      }
+    });
+    
+    // Identificar grupos com mais de 1 item (duplicatas)
+    textMap.forEach((items, text) => {
+      if (items.length > 1) {
+        duplicateGroups.push({
+          text: items[0].texto, // Texto original (não normalizado)
+          count: items.length,
+          items: items,
+          normalizedText: text
+        });
+      }
+    });
+    
+    return duplicateGroups;
+  };
+
+  // Função para processar dados após decisão sobre duplicatas
+
+
+  // Função para processar dados em chunks com IA
+  const processDataInChunks = async (data: any[], hotelId: string, hotelName: string): Promise<Feedback[]> => {
+    const result: Feedback[] = [];
+    
+    // Usar configurações adaptativas baseadas no tamanho dos dados
+    const performanceProfile = getPerformanceProfile(data.length);
+    const chunkSize = performanceProfile.CHUNK_SIZE;
+    const concurrentRequests = performanceProfile.CONCURRENT_REQUESTS;
+    const requestDelay = performanceProfile.REQUEST_DELAY;
+    const delayBetweenBatches = performanceProfile.DELAY_BETWEEN_BATCHES;
+    
+    // Mostrar estimativa de tempo
+    const estimatedSeconds = estimateProcessingTime(data.length);
+    const estimatedTimeStr = formatEstimatedTime(estimatedSeconds);
+    setEstimatedTime(estimatedTimeStr);
+    
+    setCurrentStep(`Processando ${data.length} itens com perfil ${data.length < 100 ? 'LEVE' : data.length < 500 ? 'MÉDIO' : 'PESADO'} - ${estimatedTimeStr}`);
+    
+    // Obter API Key do localStorage
+    const apiKey = localStorage.getItem('openai-api-key');
+    if (!apiKey) {
+      throw new Error('Chave da API OpenAI não encontrada. Configure nas configurações.');
+    }
+    
+    // Dividir dados em chunks
+    const chunks = [];
+    for (let i = 0; i < data.length; i += chunkSize) {
+      chunks.push(data.slice(i, i + chunkSize));
+    }
+    
+    // Função para retry com backoff exponencial
+    const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, baseDelay = 1000) => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return await fn();
+        } catch (error: any) {
+          if (attempt === maxRetries) throw error;
+          
+          // Verificar se foi cancelado
+          if (error.message?.includes('cancelada') || error.name === 'AbortError') {
+            throw error;
+          }
+          
+          // Incrementar contador de retry
+          setRetryCount(prev => prev + 1);
+          
+          const delayTime = baseDelay * Math.pow(2, attempt - 1);
+          setCurrentStep(`Erro na tentativa ${attempt}. Tentando novamente em ${delayTime/1000}s...`);
+          await delay(delayTime);
+        }
+      }
+    };
+    
+    // Função para processar um lote em paralelo
+    const processBatchParallel = async (batch: any[]) => {
+      const batchResults: Feedback[] = [];
+      
+      // Dividir o lote em grupos menores para requisições paralelas
+      const groups = [];
+      for (let i = 0; i < batch.length; i += concurrentRequests) {
+        groups.push(batch.slice(i, i + concurrentRequests));
+      }
+      
+      for (const group of groups) {
+        // Verificar se foi cancelado
+        if (isCancelled) {
+          throw new Error('Análise cancelada pelo usuário');
+        }
+        
+        const promises = group.map(async (row: any) => {
+          // Verificar novamente se foi cancelado antes de cada requisição
+          if (isCancelled) {
+            throw new Error('Análise cancelada pelo usuário');
+          }
+          
+          return retryWithBackoff(async () => {
+            const response = await fetch('/api/analyze-feedback', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+              },
+              body: JSON.stringify({
+                text: row.texto,
+                signal: abortControllerRef.current?.signal
+              })
+            });
+            
+            if (!response.ok) {
+              setErrorCount(prev => prev + 1);
+              throw new Error(`Erro na API: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            // Aguardar um pouco entre requisições para não sobrecarregar
+            await delay(requestDelay);
+            
+            const rating = parseInt(result.rating) || 3;
+            const keyword = result.keyword || '';
+            const sector = result.sector || '';
+            
+            // Processar problemas (nova estrutura)
+            let problem = '';
+            let allProblems: string[] = [];
+            
+            if (result.problem) {
+              if (typeof result.problem === 'string') {
+                // Estrutura antiga - apenas um problema
+                problem = result.problem;
+                allProblems = [result.problem];
+              } else if (Array.isArray(result.problem)) {
+                // Nova estrutura - array de problemas
+                allProblems = result.problem;
+                problem = allProblems[0] || ''; // Usar o primeiro problema como principal
+              } else if (typeof result.problem === 'object') {
+                // Estrutura de objeto - extrair valores
+                allProblems = Object.values(result.problem).filter(Boolean) as string[];
+                problem = allProblems[0] || '';
+              }
+            }
+                
+            return {
+              id: generateUniqueId(),
+              date: row.dataFeedback,
+              comment: row.texto,
+              rating: rating,
+              sentiment: rating >= 4 ? 'positive' : rating <= 2 ? 'negative' : 'neutral',
+              keyword: keyword,
+              sector: sector,
+              problem: problem,
+              hotel: row.nomeHotel,
+              hotelId: hotelId,
+              source: row.fonte || '',
+              language: row.idioma || '',
+              score: row.pontuacao || undefined,
+              url: row.url || undefined,
+              author: row.autor || undefined,
+              title: row.titulo || undefined,
+              apartamento: row.apartamento || undefined,
+              allProblems: [] // Armazenar um array vazio para problemas
+            } as Feedback;
+          });
+        });
+        
+        // Aguardar todas as requisições do grupo terminarem
+        try {
+          const groupResults = await Promise.all(promises);
+          batchResults.push(...groupResults);
+        } catch (error: any) {
+          // Se alguma promessa foi cancelada, parar imediatamente
+          if (error.message.includes('cancelada') || error.name === 'AbortError') {
+            throw error;
+          }
+          // Se for outro erro, continuar com os resultados parciais
+          throw error;
+        }
+        
+        // Atualizar progresso
+        const currentProcessed = result.length + batchResults.length;
+        setProcessedItems(currentProcessed);
+        const analysisProgress = 10 + ((currentProcessed / data.length) * 80);
+        setProgress(Math.min(analysisProgress, 90));
+      }
+      
+      return batchResults;
+    };
+
+    for (let i = 0; i < chunks.length; i++) {
+      // Verificar se foi cancelado
+      if (isCancelled) {
+        throw new Error('Análise cancelada pelo usuário');
+      }
+      
+      const chunk = chunks[i];
+      
+      setCurrentStep(`Analisando lote ${i + 1}/${chunks.length} (${chunk.length} itens) - ${Math.round(((i + 1) / chunks.length) * 100)}% dos lotes`);
+      
+      // Processar chunk em paralelo
+      const chunkResults = await processBatchParallel(chunk);
+      result.push(...chunkResults);
+      
+      // Verificar novamente após processar o chunk
+      if (isCancelled) {
+        throw new Error('Análise cancelada pelo usuário');
+      }
+      
+      // Pausa otimizada entre chunks baseada no perfil
+      if (i < chunks.length - 1) {
+        await delay(delayBetweenBatches);
+      }
+    }
+
+    return result;
   };
 
   const processFileWithAccountHotel = async (file: File) => {
@@ -648,10 +885,79 @@ function ImportPageContent() {
         return;
       }
       
-      // Definir totais para estatísticas
+      // Verificar duplicatas ANTES de configurar progresso
+      setCurrentStep("Verificando comentários duplicados...");
+      const foundDuplicates = detectDuplicates(data);
+      
+      if (foundDuplicates.length > 0) {
+        // Mostrar dialog de duplicatas e aguardar decisão do usuário
+        setDuplicates(foundDuplicates);
+        setShowDuplicatesDialog(true);
+        
+        // Aguardar decisão do usuário usando Promise
+        const userDecision = await new Promise<'exclude' | 'analyze' | null>((resolve) => {
+          // Criar funções temporárias para capturar a decisão
+          const handleExclude = () => {
+            setShowDuplicatesDialog(false);
+            resolve('exclude');
+          };
+          const handleAnalyze = () => {
+            setShowDuplicatesDialog(false);
+            resolve('analyze');
+          };
+          const handleCancel = () => {
+            setShowDuplicatesDialog(false);
+            resolve(null);
+          };
+          
+          // Armazenar as funções para uso nos botões do dialog
+          (window as any).duplicateHandlers = {
+            exclude: handleExclude,
+            analyze: handleAnalyze,
+            cancel: handleCancel
+          };
+        });
+        
+        // Processar decisão do usuário
+        if (userDecision === null) {
+          // Usuário cancelou
+          setImporting(false);
+          setIsProcessing(false);
+          return;
+        } else if (userDecision === 'exclude') {
+          // Remover duplicatas mantendo apenas o primeiro item de cada grupo
+          const indicesToRemove = new Set();
+          let totalRemoved = 0;
+          
+          foundDuplicates.forEach(group => {
+            // Manter o primeiro item (índice 0) e remover os demais
+            for (let i = 1; i < group.items.length; i++) {
+              indicesToRemove.add(group.items[i].originalIndex);
+              totalRemoved++;
+            }
+          });
+          
+          data = data.filter((_, index) => !indicesToRemove.has(index));
+          
+          toast({
+            title: "Duplicatas Removidas",
+            description: `${totalRemoved} comentários duplicados foram excluídos da análise. Mantido 1 de cada grupo.`,
+            variant: "default"
+          });
+        }
+        // Se userDecision === 'analyze', continua com todos os dados
+        
+        // Resetar estados de duplicatas
+        setDuplicates([]);
+      }
+      
+      // Configurar estados de progresso com dados finais (após tratamento de duplicatas)
       setTotalItems(data.length);
       setProcessedItems(0);
       setProgress(10);
+      setStartTime(new Date());
+      setRetryCount(0);
+      setErrorCount(0);
 
       const processDataInChunks = async (data: any[]): Promise<Feedback[]> => {
         const result: Feedback[] = [];
@@ -1706,13 +2012,13 @@ function ImportPageContent() {
               Chave de API Necessária
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-4">
-              <p>
+              <div>
                 Para analisar feedbacks com inteligência artificial, é necessário configurar uma chave de API.
-              </p>
-              <p className="text-sm text-muted-foreground">
+              </div>
+              <div className="text-sm text-muted-foreground">
                 Você pode configurar sua própria chave nas Configurações ou, se não possuir uma chave, 
                 entre em contato com o administrador do sistema para obter acesso.
-              </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-3">
@@ -1739,12 +2045,12 @@ function ImportPageContent() {
               Confirmação de Importação
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-4">
-              <p>
+              <div>
                 Tem certeza que deseja importar o arquivo <strong>{fileToConfirm?.name}</strong>?
-              </p>
-              <p className="text-sm text-muted-foreground">
+              </div>
+              <div className="text-sm text-muted-foreground">
                 Você está logado com o hotel <strong>{userData?.hotelName}</strong>.
-              </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-3">
@@ -1758,6 +2064,144 @@ function ImportPageContent() {
               <Upload className="h-4 w-4" />
               Confirmar Importação
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog para comentários duplicados */}
+      <AlertDialog open={showDuplicatesDialog} onOpenChange={setShowDuplicatesDialog}>
+        <AlertDialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-3 text-xl">
+              <div className="p-2 bg-yellow-100 rounded-full">
+                <AlertCircle className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div>
+                <div className="text-gray-900">Comentários Duplicados Detectados</div>
+                <div className="text-sm font-normal text-gray-600 mt-1">
+                  {duplicates.reduce((total, group) => total + group.items.length, 0)} comentários em {duplicates.length} grupos duplicados
+                </div>
+              </div>
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4 text-base">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-1 bg-blue-100 rounded-full mt-0.5">
+                    <Brain className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-blue-900 mb-2">O que são comentários duplicados?</h4>
+                    <p className="text-blue-800 text-sm leading-relaxed">
+                      Comentários com texto idêntico ou muito similar que podem distorcer a análise. 
+                      Manter duplicatas pode inflar artificialmente certas métricas e problemas.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="font-semibold text-green-900">Excluir Duplicatas (Recomendado)</span>
+                  </div>
+                  <p className="text-green-800 text-sm">
+                    Remove comentários duplicados, mantendo apenas 1 de cada grupo. 
+                    Resulta em análise mais precisa e representativa.
+                  </p>
+                </div>
+                
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="h-4 w-4 text-orange-600" />
+                    <span className="font-semibold text-orange-900">Analisar Todos</span>
+                  </div>
+                  <p className="text-orange-800 text-sm">
+                    Mantém todos os comentários, incluindo duplicatas. 
+                    Pode resultar em métricas inflacionadas.
+                  </p>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {duplicates.map((group, groupIndex) => (
+              <div key={groupIndex} className="border rounded-lg p-4 bg-gray-50">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm font-medium">
+                    Grupo {groupIndex + 1} - {group.items.length} duplicatas
+                  </div>
+                </div>
+                
+                <div className="bg-white p-3 rounded border mb-3">
+                  <p className="text-sm font-medium text-gray-700 mb-1">Texto do comentário:</p>
+                  <p className="text-sm text-gray-900 italic">"{group.normalizedText}"</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">Ocorrências encontradas:</p>
+                  {group.items.map((item: any, itemIndex: number) => (
+                    <div key={itemIndex} className="bg-white p-2 rounded border text-xs">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><span className="font-medium">Linha:</span> {item.originalIndex + 1}</div>
+                        <div><span className="font-medium">Data:</span> {item.dataFeedback}</div>
+                        <div><span className="font-medium">Hotel:</span> {item.nomeHotel}</div>
+                        <div><span className="font-medium">Fonte:</span> {item.fonte || 'N/A'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <AlertDialogFooter className="flex-col sm:flex-row gap-3 pt-6 border-t">
+            <div className="flex flex-col sm:flex-row gap-3 w-full">
+              <AlertDialogCancel 
+                onClick={() => {
+                  if ((window as any).duplicateHandlers?.cancel) {
+                    (window as any).duplicateHandlers.cancel();
+                  }
+                }} 
+                className="sm:order-1 border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancelar Importação
+              </AlertDialogCancel>
+              
+              <Button
+                onClick={() => {
+                  if ((window as any).duplicateHandlers?.exclude) {
+                    (window as any).duplicateHandlers.exclude();
+                  }
+                }}
+                variant="outline"
+                className="flex items-center gap-2 border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400 sm:order-2 flex-1"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <div className="text-left">
+                  <div className="font-semibold">Excluir Duplicatas</div>
+                  <div className="text-xs opacity-75">Recomendado • Análise mais precisa</div>
+                </div>
+              </Button>
+              
+              <Button
+                onClick={() => {
+                  if ((window as any).duplicateHandlers?.analyze) {
+                    (window as any).duplicateHandlers.analyze();
+                  }
+                }}
+                variant="outline"
+                className="flex items-center gap-2 border-orange-300 text-orange-700 hover:bg-orange-50 hover:border-orange-400 sm:order-3 flex-1"
+              >
+                <Users className="h-4 w-4" />
+                <div className="text-left">
+                  <div className="font-semibold">Manter Todos</div>
+                  <div className="text-xs opacity-75">Incluir duplicatas na análise</div>
+                </div>
+              </Button>
+            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

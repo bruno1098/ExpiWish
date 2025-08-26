@@ -18,9 +18,63 @@ import {
 import { ReactNode } from "react"
 import Image from "next/image"
 
+// Função para obter a logo do hotel baseado no nome
+const getHotelLogo = (hotelName: string) => {
+  if (!hotelName) return null
+  
+  // Normaliza o nome do hotel para comparação
+  const normalizedName = hotelName.trim()
+  
+  const logoMap: { [key: string]: string } = {
+    "Wish Foz do Iguaçu": "/logo-novo-horizontal-wish-foz-do-iguacu.png",
+    "Wish Natal": "/logo-novo-horizontal-wish-natal.png",
+    "Wish Serrano": "/logo-novo-horizontal-wish-serrano.png",
+    "Marupiara by Wish": "/marupiara-by-wish-azul.png",
+    "Prodigy Gramado by Wish": "/prodigy-gramado-by-wish-vermelho.png",
+    "Prodigy SDU by Wish": "/prodigy-sdu-by-wish-vermelho.png",
+    // Variações alternativas para Prodigy SDU
+    "Prodigy SDU": "/prodigy-sdu-by-wish-vermelho.png",
+    "prodigy sdu by wish": "/prodigy-sdu-by-wish-vermelho.png",
+    "PRODIGY SDU BY WISH": "/prodigy-sdu-by-wish-vermelho.png",
+    "Prodigy Santos Dumont": "/prodigy-sdu-by-wish-vermelho.png",
+    "prodigy santos dumont": "/prodigy-sdu-by-wish-vermelho.png",
+    "PRODIGY SANTOS DUMONT": "/prodigy-sdu-by-wish-vermelho.png",
+    "Confins": "/Confins.png",
+    "Galeão": "/Galeão.png",
+    "Bahia": "/Logo Bahia.png"
+  }
+  
+  // Busca exata primeiro
+  if (logoMap[normalizedName]) {
+    return logoMap[normalizedName]
+  }
+  
+  // Busca case-insensitive como fallback
+  const lowerName = normalizedName.toLowerCase()
+  for (const [key, value] of Object.entries(logoMap)) {
+    if (key.toLowerCase() === lowerName) {
+      return value
+    }
+  }
+  
+  // Busca parcial para casos como "Prodigy Gramado" sem "by Wish"
+  for (const [key, value] of Object.entries(logoMap)) {
+    if (key.toLowerCase().includes(lowerName) || lowerName.includes(key.toLowerCase())) {
+      return value
+    }
+  }
+  
+  return null
+}
+
 export default function Header({ children }: { children?: ReactNode }) {
   const { userData } = useAuth()
   const router = useRouter()
+
+  // Calcular o logo do hotel sempre que userData mudar (importante para PCs compartilhados)
+  const hotelLogo = userData?.hotelName && userData.role !== 'admin' 
+    ? getHotelLogo(userData.hotelName) 
+    : null
 
   const handleLogout = async () => {
     try {
@@ -60,63 +114,6 @@ export default function Header({ children }: { children?: ReactNode }) {
       return <Crown className="w-3 h-3" />
     }
     return <Shield className="w-3 h-3" />
-  }
-
-  // Função para obter a logo do hotel baseado no nome
-  const getHotelLogo = (hotelName: string) => {
-    if (!hotelName) return null
-    
-    // Normaliza o nome do hotel para comparação
-    const normalizedName = hotelName.trim()
-    
-    const logoMap: { [key: string]: string } = {
-      "Wish Foz do Iguaçu": "/logo-novo-horizontal-wish-foz-do-iguacu.png",
-      "Wish Natal": "/logo-novo-horizontal-wish-natal.png",
-      "Wish Serrano": "/logo-novo-horizontal-wish-serrano.png",
-      "Marupiara by Wish": "/marupiara-by-wish-azul.png",
-      "Prodigy Gramado by Wish": "/prodigy-gramado-by-wish-vermelho.png",
-      "Prodigy SDU by Wish": "/prodigy-sdu-by-wish-vermelho.png",
-      // Variações alternativas para Prodigy SDU
-      "Prodigy SDU": "/prodigy-sdu-by-wish-vermelho.png",
-      "prodigy sdu by wish": "/prodigy-sdu-by-wish-vermelho.png",
-      "PRODIGY SDU BY WISH": "/prodigy-sdu-by-wish-vermelho.png",
-      "Prodigy Santos Dumont": "/prodigy-sdu-by-wish-vermelho.png",
-      "prodigy santos dumont": "/prodigy-sdu-by-wish-vermelho.png",
-      "PRODIGY SANTOS DUMONT": "/prodigy-sdu-by-wish-vermelho.png",
-      "Confins": "/Confins.png",
-      "Galeão": "/Galeão.png",
-      "Bahia": "/Logo Bahia.png"
-    }
-    
-    // Debug: Log para verificar o nome do hotel recebido
-    console.log('🏨 getHotelLogo - Nome recebido:', `"${normalizedName}"`)
-    console.log('🏨 getHotelLogo - Chaves disponíveis:', Object.keys(logoMap))
-    
-    // Busca exata primeiro
-    if (logoMap[normalizedName]) {
-      console.log('✅ getHotelLogo - Match exato encontrado:', logoMap[normalizedName])
-      return logoMap[normalizedName]
-    }
-    
-    // Busca case-insensitive como fallback
-    const lowerName = normalizedName.toLowerCase()
-    for (const [key, value] of Object.entries(logoMap)) {
-      if (key.toLowerCase() === lowerName) {
-        console.log('✅ getHotelLogo - Match case-insensitive encontrado:', value)
-        return value
-      }
-    }
-    
-    // Busca parcial para casos como "Prodigy Gramado" sem "by Wish"
-    for (const [key, value] of Object.entries(logoMap)) {
-      if (key.toLowerCase().includes(lowerName) || lowerName.includes(key.toLowerCase())) {
-        console.log('✅ getHotelLogo - Match parcial encontrado:', value)
-        return value
-      }
-    }
-    
-    console.log('❌ getHotelLogo - Nenhum logo encontrado para:', `"${normalizedName}"`)
-    return null
   }
 
   return (
@@ -184,10 +181,10 @@ export default function Header({ children }: { children?: ReactNode }) {
               {/* Logo do hotel */}
               <div className="flex items-center justify-center">
                 <div className="relative">
-                  {userData.role !== 'admin' && getHotelLogo(userData.hotelName) ? (
+                  {hotelLogo ? (
                     <div className="w-64 h-16 rounded-xl overflow-hidden shadow-md bg-white/80 backdrop-blur-sm flex items-center justify-center p-2">
                       <Image 
-                        src={getHotelLogo(userData.hotelName)!} 
+                        src={hotelLogo} 
                         alt={`Logo ${userData.hotelName}`}
                         width={140}
                         height={56}
@@ -196,11 +193,7 @@ export default function Header({ children }: { children?: ReactNode }) {
                           filter: 'contrast(1.05) saturate(1.05)'
                         }}
                         onError={(e) => {
-                          console.error('❌ Erro ao carregar logo:', getHotelLogo(userData.hotelName), 'para hotel:', userData.hotelName)
                           e.currentTarget.style.display = 'none'
-                        }}
-                        onLoad={() => {
-                          console.log('✅ Logo carregado com sucesso:', getHotelLogo(userData.hotelName))
                         }}
                       />
                     </div>
@@ -263,10 +256,10 @@ export default function Header({ children }: { children?: ReactNode }) {
                 
                 <DropdownMenuItem className="text-sm p-4 cursor-default rounded-lg mb-2">
                   <div className="flex items-center gap-4 w-full">
-                    {userData.role !== 'admin' && getHotelLogo(userData.hotelName) ? (
+                    {hotelLogo ? (
                       <div className="w-16 h-12 rounded-lg overflow-hidden shadow-md flex items-center justify-center bg-white">
                         <Image 
-                          src={getHotelLogo(userData.hotelName)!} 
+                          src={hotelLogo} 
                           alt={`Logo ${userData.hotelName}`}
                           width={64}
                           height={48}

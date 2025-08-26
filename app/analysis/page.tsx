@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSlideUpCounter, useSlideUpDecimal } from "@/hooks/use-slide-up-counter"
 import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
@@ -389,6 +390,62 @@ const scrollbarStyles = `
       background: linear-gradient(90deg, #dcfce7, #f3f4f6) !important;
     }
   }
+
+  /* Animação de slide up para números */
+  .number-slide-enter {
+    animation: slideUpNumber 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+
+  @keyframes slideUpNumber {
+    0% {
+      transform: translateY(100%) scale(0.8);
+      opacity: 0;
+    }
+    30% {
+      transform: translateY(20%) scale(0.9);
+      opacity: 0.3;
+    }
+    60% {
+      transform: translateY(-5%) scale(1.02);
+      opacity: 0.8;
+    }
+    100% {
+      transform: translateY(0%) scale(1);
+      opacity: 1;
+    }
+  }
+
+  .number-container {
+    perspective: 1000px;
+  }
+
+  .number-digit {
+    display: inline-block;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .number-digit.animating {
+    animation: digitBounce 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  }
+
+  @keyframes digitBounce {
+    0% {
+      transform: translateY(30px) scale(0.7);
+      opacity: 0;
+    }
+    40% {
+      transform: translateY(10px) scale(0.9);
+      opacity: 0.5;
+    }
+    70% {
+      transform: translateY(-3px) scale(1.05);
+      opacity: 0.9;
+    }
+    100% {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+  }
 `;
 
 // Mapa de cores para sentimentos
@@ -566,36 +623,83 @@ const StatsCard = ({ icon: Icon, title, value, change, color, gradient }: {
   change?: { value: number; positive: boolean };
   color: string;
   gradient: string;
-}) => (
-  <Card className="relative overflow-hidden bg-white/80 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
-    <div className={cn("absolute inset-0 opacity-5", gradient)} />
-    <div className="relative p-6">
-      <div className="flex items-start justify-between mb-4">
-        <div className={cn("p-3 rounded-xl shadow-lg", gradient)}>
-          <Icon className="h-6 w-6 text-white" />
-        </div>
-        {change && (
-          <div className={cn(
-            "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold",
-            change.positive 
-              ? "bg-green-100 text-green-700 border border-green-200" 
-              : "bg-red-100 text-red-700 border border-red-200"
-          )}>
-            {change.positive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-            <span>{Math.abs(change.value)}%</span>
+}) => {
+  // Determina se o valor é numérico ou string (como média com decimal)
+  const isNumeric = typeof value === 'number'
+  const isDecimal = typeof value === 'string' && value.includes('.')
+  
+  // Usa animação de slide up baseada no tipo de valor
+  const numericResult = isNumeric 
+    ? useSlideUpCounter(value as number, { duration: 400, delay: 0 })
+    : null
+    
+  const decimalResult = isDecimal 
+    ? useSlideUpDecimal(parseFloat(value as string), 1, { duration: 400, delay: 0 })
+    : null
+
+  const animatedValue = isNumeric 
+    ? numericResult?.value
+    : isDecimal 
+      ? decimalResult?.value
+      : value
+      
+  const isAnimating = isNumeric 
+    ? numericResult?.isAnimating
+    : isDecimal 
+      ? decimalResult?.isAnimating
+      : false
+
+  return (
+    <Card className="relative overflow-hidden bg-white/80 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
+      <div className={cn("absolute inset-0 opacity-5", gradient)} />
+      <div className="relative p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className={cn("p-3 rounded-xl shadow-lg", gradient)}>
+            <Icon className="h-6 w-6 text-white" />
           </div>
-        )}
+          {change && (
+            <div className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold",
+              change.positive 
+                ? "bg-green-100 text-green-700 border border-green-200" 
+                : "bg-red-100 text-red-700 border border-red-200"
+            )}>
+              {change.positive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+              <span>{Math.abs(change.value)}%</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">{title}</p>
+          <div className="relative overflow-hidden h-12 flex items-end number-container">
+            <p className={cn(
+              "text-3xl font-bold text-gray-900 leading-none tabular-nums",
+              isAnimating ? "number-slide-enter" : ""
+            )}>
+              {String(animatedValue).split('').map((digit, index) => (
+                <span 
+                  key={`digit-${index}-${Date.now()}`}
+                  className={cn(
+                    "number-digit",
+                    isAnimating ? "animating" : ""
+                  )}
+                  style={{
+                    animationDelay: `${index * 150}ms`
+                  }}
+                >
+                  {digit}
+                </span>
+              ))}
+            </p>
+          </div>
+        </div>
+        
+        <div className={cn("absolute bottom-0 left-0 right-0 h-1", gradient)} />
       </div>
-      
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">{title}</p>
-        <p className="text-3xl font-bold text-gray-900 leading-none">{value}</p>
-      </div>
-      
-      <div className={cn("absolute bottom-0 left-0 right-0 h-1", gradient)} />
-    </div>
-  </Card>
-);
+    </Card>
+  )
+};
 
 // Componente para Modal de Comentário Completo
 const CommentModal = ({ 
@@ -2226,14 +2330,13 @@ function AnalysisPageContent() {
     setFilteredFeedbacks(filtered)
   }, [feedbacks, sentimentFilter, sectorFilter, keywordFilter, problemFilter, importFilter, dateRange, searchTerm])
 
-  // Calcular estatísticas (excluindo feedbacks deletados)
-  const activeFeedbacks = feedbacks.filter(f => !f.deleted)
+  // Calcular estatísticas baseadas nos feedbacks filtrados
   const stats = {
-    total: activeFeedbacks.length,
-    positive: activeFeedbacks.filter(f => f.sentiment === 'positive').length,
-    negative: activeFeedbacks.filter(f => f.sentiment === 'negative').length,
-    neutral: activeFeedbacks.filter(f => f.sentiment === 'neutral').length,
-    averageRating: activeFeedbacks.length > 0 ? (activeFeedbacks.reduce((acc, f) => acc + f.rating, 0) / activeFeedbacks.length).toFixed(1) : '0'
+    total: filteredFeedbacks.length,
+    positive: filteredFeedbacks.filter(f => f.sentiment === 'positive').length,
+    negative: filteredFeedbacks.filter(f => f.sentiment === 'negative').length,
+    neutral: filteredFeedbacks.filter(f => f.sentiment === 'neutral').length,
+    averageRating: filteredFeedbacks.length > 0 ? (filteredFeedbacks.reduce((acc, f) => acc + f.rating, 0) / filteredFeedbacks.length).toFixed(1) : '0'
   }
 
   // Obter listas únicas para filtros
