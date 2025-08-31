@@ -1,0 +1,310 @@
+import { db } from './firebase';
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  arrayUnion, 
+  Timestamp 
+} from 'firebase/firestore';
+
+// Interface para as listas dinâmicas
+interface DynamicLists {
+  keywords: string[];
+  problems: string[];
+  departments: string[];
+  lastUpdated: Timestamp;
+}
+
+// Listas padrão que sempre estarão disponíveis
+const DEFAULT_KEYWORDS = [
+  'A&B - Café da manhã',
+  'A&B - Serviço',
+  'A&B - Variedade',
+  'A&B - Preço',
+  'Limpeza - Quarto',
+  'Limpeza - Banheiro',
+  'Limpeza - Áreas sociais',
+  'Enxoval',
+  'Manutenção - Quarto',
+  'Manutenção - Banheiro',
+  'Manutenção - Instalações',
+  'Ar-condicionado',
+  'Elevador',
+  'Frigobar',
+  'Infraestrutura',
+  'Lazer - Variedade',
+  'Lazer - Estrutura',
+  'Spa',
+  'Piscina',
+  'Tecnologia - Wi-fi',
+  'Tecnologia - TV',
+  'Comodidade',
+  'Estacionamento',
+  'Atendimento',
+  'Acessibilidade',
+  'Reserva de cadeiras (pool)',
+  'Processo',
+  'Custo-benefício',
+  'Comunicação',
+  'Check-in - Atendimento',
+  'Check-out - Atendimento',
+  'Concierge',
+  'Cotas',
+  'Reservas'
+];
+
+const DEFAULT_PROBLEMS = [
+  'VAZIO',
+  'Demora no Atendimento',
+  'Falta de Limpeza',
+  'Capacidade Insuficiente',
+  'Falta de Cadeiras',
+  'Não Funciona',
+  'Conexão Instável',
+  'Ruído Excessivo',
+  'Espaço Insuficiente',
+  'Qualidade da Comida',
+  'Muito Frio',
+  'Muito Quente',
+  'Pressão de Vendas',
+  'Check-in Lento',
+  'Check-out Lento'
+];
+
+const DEFAULT_DEPARTMENTS = [
+  'A&B',
+  'Governança', 
+  'Manutenção',
+  'Manutenção - Quarto',
+  'Manutenção - Banheiro', 
+  'Manutenção - Instalações',
+  'Lazer',
+  'TI',
+  'Operações',
+  'Produto',
+  'Marketing',
+  'Comercial',
+  'Qualidade',
+  'Recepção',
+  'Programa de vendas'
+];
+
+// Nome da coleção no Firebase
+const DYNAMIC_LISTS_COLLECTION = 'dynamic-lists';
+const GLOBAL_LISTS_DOC = 'global-lists';
+
+/**
+ * Busca as listas dinâmicas do Firebase
+ * Se não existirem, cria com os valores padrão
+ */
+export const getDynamicLists = async (): Promise<DynamicLists> => {
+  try {
+    const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data() as DynamicLists;
+      
+      // Garantir que as listas padrão estejam sempre incluídas
+      const keywordSet = new Set([...DEFAULT_KEYWORDS, ...(data.keywords || [])]);
+      const problemSet = new Set([...DEFAULT_PROBLEMS, ...(data.problems || [])]);
+      const departmentSet = new Set([...DEFAULT_DEPARTMENTS, ...(data.departments || [])]);
+      
+      const mergedKeywords = Array.from(keywordSet);
+      const mergedProblems = Array.from(problemSet);
+      const mergedDepartments = Array.from(departmentSet);
+      
+      return {
+        keywords: mergedKeywords.sort(),
+        problems: mergedProblems.sort(),
+        departments: mergedDepartments.sort(),
+        lastUpdated: data.lastUpdated || Timestamp.now()
+      };
+    } else {
+      // Criar documento inicial com listas padrão
+      const initialData: DynamicLists = {
+        keywords: DEFAULT_KEYWORDS.sort(),
+        problems: DEFAULT_PROBLEMS.sort(),
+        departments: DEFAULT_DEPARTMENTS.sort(),
+        lastUpdated: Timestamp.now()
+      };
+      
+      await setDoc(docRef, initialData);
+      return initialData;
+    }
+  } catch (error) {
+    console.error('Erro ao buscar listas dinâmicas:', error);
+    // Retornar listas padrão em caso de erro
+    return {
+      keywords: DEFAULT_KEYWORDS.sort(),
+      problems: DEFAULT_PROBLEMS.sort(),
+      departments: DEFAULT_DEPARTMENTS.sort(),
+      lastUpdated: Timestamp.now()
+    };
+  }
+};
+
+/**
+ * Adiciona uma nova palavra-chave à lista global
+ */
+export const addKeyword = async (keyword: string): Promise<boolean> => {
+  try {
+    const trimmedKeyword = keyword.trim();
+    if (!trimmedKeyword) {
+      throw new Error('Palavra-chave não pode estar vazia');
+    }
+    
+    const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
+    
+    // Verificar se já existe
+    const currentLists = await getDynamicLists();
+    if (currentLists.keywords.includes(trimmedKeyword)) {
+      return true; // Já existe, não precisa adicionar
+    }
+    
+    // Adicionar à lista
+    await updateDoc(docRef, {
+      keywords: arrayUnion(trimmedKeyword),
+      lastUpdated: Timestamp.now()
+    });
+    
+    console.log('✅ Palavra-chave adicionada:', trimmedKeyword);
+    return true;
+  } catch (error) {
+    console.error('Erro ao adicionar palavra-chave:', error);
+    return false;
+  }
+};
+
+/**
+ * Adiciona um novo problema à lista global
+ */
+export const addProblem = async (problem: string): Promise<boolean> => {
+  try {
+    const trimmedProblem = problem.trim();
+    if (!trimmedProblem) {
+      throw new Error('Problema não pode estar vazio');
+    }
+    
+    const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
+    
+    // Verificar se já existe
+    const currentLists = await getDynamicLists();
+    if (currentLists.problems.includes(trimmedProblem)) {
+      return true; // Já existe, não precisa adicionar
+    }
+    
+    // Adicionar à lista
+    await updateDoc(docRef, {
+      problems: arrayUnion(trimmedProblem),
+      lastUpdated: Timestamp.now()
+    });
+    
+    console.log('✅ Problema adicionado:', trimmedProblem);
+    return true;
+  } catch (error) {
+    console.error('Erro ao adicionar problema:', error);
+    return false;
+  }
+};
+
+/**
+ * Adiciona um novo departamento à lista global
+ */
+export const addDepartment = async (department: string): Promise<boolean> => {
+  try {
+    const trimmedDepartment = department.trim();
+    if (!trimmedDepartment) {
+      throw new Error('Departamento não pode estar vazio');
+    }
+    
+    const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
+    
+    // Verificar se já existe
+    const currentLists = await getDynamicLists();
+    if (currentLists.departments.includes(trimmedDepartment)) {
+      return true; // Já existe, não precisa adicionar
+    }
+    
+    // Adicionar à lista
+    await updateDoc(docRef, {
+      departments: arrayUnion(trimmedDepartment),
+      lastUpdated: Timestamp.now()
+    });
+    
+    console.log('✅ Departamento adicionado:', trimmedDepartment);
+    return true;
+  } catch (error) {
+    console.error('Erro ao adicionar departamento:', error);
+    return false;
+  }
+};
+
+/**
+ * Hook personalizado para gerenciar listas dinâmicas
+ */
+export const useDynamicLists = () => {
+  const [lists, setLists] = React.useState<DynamicLists | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  
+  React.useEffect(() => {
+    const loadLists = async () => {
+      try {
+        const dynamicLists = await getDynamicLists();
+        setLists(dynamicLists);
+      } catch (error) {
+        console.error('Erro ao carregar listas dinâmicas:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadLists();
+  }, []);
+  
+  const refreshLists = async () => {
+    setLoading(true);
+    try {
+      const dynamicLists = await getDynamicLists();
+      setLists(dynamicLists);
+    } catch (error) {
+      console.error('Erro ao atualizar listas dinâmicas:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return {
+    lists,
+    loading,
+    refreshLists,
+    addKeyword: async (keyword: string) => {
+      const success = await addKeyword(keyword);
+      if (success) {
+        await refreshLists();
+      }
+      return success;
+    },
+    addProblem: async (problem: string) => {
+      const success = await addProblem(problem);
+      if (success) {
+        await refreshLists();
+      }
+      return success;
+    },
+    addDepartment: async (department: string) => {
+      const success = await addDepartment(department);
+      if (success) {
+        await refreshLists();
+      }
+      return success;
+    }
+  };
+};
+
+// Importar React para o hook
+import React from 'react';
+
+export type { DynamicLists };
