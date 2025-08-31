@@ -61,6 +61,7 @@ import { filterValidFeedbacks, isValidProblem, isValidSectorOrKeyword } from "@/
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import type { DateRange } from "react-day-picker"
+import { EnhancedProblemEditor } from "@/components/enhanced-problem-editor"
 
 // Estilos para scrollbars SEMPRE visíveis e header fixo
 const scrollbarStyles = `
@@ -721,7 +722,7 @@ const CommentModal = ({
 }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
-  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])
+  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])  
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -733,6 +734,8 @@ const CommentModal = ({
     source: '',
     apartamento: ''
   })
+  // Estado unificado para edição de metadados e análise
+  const [isEditingUnified, setIsEditingUnified] = useState(false)
   
   // Usar o feedback correto baseado no currentIndex
   const currentFeedback = allFeedbacks.length > 0 && allFeedbacks[currentIndex] ? allFeedbacks[currentIndex] : feedback
@@ -864,6 +867,154 @@ const CommentModal = ({
       source: currentFeedback.source || '',
       apartamento: currentFeedback.apartamento || ''
     })
+  }
+
+  // Funções unificadas para edição de metadados e análise
+  const handleStartEditUnified = () => {
+    setIsEditingUnified(true)
+    setIsEditing(true)
+    setIsEditingMetadata(true)
+    
+    // Inicializar metadados editados com valores originais
+    setEditedMetadata({
+      sentiment: currentFeedback.sentiment || '',
+      rating: currentFeedback.rating || 0,
+      language: currentFeedback.language || '',
+      source: currentFeedback.source || '',
+      apartamento: currentFeedback.apartamento || ''
+    })
+  }
+
+  const handleCancelEditUnified = () => {
+    setIsEditingUnified(false)
+    setIsEditing(false)
+    setIsEditingMetadata(false)
+    
+    // Resetar metadados para os valores originais
+    setEditedMetadata({
+      sentiment: currentFeedback.sentiment || '',
+      rating: currentFeedback.rating || 0,
+      language: currentFeedback.language || '',
+      source: currentFeedback.source || '',
+      apartamento: currentFeedback.apartamento || ''
+    })
+    
+    // Resetar problemas para os valores originais
+    if (currentFeedback.allProblems && currentFeedback.allProblems.length > 0) {
+      setEditedProblems(currentFeedback.allProblems.map((problem, index) => ({
+        id: `problem-${Date.now()}-${index}`,
+        ...problem
+      })))
+    }
+  }
+
+  const handleSaveUnified = async () => {
+    setIsSaving(true)
+    
+    try {
+      // Converter problemas editados para string
+      const keywords = editedProblems.map(p => p.keyword).join(', ')
+      const sectors = editedProblems.map(p => p.sector).join(', ')
+      const problems = editedProblems.map(p => p.problem).join(', ')
+      
+      // Criar feedback atualizado com metadados e análise
+      const updatedFeedback = {
+        ...currentFeedback,
+        keyword: keywords,
+        sector: sectors,
+        problem: problems,
+        allProblems: editedProblems,
+        sentiment: editedMetadata.sentiment,
+        rating: editedMetadata.rating,
+        language: editedMetadata.language,
+        source: editedMetadata.source,
+        apartamento: editedMetadata.apartamento
+      }
+      
+      // Atualizar localStorage se for do hotel atual
+      const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
+      if (storedFeedbacks) {
+        const storedHotelId = localStorage.getItem('current-hotel-id')
+        if (storedHotelId === userData?.hotelId) {
+          const feedbacks = JSON.parse(storedFeedbacks)
+          const updatedFeedbacks = feedbacks.map((f: Feedback) => 
+            f.id === currentFeedback.id ? updatedFeedback : f
+          )
+          localStorage.setItem('analysis-feedbacks', JSON.stringify(updatedFeedbacks))
+        }
+      }
+      
+      // Salvar no Firebase
+      await updateFeedbackInFirestore(currentFeedback.id, updatedFeedback)
+      
+      // Salvar no histórico de edições (unificado - análise e metadados)
+      await saveRecentEdit({
+        feedbackId: currentFeedback.id,
+        hotelId: currentFeedback.hotelId || currentFeedback.id.split('_')[0] || 'unknown',
+        hotelName: userData?.hotelName || currentFeedback.hotel || 'Hotel não identificado',
+        comment: currentFeedback.comment,
+        rating: editedMetadata.rating,
+        date: currentFeedback.date,
+        source: editedMetadata.source || 'Sistema',
+        oldClassification: {
+          keyword: currentFeedback.keyword || '',
+          sector: currentFeedback.sector || '',
+          problem: currentFeedback.problem || ''
+        },
+        newClassification: {
+          keyword: keywords,
+          sector: sectors,
+          problem: problems
+        },
+        oldMetadata: {
+          rating: currentFeedback.rating,
+          sentiment: currentFeedback.sentiment,
+          source: currentFeedback.source,
+          language: currentFeedback.language,
+          apartamento: currentFeedback.apartamento || ''
+        },
+        newMetadata: {
+          rating: editedMetadata.rating,
+          sentiment: editedMetadata.sentiment,
+          source: editedMetadata.source,
+          language: editedMetadata.language,
+          apartamento: editedMetadata.apartamento
+        },
+        modifiedAt: new Date().toISOString(),
+        modifiedBy: userData?.email || 'Colaborador',
+        page: 'analysis-unified'
+      })
+      
+      // Resetar estados de edição
+      setIsEditingUnified(false)
+      setIsEditing(false)
+      setIsEditingMetadata(false)
+      
+      // Chamar callback para atualizar a lista principal
+      onFeedbackUpdated?.(updatedFeedback)
+      
+      toast({
+        title: "Dados Atualizados",
+        description: "Metadados e análise foram salvos com sucesso.",
+        duration: 2000,
+      })
+      
+      // Fechar modal após um pequeno delay para mostrar o toast
+      setTimeout(() => {
+        setIsOpen(false)
+      }, 1000)
+      
+    } catch (error) {
+      console.error('Erro ao salvar:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar as alterações.",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleSaveMetadata = async () => {
@@ -1180,22 +1331,44 @@ const CommentModal = ({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleStartEdit}
-                      className="flex items-center gap-1.5 text-xs bg-blue-50 hover:bg-blue-100 border-blue-200 hover:border-blue-300 text-blue-700 hover:text-blue-800 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:border-blue-400/30 dark:hover:border-blue-400/50 dark:text-blue-100 dark:hover:text-white transition-all duration-300"
+                      onClick={handleStartEditUnified}
+                      className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-blue-50 to-purple-50 hover:from-blue-100 hover:to-purple-100 border-blue-200 hover:border-purple-300 text-blue-700 hover:text-purple-800 dark:bg-gradient-to-r dark:from-blue-500/10 dark:to-purple-500/10 dark:hover:from-blue-500/20 dark:hover:to-purple-500/20 dark:border-blue-400/30 dark:hover:border-purple-400/50 dark:text-blue-100 dark:hover:text-purple-100 transition-all duration-300"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
-                      Editar Análise
+                      Editar Metadados/Análise
                     </Button>
+                  </>
+                ) : isEditingUnified ? (
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleStartEditMetadata}
-                      className="flex items-center gap-1.5 text-xs bg-purple-50 hover:bg-purple-100 border-purple-200 hover:border-purple-300 text-purple-700 hover:text-purple-800 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 dark:border-purple-400/30 dark:hover:border-purple-400/50 dark:text-purple-100 dark:hover:text-white transition-all duration-300"
+                      onClick={handleCancelEditUnified}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 text-xs bg-gray-50 hover:bg-gray-100 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-800 dark:bg-gray-500/10 dark:hover:bg-gray-500/20 dark:border-gray-400/30 dark:hover:border-gray-400/50 dark:text-gray-100 dark:hover:text-white transition-all duration-300"
                     >
-                      <Edit3 className="h-3.5 w-3.5" />
-                      Editar Metadados
+                      <Minus className="h-3.5 w-3.5" />
+                      Cancelar
                     </Button>
-                  </>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveUnified}
+                      disabled={isSaving}
+                      className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-md hover:shadow-lg transition-all duration-300 border-0"
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          Salvando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-3.5 w-3.5" />
+                          Salvar Tudo
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 ) : isEditingMetadata ? (
                   <div className="flex items-center gap-2">
                     <Button
@@ -1285,7 +1458,7 @@ const CommentModal = ({
               </div>
               <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avaliação</p>
-                {isEditingMetadata ? (
+                {(isEditingMetadata || isEditingUnified) ? (
                   <Select value={editedMetadata.rating?.toString()} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, rating: parseInt(value) }))}>
                     <SelectTrigger className="w-full h-8 text-sm">
                       <SelectValue />
@@ -1316,7 +1489,7 @@ const CommentModal = ({
               </div>
               <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sentimento</p>
-                {isEditingMetadata ? (
+                {(isEditingMetadata || isEditingUnified) ? (
                   <Select value={editedMetadata.sentiment} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, sentiment: value }))}>
                     <SelectTrigger className="w-full h-8 text-sm">
                       <SelectValue />
@@ -1393,7 +1566,7 @@ const CommentModal = ({
                   </div>
 
                   {editedProblems.map((problem, index) => (
-                    <ProblemEditor
+                    <EnhancedProblemEditor
                       key={problem.id}
                       problem={problem}
                       onUpdate={(updated) => handleUpdateProblem(problem.id, updated)}
@@ -1501,7 +1674,7 @@ const CommentModal = ({
               {currentFeedback.source && (
               <div>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fonte</p>
-                {isEditingMetadata ? (
+                {(isEditingMetadata || isEditingUnified) ? (
                   <Select value={editedMetadata.source} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, source: value }))}>
                     <SelectTrigger className="h-8 text-sm">
                       <SelectValue />
@@ -1524,7 +1697,7 @@ const CommentModal = ({
             {currentFeedback.language && (
               <div>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Idioma</p>
-                {isEditingMetadata ? (
+                {(isEditingMetadata || isEditingUnified) ? (
                   <Select value={editedMetadata.language} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, language: value }))}>
                     <SelectTrigger className="h-8 text-sm">
                       <SelectValue />
@@ -1547,7 +1720,7 @@ const CommentModal = ({
               {currentFeedback.apartamento && (
                  <div>
                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Apartamento</p>
-                   {isEditingMetadata ? (
+                   {(isEditingMetadata || isEditingUnified) ? (
                      <Input 
                        value={editedMetadata.apartamento} 
                        onChange={(e) => setEditedMetadata(prev => ({ ...prev, apartamento: e.target.value }))}

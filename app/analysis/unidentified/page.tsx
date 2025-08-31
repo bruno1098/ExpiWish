@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
+import { EnhancedProblemEditor } from "@/components/enhanced-problem-editor"
 
 // Estilos para scroll otimizado
 const scrollbarStyles = `
@@ -1039,7 +1040,7 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
                 </div>
 
                 {editedProblems.map((problem, index) => (
-                  <ProblemEditor
+                  <EnhancedProblemEditor
                     key={problem.id}
                     problem={problem}
                     onUpdate={(updated) => handleUpdateProblem(problem.id, updated)}
