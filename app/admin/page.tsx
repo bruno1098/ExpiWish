@@ -585,11 +585,15 @@ function AdminDashboardContent() {
           if (feedback.sector && typeof feedback.sector === 'string') {
             // Usar a mesma lógica de divisão por ';' que o processSectorDistribution
             const sectors = feedback.sector.split(';').map((s: string) => s.trim());
-            return sectors.includes(sectorLabel) && sectors.every((s: string) => s !== 'VAZIO');
+            // Normalizar cada setor e verificar se corresponde ao sectorLabel
+             const normalizedSectors = sectors.map((s: string) => normalizeDepartmentName(s));
+            return normalizedSectors.includes(sectorLabel) && sectors.every((s: string) => s !== 'VAZIO');
           }
           if (feedback.department && typeof feedback.department === 'string') {
             const departments = feedback.department.split(';').map((d: string) => d.trim());
-            return departments.includes(sectorLabel) && departments.every((d: string) => d !== 'VAZIO');
+            // Normalizar cada departamento e verificar se corresponde ao sectorLabel
+             const normalizedDepartments = departments.map((d: string) => normalizeDepartmentName(d));
+            return normalizedDepartments.includes(sectorLabel) && departments.every((d: string) => d !== 'VAZIO');
           }
           return false;
         });
@@ -916,6 +920,19 @@ function AdminDashboardContent() {
       .slice(0, 20);
   };
 
+  // Função para normalizar nomes de departamentos (unificar variações de manutenção)
+  const normalizeDepartmentName = (departmentName: string): string => {
+    const trimmed = departmentName.trim();
+    
+    // Verificar se contém "manutenção" (case-insensitive)
+    if (trimmed.toLowerCase().includes('manutenção') || 
+        trimmed.toLowerCase().includes('manutencao')) {
+      return 'Manutenção';
+    }
+    
+    return trimmed;
+  };
+
   const processSectorDistribution = (data?: any[]) => {
     // Usar dados fornecidos ou função centralizada para garantir consistência
     const dataToUse = data && data.length > 0 ? data : getCurrentData();
@@ -938,7 +955,9 @@ function AdminDashboardContent() {
           allSectors.forEach((sector: string) => {
             const trimmedSector = sector.trim();
             if (trimmedSector && trimmedSector !== 'VAZIO') {
-              sectorCounts[trimmedSector] = (sectorCounts[trimmedSector] || 0) + 1;
+              // Normalizar o nome do departamento para unificar variações de manutenção
+              const normalizedSector = normalizeDepartmentName(trimmedSector);
+              sectorCounts[normalizedSector] = (sectorCounts[normalizedSector] || 0) + 1;
             }
           });
         }
@@ -970,7 +989,9 @@ function AdminDashboardContent() {
             allSectors.forEach((sector: string) => {
               const trimmedSector = sector.trim();
               if (trimmedSector && trimmedSector !== 'VAZIO') {
-                departmentProblems[trimmedSector] = (departmentProblems[trimmedSector] || 0) + 1;
+                // Normalizar o nome do departamento para unificar variações de manutenção
+                const normalizedSector = normalizeDepartmentName(trimmedSector);
+                departmentProblems[normalizedSector] = (departmentProblems[normalizedSector] || 0) + 1;
               }
             });
           }
@@ -3060,7 +3081,9 @@ function AdminDashboardContent() {
                         const departmentProblems = (dataToUse || [])
                           .filter((item: any) => {
                             if (item.sector && typeof item.sector === 'string') {
-                              return item.sector.split(';').map((s: string) => s.trim()).includes(dept.label);
+                              const sectors = item.sector.split(';').map((s: string) => s.trim());
+                              const normalizedSectors = sectors.map((s: string) => normalizeDepartmentName(s));
+                              return normalizedSectors.includes(dept.label);
                             }
                             return false;
                           })
