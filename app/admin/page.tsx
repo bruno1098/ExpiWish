@@ -920,7 +920,7 @@ function AdminDashboardContent() {
       .slice(0, 20);
   };
 
-  // Função para normalizar nomes de departamentos (unificar variações de manutenção)
+  // Função para normalizar nomes de departamentos (unificar variações de manutenção e programa de vendas)
   const normalizeDepartmentName = (departmentName: string): string => {
     const trimmed = departmentName.trim();
     
@@ -928,6 +928,11 @@ function AdminDashboardContent() {
     if (trimmed.toLowerCase().includes('manutenção') || 
         trimmed.toLowerCase().includes('manutencao')) {
       return 'Manutenção';
+    }
+    
+    // Verificar se contém "programa de vendas" (case-insensitive)
+    if (trimmed.toLowerCase().includes('programa de vendas')) {
+      return 'EG';
     }
     
     return trimmed;
