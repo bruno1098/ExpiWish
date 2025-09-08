@@ -31,6 +31,7 @@ interface UnidentifiedFeedback {
 
 interface RecentEdit {
   id: string
+  feedbackId?: string // Novo campo para compatibilidade com a nova estrutura
   comment: string
   rating: number
   date: string
@@ -49,6 +50,7 @@ interface RecentEdit {
   }
   modifiedAt: string
   modifiedBy?: string
+  page?: string // Campo adicional presente na nova estrutura
 }
 
 interface HotelStats {
@@ -117,7 +119,7 @@ const KeywordBadge = ({ keyword, sector }: { keyword: string, sector: string }) 
   
   return (
     <Badge variant="outline" className={cn(
-      "text-sm px-3 py-1.5 rounded-full border font-semibold transition-all duration-200 hover:scale-105 hover:shadow-md cursor-default",
+      "text-xs border font-medium",
       colorClass
     )}>
       <span className="mr-1">🏷️</span>
@@ -140,6 +142,12 @@ export default function AdminUnidentifiedFeedbacks() {
   // Estados para feedbacks excluídos
   const [deletedFeedbacks, setDeletedFeedbacks] = useState<DeletedFeedback[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  
+  // Estados para edições recentes expandidas
+  const [allRecentEdits, setAllRecentEdits] = useState<RecentEdit[]>([])
+  const [showAllEdits, setShowAllEdits] = useState(false)
+  const [loadingAllEdits, setLoadingAllEdits] = useState(false)
+  
   const { toast } = useToast()
 
   // Função para verificar se um feedback ainda deve ser considerado não identificado
@@ -279,53 +287,43 @@ export default function AdminUnidentifiedFeedbacks() {
       // Carregar edições de todos os usuários do Firebase
       const edits = await getRecentEdits(7) // Últimos 7 dias
       
-      console.log('🔍 DEBUG - Edições carregadas:', edits.length)
-      console.log('🔍 DEBUG - Primeira edição:', edits[0])
-      console.log('🔍 DEBUG - hotelNames disponíveis:', hotelNames)
-      
       // Mapear com nomes dos hotéis - usar o nome que vem da edição se disponível
       const editsWithHotelNames = edits.map((edit: any) => {
         const hotelName = edit.hotelName || hotelNames[edit.hotelId] || `Hotel ${edit.hotelId}`
-        console.log(`🔍 DEBUG - Edição ${edit.id}: hotelId=${edit.hotelId}, hotelName=${hotelName}`)
         return {
           ...edit,
           hotelName: hotelName
         }
       })
       
-      setRecentEdits(editsWithHotelNames.slice(0, 10)) // Limitar a 10 itens
+      // Armazenar todas as edições
+      setAllRecentEdits(editsWithHotelNames)
+      // Manter apenas 10 para exibição inicial
+      setRecentEdits(editsWithHotelNames.slice(0, 10))
       
       // Atualizar estatísticas com contagem de edições
       setHotelStats(prev => prev.map(stat => {
         // Filtrar edições que correspondem a este hotel
         // Verificar tanto hotelId quanto possível mapeamento reverso
         const hotelEdits = editsWithHotelNames.filter(edit => {
-          console.log(`🔍 DEBUG - Filtrando edição: editHotelId=${edit.hotelId}, statHotelId=${stat.hotelId}, editHotelName=${edit.hotelName}, statHotelName=${stat.hotelName}`)
-          
           // Comparação direta de IDs
           if (edit.hotelId === stat.hotelId) {
-            console.log(`🔍 DEBUG - Match por ID direto`)
             return true
           }
           
           // Verificar se o nome do hotel corresponde
           if (edit.hotelName && edit.hotelName === stat.hotelName) {
-            console.log(`🔍 DEBUG - Match por nome do hotel`)
             return true
           }
           
           // Verificar mapeamento reverso nos nomes dos hotéis
           const mappedId = Object.keys(hotelNames).find(id => hotelNames[id] === edit.hotelName)
           if (mappedId === stat.hotelId) {
-            console.log(`🔍 DEBUG - Match por mapeamento reverso: mappedId=${mappedId}`)
             return true
           }
           
-          console.log(`🔍 DEBUG - Nenhum match encontrado`)
           return false
         })
-        
-        console.log(`🔍 DEBUG - Edições encontradas para hotel ${stat.hotelName}:`, hotelEdits.length)
         
         return {
           ...stat,
@@ -466,6 +464,89 @@ export default function AdminUnidentifiedFeedbacks() {
     })
   }
 
+  // Função para carregar todas as edições recentes (expandir lista)
+  const loadAllRecentEdits = async () => {
+    try {
+      setLoadingAllEdits(true)
+      // Carregar edições dos últimos 30 dias para ter mais dados
+      const edits = await getRecentEdits(30)
+      
+      const editsWithHotelNames = edits.map((edit: any) => {
+        const hotelName = edit.hotelName || hotelNames[edit.hotelId] || `Hotel ${edit.hotelId}`
+        return {
+          ...edit,
+          hotelName: hotelName
+        }
+      })
+      
+      // Atualizar ambos os estados
+      setAllRecentEdits(editsWithHotelNames)
+      setRecentEdits(editsWithHotelNames) // Mostrar todas
+      setShowAllEdits(true)
+      
+      toast({
+        title: "Lista Expandida",
+        description: `${editsWithHotelNames.length} edições carregadas dos últimos 30 dias`,
+      })
+    } catch (error) {
+      console.error('Erro ao carregar todas as edições:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar todas as edições",
+        variant: "destructive"
+      })
+    } finally {
+      setLoadingAllEdits(false)
+    }
+  }
+
+  // Função para voltar à visualização limitada
+  const showLimitedEdits = () => {
+    setRecentEdits(allRecentEdits.slice(0, 10))
+    setShowAllEdits(false)
+  }
+
+  // Função para exportar edições recentes em JSON
+  const exportRecentEdits = () => {
+    const editsToExport = filteredRecentEdits.map(edit => ({
+      id: edit.id,
+      comentario: edit.comment,
+      avaliacao: edit.rating,
+      data_feedback: edit.date,
+      fonte: edit.source,
+      hotel: {
+        id: edit.hotelId,
+        nome: edit.hotelName
+      },
+      classificacao_anterior: {
+        setor: edit.oldClassification.sector,
+        palavra_chave: edit.oldClassification.keyword,
+        problema: edit.oldClassification.problem
+      },
+      nova_classificacao: {
+        setor: edit.newClassification.sector,
+        palavra_chave: edit.newClassification.keyword,
+        problema: edit.newClassification.problem
+      },
+      modificado_em: edit.modifiedAt,
+      modificado_por: edit.modifiedBy
+    }))
+    
+    const dataStr = JSON.stringify(editsToExport, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `edicoes-recentes-${new Date().toISOString().split('T')[0]}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+
+    toast({
+      title: "Exportação Concluída",
+      description: `${editsToExport.length} edições exportadas com sucesso`,
+    })
+  }
+
   const filteredHotels = selectedHotel === 'all' 
     ? Object.keys(unidentifiedByHotel) 
     : [selectedHotel]
@@ -535,22 +616,38 @@ export default function AdminUnidentifiedFeedbacks() {
   const totalHotels = filteredHotels.length
   
   // Calcular edições recentes filtradas
-  const filteredRecentEdits = selectedHotel === 'all' 
+  const allFilteredRecentEdits = selectedHotel === 'all' 
     ? recentEdits 
     : recentEdits.filter(edit => {
-        // Comparação mais robusta de IDs de hotéis
+        // Comparação mais robusta de IDs de hotéis - compatível com nova estrutura
         const editHotelId = String(edit.hotelId || '').trim()
         const selectedHotelId = String(selectedHotel || '').trim()
         
         // Comparação direta
         if (editHotelId === selectedHotelId) return true
         
+        // Verificar correspondência parcial (para compatibilidade com mudanças de estrutura)
+        if (editHotelId && selectedHotelId && 
+            (editHotelId.includes(selectedHotelId) || selectedHotelId.includes(editHotelId))) {
+          return true
+        }
+        
         // Verificar se o nome do hotel corresponde
         const selectedHotelName = hotelStats.find(h => h.hotelId === selectedHotel)?.hotelName
         if (selectedHotelName && edit.hotelName === selectedHotelName) return true
         
+        // Verificar pelo feedbackId se disponível (nova estrutura)
+        if (edit.feedbackId && selectedHotelId && edit.feedbackId.includes(selectedHotelId)) {
+          return true
+        }
+        
         return false
       })
+  
+  // Limitar exibição baseado no estado showAllEdits
+  const filteredRecentEdits = showAllEdits 
+    ? allFilteredRecentEdits 
+    : allFilteredRecentEdits.slice(0, 10)
   
   // Calcular feedbacks excluídos filtrados por hotel (sem considerar termo de busca)
   const filteredDeletedFeedbacksCount = selectedHotel === 'all'
@@ -758,9 +855,76 @@ export default function AdminUnidentifiedFeedbacks() {
         </TabsContent>
 
         <TabsContent value="recent-edits" className="space-y-4">
+          {/* Header da seção de edições recentes */}
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Edit3 className="h-5 w-5 text-green-500" />
+                Edições Recentes
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                {showAllEdits 
+                  ? `Mostrando todas as ${filteredRecentEdits.length} edições dos últimos 30 dias${selectedHotel !== 'all' ? ' (filtradas por hotel)' : ''}`
+                  : `Mostrando ${filteredRecentEdits.length} de ${allFilteredRecentEdits.length} edições mais recentes${selectedHotel !== 'all' ? ' (filtradas por hotel)' : ''}`
+                }
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={exportRecentEdits}
+                variant="outline"
+                className="flex items-center gap-2"
+                disabled={filteredRecentEdits.length === 0}
+              >
+                <Download className="h-4 w-4" />
+                Exportar JSON
+              </Button>
+              
+              {!showAllEdits ? (
+                <Button
+                  onClick={loadAllRecentEdits}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  disabled={loadingAllEdits}
+                >
+                  {loadingAllEdits ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500"></div>
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                  {loadingAllEdits ? 'Carregando...' : `Ver Todas (${allRecentEdits.length > 0 ? allRecentEdits.length : 'carregar'})`}
+                </Button>
+              ) : (
+                <Button
+                  onClick={showLimitedEdits}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Mostrar Menos
+                </Button>
+              )}
+              
+              <Button
+                onClick={loadRecentEdits}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Atualizar
+              </Button>
+            </div>
+          </div>
+
           {filteredRecentEdits.length > 0 ? (
             <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Histórico de Correções</h3>
+              <div className="mb-4 flex items-center justify-between">
+                <h4 className="text-lg font-semibold">Histórico de Correções</h4>
+                <Badge variant="outline" className="bg-blue-50 text-blue-600">
+                  {filteredRecentEdits.length} edições
+                </Badge>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -809,29 +973,29 @@ export default function AdminUnidentifiedFeedbacks() {
                       </TableCell>
                       
                       <TableCell>
-                        <div className="space-y-1">
+                        <div className="flex flex-wrap gap-1">
                           <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">
                             {edit.oldClassification.sector}
                           </Badge>
-                          <br />
                           <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">
                             {edit.oldClassification.keyword}
                           </Badge>
-                          <br />
                           <Badge variant="secondary" className="text-xs bg-red-50 text-red-600">
-                            {edit.oldClassification.problem || 'Não identificado'}
+                            {edit.oldClassification.problem === 'VAZIO' ? (
+                              <span className="italic text-gray-500">Sem problemas</span>
+                            ) : (
+                              edit.oldClassification.problem || 'Não identificado'
+                            )}
                           </Badge>
                         </div>
                       </TableCell>
                       
                       <TableCell>
-                        <div className="space-y-1">
+                        <div className="flex flex-wrap gap-1">
                           <Badge variant="outline" className={cn("text-xs border font-medium", getSectorColor(edit.newClassification.sector))}>
                             {edit.newClassification.sector}
                           </Badge>
-                          <br />
                           <KeywordBadge keyword={edit.newClassification.keyword} sector={edit.newClassification.sector} />
-                          <br />
                           <Badge variant="secondary" className="text-xs">
                             {edit.newClassification.problem === 'VAZIO' ? (
                               <span className="italic text-gray-500">Sem problemas</span>
