@@ -200,11 +200,19 @@ export const CommentsDialog: React.FC<CommentsDialogProps> = ({
                       <p className="text-sm font-medium">Problemas identificados:</p>
                       <div className="flex flex-wrap gap-2 mt-1">
                         {feedback.problem.split(";").map((problem: string, idx: number) => (
-                          <Badge key={idx} variant="outline" className={idx === 0 ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-300 dark:border-red-800" : idx === 1 ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-800" : "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-800"}>
+                          <Badge
+                            key={idx}
+                            variant="outline"
+                            className={idx === 0 ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border-red-300 dark:border-red-800" : idx === 1 ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-800" : "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-800"}
+                            title={idx === 0 && feedback.problem_detail ? feedback.problem_detail : problem.trim()}
+                          >
                             {problem.trim()}
                           </Badge>
                         ))}
                       </div>
+                      {feedback.problem_detail && (
+                        <p className="text-xs text-muted-foreground mt-1">{feedback.problem_detail}</p>
+                      )}
                     </div>
                   )}
                   {feedback.apartamento && (

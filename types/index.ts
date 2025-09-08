@@ -3,7 +3,12 @@ export interface AnalysisResult {
   keyword: string;
   sector: string;
   problem: string;
+  problem_detail?: string; // detalhe textual curto do problema
   allProblems?: ProblemAnalysis[];
+  // Flags de sugestão (análise automática)
+  has_suggestion?: boolean; // há alguma sugestão no comentário
+  suggestion_type?: 'only' | 'mixed' | 'none'; // apenas sugestão | mistura | nenhuma
+  suggestion_summary?: string; // resumo curto da sugestão, quando aplicável
 }
 
 export interface ProblemAnalysis {
@@ -11,6 +16,7 @@ export interface ProblemAnalysis {
   keyword: string;
   sector: string;
   problem: string;
+  problem_detail?: string; // detalhe textual opcional
 }
 
 export type Feedback = {
@@ -22,6 +28,7 @@ export type Feedback = {
   keyword: string
   sector: string
   problem: string
+  problem_detail?: string
   hotel: string
   hotelName?: string
   source: string
@@ -36,6 +43,10 @@ export type Feedback = {
   deleted?: boolean // Campo para marcar feedbacks excluídos
   edited?: boolean // Campo para marcar feedbacks editados
   importId?: string // ID da importação/análise
+  // Flags de sugestão (persistidas junto ao feedback)
+  has_suggestion?: boolean
+  suggestion_type?: 'only' | 'mixed' | 'none'
+  suggestion_summary?: string
 }
 
 import { User as FirebaseUser } from "firebase/auth";

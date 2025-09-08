@@ -21,6 +21,7 @@ import {
   addDepartment,
   type DynamicLists 
 } from '@/lib/dynamic-lists-service';
+import { Textarea } from '@/components/ui/textarea'
 
 // Cores para departamentos
 const getSectorColor = (sector: string) => {
@@ -54,11 +55,17 @@ interface ProblemData {
   keyword: string;
   sector: string;
   problem: string;
+  problem_detail?: string; // detalhe opcional do problema
 }
 
 interface EnhancedProblemEditorProps {
   problem: ProblemData;
-  onUpdate: (updated: { keyword: string; sector: string; problem: string }) => void;
+  onUpdate: (updated: {
+    keyword: string;
+    sector: string;
+    problem: string;
+    problem_detail?: string; // incluir detalhe opcional
+  }) => void;
   onRemove?: () => void;
   canRemove?: boolean;
 }
@@ -75,6 +82,7 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
   const [keyword, setKeyword] = useState(problem.keyword);
   const [sector, setSector] = useState(problem.sector);
   const [problemText, setProblemText] = useState(problem.problem);
+  const [problemDetail, setProblemDetail] = useState(problem.problem_detail || '')
   
   // Estados para listas dinâmicas
   const [dynamicLists, setDynamicLists] = useState<DynamicLists | null>(null);
@@ -121,10 +129,13 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
     loadDynamicLists();
   }, [toast]);
 
+  // Definir commonProblems baseado nas listas dinâmicas
+  const commonProblems = dynamicLists?.problems || [];
+
   // Notificar mudanças para o componente pai
   useEffect(() => {
-    onUpdate({ keyword, sector, problem: problemText });
-  }, [keyword, sector, problemText]);
+    onUpdate({ keyword, sector, problem: problemText, problem_detail: problemDetail })
+  }, [keyword, sector, problemText, problemDetail, onUpdate])
 
   // Função para mostrar feedback visual de sucesso
   const showSuccessFeedback = useCallback((type: 'keyword' | 'problem' | 'department') => {
@@ -218,6 +229,14 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
       setProblemInput(problemText || '');
     }
     setProblemInputMode(!problemInputMode);
+  };
+
+  // NOVO: handler para mudança via Select de problema
+  const handleProblemChange = (value: string) => {
+    setProblemText(value);
+    if (value !== 'VAZIO') {
+      setProblemInputMode(false);
+    }
   };
 
   const handleProblemInputSave = async () => {
@@ -638,37 +657,12 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Select value={problemText} onValueChange={setProblemText}>
-                <SelectTrigger className={cn(
-                  "h-9",
-                  problemJustSaved 
-                    ? "bg-green-100 dark:bg-green-950/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200 shadow-md ring-2 ring-green-200 dark:ring-green-800" 
-                    : dynamicLists && !dynamicLists.problems.includes(problemText) && problemText
-                    ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
-                    : ""
-                )}>
-                  <div className="flex items-center justify-between w-full">
-                    <span>
-                      {problemText === 'VAZIO' ? (
-                        <span className="italic text-gray-500">Sem problemas</span>
-                      ) : (
-                        problemText || "Selecione problema"
-                      )}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {problemJustSaved && (
-                        <Check className="w-4 h-4 text-green-600 dark:text-green-400 animate-pulse" />
-                      )}
-                      {dynamicLists && !dynamicLists.problems.includes(problemText) && problemText && (
-                        <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                          Personalizado
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
+              <Select value={problemText} onValueChange={handleProblemChange}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Selecione problema" />
                 </SelectTrigger>
                 <SelectContent>
-                  {dynamicLists?.problems.map((prob) => (
+                  {commonProblems.map((prob) => (
                     <SelectItem key={prob} value={prob}>
                       {prob === 'VAZIO' ? (
                         <span className="italic text-gray-500">Sem problemas</span>
@@ -683,13 +677,23 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                 variant="ghost" 
                 size="sm" 
                 onClick={handleProblemInputModeToggle}
-                className="text-xs text-green-600 hover:text-green-800 p-0 h-auto"
+                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
               >
                 <div className="flex items-center gap-1">
                   <Plus className="w-3 h-3" />
                   Personalizar
                 </div>
               </Button>
+              <div className="space-y-1">
+                <label className="text-xs text-gray-600 dark:text-gray-400">Detalhe do Problema (opcional)</label>
+                <Textarea
+                  value={problemDetail}
+                  onChange={(e) => setProblemDetail(e.target.value)}
+                  placeholder="Descreva detalhes adicionais do problema"
+                  className="text-sm"
+                  rows={3}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -713,6 +717,9 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
               problemText
             )}
           </Badge>
+          {problemDetail && (
+            <span className="text-xs text-muted-foreground">• {problemDetail}</span>
+          )}
         </div>
       </div>
     </div>

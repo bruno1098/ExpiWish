@@ -744,13 +744,38 @@ export const getRecentEdits = async (limitDays: number = 7, hotelId?: string) =>
         ...doc.data()
       }))
       .filter((edit: any) => {
+        // Verificar se o documento tem os campos necessários
+        if (!edit.modifiedAt) {
+          return false
+        }
+        
         // Filtrar pelos últimos X dias
         const editDate = new Date(edit.modifiedAt)
         const isWithinDateRange = editDate >= pastDate
         
         // Se hotelId foi fornecido, filtrar também por hotel
         if (hotelId) {
-          return isWithinDateRange && edit.hotelId === hotelId
+          // Comparação mais robusta de hotelId - compatível com nova estrutura
+          const editHotelId = String(edit.hotelId || '').trim()
+          const targetHotelId = String(hotelId || '').trim()
+          
+          // Verificar correspondência direta
+          if (editHotelId === targetHotelId) {
+            return isWithinDateRange
+          }
+          
+          // Verificar correspondência parcial (para compatibilidade)
+          if (editHotelId && targetHotelId && 
+              (editHotelId.includes(targetHotelId) || targetHotelId.includes(editHotelId))) {
+            return isWithinDateRange
+          }
+          
+          // Verificar pelo feedbackId se disponível (nova estrutura)
+          if (edit.feedbackId && edit.feedbackId.includes(targetHotelId)) {
+            return isWithinDateRange
+          }
+          
+          return false
         }
         
         return isWithinDateRange
@@ -916,6 +941,8 @@ export const checkForDuplicateAnalyses = async () => {
   }
 };
 
+
+
 // Disponibilizar funções globalmente para testes no console
 if (typeof window !== 'undefined') {
   (window as any).firebaseUtils = {
@@ -927,6 +954,7 @@ if (typeof window !== 'undefined') {
     clearRecentEdits,
     getRecentEdits,
     saveRecentEdit,
-    checkForDuplicateAnalyses
+    checkForDuplicateAnalyses,
+    detectAndFixDuplicateIds
   };
 }

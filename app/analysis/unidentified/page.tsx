@@ -346,7 +346,7 @@ interface UnidentifiedFeedback {
   date: string
   source: string
   sentiment?: string
-  allProblems?: Array<{keyword: string, sector: string, problem: string}>
+  allProblems?: Array<{keyword: string, sector: string, problem: string, problem_detail?: string}>
   deleted?: boolean
 }
 
@@ -472,8 +472,8 @@ const ProblemEditor = ({
   onRemove, 
   canRemove = true 
 }: { 
-  problem: { id: string; keyword: string; sector: string; problem: string };
-  onUpdate: (updated: { keyword: string; sector: string; problem: string }) => void;
+  problem: { id: string; keyword: string; sector: string; problem: string; problem_detail?: string };
+  onUpdate: (updated: { keyword: string; sector: string; problem: string; problem_detail?: string }) => void;
   onRemove?: () => void;
   canRemove?: boolean;
 }) => {
@@ -729,7 +729,7 @@ const ProblemEditor = ({
 const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedback, onSave: (updatedFeedback: UnidentifiedFeedback) => void }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
-  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])
+  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string, problem_detail?: string}>>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -755,7 +755,8 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
           id: `problem-${Date.now()}-${i}`,
           keyword: keywords[i] || keywords[0] || 'Comodidade',
           sector: sectors[i] || sectors[0] || 'Produto', 
-          problem: problems[i] || problems[0] || 'VAZIO'
+          problem: problems[i] || problems[0] || 'VAZIO',
+          problem_detail: ''
         })
       }
       
@@ -771,7 +772,7 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
     setIsEditing(false)
   }
 
-  const handleUpdateProblem = (id: string, updated: {keyword: string, sector: string, problem: string}) => {
+  const handleUpdateProblem = (id: string, updated: {keyword: string, sector: string, problem: string, problem_detail?: string}) => {
     const newProblems = editedProblems.map(p => 
       p.id === id ? { ...p, ...updated } : p
     )
@@ -792,7 +793,8 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
         id: `problem-${Date.now()}-${editedProblems.length}`,
         keyword: 'Comodidade', 
         sector: 'Produto', 
-        problem: 'VAZIO' 
+        problem: 'VAZIO',
+        problem_detail: ''
       }
     ])
   }
