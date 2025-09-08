@@ -49,7 +49,8 @@ import {
   X,
   Plus,
   Trash2,
-  CalendarDays
+  CalendarDays,
+  Lightbulb
 } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
@@ -722,7 +723,7 @@ const CommentModal = ({
 }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
-  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])  
+  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string, problem_detail?: string}>>([])  
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -761,7 +762,8 @@ const CommentModal = ({
           id: `problem-${Date.now()}-${i}`,
           keyword: keywords[i] || keywords[0] || 'Não identificado',
           sector: sectors[i] || sectors[0] || 'Não identificado', 
-          problem: problems[i] || problems[0] || ''
+          problem: problems[i] || problems[0] || '',
+          problem_detail: ''
         })
       }
       
@@ -827,7 +829,7 @@ const CommentModal = ({
     }
   }
 
-  const handleUpdateProblem = (id: string, updated: {keyword: string, sector: string, problem: string}) => {
+  const handleUpdateProblem = (id: string, updated: {keyword: string, sector: string, problem: string, problem_detail?: string}) => {
     const newProblems = editedProblems.map(p => 
       p.id === id ? { ...p, ...updated } : p
     )
@@ -848,7 +850,8 @@ const CommentModal = ({
         id: `problem-${Date.now()}-${editedProblems.length}`,
         keyword: 'Comodidade', 
         sector: 'Produto', 
-        problem: 'VAZIO' 
+        problem: 'VAZIO',
+        problem_detail: ''
       }
     ])
   }
@@ -1619,6 +1622,11 @@ const CommentModal = ({
                                 problemAnalysis.problem || 'Não especificado'
                               )}
                             </Badge>
+                            {problemAnalysis.problem_detail && (
+                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2" title={problemAnalysis.problem_detail}>
+                                {problemAnalysis.problem_detail}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1663,6 +1671,11 @@ const CommentModal = ({
                       feedback.problem || 'Não especificado'
                     )}
                   </Badge>
+                  {feedback.problem_detail && (
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2" title={feedback.problem_detail}>
+                      {feedback.problem_detail}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -2988,6 +3001,10 @@ function AnalysisPageContent() {
                     <Filter className="h-4 w-4 mr-2 text-red-300" />
                     Problema
                   </div>
+                  <div className="w-32 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <Lightbulb className="h-4 w-4 mr-2 text-yellow-300" />
+                    Sugestão
+                  </div>
                   <div className="w-12 py-5 px-4 font-bold text-white text-sm text-center flex items-center justify-center">
                     <Eye className="h-4 w-4 text-gray-300" />
                   </div>
@@ -3155,13 +3172,33 @@ function AnalysisPageContent() {
                                 }
                                 
                                 return (
-                                  <Badge 
-                                    key={index} 
-                                    variant="outline"
-                                    className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
-                                  >
-                                    {trimmedProblem.substring(0, 14)}
-                                  </Badge>
+                                  feedback.problem_detail ? (
+                                    <span key={index} className="inline-flex">
+                                      <TooltipProvider delayDuration={100}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Badge 
+                                              variant="outline"
+                                              className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                            >
+                                              {trimmedProblem.substring(0, 14)}
+                                            </Badge>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-sm text-xs leading-relaxed">
+                                            {feedback.problem_detail}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </span>
+                                  ) : (
+                                    <Badge 
+                                      key={index} 
+                                      variant="outline"
+                                      className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                    >
+                                      {trimmedProblem.substring(0, 14)}
+                                    </Badge>
+                                  )
                                 );
                               })
                             ) : (
@@ -3171,6 +3208,35 @@ function AnalysisPageContent() {
                               <Badge variant="outline" className="text-sm px-2 py-1">
                                 +{feedback.problem.split(';').length - 3}
                               </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="w-32 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
+                          <div className="flex flex-wrap gap-1">
+                            {feedback.has_suggestion ? (
+                              <Badge 
+                                variant="outline"
+                                className={cn(
+                                  "text-sm px-3 py-1.5 border",
+                                  feedback.suggestion_type === 'only'
+                                    ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 shadow-sm"
+                                    : feedback.suggestion_type === 'mixed'
+                                    ? "bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/40 dark:to-violet-900/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700 shadow-sm"
+                                    : "bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/40 dark:to-yellow-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700 shadow-sm"
+                                )}
+                              >
+                                <Lightbulb className="w-3 h-3 mr-1" />
+                                {feedback.suggestion_type === 'only'
+                                  ? 'Apenas Sugestão'
+                                  : feedback.suggestion_type === 'mixed'
+                                  ? 'Mista'
+                                  : 'Com Sugestão'
+                                }
+                              </Badge>
+                            ) : (
+                              <span className="text-sm text-gray-500 dark:text-gray-400 italic font-medium">
+                                Sem sugestões
+                              </span>
                             )}
                           </div>
                         </div>
