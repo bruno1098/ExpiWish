@@ -844,7 +844,7 @@ Comentário: "${finalText}"`;
       // Gera um resumo básico da sugestão baseado no comentário
       if (!suggestionSummary || suggestionSummary.trim() === '') {
         // Extrai parte relevante do comentário que contém a sugestão
-        const words = comment.split(' ');
+        const words = finalText.split(' ');
         const maxWords = 25; // Limita a 25 palavras
         suggestionSummary = words.slice(0, maxWords).join(' ');
         if (words.length > maxWords) {

@@ -1694,85 +1694,8 @@ function DashboardContent() {
             </Card>
           </div>
 
-          {/* Nova seção com gráficos adicionais */}
-          <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-            {/* Gráfico de Principais Problemas Identificados */}
-            <Card className="p-4 md:p-6 hover:shadow-lg transition-shadow relative">
-              <h3 className="text-lg font-medium mb-4">Principais Problemas Identificados</h3>
-              <div className="h-[300px] relative">
-                {hasData ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={allFeedbacks
-                        .filter(feedback => !selectedHotel || feedback.hotel === selectedHotel || feedback.source === selectedHotel)
-                        .reduce((acc: {problem: string, count: number}[], feedback) => {
-                          if (feedback.problem) {
-                            const problems = feedback.problem.includes(';') 
-                              ? feedback.problem.split(';').map(p => p.trim())
-                              : [feedback.problem];
-                              
-                            problems.forEach(problem => {
-                              // Função para verificar se é um problema válido
-                              const isValidProblem = (p: string) => {
-                                if (!p || typeof p !== 'string') return false;
-                                const normalized = p.toLowerCase().trim();
-                                const invalidProblems = [
-                                  'vazio', 'sem problemas', 'nao identificado', 'não identificado',
-                                  'sem problema', 'nenhum problema', 'ok', 'tudo ok', 'sem', 'n/a', 'na', '-', ''
-                                ];
-                                return !invalidProblems.includes(normalized) && 
-                                       !normalized.includes('vazio') &&
-                                       !normalized.includes('sem problemas') &&
-                                       normalized.length > 2;
-                              };
-                              
-                              if (isValidProblem(problem)) {
-                                const existingProblem = acc.find(p => p.problem === problem);
-                                if (existingProblem) {
-                                  existingProblem.count += 1;
-                                } else {
-                                  acc.push({ problem, count: 1 });
-                                }
-                              }
-                            });
-                          }
-                          return acc;
-                        }, [])
-                        .sort((a, b) => b.count - a.count)
-                        .slice(0, 8)}
-                      layout="vertical"
-                      margin={{ top: 5, right: 30, left: 150, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.5} />
-                      <XAxis type="number" />
-                      <YAxis 
-                        type="category" 
-                        dataKey="problem" 
-                        width={140}
-                        tickFormatter={(value) => value.length > 20 ? `${value.substring(0, 20)}...` : value}
-                      />
-                      <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar
-                        dataKey="count"
-                        fill="#F44336"
-                        className="cursor-pointer"
-                        onClick={(data) => handleItemClick({
-                          type: 'problem',
-                          value: data.problem
-                        })}
-                      >
-                        <LabelList dataKey="count" position="right" />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-muted-foreground">
-                    Sem dados suficientes
-                  </div>
-                )}
-              </div>
-            </Card>
-
+          {/* Seção com gráfico de departamentos */}
+          <div className="grid gap-6 grid-cols-1">
             {/* Gráfico de Distribuição por Departamento com Pie Chart */}
             <Card className="p-4 md:p-6 hover:shadow-lg transition-shadow relative">
               <div className="flex items-center justify-between mb-4">
