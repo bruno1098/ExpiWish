@@ -94,10 +94,91 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   "garcom": "A&B - Serviço",
   "garcons": "A&B - Serviço",
   "bar": "A&B - Serviço",
-  "bingo": "Recreação",
-  "recreação": "Recreação",
-  "recreacao": "Recreação", 
-  "tia da recreação": "Recreação",
+  "bingo": "Lazer - Atividades de Recreação",
+  "recreação": "Lazer - Atividades de Recreação",
+  "recreacao": "Lazer - Atividades de Recreação", 
+  "tia da recreação": "Lazer - Serviço",
+  "tio": "Lazer - Serviço",
+  "tia": "Lazer - Serviço",
+  "monitores": "Lazer - Serviço",
+  "monitor": "Lazer - Serviço",
+  "karaokê": "Lazer - Atividades de Recreação",
+  "karaoke": "Lazer - Atividades de Recreação",
+  "fogueira": "Lazer - Atividades de Recreação",
+  "piscina fria": "Muito Frio/Quente",
+  "janela suja": "Falta de Limpeza",
+  "janelas sujas": "Falta de Limpeza",
+  "janelas do quarto sujas": "Falta de Limpeza",
+  "cheiro de mofo": "Falta de Limpeza",
+  "mofo": "Falta de Limpeza",
+  "poucos pontos de luz": "Falta de Equipamento",
+  "baixa iluminação": "Falta de Equipamento",
+  "pouca luminosidade": "Falta de Equipamento",
+  "falta de luminosidade": "Falta de Equipamento",
+  // Adições baseadas nas edições recentes (iluminação/tomadas)
+  "poucos pontos de luz elétrica": "Falta de Equipamento",
+  "poucos pontos de energia": "Falta de Equipamento",
+  "poucos pontos de tomada": "Falta de Equipamento",
+  "poucas tomadas": "Falta de Equipamento",
+  "tomadas insuficientes": "Falta de Equipamento",
+  "tomada insuficiente": "Falta de Equipamento",
+  "falta de tomada": "Falta de Equipamento",
+  "falta de tomadas": "Falta de Equipamento",
+  "iluminação insuficiente": "Falta de Equipamento",
+  "iluminacao insuficiente": "Falta de Equipamento",
+  // Adições baseadas nas edições recentes (modernização/antigo)
+  "falta de modernização": "Falta de Manutenção",
+  "falta de modernizacao": "Falta de Manutenção",
+  "hotel antigo": "Falta de Manutenção",
+  "estrutura antiga": "Falta de Manutenção",
+  "instalações antigas": "Falta de Manutenção",
+  "instalacoes antigas": "Falta de Manutenção",
+  "precisa modernizar": "Falta de Manutenção",
+  "precisa de modernização": "Falta de Manutenção",
+  "precisa de modernizacao": "Falta de Manutenção",
+  "precisa de reforma": "Falta de Manutenção",
+  "precisa reforma": "Falta de Manutenção",
+  "cofre": "Não Funciona",
+  "fechadura": "Não Funciona",
+  "torneira": "Não Funciona",
+  "espirra água": "Falta de Manutenção",
+  "quadro reduzido": "Capacidade Insuficiente",
+  "maior variedade de frutas": "Falta de Variedade",
+  "qualidade do café da manhã": "Qualidade da Comida",
+  "abordagem repetitiva": "Comunicação Ruim",
+  // Regras específicas para pressões de venda / multipropriedade / timeshare
+  "insistência": "Comunicação Ruim",
+  "insistencia": "Comunicação Ruim",
+  "insistente": "Comunicação Ruim",
+  "insistiram": "Comunicação Ruim",
+  "pressão": "Comunicação Ruim",
+  "pressao": "Comunicação Ruim",
+  "pressionaram": "Comunicação Ruim",
+  "coação": "Comunicação Ruim",
+  "coacao": "Comunicação Ruim",
+  "assédio": "Comunicação Ruim",
+  "assedio": "Comunicação Ruim",
+  "venda agressiva": "Comunicação Ruim",
+  "vendas agressivas": "Comunicação Ruim",
+  "apresentação de vendas": "Comunicação Ruim",
+  "apresentacao de vendas": "Comunicação Ruim",
+  "multipropriedade": "Comunicação Ruim",
+  "timeshare": "Comunicação Ruim",
+  "compra de multipropriedade": "Comunicação Ruim",
+  "insistência para comprar": "Comunicação Ruim",
+  "pressão para comprar": "Comunicação Ruim",
+  "coagidos": "Comunicação Ruim",
+  "salas de trabalho": "Falta de Disponibilidade",
+  // Duplicatas removidas (mantidas as versões acima):
+  // "garçom": "A&B - Serviço",
+  // "garçons": "A&B - Serviço", 
+  // "garcom": "A&B - Serviço",
+  // "garcons": "A&B - Serviço",
+  // "bar": "A&B - Serviço",
+  // "bingo": "Recreação",
+  // "recreação": "Recreação",
+  // "recreacao": "Recreação", 
+  // "tia da recreação": "Recreação",
   "música": "A&B - Serviço",
   "musica": "A&B - Serviço",
   "som": "A&B - Serviço",
@@ -145,7 +226,7 @@ const NORMALIZATION_DICT = Object.fromEntries(
   Object.entries(RAW_NORMALIZATION_DICT).map(([k, v]) => [normalizeText(k), v])
 );
 
-// Keywords oficiais permitidas
+// Keywords oficiais permitadas
 const OFFICIAL_KEYWORDS = [
   "A&B - Café da manhã", "A&B - Serviço", "A&B - Variedade", "A&B - Preço",
   "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval",
@@ -153,11 +234,12 @@ const OFFICIAL_KEYWORDS = [
   "Ar-condicionado", "Elevador", "Frigobar", "Infraestrutura",
 
   "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina",
+  "Lazer - Serviço", "Lazer - Atividades de Recreação",
   "Tecnologia - Wi-fi", "Tecnologia - TV", "Experiência", "Estacionamento",
   "Atendimento", "Acessibilidade", "Reserva de cadeiras (pool)", "Processo",
   "Custo-benefício", "Comunicação", "Check-in - Atendimento", "Check-out - Atendimento",
   "Concierge", "Cotas", "Reservas", "Água", "Recreação",
-  "Travesseiro", "Colchão", "Espelho"
+  "Travesseiro", "Colchão", "Espelho", "A&B - Gastronomia"
 ];
 
 // Departamentos oficiais
@@ -217,6 +299,7 @@ function validateDepartment(department: string, keyword: string): string {
     "A&B - Serviço": "A&B", 
     "A&B - Variedade": "A&B",
     "A&B - Preço": "A&B",
+    "A&B - Gastronomia": "A&B",
     "Limpeza - Quarto": "Governança",
     "Limpeza - Banheiro": "Governança",
     "Limpeza - Áreas sociais": "Governança",
@@ -230,6 +313,8 @@ function validateDepartment(department: string, keyword: string): string {
     "Infraestrutura": "Manutenção",
     "Lazer - Variedade": "Lazer",
     "Lazer - Estrutura": "Lazer",
+    "Lazer - Serviço": "Lazer",
+    "Lazer - Atividades de Recreação": "Lazer",
     "Spa": "Lazer",
     "Piscina": "Lazer",
     "Tecnologia - Wi-fi": "TI",
@@ -246,6 +331,12 @@ function validateDepartment(department: string, keyword: string): string {
     "Check-out - Atendimento": "Recepção",
     "Concierge": "Programa de vendas",
     "Cotas": "Programa de vendas", 
+    // Mapear vendas/multipropriedade para Programa de vendas
+    "Apresentação de vendas": "Programa de vendas",
+    "Apresentacao de vendas": "Programa de vendas",
+    "Multipropriedade": "Programa de vendas",
+    "Timeshare": "Programa de vendas",
+    "Oferta de cotas": "Programa de vendas",
     "Reservas": "Comercial",
     "Água": "Operações",
     "Recreação": "Lazer",
@@ -306,8 +397,13 @@ export async function POST(request: NextRequest) {
     requestCount++;
 
     const body = await request.json();
-    const { texto, apiKey } = body;
-
+    const { texto, comment } = body;
+    
+    // Usar comment se texto não estiver presente (compatibilidade)
+    const finalText = texto || comment;
+    
+    // Verificar se a API key está configurada nas variáveis de ambiente
+    const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
         { error: 'API Key não configurada' },
@@ -315,12 +411,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!texto || texto.trim() === '') {
+    if (!finalText || finalText.trim() === '') {
       return NextResponse.json({
         rating: 3,
         keyword: 'Experiência',
         sector: 'Produto',
         problem: 'VAZIO',
+        has_suggestion: false,
+        suggestion_type: 'none',
         problems: [{
           keyword: 'Experiência',
           sector: 'Produto', 
@@ -331,7 +429,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar chave de cache
-    const cacheKey = `${texto.trim().toLowerCase().slice(0, 100)}`;
+    const cacheKey = `${finalText.trim().toLowerCase().slice(0, 100)}`;
     
     // Verificar cache
     const cached = analysisCache.get(cacheKey);
@@ -340,7 +438,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o texto contém apenas números ou caracteres não significativos
-    const cleanText = texto.trim();
+    const cleanText = finalText.trim();
     const isOnlyNumbers = /^\d+$/.test(cleanText);
     const isOnlySpecialChars = /^[^\w\s]+$/.test(cleanText);
     const isTooShort = cleanText.length < 10;
@@ -351,6 +449,8 @@ export async function POST(request: NextRequest) {
         keyword: 'Experiência',
         sector: 'Produto',
         problem: 'VAZIO',
+        has_suggestion: false,
+        suggestion_type: 'none',
         problems: [{
           keyword: 'Experiência',
           sector: 'Produto',
@@ -378,7 +478,7 @@ export async function POST(request: NextRequest) {
     // Definir a função estruturada para classificação
     const classifyFunction = {
       name: "classify_feedback",
-      description: "Classifica o feedback do hóspede em sentimento e problemas estruturados",
+      description: "Classifica o feedback do hóspede em sentimento, problemas estruturados e detecção de sugestões",
       parameters: {
         type: "object",
         properties: {
@@ -386,6 +486,19 @@ export async function POST(request: NextRequest) {
             type: "integer",
             enum: [1, 2, 3, 4, 5],
             description: "1=Muito insatisfeito, 2=Insatisfeito, 3=Neutro, 4=Satisfeito, 5=Muito satisfeito"
+          },
+          has_suggestion: {
+            type: "boolean",
+            description: "true se o comentário contém alguma sugestão de melhoria, false caso contrário"
+          },
+          suggestion_type: {
+            type: "string",
+            enum: ["none", "only_suggestion", "with_criticism", "with_praise", "mixed"],
+            description: "Tipo de sugestão: 'none'=sem sugestões, 'only_suggestion'=apenas sugestões, 'with_criticism'=sugestões com críticas, 'with_praise'=sugestões com elogios, 'mixed'=sugestões com críticas E elogios"
+          },
+          suggestion_summary: {
+            type: "string",
+            description: "Resumo objetivo da(s) sugestão(ões) mencionada(s) no comentário. Máximo 200 caracteres. Deixe vazio se has_suggestion for false."
           },
           issues: {
             type: "array",
@@ -407,100 +520,93 @@ export async function POST(request: NextRequest) {
                    type: "string",
                    enum: STANDARD_PROBLEMS,
                    description: "Problema específico identificado ou 'VAZIO' se apenas elogio"
-                 }
+                 },
+                problem_detail: {
+                  type: "string",
+                  description: "Breve detalhe objetivo do problema: o que exatamente não funciona/falta/está ruim. Ex.: 'Ar-condicionado sem resfriar', 'Wi‑Fi cai toda hora', 'Poucas tomadas no quarto'. Máx. 120 caracteres."
+                }
               },
               required: ["keyword", "department", "problem"]
             }
           }
         },
-        required: ["sentiment", "issues"]
+        required: ["sentiment", "has_suggestion", "suggestion_type", "suggestion_summary", "issues"]
       }
     };
 
     const analysisPrompt = `Você é um auditor de reputação hoteleira especializado. O comentário pode estar EM QUALQUER IDIOMA; identifique internamente e traduza se necessário.
 
-**MISSÃO:** Analise TODO o comentário e identifique ATÉ 3 PROBLEMAS DIFERENTES. Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta ou insatisfação mencionada.
+**MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 PROBLEMAS DIFERENTES. Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta ou insatisfação mencionada. SEJA ASSERTIVO na classificação - SEMPRE encontre uma categoria apropriada. TAMBÉM detecte e classifique SUGESTÕES de melhoria.
+
+**REGRA FUNDAMENTAL:** NUNCA use "Não identificado" a menos que o comentário seja completamente vazio ou inválido. SEMPRE classifique feedback real em categorias específicas.
+
+**ATENÇÃO CRÍTICA:** Se o comentário contém QUALQUER palavra ou expressão que indique sugestão, melhoria ou mudança, SEMPRE defina has_suggestion como true. NÃO ignore sugestões!
+
+**DETECÇÃO DE SUGESTÕES (OBRIGATÓRIA E CRÍTICA):**
+- has_suggestion: true se o comentário contém QUALQUER sugestão de melhoria, implementação ou mudança
+- suggestion_type: classifique o tipo de sugestão:
+  * "none": sem sugestões
+  * "only_suggestion": comentário contém APENAS sugestões (sem críticas ou elogios)
+  * "with_criticism": sugestões combinadas com críticas/problemas
+  * "with_praise": sugestões combinadas com elogios
+  * "mixed": sugestões com críticas E elogios
+
+**PADRÕES DE SUGESTÃO (ANÁLISE OBRIGATÓRIA):**
+- Palavras diretas: "poderia", "deveria", "seria bom", "sugiro", "recomendo", "melhoraria se", "gostaria que", "seria interessante", "poderiam implementar", "precisam de", "deveriam ter", "seria legal", "seria ótimo"
+- Expressões de falta: "falta", "faltou", "não tem", "não tinha", "senti falta", "faz falta", "deveria ter", "precisava ter", "não há", "ausência de"
+- Frases condicionais: "se tivesse...", "seria melhor com...", "faltou apenas...", "se houvesse...", "com mais...", "tendo..."
+- Comparações construtivas: "poderia ser melhor", "deveria melhorar", "precisa de mais", "seria ideal", "esperava mais"
+- Sugestões implícitas: "tenho uma sugestão", "uma dica", "uma ideia", "minha opinião", "acredito que", "penso que", "acho que deveria"
+- Ideias construtivas: propostas de melhorias, implementações, mudanças, adições, modificações
+
+**REGRA CRÍTICA DE SUGESTÕES:** Se encontrar QUALQUER das palavras acima no comentário, SEMPRE defina has_suggestion=true. Não há exceções!
+
+**EXEMPLOS DE SUGESTÕES:**
+- "Seria bom ter mais opções no café da manhã" → has_suggestion=true, suggestion_type="only_suggestion"
+- "O quarto estava sujo, mas poderiam colocar mais toalhas" → has_suggestion=true, suggestion_type="with_criticism"
+- "Adorei a estadia! Sugiro apenas mais atividades na piscina" → has_suggestion=true, suggestion_type="with_praise"
+- "Hotel excelente, mas faltou ar-condicionado. Poderiam melhorar a limpeza também" → has_suggestion=true, suggestion_type="mixed"
+- "Tudo perfeito, recomendo!" → has_suggestion=false, suggestion_type="none"
+- "Tenho uma sugestão de melhorar a piscina" → has_suggestion=true, suggestion_type="only_suggestion"
+- "Faltou apenas mais variedade no café da manhã" → has_suggestion=true, suggestion_type="only_suggestion"
+- "Não tinha ar condicionado, seria bom ter" → has_suggestion=true, suggestion_type="with_criticism"
+- "Senti falta de mais atividades para crianças" → has_suggestion=true, suggestion_type="only_suggestion"
+- "Seria interessante ter um spa" → has_suggestion=true, suggestion_type="only_suggestion"
+- "Deveria ter mais funcionários na recepção" → has_suggestion=true, suggestion_type="only_suggestion"
+
+**REGRAS DE SAÍDA (OBRIGATÓRIAS):**
+- Gere até 3 items em "issues". Cada item DEVE conter: keyword (uma das oficiais), department (compatível com a keyword), problem (uma das categorias padrão; use "VAZIO" somente se houver apenas elogios), e problem_detail.
+- problem_detail: descreva em UMA FRASE CURTA, objetiva e concreta o que exatamente está errado/faltando/ruim, sem repetir a categoria ou a keyword. Máx. 120 caracteres. Exemplos: "Ar-condicionado não resfria", "Wi‑Fi cai frequentemente", "Poucas tomadas no quarto".
+- Se problem = "VAZIO" (apenas elogio), deixe problem_detail vazio.
+- Prefira o idioma do comentário original ao redigir problem_detail.
 
 **⚠️ ATENÇÃO ESPECIAL - COMENTÁRIOS IRRELEVANTES:**
-ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLIDO:
+APENAS classifique como "Não identificado" se o comentário for COMPLETAMENTE VAZIO ou INVÁLIDO:
 
-**PADRÕES DE COMENTÁRIOS IRRELEVANTES (retornar: keyword="Experiência", department="Produto", problem="Não identificado"):**
-- Referências vagas: "conforme meu relato acima", "como mencionado anteriormente", "conforme já disse", "já informei"
-- Textos de preenchimento: "VICE ACIMA", "VIDE ACIMA", "ver acima", "idem acima", "igual acima"
-- Comentários vazios de contexto: "mesmo problema", "igual anterior", "mesma situação", "idem"
-- Textos sem sentido: "test", "teste", "...", "xxx", "nada a declarar", "n/a", "não se aplica"
-- Apenas pontuação/símbolos: ".", "...", "---", "***", "sem comentários"
-- Frases incompletas sem contexto: "sobre o", "em relação", "quanto ao", "a respeito"
-- Redirecionamentos: "ver comentário anterior", "conforme informado", "como relatado"
+**PADRÕES DE COMENTÁRIOS IRRELEVANTES (classificar como "Não identificado"):**
+- Comentários vazios: "", "...", "---", "N/A"
+- Referências vazias: "conforme meu relato acima", "ver comentário anterior", "mesmo problema"
+- Testes óbvios: "teste", "test", "testing"
 
-**SE IDENTIFICAR QUALQUER PADRÃO ACIMA:**
-- Retorne SEMPRE: keyword="Experiência", department="Produto", problem="Não identificado"
-- NÃO tente analisar o conteúdo
-- NÃO busque por problemas ou sentimentos
+**IMPORTANTE:** SEMPRE tente encontrar uma categoria apropriada. Para elogios gerais, use keyword="Experiência", department="Produto", problem="VAZIO". Para qualquer feedback específico, identifique o departamento correto mesmo que seja uma crítica sutil.
 
-**METODOLOGIA DE ANÁLISE SEMÂNTICA (APENAS para comentários VÁLIDOS):**
-1. **LEIA** cuidadosamente todo o comentário
-2. **DETECTE PRIMEIRO A&B** - Procure palavras relacionadas a alimentação:
-   - Palavras-chave: "food", "comida", "meal", "dinner", "lunch", "breakfast", "pasta", "restaurant", "bar", "drink", "coffee", "garçom", "waiter"
-   - Se encontrar QUALQUER uma → use departamento A&B (NUNCA "Produto" ou "Experiência")
-3. **IDENTIFIQUE** apenas problemas reais:
-   - Faltas: "não tinha", "faltou", "senti falta", "sem..."
-   - Críticas: "muito alto", "ruim", "inadequado", "pequeno demais"
-   - Defeitos: "quebrado", "sujo", "não funcionava", "com problema"
-   - Reclamações: "atrapalhando", "incomodou", "demorou", "difícil"
-4. **IGNORE** completamente elogios e aspectos positivos:
-   - "maravilhoso", "excelente", "ótimo", "agradável", "limpo", "atenciosos"
-5. **CLASSIFIQUE** usando as regras abaixo
-
-**REGRAS OBRIGATÓRIAS:**
-- **PRIMEIRA PRIORIDADE:** Verifique se é comentário irrelevante/inválido. Se SIM, retorne imediatamente "Não identificado"
-- **SEGUNDA PRIORIDADE:** Identifique temas de A&B (comida, bebida, restaurante, bar, café da manhã, garçom):
-  * Qualquer menção a "food", "comida", "meal", "dinner", "lunch", "breakfast", "café da manhã" → use A&B
-  * "restaurant", "restaurante", "bar", "garçom", "waiter", "service" (em contexto de comida) → use A&B
-  * "pasta", "drink", "beverage", "coffee", "tea" e ingredientes/pratos → use A&B
-  * NUNCA use "Experiência" para problemas de comida - SEMPRE use A&B
-- SEMPRE seguir EXATAMENTE a tabela de mapeamento abaixo
-- Se Palavra-chave = "Estacionamento" → Departamento DEVE ser "Operações"  
-- Se Palavra-chave = "Enxoval" → Departamento DEVE ser "Governança"
-- E assim por diante seguindo a tabela RIGOROSAMENTE
-- Se houver elogios **e** problemas ➜ foque APENAS nos **problemas**
-- Se houver **apenas elogios** ➜ retorne: keyword="Experiência", department="Produto", problem="VAZIO"
-- Para problemas use termos ESPECÍFICOS e PADRONIZADOS:
-  * Se for serviço lento: "Demora no Atendimento"
-  * Se for quarto pequeno: "Espaço Insuficiente" 
-  * Se for comida ruim: "Qualidade da Comida"
-  * Se for ar-condicionado: "Não Funciona" ou "Muito Frio/Quente"
-  * Se for WiFi: "Conexão Instável"
-  * Se for limpeza: "Falta de Limpeza"
-  * Se for barulho/música alta: "Ruído Excessivo"
-  * Se for falta de algo: "Falta de Disponibilidade"
-- Identifique até 3 PROBLEMAS diferentes
-- Palavra-chave, departamento e problema devem falar do MESMO assunto
-- Não use termos vagos ("Ruim", "Problema", "Coisas", "Lento")
-- SEMPRE tente classificar o comentário; use "Não identificado" apenas em casos extremos
-- Quando for relacionado a bar/restaurante, coloque em A&B
-- JAMAIS use "Sem problemas" - use apenas "VAZIO"
-- Se há contexto suficiente, escolha o departamento mais próximo da tabela
-
-**EXEMPLOS DE ANÁLISE SEMÂNTICA:**
-
-**COMENTÁRIOS IRRELEVANTES (classificar como "Não identificado"):**
-"conforme meu relato acima" → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
-"VICE ACIMA" → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
-"ver comentário anterior" → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
-"mesmo problema" → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
-"teste" → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
-"..." → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
-Sempre tente aproximar o maximo possivel os comentarios com os departamentos e palavra chave, use Não identificado somente em casos extremos, quando tiver elogios nao use Não identificado, use Produto e Experiência
+**ATENÇÃO - VENDAS/MULTIPROPRIEDADE:** Se houver insistência/pressão/assédio/coação para comprar multipropriedade (timeshare) ou situações de venda agressiva, crie um dos items em "issues" com: keyword="Cotas", department="Programa de vendas" e problem="Comunicação Ruim". Descreva em problem_detail a situação (ex.: "Insistência para comprar multipropriedade durante a estadia").
 
 **COMENTÁRIOS VÁLIDOS (análise normal):**
 "Senti falta de água nas áreas comuns" → keyword="Água", department="A&B", problem="Falta de Disponibilidade"
 "A música estava muito alta atrapalhando" → keyword="A&B - Serviço", department="A&B", problem="Ruído Excessivo"
+"Hotel muito bom" → keyword="Experiência", department="Produto", problem="VAZIO"
+"Gostei da estadia" → keyword="Experiência", department="Produto", problem="VAZIO"
+"Comida boa" → keyword="A&B - Serviço", department="A&B", problem="VAZIO"
+"Quarto limpo" → keyword="Limpeza - Quarto", department="Governança", problem="VAZIO"
+"Atendimento excelente" → keyword="Atendimento", department="Operações", problem="VAZIO"
+"Piscina agradável" → keyword="Piscina", department="Lazer", problem="VAZIO"
+"Wi-Fi funcionou bem" → keyword="Tecnologia - Wi-fi", department="TI", problem="VAZIO"
 "Wi-Fi não funcionava no quarto" → keyword="Tecnologia - Wi-fi", department="TI", problem="Não Funciona"
 "Demora absurda no check-in" → keyword="Check-in - Atendimento", department="Recepção", problem="Demora no Check-in"
 "Limpeza Simples " → keyword="Limpeza - Quarto", department="Governança", problem="Falta de Limpeza"
-"Não tinha shampoo e a tornera estava emperrada." → keyword="Limpeza - Quarto", department="Governança", problem="Falta de Limpeza"
-"Quarto sujo com problemas de manutenção" → keyword="Manutenção - Quarto", department="Governança", problem="Falta de Limpeza"
+"Não tinha shampoo e a torneira estava emperrada." → keyword="Limpeza - Quarto", department="Governança", problem="Falta de Limpeza"
+"Quarto sujo com problemas de manutenção" → keyword="Limpeza - Quarto", department="Governança", problem="Falta de Limpeza"
 
 **EXEMPLOS ESPECÍFICOS PARA ALIMENTAÇÃO (A&B):**
 "Dinner food was horrible, very low quality ingredients" → keyword="A&B - Serviço", department="A&B", problem="Qualidade da Comida"
@@ -509,8 +615,8 @@ Sempre tente aproximar o maximo possivel os comentarios com os departamentos e p
 "Café da manhã sem variedade" → keyword="A&B - Café da manhã", department="A&B", problem="Falta de Variedade"
 "Breakfast was limited, no options" → keyword="A&B - Café da manhã", department="A&B", problem="Falta de Variedade"
 "Restaurant service was slow" → keyword="A&B - Serviço", department="A&B", problem="Demora no Atendimento"
-"Garçom demorou muito para atender" → keyword="Garçom", department="A&B", problem="Demora no Atendimento"
-"Bar drinks were expensive" → keyword="Bar", department="A&B", problem="Preço Alto"
+"Garçom demorou muito para atender" → keyword="A&B - Serviço", department="A&B", problem="Demora no Atendimento"
+"Bar drinks were expensive" → keyword="A&B - Preço", department="A&B", problem="Preço Alto"
 "Meal prices too high" → keyword="A&B - Preço", department="A&B", problem="Preço Alto"
 
 **MAPEAMENTO PALAVRA-CHAVE → DEPARTAMENTO (OBRIGATÓRIO):**
@@ -588,7 +694,7 @@ Comentário: "${texto}"`;
 
     // Pós-validação e normalização
     const rating = result.sentiment || 3;
-    let processedProblems: Array<{keyword: string, sector: string, problem: string}> = [];
+    let processedProblems: Array<{keyword: string, sector: string, problem: string, problem_detail?: string}> = [];
     
     if (result.issues && Array.isArray(result.issues)) {
       for (const issue of result.issues.slice(0, 3)) {
@@ -597,11 +703,64 @@ Comentário: "${texto}"`;
         const validatedDepartment = validateDepartment(issue.department || "Produto", validatedKeyword);
         const validatedProblem = validateProblem(issue.problem || "");
         
+        // Definir detalhe do problema (preferir IA; fallback heurístico curto)
+        let problemDetail: string = (issue.problem_detail || issue.detail || '').toString().trim();
+        if (!problemDetail) {
+          const normalizedProblem = (validatedProblem || '').toLowerCase();
+          // Nunca gerar detalhe quando for VAZIO ou Não identificado
+          if (normalizedProblem === 'vazio' || normalizedProblem === 'não identificado' || normalizedProblem === 'nao identificado') {
+            problemDetail = '';
+          } else {
+            const genericProblems = ["não funciona", "nao funciona"]; 
+            const isGeneric = genericProblems.includes(normalizedProblem);
+            if (isGeneric && validatedKeyword && validatedKeyword !== "Experiência") {
+              problemDetail = `${validatedKeyword} não funciona`;
+            } else if (validatedProblem) {
+              // Monta um detalhe curto combinando problema + palavra-chave, sem repetir "Falta de" 2x
+              if (normalizedProblem.startsWith('falta')) {
+                problemDetail = `${validatedProblem} de ${validatedKeyword}`;
+              } else {
+                problemDetail = `${validatedProblem} em ${validatedKeyword}`;
+              }
+            } else {
+              problemDetail = '';
+            }
+            // Limitar a 120 chars
+            if (problemDetail.length > 120) problemDetail = problemDetail.slice(0, 117).trimEnd() + '...';
+          }
+        }
+        
         processedProblems.push({
           keyword: validatedKeyword,
           sector: validatedDepartment,
-          problem: validatedProblem
+          problem: validatedProblem,
+          problem_detail: problemDetail
         });
+      }
+    }
+    
+    // Se retornou apenas placeholders (VAZIO/Não identificado), manter apenas 1.
+    // Se houver problemas reais, remover placeholders e linhas de Produto/Experiência.
+    if (processedProblems.length > 0) {
+      const hasRealIssues = processedProblems.some(p => {
+        const pr = (p.problem || '').toLowerCase();
+        return pr !== 'vazio' && pr !== 'não identificado' && pr !== 'nao identificado' && pr.trim() !== '';
+      });
+
+      if (hasRealIssues) {
+        processedProblems = processedProblems.filter(p => {
+          const pr = (p.problem || '').toLowerCase();
+          const isPlaceholder = pr === 'vazio' || pr === 'não identificado' || pr === 'nao identificado' || (p.keyword === 'Experiência' && p.sector === 'Produto');
+          return !isPlaceholder;
+        });
+      } else {
+        // Consolidar para um único item padrão
+        processedProblems = [{
+          keyword: 'Experiência',
+          sector: 'Produto', 
+          problem: 'VAZIO',
+          problem_detail: ''
+        }];
       }
     }
     
@@ -610,7 +769,8 @@ Comentário: "${texto}"`;
       processedProblems.push({
         keyword: "Experiência",
         sector: "Produto", 
-        problem: ""
+        problem: "",
+        problem_detail: ''
       });
     }
 
@@ -618,8 +778,50 @@ Comentário: "${texto}"`;
     const firstProblem = processedProblems[0] || {
       keyword: 'Experiência',
       sector: 'Produto', 
-      problem: 'VAZIO'
+      problem: 'VAZIO',
+      problem_detail: ''
     };
+
+    // Extrair campos de sugestão da resposta da IA
+    let hasSuggestion = result.has_suggestion || false;
+    let suggestionType = result.suggestion_type || 'none';
+    let suggestionSummary = result.suggestion_summary || '';
+
+    // VALIDAÇÃO PÓS-PROCESSAMENTO: Força detecção de sugestões
+    // Lista de palavras-chave que indicam sugestões
+    const suggestionKeywords = [
+      'sugestao', 'sugestão', 'sugiro', 'seria bom', 'seria legal', 'seria interessante',
+      'poderia', 'poderiam', 'deveria', 'deveriam', 'melhorar', 'melhoria', 'melhorias',
+      'implementar', 'adicionar', 'incluir', 'colocar', 'ter mais', 'aumentar',
+      'diminuir', 'reduzir', 'trocar', 'mudar', 'modificar', 'alterar',
+      'seria melhor', 'ficaria melhor', 'recomendo', 'recomendaria',
+      'gostaria que', 'queria que', 'espero que', 'esperava que',
+      'falta', 'faltou', 'precisa de', 'precisava de', 'necessita',
+      'ideal seria', 'perfeito seria', 'bom seria', 'legal seria'
+    ];
+
+    const normalizedComment = normalizeText(finalText.toLowerCase());
+    const hasSuggestionKeyword = suggestionKeywords.some(keyword => 
+      normalizedComment.includes(normalizeText(keyword))
+    );
+
+    // Se encontrou palavra-chave de sugestão mas IA não detectou, força detecção
+    if (hasSuggestionKeyword && !hasSuggestion) {
+      console.log('🔍 Validação pós-processamento: Forçando detecção de sugestão');
+      hasSuggestion = true;
+      suggestionType = 'only_suggestion'; // Assume apenas sugestão por padrão
+      
+      // Gera um resumo básico da sugestão baseado no comentário
+      if (!suggestionSummary || suggestionSummary.trim() === '') {
+        // Extrai parte relevante do comentário que contém a sugestão
+        const words = comment.split(' ');
+        const maxWords = 25; // Limita a 25 palavras
+        suggestionSummary = words.slice(0, maxWords).join(' ');
+        if (words.length > maxWords) {
+          suggestionSummary += '...';
+        }
+      }
+    }
 
     const finalResult = {
       rating,
@@ -627,8 +829,14 @@ Comentário: "${texto}"`;
       keyword: firstProblem.keyword,
       sector: firstProblem.sector,
       problem: firstProblem.problem,
+      problem_detail: firstProblem.problem_detail || '',
+      // Novos campos de sugestão
+      has_suggestion: hasSuggestion,
+      suggestion_type: suggestionType,
+      suggestion_summary: suggestionSummary,
       // Formato estendido para futuras melhorias
       problems: processedProblems,
+      allProblems: processedProblems,
       // Formato legado string (se necessário)
       legacyFormat: processedProblems.map(p => 
         `${p.keyword}, ${p.sector}, ${p.problem || 'VAZIO'}`

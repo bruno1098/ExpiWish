@@ -616,7 +616,11 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
                         {feedback.sector}
                       </Badge>
                       {feedback.problem && (
-                        <Badge variant="outline" className="bg-red-100 dark:bg-red-900/30">
+                        <Badge
+                          variant="outline"
+                          className="bg-red-100 dark:bg-red-900/30"
+                          title={feedback.problem_detail || feedback.problem}
+                        >
                           {feedback.problem}
                         </Badge>
                       )}
@@ -626,6 +630,9 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
                         </Badge>
                       )}
                     </div>
+                    {feedback.problem_detail && (
+                      <p className="text-xs text-muted-foreground -mt-1">{feedback.problem_detail}</p>
+                    )}
                     
                     <p className="text-sm mt-2">{feedback.comment}</p>
                   </Card>
@@ -1855,11 +1862,18 @@ function DashboardContent() {
                           {feedback.sector}
                         </Badge>
                         {feedback.problem && (
-                          <Badge variant="outline" className="bg-red-100 dark:bg-red-900/30">
+                          <Badge
+                            variant="outline"
+                            className="bg-red-100 dark:bg-red-900/30"
+                            title={feedback.problem_detail || feedback.problem}
+                          >
                             {feedback.problem}
                           </Badge>
                         )}
                       </div>
+                      {feedback.problem_detail && (
+                        <p className="text-xs text-muted-foreground -mt-1">{feedback.problem_detail}</p>
+                      )}
                       
                       <p className="text-sm mt-2 line-clamp-2">{feedback.comment}</p>
                     </Card>

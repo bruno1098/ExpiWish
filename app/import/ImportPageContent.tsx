@@ -1134,7 +1134,11 @@ function ImportPageContent() {
                   author: row.autor || undefined,
                   title: row.titulo || undefined,
                   apartamento: row.apartamento || undefined,
-                  allProblems: allProblems // Armazenar todos os problemas detectados
+                  allProblems: allProblems, // Armazenar todos os problemas detectados
+                  // Campos de sugestão
+                  has_suggestion: analysisResult.has_suggestion || false,
+                  suggestion_type: analysisResult.suggestion_type || undefined,
+                  suggestion_summary: analysisResult.suggestion_summary || undefined
                 } as Feedback;
                   
               } catch (error: any) {
@@ -1163,7 +1167,11 @@ function ImportPageContent() {
                   author: row.autor || undefined,
                   title: row.titulo || undefined,
                   apartamento: row.apartamento || undefined,
-                  allProblems: [] // Armazenar um array vazio para problemas
+                  allProblems: [], // Armazenar um array vazio para problemas
+                  // Campos de sugestão (valores padrão para casos de erro)
+                  has_suggestion: false,
+                  suggestion_type: undefined,
+                  suggestion_summary: undefined
                 } as Feedback;
               }
             });

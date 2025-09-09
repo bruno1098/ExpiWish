@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
 import { filterValidFeedbacks, isValidProblem } from "@/lib/utils"
+import { Lightbulb } from "lucide-react"
 
 interface ProblemsDashboardProps {
   feedbacks: Array<{
@@ -26,6 +27,9 @@ interface ProblemsDashboardProps {
     sentiment: string;
     rating: number;
     keyword: string;
+    has_suggestion?: boolean;
+    suggestion_type?: 'only_suggestion' | 'mixed' | 'with_suggestion';
+    suggestion_summary?: string;
   }>;
   onProblemClick?: (problem: string) => void;
 }
@@ -245,6 +249,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
             <TabsTrigger value="problems">Problemas</TabsTrigger>
             <TabsTrigger value="sectors">Departamentos</TabsTrigger>
             <TabsTrigger value="keywords">Palavras-chave</TabsTrigger>
+            <TabsTrigger value="suggestions">Sugestões</TabsTrigger>
           </TabsList>
           
           {/* Tab de Problemas */}
@@ -557,6 +562,201 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+          
+          {/* Tab de Sugestões */}
+          <TabsContent value="suggestions" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <Card className="p-4">
+                <div className="text-sm font-medium text-gray-500">Total com Sugestões</div>
+                <div className="text-2xl font-bold mt-1 text-blue-600">
+                  {validFeedbacks.filter(f => f.has_suggestion).length}
+                </div>
+              </Card>
+              
+              <Card className="p-4">
+                <div className="text-sm font-medium text-gray-500">Apenas Sugestões</div>
+                <div className="text-2xl font-bold mt-1 text-indigo-600">
+                  {validFeedbacks.filter(f => f.suggestion_type === 'only_suggestion').length}
+                </div>
+              </Card>
+              
+              <Card className="p-4">
+                <div className="text-sm font-medium text-gray-500">Feedbacks Mistos</div>
+                <div className="text-2xl font-bold mt-1 text-purple-600">
+                  {validFeedbacks.filter(f => f.suggestion_type === 'mixed').length}
+                </div>
+              </Card>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Gráfico de Pizza - Distribuição de Tipos de Sugestão */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4" />
+                    Distribuição de Tipos de Sugestão
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={[
+                            {
+                              name: 'Apenas Sugestões',
+                              value: validFeedbacks.filter(f => f.suggestion_type === 'only_suggestion').length,
+                              color: '#3B82F6'
+                            },
+                            {
+                              name: 'Feedbacks Mistos',
+                              value: validFeedbacks.filter(f => f.suggestion_type === 'mixed').length,
+                              color: '#8B5CF6'
+                            },
+                            {
+                              name: 'Com Sugestões',
+                              value: validFeedbacks.filter(f => f.suggestion_type === 'with_suggestion').length,
+                              color: '#FBBF24'
+                            }
+                          ].filter(item => item.value > 0)}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                        >
+                          {[
+                            { color: '#3B82F6' },
+                            { color: '#8B5CF6' },
+                            { color: '#FBBF24' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Tabela de Sugestões por Departamento */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Sugestões por Departamento</CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-[400px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Departamento</TableHead>
+                        <TableHead className="text-right">Sugestões</TableHead>
+                        <TableHead className="text-right">% do Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.entries(
+                        validFeedbacks
+                          .filter(f => f.has_suggestion)
+                          .reduce((acc, feedback) => {
+                            const sectors = feedback.sector.split(';').map((s: string) => s.trim());
+                            sectors.forEach((sector: string) => {
+                              acc[sector] = (acc[sector] || 0) + 1;
+                            });
+                            return acc;
+                          }, {} as Record<string, number>)
+                      )
+                        .sort(([,a], [,b]) => (b as number) - (a as number))
+                        .map(([department, count]) => {
+                          const totalSuggestions = validFeedbacks.filter(f => f.has_suggestion).length;
+                          const countNumber = count as number;
+                          return (
+                            <TableRow key={department as string}>
+                              <TableCell>
+                                <Badge 
+                                  style={{ 
+                                    backgroundColor: `${getDepartmentColor(department as string)}20`,
+                                    color: getDepartmentColor(department as string),
+                                    borderColor: getDepartmentColor(department as string)
+                                  }}
+                                >
+                                  {department as string}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{countNumber}</TableCell>
+                              <TableCell className="text-right">
+                                {totalSuggestions > 0 ? ((countNumber / totalSuggestions) * 100).toFixed(1) : '0.0'}%
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+            
+            {/* Lista de Feedbacks com Sugestões */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Feedbacks com Sugestões</CardTitle>
+              </CardHeader>
+              <CardContent className="max-h-[400px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Departamento</TableHead>
+                      <TableHead>Palavra-chave</TableHead>
+                      <TableHead>Resumo da Sugestão</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {validFeedbacks
+                      .filter(f => f.has_suggestion)
+                      .slice(0, 20)
+                      .map((feedback, index) => (
+                        <TableRow key={index}>
+                          <TableCell>
+                            <Badge 
+                              className={
+                                feedback.suggestion_type === 'only_suggestion'
+                                  ? 'bg-blue-100 text-blue-700 border-blue-200'
+                                  : feedback.suggestion_type === 'mixed'
+                                  ? 'bg-purple-100 text-purple-700 border-purple-200'
+                                  : 'bg-amber-100 text-amber-700 border-amber-200'
+                              }
+                            >
+                              <Lightbulb className="w-3 h-3 mr-1" />
+                              {feedback.suggestion_summary || (
+                                feedback.suggestion_type === 'only_suggestion'
+                                  ? 'Apenas Sugestão'
+                                  : feedback.suggestion_type === 'mixed'
+                                  ? 'Mista'
+                                  : 'Com Sugestão'
+                              )}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {feedback.sector.split(';')[0]?.trim() || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {feedback.keyword.split(';')[0]?.trim() || 'N/A'}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {feedback.suggestion_summary || 'Resumo não disponível'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </CardContent>

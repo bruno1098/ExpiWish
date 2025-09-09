@@ -49,7 +49,8 @@ import {
   X,
   Plus,
   Trash2,
-  CalendarDays
+  CalendarDays,
+  Lightbulb
 } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
@@ -510,6 +511,291 @@ const sectorColors: Record<string, string> = {
   'Programa de vendas': 'bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/40 dark:to-yellow-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700 shadow-sm'
 };
 
+// Componente SuggestionEditor para editar sugestões
+const SuggestionEditor = ({ 
+  suggestion, 
+  onUpdate, 
+  onRemove, 
+  canRemove = true 
+}: { 
+  suggestion: { id: string; has_suggestion: boolean; suggestion_type: string; suggestion_summary: string };
+  onUpdate: (updated: { has_suggestion: boolean; suggestion_type: string; suggestion_summary: string }) => void;
+  onRemove?: () => void;
+  canRemove?: boolean;
+}) => {
+  const [hasSuggestion, setHasSuggestion] = useState(suggestion.has_suggestion);
+  const [suggestionType, setSuggestionType] = useState(suggestion.suggestion_type);
+  const [suggestionSummary, setSuggestionSummary] = useState(suggestion.suggestion_summary);
+  const [summaryInputMode, setSummaryInputMode] = useState(false);
+  const [summaryInput, setSummaryInput] = useState(suggestion.suggestion_summary);
+  const [summaryJustEdited, setSummaryJustEdited] = useState(false);
+
+  // Opções de tipo de sugestão
+  const suggestionTypes = [
+    { value: 'only', label: 'Apenas' },
+    { value: 'only_suggestion', label: 'Apenas Sugestão' },
+    { value: 'mixed', label: 'Mista' },
+    { value: 'with_criticism', label: 'Com Crítica' },
+    { value: 'with_praise', label: 'Com Elogio' },
+    { value: 'none', label: 'Sem Sugestão' }
+  ];
+
+  // Atualizar apenas quando a suggestion prop mudar (não quando os states internos mudarem)
+  useEffect(() => {
+    // Só atualizar se os valores realmente mudaram comparado à prop original
+    if (suggestion.has_suggestion !== hasSuggestion) {
+      setHasSuggestion(suggestion.has_suggestion);
+    }
+    if (suggestion.suggestion_type !== suggestionType) {
+      setSuggestionType(suggestion.suggestion_type);
+    }
+    if (suggestion.suggestion_summary !== suggestionSummary) {
+      setSuggestionSummary(suggestion.suggestion_summary);
+    }
+    
+    // Só atualizar summaryInput se não estiver em modo de edição
+    if (!summaryInputMode && suggestion.suggestion_summary !== summaryInput) {
+      setSummaryInput(suggestion.suggestion_summary || '');
+    }
+  }, [suggestion.has_suggestion, suggestion.suggestion_type, suggestion.suggestion_summary, summaryInputMode]);
+
+  // Função para atualizar a sugestão
+  const handleUpdate = () => {
+    onUpdate({
+      has_suggestion: hasSuggestion,
+      suggestion_type: suggestionType,
+      suggestion_summary: suggestionSummary
+    });
+  };
+
+  // Funções para o modo de input do resumo
+  const handleSummaryInputModeToggle = () => {
+    setSummaryInputMode(!summaryInputMode);
+    if (!summaryInputMode) {
+      setSummaryInput(suggestionSummary);
+    }
+  };
+
+  const handleSummaryInputSave = () => {
+    setSuggestionSummary(summaryInput);
+    setSummaryInputMode(false);
+    setSummaryJustEdited(true);
+    
+    // Chamar update diretamente com os novos valores, sem depender do estado
+    onUpdate({
+      has_suggestion: hasSuggestion,
+      suggestion_type: suggestionType,
+      suggestion_summary: summaryInput // Usar o valor atual do input
+    });
+    
+    setTimeout(() => setSummaryJustEdited(false), 3000);
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <h5 className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+          Análise de Sugestão
+        </h5>
+        {canRemove && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRemove}
+            className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Tem Sugestão */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+            Tem Sugestão
+          </label>
+          <Select value={hasSuggestion ? 'true' : 'false'} onValueChange={(value) => {
+            const newValue = value === 'true';
+            setHasSuggestion(newValue);
+            
+            // Se mudou para "Sim" e não tinha tipo definido, configurar um padrão
+            let newType = suggestionType;
+            if (newValue && (!suggestionType || suggestionType === 'none')) {
+              newType = 'only_suggestion';
+              setSuggestionType(newType);
+            } else if (!newValue) {
+              newType = 'none';
+              setSuggestionType(newType);
+            }
+            
+            // Chamar onUpdate diretamente com os novos valores
+            onUpdate({
+              has_suggestion: newValue,
+              suggestion_type: newType,
+              suggestion_summary: suggestionSummary
+            });
+          }}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="true">Sim</SelectItem>
+              <SelectItem value="false">Não</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Tipo de Sugestão */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+            Tipo de Sugestão
+          </label>
+          <Select value={suggestionType} onValueChange={(value) => {
+            setSuggestionType(value);
+            
+            // Chamar onUpdate diretamente com os novos valores
+            onUpdate({
+              has_suggestion: hasSuggestion,
+              suggestion_type: value,
+              suggestion_summary: suggestionSummary
+            });
+          }} disabled={!hasSuggestion}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Selecione tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              {suggestionTypes.map((type) => (
+                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Resumo da Sugestão */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+            Resumo da Sugestão
+          </label>
+          {summaryInputMode ? (
+            <div className="space-y-2">
+              <textarea
+                value={summaryInput}
+                onChange={(e) => setSummaryInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    handleSummaryInputSave();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setSummaryInput(suggestionSummary);
+                    setSummaryInputMode(false);
+                  }
+                }}
+                className={cn(
+                  "w-full p-2 text-sm border rounded-md min-h-[80px] resize-vertical transition-all duration-300 focus:outline-none focus:ring-2",
+                  summaryJustEdited 
+                    ? "border-green-300 dark:border-green-700 focus:ring-green-200 dark:focus:ring-green-800 bg-white dark:bg-gray-800" 
+                    : "border-gray-300 dark:border-gray-600 focus:ring-blue-200 dark:focus:ring-blue-800 bg-white dark:bg-gray-800",
+                  "text-gray-900 dark:text-gray-100"
+                )}
+                placeholder="Digite o resumo da sugestão... (Ctrl+Enter para salvar)"
+                autoFocus
+                disabled={!hasSuggestion}
+              />
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  onClick={handleSummaryInputSave} 
+                  className={cn(
+                    "text-xs transition-all duration-300",
+                    summaryJustEdited 
+                      ? "bg-green-600 hover:bg-green-700 text-white" 
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  )}
+                >
+                  {summaryJustEdited ? '✓ Salvo' : 'OK'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => {
+                  setSummaryInput(suggestionSummary);
+                  setSummaryInputMode(false);
+                }} className="text-xs">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2 relative">
+              <div
+                className={cn(
+                  "min-h-[80px] p-3 text-sm font-medium transition-all duration-500 border rounded-md cursor-pointer hover:shadow-sm",
+                  summaryJustEdited 
+                    ? "bg-green-100 dark:bg-green-950/30 border-green-300 dark:border-green-700 text-green-800 dark:text-green-200 shadow-md ring-2 ring-green-200 dark:ring-green-800" 
+                    : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                )}
+                onClick={() => {
+                  if (hasSuggestion) {
+                    setSummaryInputMode(true);
+                    setSummaryInput(suggestionSummary || '');
+                  }
+                }}
+              >
+                {suggestionSummary || (hasSuggestion ? "Clique para adicionar resumo da sugestão..." : "Sem sugestão")}
+              </div>
+              {summaryJustEdited && (
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-green-600 dark:text-green-400 text-xs font-bold animate-pulse">
+                  ✓
+                </div>
+              )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  setSummaryInputMode(true);
+                  setSummaryInput(suggestionSummary || '');
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200"
+                disabled={!hasSuggestion}
+              >
+                <Edit3 className="h-3 w-3 mr-1" />
+                Editar
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Preview do badge */}
+      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 mb-2">
+          <Eye className="h-3 w-3" />
+          Visualização:
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {hasSuggestion ? (
+            <>
+              <Badge variant="outline" className="text-sm border font-medium bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300">
+                <Lightbulb className="h-3 w-3 mr-1" />
+                {suggestionTypes.find(t => t.value === suggestionType)?.label || suggestionType}
+              </Badge>
+              {suggestionSummary && (
+                <Badge variant="secondary" className="text-sm">
+                  {suggestionSummary}
+                </Badge>
+              )}
+            </>
+          ) : (
+            <Badge variant="secondary" className="text-sm italic text-gray-500">
+              Sem Sugestão
+            </Badge>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Lista de departamentos disponíveis
 const availableDepartments = [
   'A&B',
@@ -634,21 +920,13 @@ const StatsCard = ({ icon: Icon, title, value, change, color, gradient }: {
     ? useSlideUpCounter(value as number, { duration: 400, delay: 0 })
     : null
     
-  const decimalResult = isDecimal 
-    ? useSlideUpDecimal(parseFloat(value as string), 1, { duration: 400, delay: 0 })
-    : null
-
   const animatedValue = isNumeric 
     ? numericResult?.value
-    : isDecimal 
-      ? decimalResult?.value
-      : value
+    : value
       
   const isAnimating = isNumeric 
     ? numericResult?.isAnimating
-    : isDecimal 
-      ? decimalResult?.isAnimating
-      : false
+    : false
 
   return (
     <Card className="relative overflow-hidden bg-white/80 backdrop-blur-sm border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105">
@@ -700,7 +978,7 @@ const StatsCard = ({ icon: Icon, title, value, change, color, gradient }: {
       </div>
     </Card>
   )
-};
+}
 
 // Componente para Modal de Comentário Completo
 const CommentModal = ({ 
@@ -722,7 +1000,7 @@ const CommentModal = ({
 }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
-  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string}>>([])  
+  const [editedProblems, setEditedProblems] = useState<Array<{id: string, keyword: string, sector: string, problem: string, problem_detail?: string}>>([])  
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
@@ -736,6 +1014,13 @@ const CommentModal = ({
   })
   // Estado unificado para edição de metadados e análise
   const [isEditingUnified, setIsEditingUnified] = useState(false)
+  // Estados para edição de sugestões - agora como array igual aos problemas
+  const [editedSuggestions, setEditedSuggestions] = useState<Array<{
+    id: string, 
+    has_suggestion: boolean, 
+    suggestion_type: string, 
+    suggestion_summary: string
+  }>>([])
   
   // Usar o feedback correto baseado no currentIndex
   const currentFeedback = allFeedbacks.length > 0 && allFeedbacks[currentIndex] ? allFeedbacks[currentIndex] : feedback
@@ -761,7 +1046,8 @@ const CommentModal = ({
           id: `problem-${Date.now()}-${i}`,
           keyword: keywords[i] || keywords[0] || 'Não identificado',
           sector: sectors[i] || sectors[0] || 'Não identificado', 
-          problem: problems[i] || problems[0] || ''
+          problem: problems[i] || problems[0] || '',
+          problem_detail: ''
         })
       }
       
@@ -789,6 +1075,16 @@ const CommentModal = ({
       source: currentFeedback.source || '',
       apartamento: currentFeedback.apartamento || ''
     })
+  }, [currentFeedback])
+
+  // Inicializar sugestões para edição
+  useEffect(() => {
+    setEditedSuggestions([{
+      id: `suggestion-${Date.now()}-0`,
+      has_suggestion: currentFeedback.has_suggestion || false,
+      suggestion_type: currentFeedback.suggestion_type || '',
+      suggestion_summary: currentFeedback.suggestion_summary || ''
+    }])
   }, [currentFeedback])
 
   // Atualizar feedback quando o índice mudar
@@ -827,7 +1123,7 @@ const CommentModal = ({
     }
   }
 
-  const handleUpdateProblem = (id: string, updated: {keyword: string, sector: string, problem: string}) => {
+  const handleUpdateProblem = (id: string, updated: {keyword: string, sector: string, problem: string, problem_detail?: string}) => {
     const newProblems = editedProblems.map(p => 
       p.id === id ? { ...p, ...updated } : p
     )
@@ -848,7 +1144,35 @@ const CommentModal = ({
         id: `problem-${Date.now()}-${editedProblems.length}`,
         keyword: 'Comodidade', 
         sector: 'Produto', 
-        problem: 'VAZIO' 
+        problem: 'VAZIO',
+        problem_detail: ''
+      }
+    ])
+  }
+
+  // Funções para gerenciar sugestões (similar aos problemas)
+  const handleUpdateSuggestion = (id: string, updated: {has_suggestion: boolean, suggestion_type: string, suggestion_summary: string}) => {
+    const newSuggestions = editedSuggestions.map(s => 
+      s.id === id ? { ...s, ...updated } : s
+    )
+    setEditedSuggestions(newSuggestions)
+  }
+
+  const handleRemoveSuggestion = (id: string) => {
+    if (editedSuggestions.length > 1) {
+      const newSuggestions = editedSuggestions.filter(s => s.id !== id)
+      setEditedSuggestions(newSuggestions)
+    }
+  }
+
+  const handleAddSuggestion = () => {
+    setEditedSuggestions([
+      ...editedSuggestions,
+      { 
+        id: `suggestion-${Date.now()}-${editedSuggestions.length}`,
+        has_suggestion: true,
+        suggestion_type: 'only_suggestion',
+        suggestion_summary: ''
       }
     ])
   }
@@ -883,6 +1207,14 @@ const CommentModal = ({
       source: currentFeedback.source || '',
       apartamento: currentFeedback.apartamento || ''
     })
+    
+    // Inicializar sugestões editadas com valores originais - agora como array
+    setEditedSuggestions([{
+      id: `suggestion-${Date.now()}-0`,
+      has_suggestion: currentFeedback.has_suggestion || false,
+      suggestion_type: currentFeedback.suggestion_type || 'none',
+      suggestion_summary: currentFeedback.suggestion_summary || ''
+    }])
   }
 
   const handleCancelEditUnified = () => {
@@ -906,6 +1238,14 @@ const CommentModal = ({
         ...problem
       })))
     }
+    
+    // Resetar sugestões para os valores originais
+    setEditedSuggestions([{
+      id: `suggestion-${Date.now()}-0`,
+      has_suggestion: currentFeedback.has_suggestion || false,
+      suggestion_type: currentFeedback.suggestion_type || '',
+      suggestion_summary: currentFeedback.suggestion_summary || ''
+    }])
   }
 
   const handleSaveUnified = async () => {
@@ -917,7 +1257,7 @@ const CommentModal = ({
       const sectors = editedProblems.map(p => p.sector).join(', ')
       const problems = editedProblems.map(p => p.problem).join(', ')
       
-      // Criar feedback atualizado com metadados e análise
+      // Criar feedback atualizado com metadados, análise e sugestões
       const updatedFeedback = {
         ...currentFeedback,
         keyword: keywords,
@@ -928,7 +1268,11 @@ const CommentModal = ({
         rating: editedMetadata.rating,
         language: editedMetadata.language,
         source: editedMetadata.source,
-        apartamento: editedMetadata.apartamento
+        apartamento: editedMetadata.apartamento,
+        has_suggestion: editedSuggestions[0]?.has_suggestion || false,
+        suggestion_type: editedSuggestions[0]?.suggestion_type as "only" | "mixed" | "none" | undefined,
+        suggestion_summary: editedSuggestions[0]?.suggestion_summary || '',
+        allSuggestions: editedSuggestions // Adicionar array completo
       }
       
       // Atualizar localStorage se for do hotel atual
@@ -1064,6 +1408,78 @@ const CommentModal = ({
     }
   }
 
+  const handleSaveSuggestions = async () => {
+    setIsSaving(true)
+    
+    try {
+      const updatedFeedback = {
+        ...currentFeedback,
+        has_suggestion: editedSuggestions[0]?.has_suggestion || false,
+        suggestion_type: editedSuggestions[0]?.suggestion_type as 'only' | 'mixed' | 'none' | undefined,
+        suggestion_summary: editedSuggestions[0]?.suggestion_summary || '',
+        allSuggestions: editedSuggestions
+      }
+
+      // Atualizar localStorage se for do hotel atual
+      const storedFeedbacks = localStorage.getItem('analysis-feedbacks')
+      if (storedFeedbacks) {
+        const storedHotelId = localStorage.getItem('current-hotel-id')
+        if (storedHotelId === userData?.hotelId) {
+          const feedbacks = JSON.parse(storedFeedbacks)
+          const updatedFeedbacks = feedbacks.map((f: Feedback) => 
+            f.id === currentFeedback.id ? updatedFeedback : f
+          )
+          localStorage.setItem('analysis-feedbacks', JSON.stringify(updatedFeedbacks))
+        }
+      }
+
+      // Salvar no Firebase
+      await updateFeedbackInFirestore(currentFeedback.id, updatedFeedback)
+      
+      // Salvar no histórico de edições
+      await saveRecentEdit({
+        feedbackId: currentFeedback.id,
+        hotelId: currentFeedback.hotelId || currentFeedback.id.split('_')[0] || 'unknown',
+        hotelName: userData?.hotelName || currentFeedback.hotel || 'Hotel não identificado',
+        comment: currentFeedback.comment,
+        rating: currentFeedback.rating,
+        date: currentFeedback.date,
+        source: currentFeedback.source || 'Sistema',
+        oldSuggestions: {
+          has_suggestion: currentFeedback.has_suggestion || false,
+          suggestion_type: currentFeedback.suggestion_type || '',
+          suggestion_summary: currentFeedback.suggestion_summary || ''
+        },
+        newSuggestions: {
+          has_suggestion: editedSuggestions[0]?.has_suggestion || false,
+          suggestion_type: editedSuggestions[0]?.suggestion_type || '',
+          suggestion_summary: editedSuggestions[0]?.suggestion_summary || ''
+        },
+        modifiedAt: new Date().toISOString(),
+        modifiedBy: userData?.email || 'Colaborador',
+        page: 'analysis-suggestions'
+      })
+      
+      // Chamar callback para atualizar a lista principal
+      onFeedbackUpdated?.(updatedFeedback)
+      
+      toast({
+        title: "Sugestões Atualizadas",
+        description: "As sugestões foram salvas com sucesso.",
+        duration: 2000,
+      })
+    } catch (error) {
+      console.error('Erro ao salvar sugestões:', error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar as sugestões. Tente novamente.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const handleSaveChanges = async () => {
     setIsSaving(true)
     
@@ -1179,13 +1595,13 @@ const CommentModal = ({
           <Eye className="h-4 w-4 text-blue-600 dark:text-blue-400" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden flex flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-900 dark:via-gray-900 dark:to-blue-950/30 border-0 shadow-2xl backdrop-blur-sm">
+      <DialogContent className="max-w-6xl w-[95vw] max-h-[95vh] overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-900 dark:via-gray-900 dark:to-blue-950/30 border-0 shadow-2xl backdrop-blur-sm">
         <DialogHeader className="sr-only">
           <DialogTitle>Detalhes do Comentário</DialogTitle>
         </DialogHeader>
         
         {/* Header moderno e elegante - Altura reduzida */}
-        <div className="relative flex-shrink-0 bg-gradient-to-r from-blue-50 via-slate-50 to-gray-50 dark:from-slate-950 dark:via-blue-950 dark:to-indigo-950 border-b border-gray-200 dark:border-gray-700">
+        <div className="relative sticky top-0 z-10 bg-gradient-to-r from-blue-50 via-slate-50 to-gray-50 dark:from-slate-950 dark:via-blue-950 dark:to-indigo-950 border-b border-gray-200 dark:border-gray-700">
           {/* Botão fechar elegante */}
           <Button 
             variant="ghost" 
@@ -1437,14 +1853,13 @@ const CommentModal = ({
           </div>
         </div>
 
-        {/* Conteúdo com scroll */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-6">
-            {/* Informações do Feedback - Design melhorado */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-700/30 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-white" />
+        {/* Conteúdo responsivo */}
+        <div className="p-4 md:p-6 space-y-4">
+            {/* Informações do Feedback - Design compacto */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700/30 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
+                <Calendar className="h-4 w-4 text-white" />
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Data</p>
@@ -1452,9 +1867,9 @@ const CommentModal = ({
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-yellow-500 flex items-center justify-center">
-                <Star className="h-5 w-5 text-white fill-current" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-yellow-500 flex items-center justify-center">
+                <Star className="h-4 w-4 text-white fill-current" />
               </div>
               <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avaliação</p>
@@ -1483,9 +1898,9 @@ const CommentModal = ({
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
-                <MessageSquare className="h-5 w-5 text-white" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center">
+                <MessageSquare className="h-4 w-4 text-white" />
               </div>
               <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sentimento</p>
@@ -1506,10 +1921,9 @@ const CommentModal = ({
               </div>
             </div>
           </div>
-          </div>
 
-          {/* Comentário Principal - Design melhorado */}
-          <div className="space-y-4">
+        {/* Comentário Principal - Design melhorado */}
+        <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Comentário do Cliente</h3>
@@ -1527,8 +1941,8 @@ const CommentModal = ({
                 Copiar
               </Button>
             </div>
-            <div className="p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
-              <p className="text-sm leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300 font-medium">
+            <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+              <p className="text-sm leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300">
                 {currentFeedback.comment}
               </p>
             </div>
@@ -1554,11 +1968,11 @@ const CommentModal = ({
             {feedback.allProblems && feedback.allProblems.length > 0 ? (
               isEditing ? (
                 // Modo de edição
-                <div className="space-y-6">
-                  <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
-                      <Edit3 className="h-4 w-4" />
-                      <span className="text-sm font-medium">Editando Classificação</span>
+                <div className="space-y-3">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-1">
+                      <Edit3 className="h-3 w-3" />
+                      <span className="text-xs font-medium">Editando Classificação</span>
                     </div>
                     <p className="text-xs text-blue-600 dark:text-blue-400">
                       Corrija a análise da IA se necessário. As alterações serão salvas e refletidas nos dashboards.
@@ -1619,6 +2033,11 @@ const CommentModal = ({
                                 problemAnalysis.problem || 'Não especificado'
                               )}
                             </Badge>
+                            {problemAnalysis.problem_detail && (
+                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2" title={problemAnalysis.problem_detail}>
+                                {problemAnalysis.problem_detail}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1628,113 +2047,245 @@ const CommentModal = ({
               )
             ) : (
               // Exibição tradicional para problema único
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <h4 className="font-medium text-gray-900 dark:text-white">Departamento</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {feedback.sector.split(';').map((sector, index) => (
-                      <Badge 
-                        key={index} 
-                        variant="outline"
-                        className={cn("text-sm border font-medium", getSectorColor(sector.trim()))}
-                      >
-                        {sector.trim()}
-                      </Badge>
-                    ))}
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-900 dark:text-white">Departamento</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {feedback.sector.split(';').map((sector, index) => (
+                        <Badge 
+                          key={index} 
+                          variant="outline"
+                          className={cn("text-sm border font-medium", getSectorColor(sector.trim()))}
+                        >
+                          {sector.trim()}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <h4 className="font-medium text-gray-900 dark:text-white">Palavras-chave</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {feedback.keyword.split(';').map((kw, index) => {
-                      const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
-                      return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
-                    })}
+                  
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-900 dark:text-white">Palavras-chave</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {feedback.keyword.split(';').map((kw, index) => {
+                        const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
+                        return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
+                      })}
+                    </div>
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <h4 className="font-medium text-gray-900 dark:text-white">Problema</h4>
-                  <Badge variant="secondary" className="text-sm">
-                    {feedback.problem === 'VAZIO' ? (
-                      <span className="italic text-green-600 dark:text-green-400">Sem problemas</span>
-                    ) : (
-                      feedback.problem || 'Não especificado'
+                  
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-gray-900 dark:text-white">Problema</h4>
+                    <Badge variant="secondary" className="text-sm">
+                      {feedback.problem === 'VAZIO' ? (
+                        <span className="italic text-green-600 dark:text-green-400">Sem problemas</span>
+                      ) : (
+                        feedback.problem || 'Não especificado'
+                      )}
+                    </Badge>
+                    {feedback.problem_detail && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2" title={feedback.problem_detail}>
+                        {feedback.problem_detail}
+                      </p>
                     )}
-                  </Badge>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
+          {/* Seção de Sugestões - Design melhorado */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h4 className="font-semibold text-gray-900 dark:text-white">Sugestões da IA</h4>
+                <Badge variant="secondary" className="text-xs">
+                  <Lightbulb className="w-3 h-3 mr-1" />
+                  IA
+                </Badge>
+              </div>
+            </div>
+            
+            {(isEditingMetadata || isEditingUnified) ? (
+              <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 mb-2">
+                        <Edit3 className="h-4 w-4" />
+                        <span className="text-sm font-medium">Editando Sugestões</span>
+                      </div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-3">
+                        Corrija a análise de sugestões da IA se necessário. As alterações serão salvas e refletidas nos dashboards.
+                      </p>
+                      {editedSuggestions.map((suggestion, index) => (
+                        <SuggestionEditor
+                          key={suggestion.id}
+                          suggestion={suggestion}
+                          onUpdate={(updated) => handleUpdateSuggestion(suggestion.id, updated)}
+                          onRemove={() => handleRemoveSuggestion(suggestion.id)}
+                          canRemove={editedSuggestions.length > 1}
+                        />
+                      ))}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddSuggestion}
+                        className="w-full border-dashed border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Adicionar Sugestão ({editedSuggestions.length})
+                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleSaveSuggestions}
+                          disabled={isSaving}
+                          className="flex-1"
+                        >
+                          <Save className="h-3 w-3 mr-1" />
+                          {isSaving ? 'Salvando...' : 'Salvar Sugestões'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditedSuggestions([{
+                              id: `suggestion-${Date.now()}-0`,
+                              has_suggestion: feedback.has_suggestion || false,
+                              suggestion_type: feedback.suggestion_type || 'none',
+                              suggestion_summary: feedback.suggestion_summary || ''
+                            }])
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    feedback.has_suggestion ? (
+                      <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/40 rounded-lg border border-blue-200 dark:border-blue-700">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <h5 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Tipo de Sugestão</h5>
+                          </div>
+                          <Badge 
+                            variant="outline" 
+                            className={cn(
+                              "text-sm font-medium",
+                              feedback.suggestion_type === 'only' || feedback.suggestion_type === 'only_suggestion'
+                                    ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 shadow-sm"
+                                    : feedback.suggestion_type === 'mixed'
+                                ? "bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/40 dark:to-violet-900/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700 shadow-sm"
+                                : feedback.suggestion_type === 'with_criticism'
+                                ? "bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/40 dark:to-amber-900/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700 shadow-sm"
+                                : feedback.suggestion_type === 'with_praise'
+                                ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700 shadow-sm"
+                                : "bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-900/40 dark:to-slate-900/40 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 shadow-sm"
+                            )}
+                          >
+                            <Lightbulb className="w-3 h-3 mr-1" />
+                            {feedback.suggestion_type === 'only' || feedback.suggestion_type === 'only_suggestion'
+                              ? 'Apenas Sugestão'
+                              : feedback.suggestion_type === 'mixed'
+                              ? 'Mista (Sugestão + Problema)'
+                              : feedback.suggestion_type === 'with_criticism'
+                              ? 'Sugestão com Crítica'
+                              : feedback.suggestion_type === 'with_praise'
+                              ? 'Sugestão com Elogio'
+                              : 'Sem Sugestão'}
+                          </Badge>
+                          
+                          {feedback.suggestion_summary && (
+                            <div className="space-y-2">
+                              <h5 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Resumo da Sugestão</h5>
+                              <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                  {feedback.suggestion_summary}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-800 dark:to-slate-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                          <Lightbulb className="w-4 h-4" />
+                          <span className="text-sm font-medium italic">Nenhuma sugestão identificada pela IA</span>
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+         
+
           {/* Informações Adicionais - Design melhorado */}
           {(currentFeedback.source || currentFeedback.language || currentFeedback.apartamento) && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-800 dark:to-slate-800 rounded-lg border border-gray-200 dark:border-gray-700">
               {currentFeedback.source && (
-              <div>
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fonte</p>
-                {(isEditingMetadata || isEditingUnified) ? (
-                  <Select value={editedMetadata.source} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, source: value }))}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Booking">Booking</SelectItem>
-                      <SelectItem value="Airbnb">Airbnb</SelectItem>
-                      <SelectItem value="Google">Google</SelectItem>
-                      <SelectItem value="TripAdvisor">TripAdvisor</SelectItem>
-                      <SelectItem value="Expedia">Expedia</SelectItem>
-                      <SelectItem value="Hotels.com">Hotels.com</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.source}</p>
-                )}
-              </div>
-            )}
-            {currentFeedback.language && (
-              <div>
-                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Idioma</p>
-                {(isEditingMetadata || isEditingUnified) ? (
-                  <Select value={editedMetadata.language} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, language: value }))}>
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pt">Português</SelectItem>
-                      <SelectItem value="en">Inglês</SelectItem>
-                      <SelectItem value="es">Espanhol</SelectItem>
-                      <SelectItem value="fr">Francês</SelectItem>
-                      <SelectItem value="de">Alemão</SelectItem>
-                      <SelectItem value="it">Italiano</SelectItem>
-                      <SelectItem value="other">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.language}</p>
-                )}
-              </div>
-            )}
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fonte</p>
+                  {(isEditingMetadata || isEditingUnified) ? (
+                    <Select value={editedMetadata.source} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, source: value }))}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Booking">Booking</SelectItem>
+                        <SelectItem value="Airbnb">Airbnb</SelectItem>
+                        <SelectItem value="Google">Google</SelectItem>
+                        <SelectItem value="TripAdvisor">TripAdvisor</SelectItem>
+                        <SelectItem value="Expedia">Expedia</SelectItem>
+                        <SelectItem value="Hotels.com">Hotels.com</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.source}</p>
+                  )}
+                </div>
+              )}
+              {currentFeedback.language && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Idioma</p>
+                  {(isEditingMetadata || isEditingUnified) ? (
+                    <Select value={editedMetadata.language} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, language: value }))}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pt">Português</SelectItem>
+                        <SelectItem value="en">Inglês</SelectItem>
+                        <SelectItem value="es">Espanhol</SelectItem>
+                        <SelectItem value="fr">Francês</SelectItem>
+                        <SelectItem value="de">Alemão</SelectItem>
+                        <SelectItem value="it">Italiano</SelectItem>
+                        <SelectItem value="other">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.language}</p>
+                  )}
+                </div>
+              )}
               {currentFeedback.apartamento && (
-                 <div>
-                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Apartamento</p>
-                   {(isEditingMetadata || isEditingUnified) ? (
-                     <Input 
-                       value={editedMetadata.apartamento} 
-                       onChange={(e) => setEditedMetadata(prev => ({ ...prev, apartamento: e.target.value }))}
-                       className="h-8 text-sm"
-                       placeholder="Número do apartamento"
-                     />
-                   ) : (
-                     <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.apartamento}</p>
-                   )}
-                 </div>
-               )}
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Apartamento</p>
+                  {(isEditingMetadata || isEditingUnified) ? (
+                    <Input 
+                      value={editedMetadata.apartamento} 
+                      onChange={(e) => setEditedMetadata(prev => ({ ...prev, apartamento: e.target.value }))}
+                      className="h-8 text-sm"
+                      placeholder="Número do apartamento"
+                    />
+                  ) : (
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.apartamento}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
+     
       </DialogContent>
     </Dialog>
   )
@@ -2988,6 +3539,10 @@ function AnalysisPageContent() {
                     <Filter className="h-4 w-4 mr-2 text-red-300" />
                     Problema
                   </div>
+                  <div className="w-32 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <Lightbulb className="h-4 w-4 mr-2 text-yellow-300" />
+                    Sugestão
+                  </div>
                   <div className="w-12 py-5 px-4 font-bold text-white text-sm text-center flex items-center justify-center">
                     <Eye className="h-4 w-4 text-gray-300" />
                   </div>
@@ -3155,13 +3710,33 @@ function AnalysisPageContent() {
                                 }
                                 
                                 return (
-                                  <Badge 
-                                    key={index} 
-                                    variant="outline"
-                                    className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
-                                  >
-                                    {trimmedProblem.substring(0, 14)}
-                                  </Badge>
+                                  feedback.problem_detail ? (
+                                    <span key={index} className="inline-flex">
+                                      <TooltipProvider delayDuration={100}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Badge 
+                                              variant="outline"
+                                              className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                            >
+                                              {trimmedProblem.substring(0, 14)}
+                                            </Badge>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-sm text-xs leading-relaxed">
+                                            {feedback.problem_detail}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </span>
+                                  ) : (
+                                    <Badge 
+                                      key={index} 
+                                      variant="outline"
+                                      className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                    >
+                                      {trimmedProblem.substring(0, 14)}
+                                    </Badge>
+                                  )
                                 );
                               })
                             ) : (
@@ -3171,6 +3746,44 @@ function AnalysisPageContent() {
                               <Badge variant="outline" className="text-sm px-2 py-1">
                                 +{feedback.problem.split(';').length - 3}
                               </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="w-32 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
+                          <div className="flex flex-wrap gap-1">
+                            {feedback.has_suggestion ? (
+                              <Badge 
+                                variant="outline"
+                                className={cn(
+                                  "text-sm px-3 py-1.5 border",
+                                  feedback.suggestion_type === 'only' || feedback.suggestion_type === 'only_suggestion'
+                                    ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 shadow-sm"
+                                    : feedback.suggestion_type === 'mixed'
+                                    ? "bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/40 dark:to-violet-900/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700 shadow-sm"
+                                    : feedback.suggestion_type === 'with_criticism'
+                                    ? "bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/40 dark:to-red-900/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700 shadow-sm"
+                                    : feedback.suggestion_type === 'with_praise'
+                                    ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700 shadow-sm"
+                                    : "bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-900/40 dark:to-slate-900/40 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 shadow-sm"
+                                )}
+                              >
+                                <Lightbulb className="w-3 h-3 mr-1" />
+                                {feedback.suggestion_summary || (
+                                  feedback.suggestion_type === 'only' || feedback.suggestion_type === 'only_suggestion'
+                                    ? 'Apenas Sugestão'
+                                    : feedback.suggestion_type === 'mixed'
+                                    ? 'Mista'
+                                    : feedback.suggestion_type === 'with_criticism'
+                                    ? 'Com Crítica'
+                                    : feedback.suggestion_type === 'with_praise'
+                                    ? 'Com Elogio'
+                                    : 'Sem Sugestão'
+                                )}
+                              </Badge>
+                            ) : (
+                              <span className="text-sm text-gray-500 dark:text-gray-400 italic font-medium">
+                                Sem Sugestão
+                              </span>
                             )}
                           </div>
                         </div>
