@@ -44,7 +44,9 @@ interface Feedback {
   sector?: string;
   // Campos de sugestão
   has_suggestion?: boolean;
+
   suggestion_type?: 'only' | 'mixed' | 'none' | 'only_suggestion' | 'with_criticism' | 'with_praise';
+
   suggestion_summary?: string;
 }
 
@@ -73,7 +75,9 @@ export const EnhancedFeedbackViewer: React.FC<EnhancedFeedbackViewerProps> = ({
   const [feedbacksWithManualSuggestions, setFeedbacksWithManualSuggestions] = useState<Feedback[]>(feedbacks);
 
   // Função para lidar com sugestões adicionadas manualmente
+
   const handleSuggestionAdded = (feedbackId: string, suggestion: string, suggestionType: 'only' | 'mixed' | 'only_suggestion') => {
+
     setFeedbacksWithManualSuggestions(prev => 
       prev.map(feedback => 
         feedback.id === feedbackId 
@@ -199,17 +203,20 @@ export const EnhancedFeedbackViewer: React.FC<EnhancedFeedbackViewerProps> = ({
     if (!feedback.has_suggestion) return null;
     
     const badgeProps = {
+
       'only': { variant: 'default' as const, color: 'bg-blue-100 text-blue-800 border-blue-200' },
       'only_suggestion': { variant: 'default' as const, color: 'bg-blue-100 text-blue-800 border-blue-200' },
       'mixed': { variant: 'secondary' as const, color: 'bg-purple-100 text-purple-800 border-purple-200' },
       'with_criticism': { variant: 'secondary' as const, color: 'bg-orange-100 text-orange-800 border-orange-200' },
       'with_praise': { variant: 'secondary' as const, color: 'bg-green-100 text-green-800 border-green-200' },
+
       'none': null
     };
     
     const props = badgeProps[feedback.suggestion_type || 'none'];
     if (!props) return null;
     
+
     // Usar o conteúdo real da sugestão ou um fallback baseado no tipo
     const displayText = feedback.suggestion_summary || (
       feedback.suggestion_type === 'only' || feedback.suggestion_type === 'only_suggestion'
@@ -227,6 +234,7 @@ export const EnhancedFeedbackViewer: React.FC<EnhancedFeedbackViewerProps> = ({
       <Badge variant="outline" className={`text-xs ${props.color}`} title={feedback.suggestion_summary || 'Contém sugestão'}>
         <Lightbulb className="h-3 w-3 mr-1" />
         {displayText}
+
       </Badge>
     );
   };

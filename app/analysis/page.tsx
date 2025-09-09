@@ -54,6 +54,7 @@ import {
   Lightbulb,
   History,
   Clock
+
 } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
@@ -1179,6 +1180,7 @@ const CommentModal = ({
         sector: 'Produto', 
         problem: 'VAZIO',
         problem_detail: ''
+
       }
     ])
   }
@@ -1216,6 +1218,7 @@ const CommentModal = ({
         has_suggestion: true,
         suggestion_type: 'only_suggestion',
         suggestion_summary: ''
+
       }
     ])
   }
@@ -2260,7 +2263,9 @@ const CommentModal = ({
                         {feedback.problem_detail}
                       </p>
                     )}
+
                   </div>
+
                 </div>
               </div>
             )}
@@ -4010,10 +4015,12 @@ function AnalysisPageContent() {
                     <Filter className="h-4 w-4 mr-1 text-red-300" />
                     <span className="hidden lg:inline">Problema</span>
                   </div>
+
                   <div className="col-span-1 py-5 px-2 font-bold text-white text-sm flex items-center">
                     <Lightbulb className="h-4 w-4 mr-1 text-yellow-300" />
                     <span className="hidden xl:inline">Sugestão</span>
                     <Eye className="h-4 w-4 ml-auto text-gray-300" />
+
                   </div>
                 </div>
               </div>
@@ -4220,6 +4227,7 @@ function AnalysisPageContent() {
                                       </Badge>
                                     )
                                   );
+
                                 });
                               })()
                             ) : (
@@ -4232,6 +4240,7 @@ function AnalysisPageContent() {
                             )}
                           </div>
                         </div>
+
                         <div className="col-span-1 py-4 px-2 flex items-center justify-between">
                           <div className="flex items-center gap-1">
                             {feedback.has_suggestion ? (

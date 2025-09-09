@@ -400,7 +400,9 @@ export async function POST(request: NextRequest) {
     const { texto, comment } = body;
     
     // Usar comment se texto não estiver presente (compatibilidade)
+
     const finalText = texto || comment;
+
     
     // Verificar se a API key está configurada nas variáveis de ambiente
     const apiKey = process.env.OPENAI_API_KEY;
@@ -411,7 +413,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+
     if (!finalText || finalText.trim() === '') {
+
       return NextResponse.json({
         rating: 3,
         keyword: 'Experiência',
@@ -429,7 +433,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar chave de cache
+
     const cacheKey = `${finalText.trim().toLowerCase().slice(0, 100)}`;
+
     
     // Verificar cache
     const cached = analysisCache.get(cacheKey);
@@ -438,7 +444,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o texto contém apenas números ou caracteres não significativos
+
     const cleanText = finalText.trim();
+
     const isOnlyNumbers = /^\d+$/.test(cleanText);
     const isOnlySpecialChars = /^[^\w\s]+$/.test(cleanText);
     const isTooShort = cleanText.length < 10;
@@ -499,6 +507,7 @@ export async function POST(request: NextRequest) {
           suggestion_summary: {
             type: "string",
             description: "Resumo objetivo da(s) sugestão(ões) mencionada(s) no comentário. Máximo 200 caracteres. Deixe vazio se has_suggestion for false."
+
           },
           issues: {
             type: "array",
@@ -530,11 +539,14 @@ export async function POST(request: NextRequest) {
             }
           }
         },
+
         required: ["sentiment", "has_suggestion", "suggestion_type", "suggestion_summary", "issues"]
+
       }
     };
 
     const analysisPrompt = `Você é um auditor de reputação hoteleira especializado. O comentário pode estar EM QUALQUER IDIOMA; identifique internamente e traduza se necessário.
+
 
 **MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 PROBLEMAS DIFERENTES. Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta ou insatisfação mencionada. SEJA ASSERTIVO na classificação - SEMPRE encontre uma categoria apropriada. TAMBÉM detecte e classifique SUGESTÕES de melhoria.
 
@@ -543,6 +555,7 @@ export async function POST(request: NextRequest) {
 **ATENÇÃO CRÍTICA:** Se o comentário contém QUALQUER palavra ou expressão que indique sugestão, melhoria ou mudança, SEMPRE defina has_suggestion como true. NÃO ignore sugestões!
 
 **DETECÇÃO DE SUGESTÕES (OBRIGATÓRIA E CRÍTICA):**
+
 - has_suggestion: true se o comentário contém QUALQUER sugestão de melhoria, implementação ou mudança
 - suggestion_type: classifique o tipo de sugestão:
   * "none": sem sugestões
@@ -550,6 +563,7 @@ export async function POST(request: NextRequest) {
   * "with_criticism": sugestões combinadas com críticas/problemas
   * "with_praise": sugestões combinadas com elogios
   * "mixed": sugestões com críticas E elogios
+
 
 **PADRÕES DE SUGESTÃO (ANÁLISE OBRIGATÓRIA):**
 - Palavras diretas: "poderia", "deveria", "seria bom", "sugiro", "recomendo", "melhoraria se", "gostaria que", "seria interessante", "poderiam implementar", "precisam de", "deveriam ter", "seria legal", "seria ótimo"
@@ -561,18 +575,21 @@ export async function POST(request: NextRequest) {
 
 **REGRA CRÍTICA DE SUGESTÕES:** Se encontrar QUALQUER das palavras acima no comentário, SEMPRE defina has_suggestion=true. Não há exceções!
 
+
 **EXEMPLOS DE SUGESTÕES:**
 - "Seria bom ter mais opções no café da manhã" → has_suggestion=true, suggestion_type="only_suggestion"
 - "O quarto estava sujo, mas poderiam colocar mais toalhas" → has_suggestion=true, suggestion_type="with_criticism"
 - "Adorei a estadia! Sugiro apenas mais atividades na piscina" → has_suggestion=true, suggestion_type="with_praise"
 - "Hotel excelente, mas faltou ar-condicionado. Poderiam melhorar a limpeza também" → has_suggestion=true, suggestion_type="mixed"
 - "Tudo perfeito, recomendo!" → has_suggestion=false, suggestion_type="none"
+
 - "Tenho uma sugestão de melhorar a piscina" → has_suggestion=true, suggestion_type="only_suggestion"
 - "Faltou apenas mais variedade no café da manhã" → has_suggestion=true, suggestion_type="only_suggestion"
 - "Não tinha ar condicionado, seria bom ter" → has_suggestion=true, suggestion_type="with_criticism"
 - "Senti falta de mais atividades para crianças" → has_suggestion=true, suggestion_type="only_suggestion"
 - "Seria interessante ter um spa" → has_suggestion=true, suggestion_type="only_suggestion"
 - "Deveria ter mais funcionários na recepção" → has_suggestion=true, suggestion_type="only_suggestion"
+
 
 **REGRAS DE SAÍDA (OBRIGATÓRIAS):**
 - Gere até 3 items em "issues". Cada item DEVE conter: keyword (uma das oficiais), department (compatível com a keyword), problem (uma das categorias padrão; use "VAZIO" somente se houver apenas elogios), e problem_detail.
@@ -591,6 +608,17 @@ APENAS classifique como "Não identificado" se o comentário for COMPLETAMENTE V
 **IMPORTANTE:** SEMPRE tente encontrar uma categoria apropriada. Para elogios gerais, use keyword="Experiência", department="Produto", problem="VAZIO". Para qualquer feedback específico, identifique o departamento correto mesmo que seja uma crítica sutil.
 
 **ATENÇÃO - VENDAS/MULTIPROPRIEDADE:** Se houver insistência/pressão/assédio/coação para comprar multipropriedade (timeshare) ou situações de venda agressiva, crie um dos items em "issues" com: keyword="Cotas", department="Programa de vendas" e problem="Comunicação Ruim". Descreva em problem_detail a situação (ex.: "Insistência para comprar multipropriedade durante a estadia").
+ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLIDO:
+
+**PADRÕES DE COMENTÁRIOS IRRELEVANTES (classificar como "Não identificado"):**
+"conforme meu relato acima" → keyword="Experiência", department="Produto", problem="Não identificado"
+"VICE ACIMA" → keyword="Experiência", department="Produto", problem="Não identificado"
+"ver comentário anterior" → keyword="Experiência", department="Produto", problem="Não identificado"
+"mesmo problema" → keyword="Experiência", department="Produto", problem="Não identificado"
+"teste" → keyword="Experiência", department="Produto", problem="Não identificado"
+"..." → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
+Sempre tente aproximar o maximo possivel os comentarios com os departamentos e palavra chave, use Não identificado somente em casos extremos, quando tiver elogios nao use Não identificado, use Produto e Experiência
+
 
 **COMENTÁRIOS VÁLIDOS (análise normal):**
 "Senti falta de água nas áreas comuns" → keyword="Água", department="A&B", problem="Falta de Disponibilidade"
@@ -664,7 +692,7 @@ APENAS classifique como "Não identificado" se o comentário for COMPLETAMENTE V
 | Cotas                      | Programa de vendas       |
 | Reservas                   | Comercial                |
 
-Comentário: "${texto}"`;
+Comentário: "${feedbackText}"`;
 
     const response = await openai.chat.completions.create({
       model: model,
@@ -736,6 +764,14 @@ Comentário: "${texto}"`;
           problem: validatedProblem,
           problem_detail: problemDetail
         });
+      } else {
+        // Consolidar para um único item padrão
+        processedProblems = [{
+          keyword: 'Experiência',
+          sector: 'Produto', 
+          problem: 'VAZIO',
+          problem_detail: ''
+        }];
       }
     }
     
@@ -783,6 +819,7 @@ Comentário: "${texto}"`;
     };
 
     // Extrair campos de sugestão da resposta da IA
+
     let hasSuggestion = result.has_suggestion || false;
     let suggestionType = result.suggestion_type || 'none';
     let suggestionSummary = result.suggestion_summary || '';
@@ -833,7 +870,9 @@ Comentário: "${texto}"`;
       // Novos campos de sugestão
       has_suggestion: hasSuggestion,
       suggestion_type: suggestionType,
+
       suggestion_summary: suggestionSummary,
+
       // Formato estendido para futuras melhorias
       problems: processedProblems,
       allProblems: processedProblems,

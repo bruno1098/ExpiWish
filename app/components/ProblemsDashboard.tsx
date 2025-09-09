@@ -731,6 +731,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                               }
                             >
                               <Lightbulb className="w-3 h-3 mr-1" />
+
                               {feedback.suggestion_summary || (
                                 feedback.suggestion_type === 'only_suggestion'
                                   ? 'Apenas Sugestão'
@@ -738,6 +739,7 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                                   ? 'Mista'
                                   : 'Com Sugestão'
                               )}
+
                             </Badge>
                           </TableCell>
                           <TableCell>
