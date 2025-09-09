@@ -453,6 +453,33 @@ const scrollbarStyles = `
   }
 `;
 
+// Função helper para dividir strings por múltiplos delimitadores
+const splitByDelimiter = (str: string): string[] => {
+  if (!str || str.trim() === '') return [];
+  
+  console.log('🔍 splitByDelimiter recebeu:', str);
+  
+  // Primeiro tenta separar por ponto e vírgula, depois por vírgula
+  let items: string[] = [];
+  if (str.includes(';')) {
+    items = str.split(';');
+    console.log('📝 Separando por ponto e vírgula:', items);
+  } else if (str.includes(',')) {
+    items = str.split(',');
+    console.log('📝 Separando por vírgula:', items);
+  } else {
+    items = [str];
+    console.log('📝 String única:', items);
+  }
+  
+  const result = items
+    .map(item => item.trim())
+    .filter(item => item !== '' && item !== 'undefined' && item !== 'null');
+    
+  console.log('✅ Resultado final:', result);
+  return result;
+};
+
 // Mapa de cores para sentimentos
 const sentimentColors = {
   positive: "text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400",
@@ -1048,9 +1075,9 @@ const CommentModal = ({
       })))
     } else {
       // Converter formato antigo para novo
-      const keywords = currentFeedback.keyword.split(';').map(k => k.trim())
-      const sectors = currentFeedback.sector.split(';').map(s => s.trim())
-      const problems = currentFeedback.problem ? currentFeedback.problem.split(';').map(p => p.trim()) : ['']
+      const keywords = splitByDelimiter(currentFeedback.keyword)
+      const sectors = splitByDelimiter(currentFeedback.sector)
+      const problems = splitByDelimiter(currentFeedback.problem || '')
       
       const maxLength = Math.max(keywords.length, sectors.length, problems.length)
       const problemsArray = []
@@ -1317,9 +1344,14 @@ const CommentModal = ({
     
     try {
       // Converter problemas editados para string
-      const keywords = editedProblems.map(p => p.keyword).join(', ')
-      const sectors = editedProblems.map(p => p.sector).join(', ')
-      const problems = editedProblems.map(p => p.problem).join(', ')
+      const keywords = editedProblems.map(p => p.keyword).join(';')
+      const sectors = editedProblems.map(p => p.sector).join(';')
+      const problems = editedProblems.map(p => p.problem).join(';')
+      
+      console.log('🔄 Salvando dados unificados:')
+      console.log('Keywords:', keywords)
+      console.log('Sectors:', sectors)
+      console.log('Problems:', problems)
       
       // Criar feedback atualizado com metadados, análise e sugestões
       const updatedFeedback = {
@@ -2190,7 +2222,7 @@ const CommentModal = ({
                   <div className="space-y-2">
                     <h4 className="font-medium text-gray-900 dark:text-white">Departamento</h4>
                     <div className="flex flex-wrap gap-1">
-                      {feedback.sector.split(';').map((sector, index) => (
+                      {splitByDelimiter(feedback.sector).map((sector, index) => (
                         <Badge 
                           key={index} 
                           variant="outline"
@@ -2205,8 +2237,9 @@ const CommentModal = ({
                   <div className="space-y-2">
                     <h4 className="font-medium text-gray-900 dark:text-white">Palavras-chave</h4>
                     <div className="flex flex-wrap gap-1">
-                      {feedback.keyword.split(';').map((kw, index) => {
-                        const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
+                      {splitByDelimiter(feedback.keyword).map((kw, index) => {
+                        const sectors = splitByDelimiter(feedback.sector);
+                        const sector = sectors[index]?.trim() || sectors[0]?.trim() || '';
                         return <KeywordBadge key={index} keyword={kw.trim()} sector={sector} />;
                       })}
                     </div>
@@ -2589,7 +2622,7 @@ const CommentModal = ({
                                                   </span>
                                                 </div>
                                                 <div className="text-sm text-red-800 dark:text-red-300 font-medium bg-white/50 dark:bg-black/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
-                                                  {String(oldValue || 'Vazio')}
+                                                  {String(oldValue === 'VAZIO' ? 'Sem problemas' : oldValue || 'Sem problemas')}
                                                 </div>
                                               </div>
                                               
@@ -2602,7 +2635,7 @@ const CommentModal = ({
                                                   </span>
                                                 </div>
                                                 <div className="text-sm text-green-800 dark:text-green-300 font-medium bg-white/50 dark:bg-black/20 rounded-lg p-3 border border-green-200 dark:border-green-700">
-                                                  {String(newValue || 'Vazio')}
+                                                  {String(newValue === 'VAZIO' ? 'Sem problemas' : newValue || 'Sem problemas')}
                                                 </div>
                                               </div>
                                             </div>
@@ -3246,6 +3279,13 @@ function AnalysisPageContent() {
       )
     )
     
+    // Atualizar também os feedbacks filtrados
+    setFilteredFeedbacks(prevFiltered => 
+      prevFiltered.map(f => 
+        f.id === updatedFeedback.id ? updatedFeedback : f
+      )
+    )
+    
     // Se feedback foi deletado, iniciar animação antes de remover
     if (updatedFeedback.deleted) {
       // Adicionar à lista de feedbacks sendo excluídos
@@ -3494,9 +3534,9 @@ function AnalysisPageContent() {
   }
 
   // Obter listas únicas para filtros
-  const sectors = Array.from(new Set(feedbacks.flatMap(f => f.sector.split(';')).map(s => s.trim()).filter(Boolean)))
-  const keywords = Array.from(new Set(feedbacks.flatMap(f => f.keyword.split(';')).map(k => k.trim()).filter(Boolean)))
-  const problems = Array.from(new Set(feedbacks.flatMap(f => f.problem?.split(';') || []).map(p => p.trim()).filter(Boolean)))
+  const sectors = Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.sector))))
+  const keywords = Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.keyword))))
+  const problems = Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.problem || ''))))
 
   const clearFilters = () => {
     setSentimentFilter("all")
@@ -4089,37 +4129,42 @@ function AnalysisPageContent() {
                         </div>
                         <div className="w-48 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
                           <div className="flex flex-wrap gap-1">
-                            {feedback.sector.split(';').slice(0, 3).map((sector, index) => (
+                            {splitByDelimiter(feedback.sector).slice(0, 3).map((sector, index) => (
                               <Badge 
-                                key={index} 
+                                key={`${feedback.id}-sector-${index}`} 
                                 variant="outline"
                                 className={cn("text-xs border", getSectorColor(sector.trim()))}
                               >
                                 {sector.trim().substring(0, 15)}
                               </Badge>
                             ))}
-                            {feedback.sector.split(';').length > 3 && (
+                            {splitByDelimiter(feedback.sector).length > 3 && (
                               <Badge variant="outline" className="text-sm px-2 py-1">
-                                +{feedback.sector.split(';').length - 3}
+                                +{splitByDelimiter(feedback.sector).length - 3}
                               </Badge>
                             )}
                           </div>
                         </div>
                         <div className="w-52 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
                           <div className="flex flex-wrap gap-1">
-                            {feedback.keyword.split(';').slice(0, 3).map((kw, index) => {
-                              const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
-                              return (
-                                <KeywordBadge 
-                                  key={index} 
-                                  keyword={kw.trim().substring(0, 16)} 
-                                  sector={sector} 
-                                />
-                              );
-                            })}
-                            {feedback.keyword.split(';').length > 3 && (
+                            {(() => {
+                              const keywords = splitByDelimiter(feedback.keyword);
+                              const sectors = splitByDelimiter(feedback.sector);
+                              console.log('🔍 Renderizando keywords para feedback', feedback.id, ':', keywords);
+                              return keywords.slice(0, 3).map((kw, index) => {
+                                const sector = sectors[index]?.trim() || sectors[0]?.trim() || '';
+                                return (
+                                  <KeywordBadge 
+                                    key={`${feedback.id}-keyword-${index}`} 
+                                    keyword={kw.trim().substring(0, 16)} 
+                                    sector={sector} 
+                                  />
+                                );
+                              });
+                            })()}
+                            {splitByDelimiter(feedback.keyword).length > 3 && (
                               <Badge variant="outline" className="text-sm px-2 py-1">
-                                +{feedback.keyword.split(';').length - 3}
+                                +{splitByDelimiter(feedback.keyword).length - 3}
                               </Badge>
                             )}
                           </div>
@@ -4127,54 +4172,61 @@ function AnalysisPageContent() {
                         <div className="w-44 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
                           <div className="flex flex-wrap gap-1">
                             {feedback.problem ? (
-                              feedback.problem.split(';').slice(0, 3).map((problem, index) => {
-                                const sector = feedback.sector.split(';')[index]?.trim() || feedback.sector.split(';')[0]?.trim() || '';
-                                const trimmedProblem = problem.trim();
-                                
-                                if (trimmedProblem === 'VAZIO') {
+                              (() => {
+                                const problems = splitByDelimiter(feedback.problem);
+                                console.log('🐛 Problemas para feedback', feedback.id, ':', problems);
+                                return problems.slice(0, 3).map((problem, index) => {
+                                  const sectors = splitByDelimiter(feedback.sector);
+                                  const sector = sectors[index]?.trim() || sectors[0]?.trim() || '';
+                                  const trimmedProblem = problem.trim();
+                                  
+                                  console.log('🔧 Processando problema:', trimmedProblem);
+                                  
+                                  if (trimmedProblem === 'VAZIO') {
+                                    return (
+                                      <span key={`${feedback.id}-problem-${index}`} className="text-sm text-green-600 dark:text-green-400 italic font-medium">
+                                        Sem problemas
+                                      </span>
+                                    );
+                                  }
+                                  
                                   return (
-                                    <span key={index} className="text-sm text-green-600 dark:text-green-400 italic font-medium">
-                                      Sem problemas
-                                    </span>
+                                    feedback.problem_detail ? (
+                                      <span key={`${feedback.id}-problem-${index}`} className="inline-flex">
+                                        <TooltipProvider delayDuration={100}>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Badge 
+                                                variant="outline"
+                                                className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                              >
+                                                {trimmedProblem.substring(0, 14)}
+                                              </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="max-w-sm text-xs leading-relaxed">
+                                              {feedback.problem_detail}
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      </span>
+                                    ) : (
+                                      <Badge 
+                                        key={index} 
+                                        variant="outline"
+                                        className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                      >
+                                        {trimmedProblem.substring(0, 14)}
+                                      </Badge>
+                                    )
                                   );
-                                }
-                                
-                                return (
-                                  feedback.problem_detail ? (
-                                    <span key={index} className="inline-flex">
-                                      <TooltipProvider delayDuration={100}>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Badge 
-                                              variant="outline"
-                                              className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
-                                            >
-                                              {trimmedProblem.substring(0, 14)}
-                                            </Badge>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="max-w-sm text-xs leading-relaxed">
-                                            {feedback.problem_detail}
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    </span>
-                                  ) : (
-                                    <Badge 
-                                      key={index} 
-                                      variant="outline"
-                                      className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
-                                    >
-                                      {trimmedProblem.substring(0, 14)}
-                                    </Badge>
-                                  )
-                                );
-                              })
+                                });
+                              })()
                             ) : (
                               <span className="text-sm text-green-600 dark:text-green-400 italic font-medium">Sem problemas</span>
                             )}
-                            {feedback.problem && feedback.problem.split(';').length > 3 && (
+                            {feedback.problem && splitByDelimiter(feedback.problem).length > 3 && (
                               <Badge variant="outline" className="text-sm px-2 py-1">
-                                +{feedback.problem.split(';').length - 3}
+                                +{splitByDelimiter(feedback.problem).length - 3}
                               </Badge>
                             )}
                           </div>
