@@ -553,7 +553,7 @@ function ImportPageContent() {
                 'Authorization': `Bearer ${apiKey}`
               },
               body: JSON.stringify({
-                text: row.texto,
+                texto: row.texto,
                 signal: abortControllerRef.current?.signal
               })
             });
