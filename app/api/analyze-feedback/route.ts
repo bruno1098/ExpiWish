@@ -400,10 +400,8 @@ export async function POST(request: NextRequest) {
     const { texto, comment } = body;
     
     // Usar comment se texto não estiver presente (compatibilidade)
-
     const finalText = texto || comment;
 
-    
     // Verificar se a API key está configurada nas variáveis de ambiente
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -413,9 +411,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-
     if (!finalText || finalText.trim() === '') {
-
       return NextResponse.json({
         rating: 3,
         keyword: 'Experiência',
@@ -433,10 +429,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar chave de cache
-
     const cacheKey = `${finalText.trim().toLowerCase().slice(0, 100)}`;
 
-    
     // Verificar cache
     const cached = analysisCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_EXPIRY) {
@@ -444,7 +438,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o texto contém apenas números ou caracteres não significativos
-
     const cleanText = finalText.trim();
 
     const isOnlyNumbers = /^\d+$/.test(cleanText);
@@ -692,7 +685,7 @@ Sempre tente aproximar o maximo possivel os comentarios com os departamentos e p
 | Cotas                      | Programa de vendas       |
 | Reservas                   | Comercial                |
 
-Comentário: "${feedbackText}"`;
+Comentário: "${finalText}"`;
 
     const response = await openai.chat.completions.create({
       model: model,
@@ -764,15 +757,15 @@ Comentário: "${feedbackText}"`;
           problem: validatedProblem,
           problem_detail: problemDetail
         });
-      } else {
-        // Consolidar para um único item padrão
-        processedProblems = [{
-          keyword: 'Experiência',
-          sector: 'Produto', 
-          problem: 'VAZIO',
-          problem_detail: ''
-        }];
       }
+    } else {
+      // Consolidar para um único item padrão
+      processedProblems = [{
+        keyword: 'Experiência',
+        sector: 'Produto',
+        problem: 'VAZIO',
+        problem_detail: ''
+      }];
     }
     
     // Se retornou apenas placeholders (VAZIO/Não identificado), manter apenas 1.
