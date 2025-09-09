@@ -457,27 +457,19 @@ const scrollbarStyles = `
 const splitByDelimiter = (str: string): string[] => {
   if (!str || str.trim() === '') return [];
   
-  console.log('🔍 splitByDelimiter recebeu:', str);
-  
   // Primeiro tenta separar por ponto e vírgula, depois por vírgula
   let items: string[] = [];
   if (str.includes(';')) {
     items = str.split(';');
-    console.log('📝 Separando por ponto e vírgula:', items);
   } else if (str.includes(',')) {
     items = str.split(',');
-    console.log('📝 Separando por vírgula:', items);
   } else {
     items = [str];
-    console.log('📝 String única:', items);
   }
   
-  const result = items
+  return items
     .map(item => item.trim())
     .filter(item => item !== '' && item !== 'undefined' && item !== 'null');
-    
-  console.log('✅ Resultado final:', result);
-  return result;
 };
 
 // Mapa de cores para sentimentos
@@ -847,7 +839,7 @@ const availableDepartments = [
 
 // Lista de problemas comuns para sugestão
 const commonProblems = [
-  'VAZIO',
+  'Sem problemas',
   'Demora no Atendimento',
   'Falta de Limpeza',
   'Capacidade Insuficiente',
@@ -1340,6 +1332,13 @@ const CommentModal = ({
   }
 
   const handleSaveUnified = async () => {
+    // Evitar múltiplas execuções simultâneas
+    if (isSaving) {
+      console.log('⚠️ Salvamento já em andamento, ignorando nova chamada');
+      return;
+    }
+    
+    console.log('🚀 Iniciando salvamento unificado para feedback:', currentFeedback.id);
     setIsSaving(true)
     
     try {
@@ -1385,9 +1384,11 @@ const CommentModal = ({
       }
       
       // Salvar no Firebase
+      console.log('💾 Salvando no Firebase...');
       await updateFeedbackInFirestore(currentFeedback.id, updatedFeedback)
       
       // Salvar no histórico de edições (unificado - análise e metadados)
+      console.log('📝 Salvando no histórico de edições...');
       await saveRecentEdit({
         feedbackId: currentFeedback.id,
         hotelId: currentFeedback.hotelId || currentFeedback.id.split('_')[0] || 'unknown',
@@ -2248,7 +2249,7 @@ const CommentModal = ({
                   <div className="space-y-2">
                     <h4 className="font-medium text-gray-900 dark:text-white">Problema</h4>
                     <Badge variant="secondary" className="text-sm">
-                      {feedback.problem === 'VAZIO' ? (
+                      {feedback.problem === 'VAZIO' || feedback.problem === 'Sem problemas' ? (
                         <span className="italic text-green-600 dark:text-green-400">Sem problemas</span>
                       ) : (
                         feedback.problem || 'Não especificado'
@@ -3577,7 +3578,7 @@ function AnalysisPageContent() {
   }
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 space-y-6 w-full min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
       <TooltipProvider>
         {/* Header */}
@@ -3956,7 +3957,7 @@ function AnalysisPageContent() {
 
         {/* Tabela de Feedbacks */}
         <Card className="overflow-hidden shadow-lg border-0 bg-white dark:bg-gray-900">
-          <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+          <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-500 rounded-lg">
@@ -3976,45 +3977,43 @@ function AnalysisPageContent() {
             </div>
           </div>
           
-          <div className="table-with-fixed-header" style={{ height: 'calc(100vh - 200px)', minHeight: '700px' }}>
+          <div className="table-with-fixed-header w-full" style={{ height: 'calc(100vh - 200px)', minHeight: '700px' }}>
             {/* Header fixo */}
             <div className="fixed-header">
-              <div className="overflow-hidden">
-                <div className="flex bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 dark:from-gray-950 dark:via-blue-950 dark:to-indigo-950 shadow-lg">
-                  <div className="w-24 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
-                    <Calendar className="h-4 w-4 mr-2 text-blue-300" />
-                    Data
+              <div className="w-full">
+                <div className="grid grid-cols-12 bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 dark:from-gray-950 dark:via-blue-950 dark:to-indigo-950 shadow-lg">
+                  <div className="col-span-1 py-5 px-3 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <Calendar className="h-4 w-4 mr-1 text-blue-300" />
+                    <span className="hidden lg:inline">Data</span>
                   </div>
-                  <div className="w-64 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
-                    <MessageSquare className="h-4 w-4 mr-2 text-blue-300" />
-                    Comentário
+                  <div className="col-span-3 py-5 px-3 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <MessageSquare className="h-4 w-4 mr-1 text-blue-300" />
+                    <span className="hidden lg:inline">Comentário</span>
                   </div>
-                  <div className="w-24 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm text-center flex items-center justify-center">
-                    <Star className="h-4 w-4 mr-2 text-yellow-300" />
-                    Nota
+                  <div className="col-span-1 py-5 px-2 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm text-center flex items-center justify-center">
+                    <Star className="h-4 w-4 mr-1 text-yellow-300" />
+                    <span className="hidden xl:inline">Nota</span>
                   </div>
-                  <div className="w-28 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm text-center flex items-center justify-center">
-                    <TrendingUp className="h-4 w-4 mr-2 text-green-300" />
-                    Sentimento
+                  <div className="col-span-1 py-5 px-2 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm text-center flex items-center justify-center">
+                    <TrendingUp className="h-4 w-4 mr-1 text-green-300" />
+                    <span className="hidden xl:inline">Sent.</span>
                   </div>
-                  <div className="w-48 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
-                    <Users className="h-4 w-4 mr-2 text-purple-300" />
-                    Departamento
+                  <div className="col-span-2 py-5 px-2 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <Users className="h-4 w-4 mr-1 text-purple-300" />
+                    <span className="hidden lg:inline">Departamento</span>
                   </div>
-                  <div className="w-52 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
-                    <BarChart3 className="h-4 w-4 mr-2 text-orange-300" />
-                    Palavra-chave
+                  <div className="col-span-2 py-5 px-2 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <BarChart3 className="h-4 w-4 mr-1 text-orange-300" />
+                    <span className="hidden lg:inline">Palavra-chave</span>
                   </div>
-                  <div className="w-44 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
-                    <Filter className="h-4 w-4 mr-2 text-red-300" />
-                    Problema
+                  <div className="col-span-1 py-5 px-2 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
+                    <Filter className="h-4 w-4 mr-1 text-red-300" />
+                    <span className="hidden lg:inline">Problema</span>
                   </div>
-                  <div className="w-32 py-5 px-4 border-r border-gray-700/50 dark:border-gray-800/50 font-bold text-white text-sm flex items-center">
-                    <Lightbulb className="h-4 w-4 mr-2 text-yellow-300" />
-                    Sugestão
-                  </div>
-                  <div className="w-12 py-5 px-4 font-bold text-white text-sm text-center flex items-center justify-center">
-                    <Eye className="h-4 w-4 text-gray-300" />
+                  <div className="col-span-1 py-5 px-2 font-bold text-white text-sm flex items-center">
+                    <Lightbulb className="h-4 w-4 mr-1 text-yellow-300" />
+                    <span className="hidden xl:inline">Sugestão</span>
+                    <Eye className="h-4 w-4 ml-auto text-gray-300" />
                   </div>
                 </div>
               </div>
@@ -4094,7 +4093,7 @@ function AnalysisPageContent() {
                       <div 
                         key={feedback.id} 
                         className={cn(
-                          "flex hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px] relative",
+                          "grid grid-cols-12 hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px] relative w-full",
                           deletingFeedbacks.has(feedback.id) && "feedback-deleting",
                           editingFeedbacks.has(feedback.id) && "feedback-editing"
                         )}
@@ -4105,48 +4104,55 @@ function AnalysisPageContent() {
                             ✓
                           </div>
                         )}
-                        <div className="w-24 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-xs flex items-center">
-                          <span className="font-medium text-gray-600 dark:text-gray-400">
+                        <div className="col-span-1 py-4 px-2 border-r border-gray-200 dark:border-gray-800 text-xs flex items-center">
+                          <span className="font-medium text-gray-600 dark:text-gray-400 truncate">
                             {formatDateBR(feedback.date)}
                           </span>
                         </div>
-                        <div className="w-64 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
-                          <p className="text-sm line-clamp-4 leading-relaxed text-gray-700 dark:text-gray-300">
-                            {feedback.comment.length > 150 
-                              ? `${feedback.comment.substring(0, 150)}...` 
-                              : feedback.comment
-                            }
-                          </p>
+                        <div className="col-span-3 py-4 px-2 border-r border-gray-200 dark:border-gray-800 flex items-start">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <p className="text-sm line-clamp-3 leading-relaxed text-gray-700 dark:text-gray-300 cursor-help">
+                                  {feedback.comment.length > 120 
+                                    ? `${feedback.comment.substring(0, 120)}...` 
+                                    : feedback.comment
+                                  }
+                                </p>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-md text-sm leading-relaxed p-3">
+                                {feedback.comment}
+                              </TooltipContent>
+                            </Tooltip>
                         </div>
-                        <div className="w-24 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-center flex items-center justify-center">
+                        <div className="col-span-1 py-4 px-2 border-r border-gray-200 dark:border-gray-800 text-center flex items-center justify-center">
                           <div className="flex flex-col items-center justify-center space-y-1">
                             <span className="text-base leading-none text-yellow-500">{ratingIcons[feedback.rating] || "N/A"}</span>
-                            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{feedback.rating}</span>
+                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{feedback.rating}</span>
                           </div>
                         </div>
-                        <div className="w-28 py-4 px-3 border-r border-gray-200 dark:border-gray-800 text-center flex items-center justify-center">
+                        <div className="col-span-1 py-4 px-2 border-r border-gray-200 dark:border-gray-800 text-center flex items-center justify-center">
                           <SentimentBadge sentiment={feedback.sentiment} />
                         </div>
-                        <div className="w-48 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
-                          <div className="flex flex-wrap gap-1">
+                        <div className="col-span-2 py-4 px-2 border-r border-gray-200 dark:border-gray-800 flex items-start">
+                          <div className="flex flex-wrap gap-1 w-full">
                             {splitByDelimiter(feedback.sector).slice(0, 3).map((sector, index) => (
                               <Badge 
                                 key={`${feedback.id}-sector-${index}`} 
                                 variant="outline"
                                 className={cn("text-xs border", getSectorColor(sector.trim()))}
                               >
-                                {sector.trim().substring(0, 15)}
+                                {sector.trim().substring(0, 12)}
                               </Badge>
                             ))}
                             {splitByDelimiter(feedback.sector).length > 3 && (
-                              <Badge variant="outline" className="text-sm px-2 py-1">
+                              <Badge variant="outline" className="text-xs px-1 py-1">
                                 +{splitByDelimiter(feedback.sector).length - 3}
                               </Badge>
                             )}
                           </div>
                         </div>
-                        <div className="w-52 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
-                          <div className="flex flex-wrap gap-1">
+                        <div className="col-span-2 py-4 px-2 border-r border-gray-200 dark:border-gray-800 flex items-start">
+                          <div className="flex flex-wrap gap-1 w-full">
                             {(() => {
                               const keywords = splitByDelimiter(feedback.keyword);
                               const sectors = splitByDelimiter(feedback.sector);
@@ -4156,35 +4162,32 @@ function AnalysisPageContent() {
                                 return (
                                   <KeywordBadge 
                                     key={`${feedback.id}-keyword-${index}`} 
-                                    keyword={kw.trim().substring(0, 16)} 
+                                    keyword={kw.trim().substring(0, 15)} 
                                     sector={sector} 
                                   />
                                 );
                               });
                             })()}
                             {splitByDelimiter(feedback.keyword).length > 3 && (
-                              <Badge variant="outline" className="text-sm px-2 py-1">
+                              <Badge variant="outline" className="text-xs px-1 py-1">
                                 +{splitByDelimiter(feedback.keyword).length - 3}
                               </Badge>
                             )}
                           </div>
                         </div>
-                        <div className="w-44 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
-                          <div className="flex flex-wrap gap-1">
+                        <div className="col-span-1 py-4 px-2 border-r border-gray-200 dark:border-gray-800 flex items-start">
+                          <div className="flex flex-wrap gap-1 w-full">
                             {feedback.problem ? (
                               (() => {
                                 const problems = splitByDelimiter(feedback.problem);
-                                console.log('🐛 Problemas para feedback', feedback.id, ':', problems);
-                                return problems.slice(0, 3).map((problem, index) => {
+                                return problems.slice(0, 2).map((problem, index) => {
                                   const sectors = splitByDelimiter(feedback.sector);
                                   const sector = sectors[index]?.trim() || sectors[0]?.trim() || '';
                                   const trimmedProblem = problem.trim();
                                   
-                                  console.log('🔧 Processando problema:', trimmedProblem);
-                                  
-                                  if (trimmedProblem === 'VAZIO') {
+                                  if (trimmedProblem === 'VAZIO' || trimmedProblem === 'Sem problemas') {
                                     return (
-                                      <span key={`${feedback.id}-problem-${index}`} className="text-sm text-green-600 dark:text-green-400 italic font-medium">
+                                      <span key={`${feedback.id}-problem-${index}`} className="text-xs text-green-600 dark:text-green-400 italic font-medium">
                                         Sem problemas
                                       </span>
                                     );
@@ -4193,83 +4196,87 @@ function AnalysisPageContent() {
                                   return (
                                     feedback.problem_detail ? (
                                       <span key={`${feedback.id}-problem-${index}`} className="inline-flex">
-                                        <TooltipProvider delayDuration={100}>
                                           <Tooltip>
                                             <TooltipTrigger asChild>
                                               <Badge 
                                                 variant="outline"
-                                                className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                                className={cn("text-xs px-2 py-1 border", getSectorColor(sector))}
                                               >
-                                                {trimmedProblem.substring(0, 14)}
+                                                {trimmedProblem.substring(0, 18)}
                                               </Badge>
                                             </TooltipTrigger>
                                             <TooltipContent className="max-w-sm text-xs leading-relaxed">
                                               {feedback.problem_detail}
                                             </TooltipContent>
                                           </Tooltip>
-                                        </TooltipProvider>
                                       </span>
                                     ) : (
                                       <Badge 
                                         key={index} 
                                         variant="outline"
-                                        className={cn("text-sm px-3 py-1.5 border", getSectorColor(sector))}
+                                        className={cn("text-xs px-2 py-1 border", getSectorColor(sector))}
                                       >
-                                        {trimmedProblem.substring(0, 14)}
+                                        {trimmedProblem.substring(0, 18)}
                                       </Badge>
                                     )
                                   );
                                 });
                               })()
                             ) : (
-                              <span className="text-sm text-green-600 dark:text-green-400 italic font-medium">Sem problemas</span>
+                              <span className="text-xs text-green-600 dark:text-green-400 italic font-medium">Sem problemas</span>
                             )}
-                            {feedback.problem && splitByDelimiter(feedback.problem).length > 3 && (
-                              <Badge variant="outline" className="text-sm px-2 py-1">
-                                +{splitByDelimiter(feedback.problem).length - 3}
+                            {feedback.problem && splitByDelimiter(feedback.problem).length > 2 && (
+                              <Badge variant="outline" className="text-xs px-1 py-1">
+                                +{splitByDelimiter(feedback.problem).length - 2}
                               </Badge>
                             )}
                           </div>
                         </div>
-                        <div className="w-32 py-4 px-3 border-r border-gray-200 dark:border-gray-800 flex items-start">
-                          <div className="flex flex-wrap gap-1">
+                        <div className="col-span-1 py-4 px-2 flex items-center justify-between">
+                          <div className="flex items-center gap-1">
                             {feedback.has_suggestion ? (
-                              <Badge 
-                                variant="outline"
-                                className={cn(
-                                  "text-sm px-3 py-1.5 border",
-                                  feedback.suggestion_type === 'only' || feedback.suggestion_type === 'only_suggestion'
-                                    ? "bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/40 dark:to-indigo-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 shadow-sm"
-                                    : feedback.suggestion_type === 'mixed'
-                                    ? "bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/40 dark:to-violet-900/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700 shadow-sm"
-                                    : feedback.suggestion_type === 'with_criticism'
-                                    ? "bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/40 dark:to-red-900/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700 shadow-sm"
-                                    : feedback.suggestion_type === 'with_praise'
-                                    ? "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700 shadow-sm"
-                                    : "bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-900/40 dark:to-slate-900/40 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 shadow-sm"
-                                )}
-                              >
-                                <Lightbulb className="w-3 h-3 mr-1" />
-                                {feedback.suggestion_summary || (
-                                  feedback.suggestion_type === 'only' || feedback.suggestion_type === 'only_suggestion'
-                                    ? 'Apenas Sugestão'
-                                    : feedback.suggestion_type === 'mixed'
-                                    ? 'Mista'
-                                    : feedback.suggestion_type === 'with_criticism'
-                                    ? 'Com Crítica'
-                                    : feedback.suggestion_type === 'with_praise'
-                                    ? 'Com Elogio'
-                                    : 'Sem Sugestão'
-                                )}
-                              </Badge>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge 
+                                      variant="outline"
+                                      className={cn(
+                                        "text-xs px-2 py-1 border cursor-help",
+                                        feedback.suggestion_type === 'only' || feedback.suggestion_type === 'only_suggestion'
+                                          ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700"
+                                          : feedback.suggestion_type === 'mixed'
+                                          ? "bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700"
+                                          : feedback.suggestion_type === 'with_criticism'
+                                          ? "bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-700"
+                                          : feedback.suggestion_type === 'with_praise'
+                                          ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700"
+                                          : "bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+                                      )}
+                                    >
+                                      {(() => {
+                                        switch(feedback.suggestion_type) {
+                                          case 'only':
+                                          case 'only_suggestion':
+                                            return 'Sugestão';
+                                          case 'with_criticism':
+                                            return 'Crítica';
+                                          case 'with_praise':
+                                            return 'Elogio';
+                                          case 'mixed':
+                                            return 'Misto';
+                                          default:
+                                            return 'Sugestão';
+                                        }
+                                      })()}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-md text-sm leading-relaxed p-3">
+                                    {feedback.suggestion_summary || 'Clique nos detalhes para adicionar um resumo da sugestão'}
+                                  </TooltipContent>
+                                </Tooltip>
                             ) : (
-                              <span className="text-sm text-gray-500 dark:text-gray-400 italic font-medium">
-                                Sem Sugestão
-                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 italic">Sem sugestão</span>
                             )}
                           </div>
-                        </div>
-                        <div className="w-12 py-4 px-3 text-center flex items-center justify-center">
                           <CommentModal 
                             feedback={feedback} 
                             onFeedbackUpdated={handleFeedbackUpdated} 
