@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Feedback } from "@/types";
 import { ChartDetailModal } from '@/components/chart-detail-modal';
+import { AdvancedProblemsView } from '@/app/components/AdvancedProblemsView';
 import { 
   Star, 
   Filter, 
@@ -1640,110 +1641,24 @@ function DashboardContent() {
 
         {/* Problemas */}
         <TabsContent value="problems" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Principais Problemas */}
-            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Principais Problemas</h3>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleViewChart(
-                    'problem',
-                    'Principais Problemas Identificados',
-                    processProblemDistribution(filteredData),
-                    'bar'
-                  )}
-                >
-                  Ver Detalhes
-                </Button>
+          {/* Nova Análise Avançada de Problemas */}
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">Análise Avançada de Problemas</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Visualização detalhada dos problemas com contexto específico e agrupamentos inteligentes
+                </p>
               </div>
-              <div className="h-[430px]">
-                <ProblemsChart 
-                  data={processProblemDistribution(filteredData)}
-                  onClick={(item: any, index: number) => {
-                    handleChartClick(item, 'problem');
-                  }}
-                />
-              </div>
-            </Card>
-
-            {/* Tendência de Problemas */}
-            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Tendência de Problemas</h3>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleViewChart(
-                    'problem',
-                    'Tendência de Problemas ao Longo do Tempo',
-                    processProblemDistribution(filteredData).slice(0, 8),
-                    'line'
-                  )}
-                >
-                  Ver Detalhes
-                </Button>
-              </div>
-              <div className="h-[430px]">
-                <ProblemsTrendChart 
-                  data={processProblemDistribution(filteredData).slice(0, 8)}
-                  onClick={(item: any) => handleChartClick(item, 'problem')}
-                />
-              </div>
-            </Card>
-          </div>
-
-          {/* Distribuição de Problemas */}
-          <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Distribuição de Problemas</h3>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handleViewChart(
-                  'problem',
-                  'Distribuição de Problemas',
-                  processProblemDistribution(filteredData),
-                  'pie'
-                )}
-              >
-                Ver Detalhes
-              </Button>
+              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                Nova Funcionalidade
+              </Badge>
             </div>
-            <div className="h-[480px]">
-              <ModernChart 
-                type="pie"
-                data={processProblemDistribution(filteredData)}
-                onClick={(item: any, index: number) => {
-                  handleChartClick(item, 'problem');
-                }}
-              />
-            </div>
-          </Card>
-           {/* Tendência de Problemas ao Longo do Tempo */}
-          <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Tendência de Problemas ao Longo do Tempo</h3>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handleViewChart(
-                  'problem',
-                  'Tendência de Problemas ao Longo do Tempo',
-                  processProblemDistribution(filteredData).slice(0, 8),
-                  'line'
-                )}
-              >
-                Ver Detalhes
-              </Button>
-            </div>
-            <div className="h-[480px]">
-              <ProblemsTrendChart 
-                data={processProblemDistribution(filteredData).slice(0, 8)}
-                onClick={(item: any) => handleChartClick(item, 'problem')}
-              />
-            </div>
+            
+            <AdvancedProblemsView 
+              feedbacks={filteredData} 
+              selectedHotel={selectedHotel}
+            />
           </Card>
         </TabsContent>
 
