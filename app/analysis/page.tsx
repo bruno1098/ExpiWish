@@ -43,6 +43,7 @@ import {
   RefreshCw,
   ArrowUp,
   ArrowDown,
+  ArrowLeft,
   Minus,
   Edit3,
   Save,
@@ -50,7 +51,9 @@ import {
   Plus,
   Trash2,
   CalendarDays,
-  Lightbulb
+  Lightbulb,
+  History,
+  Clock
 } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
@@ -1022,6 +1025,17 @@ const CommentModal = ({
     suggestion_summary: string
   }>>([])
   
+  // Estados para histórico de edições
+  const [showEditHistory, setShowEditHistory] = useState(false)
+  const [editHistory, setEditHistory] = useState<Array<{
+    timestamp: Date;
+    changes: any;
+    user: string;
+    action: string;
+    oldData?: any;
+    newData?: any;
+  }>>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
   // Usar o feedback correto baseado no currentIndex
   const currentFeedback = allFeedbacks.length > 0 && allFeedbacks[currentIndex] ? allFeedbacks[currentIndex] : feedback
   
@@ -1166,6 +1180,16 @@ const CommentModal = ({
   }
 
   const handleAddSuggestion = () => {
+    // Limitar a no máximo 3 sugestões por comentário
+    if (editedSuggestions.length >= 3) {
+      toast({
+        title: "Limite atingido",
+        description: "Máximo de 3 sugestões por comentário.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setEditedSuggestions([
       ...editedSuggestions,
       { 
@@ -1175,6 +1199,46 @@ const CommentModal = ({
         suggestion_summary: ''
       }
     ])
+  }
+
+  // Função para buscar histórico de edições
+  const handleShowEditHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      // Buscar histórico de edições recentes do Firebase
+      const { getRecentEdits } = await import('@/lib/firestore-service');
+      const allEdits = await getRecentEdits(30, userData?.hotelId); // 30 dias para ter mais contexto
+      
+      // Filtrar edições específicas deste feedback
+      const feedbackEdits = allEdits.filter((edit: any) => 
+        edit.feedbackId === currentFeedback.id || 
+        edit.documentId === currentFeedback.id ||
+        (edit.changes && edit.changes.id === currentFeedback.id)
+      );
+      
+      // Formatar histórico para exibição
+      const formattedHistory = feedbackEdits.map((edit: any) => ({
+        timestamp: edit.modifiedAt ? new Date(edit.modifiedAt) : new Date(),
+        changes: edit.changes || {},
+        user: edit.editedBy || edit.modifiedBy || 'Usuário desconhecido',
+        action: edit.action || 'Edição'
+      }));
+      
+      // Ordenar por data mais recente primeiro
+      formattedHistory.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      
+      setEditHistory(formattedHistory);
+      setShowEditHistory(true);
+    } catch (error) {
+      console.error('Erro ao buscar histórico:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar o histórico de edições.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingHistory(false);
+    }
   }
 
   const handleStartEditMetadata = () => {
@@ -1575,6 +1639,61 @@ const CommentModal = ({
     setIsOpen(false)
   }
 
+  // Função para buscar histórico de edições no CommentModal
+  const handleShowEditHistoryModal = async () => {
+    setLoadingHistory(true);
+    // Fechar o modal principal primeiro
+    setIsOpen(false);
+    
+    try {
+      // Buscar histórico de edições recentes do Firebase
+      const { getRecentEdits } = await import('@/lib/firestore-service');
+      const allEdits = await getRecentEdits(30, userData?.hotelId); // 30 dias para ter mais contexto
+      
+      // Filtrar edições específicas deste feedback
+      const feedbackEdits = allEdits.filter((edit: any) => 
+        edit.feedbackId === currentFeedback.id || 
+        edit.documentId === currentFeedback.id ||
+        (edit.changes && edit.changes.id === currentFeedback.id)
+      );
+      
+      // Formatar histórico para exibição com mais detalhes
+      const formattedHistory = feedbackEdits.map((edit: any) => {
+        console.log('Edit data:', edit); // Debug
+        
+        return {
+          timestamp: edit.modifiedAt ? new Date(edit.modifiedAt) : new Date(),
+          changes: edit.changes || edit.newClassification || edit.newMetadata || {},
+          user: edit.editedBy || edit.modifiedBy || 'Usuário desconhecido',
+          action: edit.action || edit.editType || 'Edição',
+          oldData: edit.oldClassification || edit.oldMetadata || {},
+          newData: edit.newClassification || edit.newMetadata || {}
+        };
+      });
+      
+      // Ordenar por data mais recente primeiro
+      formattedHistory.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      
+      setEditHistory(formattedHistory);
+      setShowEditHistory(true);
+    } catch (error) {
+      console.error('Erro ao buscar histórico:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar o histórico de edições.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
+
+  // Função para voltar do histórico para o modal de detalhes
+  const handleBackToDetails = () => {
+    setShowEditHistory(false);
+    setIsOpen(true);
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -1741,6 +1860,25 @@ const CommentModal = ({
                         <>
                           <Trash2 className="h-3.5 w-3.5" />
                           Excluir
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleShowEditHistoryModal}
+                      disabled={loadingHistory}
+                      className="flex items-center gap-1.5 text-xs bg-orange-50 hover:bg-orange-100 border-orange-200 hover:border-orange-300 text-orange-700 hover:text-orange-800 dark:bg-orange-500/10 dark:hover:bg-orange-500/20 dark:border-orange-400/30 dark:hover:border-orange-400/50 dark:text-orange-100 dark:hover:text-white transition-all duration-300"
+                    >
+                      {loadingHistory ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          Carregando...
+                        </>
+                      ) : (
+                        <>
+                          <History className="h-3.5 w-3.5" />
+                          Histórico
                         </>
                       )}
                     </Button>
@@ -2129,10 +2267,16 @@ const CommentModal = ({
                         variant="outline"
                         size="sm"
                         onClick={handleAddSuggestion}
-                        className="w-full border-dashed border-2 border-gray-300 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200"
+                        disabled={editedSuggestions.length >= 3}
+                        className={cn(
+                          "w-full border-dashed border-2 transition-all duration-200",
+                          editedSuggestions.length >= 3 
+                            ? "border-gray-200 text-gray-400 cursor-not-allowed" 
+                            : "border-gray-300 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        )}
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Adicionar Sugestão ({editedSuggestions.length})
+                        Adicionar Sugestão ({editedSuggestions.length}/3)
                       </Button>
                       <div className="flex gap-2">
                         <Button
@@ -2287,6 +2431,292 @@ const CommentModal = ({
         </div>
      
       </DialogContent>
+      
+      {/* Modal de Histórico dentro do CommentModal */}
+      {showEditHistory && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300" style={{zIndex: 1000000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0}}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-5xl w-full mx-4 max-h-[85vh] transform animate-in zoom-in-95 duration-300 border border-gray-200 dark:border-gray-700 flex flex-col">
+            
+            {/* Header compacto */}
+            <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                    <History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Histórico de Edições
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Alterações realizadas neste feedback
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleBackToDetails}
+                  className="flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/30"
+                  title="Voltar para detalhes"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="text-sm">Voltar</span>
+                </Button>
+              </div>
+            </div>
+            
+            {/* Conteúdo com scroll */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {editHistory.length === 0 ? (
+                <div className="text-center py-12">
+                  <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                    Nenhuma edição encontrada
+                  </h4>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Este feedback ainda não foi editado.
+                  </p>
+                </div>
+              ) : (
+                <div className="h-full overflow-y-auto bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900">
+                  <div className="p-8 space-y-8">
+                    {editHistory.map((edit, index) => (
+                      <div key={index} className="group">
+                        {/* Timeline connector */}
+                        <div className="flex">
+                          <div className="flex flex-col items-center mr-6">
+                            <div className="w-4 h-4 bg-gradient-to-br from-orange-500 to-red-500 rounded-full border-4 border-white dark:border-gray-900 shadow-lg"></div>
+                            {index < editHistory.length - 1 && (
+                              <div className="w-0.5 h-16 bg-gradient-to-b from-orange-200 to-transparent dark:from-orange-800 mt-2"></div>
+                            )}
+                          </div>
+                          
+                          {/* Card da edição */}
+                          <div className="flex-1 min-w-0">
+                            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group-hover:scale-[1.02]">
+                              
+                              {/* Header do card */}
+                              <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 p-6 border-b border-gray-200 dark:border-gray-600">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+                                        <Edit3 className="w-5 h-5 text-white" />
+                                      </div>
+                                      <div>
+                                        <h5 className="text-lg font-bold text-gray-900 dark:text-white">
+                                          {edit.action}
+                                        </h5>
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                                            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                              {edit.user}
+                                            </span>
+                                          </div>
+                                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                                            •
+                                          </span>
+                                          <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+                                            {edit.timestamp.toLocaleString('pt-BR', {
+                                              day: '2-digit',
+                                              month: '2-digit', 
+                                              year: 'numeric',
+                                              hour: '2-digit',
+                                              minute: '2-digit'
+                                            })}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <div className="px-4 py-2 bg-green-100 dark:bg-green-900/30 rounded-xl">
+                                      <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                                        #{editHistory.length - index}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Conteúdo das alterações */}
+                              <div className="p-6">
+                                {/* Mostrar oldData vs newData se disponível */}
+                                {edit.oldData && edit.newData ? (
+                                  <div className="space-y-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                      <div className="w-2 h-2 bg-gradient-to-r from-orange-500 to-red-500 rounded-full"></div>
+                                      <h6 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                        Alterações Realizadas
+                                      </h6>
+                                    </div>
+                                    
+                                    <div className="grid gap-6">
+                                      {Object.keys({...edit.oldData, ...edit.newData}).map((field) => {
+                                        const oldValue = edit.oldData[field];
+                                        const newValue = edit.newData[field];
+                                        
+                                        if (oldValue === newValue) return null;
+                                        
+                                        const fieldName = {
+                                          'keyword': 'Palavras-chave',
+                                          'sector': 'Departamentos', 
+                                          'problem': 'Problemas',
+                                          'sentiment': 'Sentimento',
+                                          'rating': 'Avaliação',
+                                          'language': 'Idioma',
+                                          'source': 'Fonte',
+                                          'apartamento': 'Apartamento'
+                                        }[field] || field;
+                                        
+                                        return (
+                                          <div key={field} className="border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden">
+                                            <div className="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 px-4 py-3">
+                                              <h6 className="font-bold text-gray-800 dark:text-gray-200 text-sm">
+                                                {fieldName}
+                                              </h6>
+                                            </div>
+                                            
+                                            <div className="grid md:grid-cols-2 gap-0">
+                                              {/* Valor anterior */}
+                                              <div className="p-4 bg-red-50 dark:bg-red-900/20 border-r border-gray-200 dark:border-gray-600">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                                  <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">
+                                                    Valor Anterior
+                                                  </span>
+                                                </div>
+                                                <div className="text-sm text-red-800 dark:text-red-300 font-medium bg-white/50 dark:bg-black/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
+                                                  {String(oldValue || 'Vazio')}
+                                                </div>
+                                              </div>
+                                              
+                                              {/* Valor novo */}
+                                              <div className="p-4 bg-green-50 dark:bg-green-900/20">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                                  <span className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wider">
+                                                    Valor Atual
+                                                  </span>
+                                                </div>
+                                                <div className="text-sm text-green-800 dark:text-green-300 font-medium bg-white/50 dark:bg-black/20 rounded-lg p-3 border border-green-200 dark:border-green-700">
+                                                  {String(newValue || 'Vazio')}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : edit.changes && Object.keys(edit.changes).length > 0 ? (
+                                  <div className="space-y-4">
+                                    <div className="flex items-center gap-2 mb-4">
+                                      <div className="w-2 h-2 bg-gradient-to-r from-orange-500 to-red-500 rounded-full"></div>
+                                      <h6 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                        Detalhes da Modificação
+                                      </h6>
+                                    </div>
+                                    
+                                    <div className="grid gap-4">
+                                      {Object.entries(edit.changes).map(([field, change]: [string, any]) => {
+                                        if (field === 'id' || !change) return null;
+                                        
+                                        const fieldName = {
+                                          'sector': 'Departamento',
+                                          'keyword': 'Palavra-chave', 
+                                          'problem': 'Problema',
+                                          'sentiment': 'Sentimento',
+                                          'rating': 'Avaliação',
+                                          'comment': 'Comentário',
+                                          'has_suggestion': 'Tem Sugestão',
+                                          'suggestion_type': 'Tipo de Sugestão',
+                                          'suggestion_summary': 'Resumo da Sugestão'
+                                        }[field] || field;
+                                        
+                                        return (
+                                          <div key={field} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
+                                            <h6 className="font-bold text-gray-800 dark:text-gray-200 mb-3">
+                                              {fieldName}
+                                            </h6>
+                                            {change.from !== undefined && change.to !== undefined ? (
+                                              <div className="grid md:grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                  <span className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wide">De:</span>
+                                                  <div className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 p-3 rounded-lg text-sm">
+                                                    {String(change.from)}
+                                                  </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                  <span className="text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wide">Para:</span>
+                                                  <div className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 p-3 rounded-lg text-sm">
+                                                    {String(change.to)}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-3 rounded-lg text-sm">
+                                                {typeof change === 'object' ? JSON.stringify(change, null, 2) : String(change)}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-8">
+                                    <div className="w-16 h-16 bg-gradient-to-br from-yellow-100 to-orange-100 dark:from-yellow-900/30 dark:to-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                                      <Edit3 className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+                                    </div>
+                                    <h6 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                                      Alteração Registrada
+                                    </h6>
+                                    <p className="text-gray-600 dark:text-gray-400 mb-3">
+                                      Detalhes específicos das alterações não estão disponíveis
+                                    </p>
+                                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                      <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                      <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
+                                        {edit.timestamp.toLocaleString('pt-BR')}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Footer compacto */}
+            <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                  <History className="w-4 h-4" />
+                  <span>
+                    {editHistory.length === 1 ? '1 edição' : `${editHistory.length} edições`}
+                  </span>
+                </div>
+                <Button 
+                  onClick={handleBackToDetails}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Voltar para Detalhes
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Dialog>
   )
 }
