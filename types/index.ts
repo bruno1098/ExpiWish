@@ -7,7 +7,9 @@ export interface AnalysisResult {
   allProblems?: ProblemAnalysis[];
   // Flags de sugestão (análise automática)
   has_suggestion?: boolean; // há alguma sugestão no comentário
-  suggestion_type?: 'only' | 'mixed' | 'none'; // apenas sugestão | mistura | nenhuma
+
+  suggestion_type?: 'only' | 'mixed' | 'none' | 'only_suggestion' | 'with_criticism' | 'with_praise'; // apenas sugestão | mistura | nenhuma
+
   suggestion_summary?: string; // resumo curto da sugestão, quando aplicável
 }
 
@@ -45,7 +47,9 @@ export type Feedback = {
   importId?: string // ID da importação/análise
   // Flags de sugestão (persistidas junto ao feedback)
   has_suggestion?: boolean
-  suggestion_type?: 'only' | 'mixed' | 'none'
+
+  suggestion_type?: 'only' | 'mixed' | 'none' | 'only_suggestion' | 'with_criticism' | 'with_praise'
+
   suggestion_summary?: string
 }
 

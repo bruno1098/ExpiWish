@@ -731,12 +731,15 @@ export function ProblemsDashboard({ feedbacks, onProblemClick }: ProblemsDashboa
                               }
                             >
                               <Lightbulb className="w-3 h-3 mr-1" />
-                              {feedback.suggestion_type === 'only_suggestion'
-                                ? 'Apenas Sugestão'
-                                : feedback.suggestion_type === 'mixed'
-                                ? 'Mista'
-                                : 'Com Sugestão'
-                              }
+
+                              {feedback.suggestion_summary || (
+                                feedback.suggestion_type === 'only_suggestion'
+                                  ? 'Apenas Sugestão'
+                                  : feedback.suggestion_type === 'mixed'
+                                  ? 'Mista'
+                                  : 'Com Sugestão'
+                              )}
+
                             </Badge>
                           </TableCell>
                           <TableCell>

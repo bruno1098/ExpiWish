@@ -400,7 +400,9 @@ export async function POST(request: NextRequest) {
     const { texto, comment } = body;
     
     // Usar comment se texto não estiver presente (compatibilidade)
-    const feedbackText = texto || comment;
+
+    const finalText = texto || comment;
+
     
     // Verificar se a API key está configurada nas variáveis de ambiente
     const apiKey = process.env.OPENAI_API_KEY;
@@ -411,7 +413,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!feedbackText || feedbackText.trim() === '') {
+
+    if (!finalText || finalText.trim() === '') {
+
       return NextResponse.json({
         rating: 3,
         keyword: 'Experiência',
@@ -429,7 +433,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar chave de cache
-    const cacheKey = `${feedbackText.trim().toLowerCase().slice(0, 100)}`;
+
+    const cacheKey = `${finalText.trim().toLowerCase().slice(0, 100)}`;
+
     
     // Verificar cache
     const cached = analysisCache.get(cacheKey);
@@ -438,7 +444,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar se o texto contém apenas números ou caracteres não significativos
-    const cleanText = feedbackText.trim();
+
+    const cleanText = finalText.trim();
+
     const isOnlyNumbers = /^\d+$/.test(cleanText);
     const isOnlySpecialChars = /^[^\w\s]+$/.test(cleanText);
     const isTooShort = cleanText.length < 10;
@@ -493,8 +501,13 @@ export async function POST(request: NextRequest) {
           },
           suggestion_type: {
             type: "string",
-            enum: ["none", "only_suggestion", "mixed", "with_criticism", "with_praise"],
-            description: "Tipo de sugestão: 'none'=sem sugestões, 'only_suggestion'=apenas sugestões, 'mixed'=sugestões com críticas/elogios, 'with_criticism'=sugestões com críticas, 'with_praise'=sugestões com elogios"
+            enum: ["none", "only_suggestion", "with_criticism", "with_praise", "mixed"],
+            description: "Tipo de sugestão: 'none'=sem sugestões, 'only_suggestion'=apenas sugestões, 'with_criticism'=sugestões com críticas, 'with_praise'=sugestões com elogios, 'mixed'=sugestões com críticas E elogios"
+          },
+          suggestion_summary: {
+            type: "string",
+            description: "Resumo objetivo da(s) sugestão(ões) mencionada(s) no comentário. Máximo 200 caracteres. Deixe vazio se has_suggestion for false."
+
           },
           issues: {
             type: "array",
@@ -526,15 +539,23 @@ export async function POST(request: NextRequest) {
             }
           }
         },
-        required: ["sentiment", "has_suggestion", "suggestion_type", "issues"]
+
+        required: ["sentiment", "has_suggestion", "suggestion_type", "suggestion_summary", "issues"]
+
       }
     };
 
     const analysisPrompt = `Você é um auditor de reputação hoteleira especializado. O comentário pode estar EM QUALQUER IDIOMA; identifique internamente e traduza se necessário.
 
-**MISSÃO:** Analise TODO o comentário e identifique ATÉ 3 PROBLEMAS DIFERENTES. Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta ou insatisfação mencionada. TAMBÉM detecte e classifique SUGESTÕES de melhoria.
 
-**DETECÇÃO DE SUGESTÕES (OBRIGATÓRIA):**
+**MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 PROBLEMAS DIFERENTES. Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta ou insatisfação mencionada. SEJA ASSERTIVO na classificação - SEMPRE encontre uma categoria apropriada. TAMBÉM detecte e classifique SUGESTÕES de melhoria.
+
+**REGRA FUNDAMENTAL:** NUNCA use "Não identificado" a menos que o comentário seja completamente vazio ou inválido. SEMPRE classifique feedback real em categorias específicas.
+
+**ATENÇÃO CRÍTICA:** Se o comentário contém QUALQUER palavra ou expressão que indique sugestão, melhoria ou mudança, SEMPRE defina has_suggestion como true. NÃO ignore sugestões!
+
+**DETECÇÃO DE SUGESTÕES (OBRIGATÓRIA E CRÍTICA):**
+
 - has_suggestion: true se o comentário contém QUALQUER sugestão de melhoria, implementação ou mudança
 - suggestion_type: classifique o tipo de sugestão:
   * "none": sem sugestões
@@ -543,10 +564,17 @@ export async function POST(request: NextRequest) {
   * "with_praise": sugestões combinadas com elogios
   * "mixed": sugestões com críticas E elogios
 
-**PADRÕES DE SUGESTÃO:**
-- Palavras indicativas: "poderia", "deveria", "seria bom", "sugiro", "recomendo", "melhoraria se", "gostaria que", "seria interessante", "poderiam implementar", "falta", "precisam de"
-- Frases condicionais: "se tivesse...", "seria melhor com...", "faltou apenas..."
-- Ideias construtivas: propostas de melhorias, implementações, mudanças
+
+**PADRÕES DE SUGESTÃO (ANÁLISE OBRIGATÓRIA):**
+- Palavras diretas: "poderia", "deveria", "seria bom", "sugiro", "recomendo", "melhoraria se", "gostaria que", "seria interessante", "poderiam implementar", "precisam de", "deveriam ter", "seria legal", "seria ótimo"
+- Expressões de falta: "falta", "faltou", "não tem", "não tinha", "senti falta", "faz falta", "deveria ter", "precisava ter", "não há", "ausência de"
+- Frases condicionais: "se tivesse...", "seria melhor com...", "faltou apenas...", "se houvesse...", "com mais...", "tendo..."
+- Comparações construtivas: "poderia ser melhor", "deveria melhorar", "precisa de mais", "seria ideal", "esperava mais"
+- Sugestões implícitas: "tenho uma sugestão", "uma dica", "uma ideia", "minha opinião", "acredito que", "penso que", "acho que deveria"
+- Ideias construtivas: propostas de melhorias, implementações, mudanças, adições, modificações
+
+**REGRA CRÍTICA DE SUGESTÕES:** Se encontrar QUALQUER das palavras acima no comentário, SEMPRE defina has_suggestion=true. Não há exceções!
+
 
 **EXEMPLOS DE SUGESTÕES:**
 - "Seria bom ter mais opções no café da manhã" → has_suggestion=true, suggestion_type="only_suggestion"
@@ -555,6 +583,14 @@ export async function POST(request: NextRequest) {
 - "Hotel excelente, mas faltou ar-condicionado. Poderiam melhorar a limpeza também" → has_suggestion=true, suggestion_type="mixed"
 - "Tudo perfeito, recomendo!" → has_suggestion=false, suggestion_type="none"
 
+- "Tenho uma sugestão de melhorar a piscina" → has_suggestion=true, suggestion_type="only_suggestion"
+- "Faltou apenas mais variedade no café da manhã" → has_suggestion=true, suggestion_type="only_suggestion"
+- "Não tinha ar condicionado, seria bom ter" → has_suggestion=true, suggestion_type="with_criticism"
+- "Senti falta de mais atividades para crianças" → has_suggestion=true, suggestion_type="only_suggestion"
+- "Seria interessante ter um spa" → has_suggestion=true, suggestion_type="only_suggestion"
+- "Deveria ter mais funcionários na recepção" → has_suggestion=true, suggestion_type="only_suggestion"
+
+
 **REGRAS DE SAÍDA (OBRIGATÓRIAS):**
 - Gere até 3 items em "issues". Cada item DEVE conter: keyword (uma das oficiais), department (compatível com a keyword), problem (uma das categorias padrão; use "VAZIO" somente se houver apenas elogios), e problem_detail.
 - problem_detail: descreva em UMA FRASE CURTA, objetiva e concreta o que exatamente está errado/faltando/ruim, sem repetir a categoria ou a keyword. Máx. 120 caracteres. Exemplos: "Ar-condicionado não resfria", "Wi‑Fi cai frequentemente", "Poucas tomadas no quarto".
@@ -562,6 +598,16 @@ export async function POST(request: NextRequest) {
 - Prefira o idioma do comentário original ao redigir problem_detail.
 
 **⚠️ ATENÇÃO ESPECIAL - COMENTÁRIOS IRRELEVANTES:**
+APENAS classifique como "Não identificado" se o comentário for COMPLETAMENTE VAZIO ou INVÁLIDO:
+
+**PADRÕES DE COMENTÁRIOS IRRELEVANTES (classificar como "Não identificado"):**
+- Comentários vazios: "", "...", "---", "N/A"
+- Referências vazias: "conforme meu relato acima", "ver comentário anterior", "mesmo problema"
+- Testes óbvios: "teste", "test", "testing"
+
+**IMPORTANTE:** SEMPRE tente encontrar uma categoria apropriada. Para elogios gerais, use keyword="Experiência", department="Produto", problem="VAZIO". Para qualquer feedback específico, identifique o departamento correto mesmo que seja uma crítica sutil.
+
+**ATENÇÃO - VENDAS/MULTIPROPRIEDADE:** Se houver insistência/pressão/assédio/coação para comprar multipropriedade (timeshare) ou situações de venda agressiva, crie um dos items em "issues" com: keyword="Cotas", department="Programa de vendas" e problem="Comunicação Ruim". Descreva em problem_detail a situação (ex.: "Insistência para comprar multipropriedade durante a estadia").
 ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLIDO:
 
 **PADRÕES DE COMENTÁRIOS IRRELEVANTES (classificar como "Não identificado"):**
@@ -573,11 +619,17 @@ ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLI
 "..." → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
 Sempre tente aproximar o maximo possivel os comentarios com os departamentos e palavra chave, use Não identificado somente em casos extremos, quando tiver elogios nao use Não identificado, use Produto e Experiência
 
-**ATENÇÃO - VENDAS/MULTIPROPRIEDADE:** Se houver insistência/pressão/assédio/coação para comprar multipropriedade (timeshare) ou situações de venda agressiva, crie um dos items em "issues" com: keyword="Cotas", department="Programa de vendas" e problem="Comunicação Ruim". Descreva em problem_detail a situação (ex.: "Insistência para comprar multipropriedade durante a estadia").
 
 **COMENTÁRIOS VÁLIDOS (análise normal):**
 "Senti falta de água nas áreas comuns" → keyword="Água", department="A&B", problem="Falta de Disponibilidade"
 "A música estava muito alta atrapalhando" → keyword="A&B - Serviço", department="A&B", problem="Ruído Excessivo"
+"Hotel muito bom" → keyword="Experiência", department="Produto", problem="VAZIO"
+"Gostei da estadia" → keyword="Experiência", department="Produto", problem="VAZIO"
+"Comida boa" → keyword="A&B - Serviço", department="A&B", problem="VAZIO"
+"Quarto limpo" → keyword="Limpeza - Quarto", department="Governança", problem="VAZIO"
+"Atendimento excelente" → keyword="Atendimento", department="Operações", problem="VAZIO"
+"Piscina agradável" → keyword="Piscina", department="Lazer", problem="VAZIO"
+"Wi-Fi funcionou bem" → keyword="Tecnologia - Wi-fi", department="TI", problem="VAZIO"
 "Wi-Fi não funcionava no quarto" → keyword="Tecnologia - Wi-fi", department="TI", problem="Não Funciona"
 "Demora absurda no check-in" → keyword="Check-in - Atendimento", department="Recepção", problem="Demora no Check-in"
 "Limpeza Simples " → keyword="Limpeza - Quarto", department="Governança", problem="Falta de Limpeza"
@@ -712,6 +764,14 @@ Comentário: "${feedbackText}"`;
           problem: validatedProblem,
           problem_detail: problemDetail
         });
+      } else {
+        // Consolidar para um único item padrão
+        processedProblems = [{
+          keyword: 'Experiência',
+          sector: 'Produto', 
+          problem: 'VAZIO',
+          problem_detail: ''
+        }];
       }
     }
     
@@ -759,8 +819,46 @@ Comentário: "${feedbackText}"`;
     };
 
     // Extrair campos de sugestão da resposta da IA
-    const hasSuggestion = result.has_suggestion || false;
-    const suggestionType = result.suggestion_type || 'none';
+
+    let hasSuggestion = result.has_suggestion || false;
+    let suggestionType = result.suggestion_type || 'none';
+    let suggestionSummary = result.suggestion_summary || '';
+
+    // VALIDAÇÃO PÓS-PROCESSAMENTO: Força detecção de sugestões
+    // Lista de palavras-chave que indicam sugestões
+    const suggestionKeywords = [
+      'sugestao', 'sugestão', 'sugiro', 'seria bom', 'seria legal', 'seria interessante',
+      'poderia', 'poderiam', 'deveria', 'deveriam', 'melhorar', 'melhoria', 'melhorias',
+      'implementar', 'adicionar', 'incluir', 'colocar', 'ter mais', 'aumentar',
+      'diminuir', 'reduzir', 'trocar', 'mudar', 'modificar', 'alterar',
+      'seria melhor', 'ficaria melhor', 'recomendo', 'recomendaria',
+      'gostaria que', 'queria que', 'espero que', 'esperava que',
+      'falta', 'faltou', 'precisa de', 'precisava de', 'necessita',
+      'ideal seria', 'perfeito seria', 'bom seria', 'legal seria'
+    ];
+
+    const normalizedComment = normalizeText(finalText.toLowerCase());
+    const hasSuggestionKeyword = suggestionKeywords.some(keyword => 
+      normalizedComment.includes(normalizeText(keyword))
+    );
+
+    // Se encontrou palavra-chave de sugestão mas IA não detectou, força detecção
+    if (hasSuggestionKeyword && !hasSuggestion) {
+      console.log('🔍 Validação pós-processamento: Forçando detecção de sugestão');
+      hasSuggestion = true;
+      suggestionType = 'only_suggestion'; // Assume apenas sugestão por padrão
+      
+      // Gera um resumo básico da sugestão baseado no comentário
+      if (!suggestionSummary || suggestionSummary.trim() === '') {
+        // Extrai parte relevante do comentário que contém a sugestão
+        const words = comment.split(' ');
+        const maxWords = 25; // Limita a 25 palavras
+        suggestionSummary = words.slice(0, maxWords).join(' ');
+        if (words.length > maxWords) {
+          suggestionSummary += '...';
+        }
+      }
+    }
 
     const finalResult = {
       rating,
@@ -772,6 +870,9 @@ Comentário: "${feedbackText}"`;
       // Novos campos de sugestão
       has_suggestion: hasSuggestion,
       suggestion_type: suggestionType,
+
+      suggestion_summary: suggestionSummary,
+
       // Formato estendido para futuras melhorias
       problems: processedProblems,
       allProblems: processedProblems,
