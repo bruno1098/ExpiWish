@@ -397,16 +397,37 @@ export async function POST(request: NextRequest) {
     requestCount++;
 
     const body = await request.json();
-    const { texto, comment } = body;
+    const { texto, comment, apiKey: clientApiKey, text } = body;
     
     // Usar comment se texto não estiver presente (compatibilidade)
-    const finalText = texto || comment;
+    const finalText = texto || comment || text;
 
-    // Verificar se a API key está configurada nas variáveis de ambiente
-    const apiKey = process.env.OPENAI_API_KEY;
+    // Verificar se API key está no header Authorization
+    const authHeader = request.headers.get('authorization');
+    const headerApiKey = authHeader?.replace('Bearer ', '');
+
+    // Log para debug
+    console.log("🔍 [ANALYZE-FEEDBACK] Processando feedback:", {
+      hasText: !!finalText,
+      textLength: finalText?.length || 0,
+      environment: process.env.NODE_ENV,
+      hasClientApiKey: !!clientApiKey,
+      hasHeaderApiKey: !!headerApiKey,
+      hasServerApiKey: !!process.env.OPENAI_API_KEY,
+      userAgent: request.headers.get('user-agent'),
+      host: request.headers.get('host'),
+      origin: request.headers.get('origin'),
+      contentLength: request.headers.get('content-length'),
+      timestamp: new Date().toISOString()
+    });
+
+    // Priorizar API key do header, depois do body, depois do servidor
+    const apiKey = headerApiKey || clientApiKey || process.env.OPENAI_API_KEY;
+    
     if (!apiKey) {
+      console.error("❌ [ANALYZE-FEEDBACK] Nenhuma API Key disponível - nem no header, nem no body, nem no servidor");
       return NextResponse.json(
-        { error: 'API Key não configurada' },
+        { error: 'API Key não configurada. Configure sua chave nas Configurações.' },
         { status: 400 }
       );
     }
@@ -475,6 +496,18 @@ export async function POST(request: NextRequest) {
 
     // Usar sempre o GPT-4 Mini
     const model = "gpt-4o-mini";
+
+    console.log("🤖 [ANALYZE-FEEDBACK] Enviando para OpenAI:", {
+      model,
+      textPreview: finalText.substring(0, 100) + '...',
+      apiKeyPrefix: apiKey.substring(0, 7) + '...',
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString(),
+      requestId: Math.random().toString(36).substring(7)
+    });
+
+    // Configurar timeout específico para produção
+    const timeoutMs = process.env.NODE_ENV === 'production' ? 30000 : 60000; // 30s prod, 60s dev
 
     // Definir a função estruturada para classificação
     const classifyFunction = {
@@ -687,13 +720,18 @@ Sempre tente aproximar o maximo possivel os comentarios com os departamentos e p
 
 Comentário: "${finalText}"`;
 
-    const response = await openai.chat.completions.create({
-      model: model,
-      messages: [{ role: "user", content: analysisPrompt }],
-      tools: [{ type: "function", function: classifyFunction }],
-      tool_choice: { type: "function", function: { name: "classify_feedback" } },
-      temperature: 0.0
-    });
+    const response = await Promise.race([
+      openai.chat.completions.create({
+        model: model,
+        messages: [{ role: "user", content: analysisPrompt }],
+        tools: [{ type: "function", function: classifyFunction }],
+        tool_choice: { type: "function", function: { name: "classify_feedback" } },
+        temperature: 0.0
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Timeout após ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]) as OpenAI.Chat.Completions.ChatCompletion;
 
     let result;
     
@@ -881,10 +919,26 @@ Comentário: "${finalText}"`;
       timestamp: Date.now()
     });
 
+    console.log("✅ [ANALYZE-FEEDBACK] Análise concluída com sucesso:", {
+      rating: finalResult.rating,
+      keyword: finalResult.keyword,
+      sector: finalResult.sector,
+      problem: finalResult.problem,
+      hasSuggestion: finalResult.has_suggestion
+    });
+
     return NextResponse.json(finalResult);
 
   } catch (error: any) {
-    console.error("Erro na análise:", error);
+    console.error("❌ [ANALYZE-FEEDBACK] Erro na análise:", {
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      type: error.type,
+      environment: process.env.NODE_ENV,
+      hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+      apiKeyPrefix: process.env.OPENAI_API_KEY?.substring(0, 7) + '...' || 'N/A'
+    });
     
     // Tratamento específico para diferentes tipos de erro
     if (error.message.includes('exceeded your current quota')) {
@@ -894,7 +948,7 @@ Comentário: "${finalText}"`;
       );
     }
     
-    if (error.message.includes('invalid api key')) {
+    if (error.message.includes('invalid api key') || error.message.includes('Incorrect API key')) {
       return NextResponse.json(
         { error: 'Chave de API inválida. Verifique sua configuração.' },
         { status: 401 }
@@ -914,13 +968,38 @@ Comentário: "${finalText}"`;
         { status: 503 }
       );
     }
+
+    // Erro 400 específico - pode ser problema com o request
+    if (error.status === 400) {
+      console.error("🚨 [ANALYZE-FEEDBACK] Erro 400 da OpenAI:", {
+        message: error.message,
+        code: error.code,
+        data: error.error,
+        type: error.type,
+        param: error.param,
+        environment: process.env.NODE_ENV,
+        timestamp: new Date().toISOString()
+      });
+      
+      return NextResponse.json(
+        { 
+          error: 'Solicitação inválida para a API OpenAI. Verifique os dados enviados.',
+          details: error.message 
+        },
+        { status: 400 }
+      );
+    }
     
     // Log detalhado para debug
-    console.error("Detalhes do erro:", {
+    console.error("📊 [ANALYZE-FEEDBACK] Detalhes completos do erro:", {
       message: error.message,
       code: error.code,
       status: error.status,
-      stack: error.stack
+      name: error.name,
+      stack: error.stack?.substring(0, 500),
+      environment: process.env.NODE_ENV,
+      userAgent: request.headers.get('user-agent'),
+      timestamp: new Date().toISOString()
     });
     
     return NextResponse.json(
