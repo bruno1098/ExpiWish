@@ -1056,8 +1056,10 @@ const CommentModal = ({
     newData?: any;
   }>>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
-  // Usar o feedback correto baseado no currentIndex
-  const currentFeedback = allFeedbacks.length > 0 && allFeedbacks[currentIndex] ? allFeedbacks[currentIndex] : feedback
+  // Usar o feedback correto baseado no currentIndex da lista allFeedbacks (que é filteredFeedbacks)
+  const currentFeedback = allFeedbacks && allFeedbacks.length > 0 && currentIndex >= 0 && currentIndex < allFeedbacks.length 
+    ? allFeedbacks[currentIndex] 
+    : feedback
   
   useEffect(() => {
     // Inicializar problemas para edição
@@ -1740,10 +1742,10 @@ const CommentModal = ({
           title="Ver detalhes do comentário"
           onClick={() => {
             setIsOpen(true)
-            // Sincronizar currentModalIndex com o índice real do feedback
-            const realIndex = allFeedbacks.findIndex(f => f.id === feedback.id)
-            if (realIndex !== -1 && onNavigate) {
-              onNavigate(realIndex)
+            // Encontrar o índice correto do feedback na lista filtrada original
+            const correctIndex = allFeedbacks.findIndex(f => f.id === feedback.id)
+            if (correctIndex !== -1 && onNavigate) {
+              onNavigate(correctIndex)
             }
           }}
         >
@@ -4163,7 +4165,6 @@ function AnalysisPageContent() {
                             {(() => {
                               const keywords = splitByDelimiter(feedback.keyword);
                               const sectors = splitByDelimiter(feedback.sector);
-                              console.log('🔍 Renderizando keywords para feedback', feedback.id, ':', keywords);
                               return keywords.slice(0, 3).map((kw, index) => {
                                 const sector = sectors[index]?.trim() || sectors[0]?.trim() || '';
                                 return (
@@ -4292,16 +4293,11 @@ function AnalysisPageContent() {
                             onDeleteFeedback={handleDeleteFeedback} 
                             userData={userData}
                             allFeedbacks={filteredFeedbacks}
-                            currentIndex={currentModalIndex >= 0 && currentModalIndex < filteredFeedbacks.length ? currentModalIndex : realIndex}
+                            currentIndex={realIndex >= 0 ? realIndex : 0}
                             onNavigate={(newIndex) => {
                               // Garantir que o newIndex está dentro dos limites dos feedbacks filtrados
                               if (newIndex >= 0 && newIndex < filteredFeedbacks.length) {
                                 setCurrentModalIndex(newIndex)
-                                // Forçar re-render do modal com o novo feedback
-                                const newFeedback = filteredFeedbacks[newIndex]
-                                if (newFeedback) {
-                                  // O modal será atualizado automaticamente através das props
-                                }
                               }
                             }}
                           />

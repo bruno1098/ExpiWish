@@ -25,7 +25,10 @@ const DELAY_BETWEEN_BATCHES = 50;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Função para gerar ID único no formato ddmmaa_hhmmss_mmm
+// Contador para garantir IDs únicos mesmo com timestamps idênticos
+let idCounter = 0;
+
+// Função para gerar ID único no formato ddmmaa_hhmmss_mmm_counter
 const generateUniqueId = () => {
   const now = new Date();
   const day = now.getDate().toString().padStart(2, '0');
@@ -36,8 +39,12 @@ const generateUniqueId = () => {
   const second = now.getSeconds().toString().padStart(2, '0');
   const millisecond = now.getMilliseconds().toString().padStart(3, '0');
   
-  // Formato: ddmmaa_hhmmss_mmm
-  return `${day}${month}${year}_${hour}${minute}${second}_${millisecond}`;
+  // Incrementar contador para garantir unicidade
+  idCounter = (idCounter + 1) % 10000; // Reset a cada 10000 para manter o ID curto
+  const counter = idCounter.toString().padStart(4, '0');
+  
+  // Formato: ddmmaa_hhmmss_mmm_counter
+  return `${day}${month}${year}_${hour}${minute}${second}_${millisecond}_${counter}`;
 };
 
 // Componente loading simples
