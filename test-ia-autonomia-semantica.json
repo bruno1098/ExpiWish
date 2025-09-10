@@ -1,0 +1,97 @@
+{
+  "title": "IA Autônoma vs Regras Fixas - Sistema ExpiWish",
+  "description": "Demonstração de como o sistema agora usa autonomia da IA ao invés de regras fixas de palavras-chave",
+  
+  "approach_comparison": {
+    "before": {
+      "method": "Regras fixas baseadas em palavras-chave específicas",
+      "problems": [
+        "Lista fixa de nomes de tios/tias",
+        "Mapeamento direto palavra → categoria",
+        "Não consegue lidar com variações ou novos contextos",
+        "Fallback genérico para casos não mapeados",
+        "Sistema não aprende com contextos novos"
+      ]
+    },
+    "after": {
+      "method": "Análise semântica inteligente com autonomia da IA",
+      "benefits": [
+        "IA analisa o contexto completo do comentário",
+        "Entende a intenção por trás das palavras",
+        "Detecta padrões semânticos ao invés de palavras fixas",
+        "Pode lidar com nomes novos e variações",
+        "Sistema evolui com novos tipos de feedback"
+      ]
+    }
+  },
+
+  "semantic_patterns": {
+    "lazer_recreation": {
+      "indicators": [
+        "recreação", "animação", "atividade", "diversão", "brincadeira",
+        "entretenimento", "lazer", "legal", "divertido", "fogueira",
+        "karaokê", "mixologia", "aula de", "monitor", "animador",
+        "tio", "tia", "equipe de recreação", "pessoal da recreação"
+      ],
+      "logic": "Se o contexto indica diversão/entretenimento → Lazer"
+    },
+    "food_beverage": {
+      "indicators": [
+        "restaurante", "comida", "café", "bar", "bebida", "drink",
+        "garçom", "alimento", "refeição", "jantar", "almoço",
+        "pessoal do restaurante", "equipe do restaurante", "cardápio"
+      ],
+      "logic": "Se o contexto indica alimentação/bebidas → A&B"
+    },
+    "contextual_intelligence": {
+      "principle": "IA analisa INTENÇÃO ao invés de palavras isoladas",
+      "examples": [
+        "Nome novo de funcionário + contexto de recreação = Lazer",
+        "Nome novo de funcionário + contexto de restaurante = A&B",
+        "Atividade não mapeada + contexto de diversão = Lazer",
+        "Serviço não mapeado + contexto específico = Categoria apropriada"
+      ]
+    }
+  },
+
+  "test_cases": [
+    {
+      "comment": "O novo monitor de atividades, João Paulo, é muito legal",
+      "before_classification": "Atendimento, Operações (fallback genérico)",
+      "after_classification": "Lazer - Serviço, Lazer (IA entende: monitor + atividades = lazer)",
+      "reasoning": "IA analisa 'monitor de atividades' semanticamente"
+    },
+    {
+      "comment": "A garçonete Maria foi super atenciosa no café da manhã",
+      "before_classification": "Atendimento, Operações (nome não mapeado)",
+      "after_classification": "A&B - Café da manhã, A&B (IA entende: garçonete + café = A&B)",
+      "reasoning": "IA analisa contexto de 'garçonete' + 'café da manhã'"
+    },
+    {
+      "comment": "Adorei a nova atividade de pintura que fizeram",
+      "before_classification": "Atendimento, Operações (atividade não mapeada)",
+      "after_classification": "Lazer - Atividades de Recreação, Lazer (IA entende: atividade = lazer)",
+      "reasoning": "IA identifica padrão de atividade recreativa"
+    },
+    {
+      "comment": "O pessoal do bar noturno foi excepcional",
+      "before_classification": "Atendimento, Operações (contexto genérico)",
+      "after_classification": "A&B - Serviço, A&B (IA entende: bar = bebidas/A&B)",
+      "reasoning": "IA conecta 'bar' com serviços de A&B"
+    }
+  ],
+
+  "key_improvements": [
+    "🧠 IA usa inteligência semântica ao invés de regras rígidas",
+    "🎯 Classificação baseada em CONTEXTO e INTENÇÃO",
+    "🔄 Sistema pode evoluir com novos tipos de feedback",
+    "📈 Maior assertividade em comentários únicos ou variados",
+    "🚀 Redução drástica de classificações genéricas incorretas",
+    "💡 IA aprende padrões ao invés de memorizar palavras-chave"
+  ],
+
+  "fallback_strategy": {
+    "old": "Qualquer coisa não reconhecida → 'Atendimento'",
+    "new": "Análise semântica do contexto → Categoria mais apropriada baseada no sentido"
+  }
+}

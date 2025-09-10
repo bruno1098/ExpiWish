@@ -30,10 +30,10 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   // Keywords genéricas
   "serviço / café da manhã": "A&B - Serviço", 
   "café da manhã": "A&B - Café da manhã",
-  "check-in": "Check-in - Atendimento",
-  "check in": "Check-in - Atendimento",
-  "check-out": "Check-out - Atendimento", 
-  "check out": "Check-out - Atendimento",
+  "check-in": "Recepção - Serviço",
+  "check in": "Recepção - Serviço",
+  "check-out": "Recepção - Serviço",
+  "check out": "Recepção - Serviço",
   "wifi": "Tecnologia - Wi-fi",
   "wi-fi": "Tecnologia - Wi-fi",
   "wi fi": "Tecnologia - Wi-fi",
@@ -158,30 +158,88 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   "coacao": "Comunicação Ruim",
   "assédio": "Comunicação Ruim",
   "assedio": "Comunicação Ruim",
-  "venda agressiva": "Comunicação Ruim",
-  "vendas agressivas": "Comunicação Ruim",
-  "apresentação de vendas": "Comunicação Ruim",
-  "apresentacao de vendas": "Comunicação Ruim",
-  "multipropriedade": "Comunicação Ruim",
-  "timeshare": "Comunicação Ruim",
-  "compra de multipropriedade": "Comunicação Ruim",
-  "insistência para comprar": "Comunicação Ruim",
-  "pressão para comprar": "Comunicação Ruim",
-  "coagidos": "Comunicação Ruim",
+  "venda agressiva": "Cotas",
+  "vendas agressivas": "Cotas",
+  "apresentação de vendas": "Cotas",
+  "apresentacao de vendas": "Cotas",
+  "multipropriedade": "Cotas",
+  "timeshare": "Cotas",
+  "compra de multipropriedade": "Cotas",
+  "insistência para comprar": "Cotas",
+  "pressão para comprar": "Cotas",
+  "coagidos": "Cotas",
   "salas de trabalho": "Falta de Disponibilidade",
-  // Duplicatas removidas (mantidas as versões acima):
-  // "garçom": "A&B - Serviço",
-  // "garçons": "A&B - Serviço", 
-  // "garcom": "A&B - Serviço",
-  // "garcons": "A&B - Serviço",
-  // "bar": "A&B - Serviço",
-  // "bingo": "Recreação",
-  // "recreação": "Recreação",
-  // "recreacao": "Recreação", 
-  // "tia da recreação": "Recreação",
-  "música": "A&B - Serviço",
-  "musica": "A&B - Serviço",
-  "som": "A&B - Serviço",
+  // Elogios de atendimento e simpatia - direcionamento para Atendimento/Operações
+  "simpático": "Atendimento",
+  "simpática": "Atendimento",
+  "simpaticos": "Atendimento",
+  "simpaticas": "Atendimento",
+  "simpáticos": "Atendimento",
+  "simpáticas": "Atendimento",
+  "gentil": "Atendimento",
+  "gentis": "Atendimento",
+  "educado": "Atendimento",
+  "educada": "Atendimento",
+  "educados": "Atendimento",
+  "educadas": "Atendimento",
+  "cordial": "Atendimento",
+  "cordiais": "Atendimento",
+  "solicito": "Atendimento",
+  "solicita": "Atendimento",
+  "solícito": "Atendimento",
+  "solícita": "Atendimento",
+  "solícitos": "Atendimento",
+  "solícitas": "Atendimento",
+  "amável": "Atendimento",
+  "amáveis": "Atendimento",
+  "prestativo": "Atendimento",
+  "prestativa": "Atendimento",
+  "prestativos": "Atendimento",
+  "prestativas": "Atendimento",
+  "bem atendido": "Atendimento",
+  "bem atendida": "Atendimento",
+  "bem atendidos": "Atendimento",
+  "bem atendidas": "Atendimento",
+  "bem recebido": "Atendimento",
+  "bem recebida": "Atendimento",
+  "bem recebidos": "Atendimento",
+  "bem recebidas": "Atendimento",
+  "recepcionistas": "Atendimento",
+  "funcionários simpáticos": "Atendimento",
+  "funcionarios simpaticos": "Atendimento",
+  "funcionária simpática": "Atendimento",
+  "funcionario simpatico": "Atendimento",
+  "staff simpático": "Atendimento",
+  "staff simpatico": "Atendimento",
+  "equipe simpática": "Atendimento",
+  "equipe simpatica": "Atendimento",
+  "atendimento excelente": "Atendimento",
+  "atendimento ótimo": "Atendimento",
+  "atendimento otimo": "Atendimento",
+  "atendimento muito bom": "Atendimento",
+  "bom atendimento": "Atendimento",
+  "ótimo atendimento": "Atendimento",
+  "otimo atendimento": "Atendimento",
+  "excelente atendimento": "Atendimento",
+  // Termos específicos de concierge
+  "concierge": "Concierge",
+  "concierges": "Concierge", 
+  "atendimento da concierge": "Concierge",
+  "atendimento do concierge": "Concierge",
+  "serviço de concierge": "Concierge",
+  "concierge excelente": "Concierge",
+  "concierge ótima": "Concierge",
+  "concierge perfeita": "Concierge",
+  // Termos de recreação/animação (evitando duplicatas)
+  "equipe de recreação": "Lazer - Serviço",
+  "equipe da recreação": "Lazer - Serviço",
+  "pessoal da recreação": "Lazer - Serviço",
+  "funcionários da recreação": "Lazer - Serviço",
+  "animação": "Lazer - Atividades de Recreação",
+  "animadores": "Lazer - Serviço",
+  "música": "Lazer - Serviço",
+  "musica": "Lazer - Serviço",
+  "som": "Lazer - Serviço",
   "restaurante": "A&B - Serviço",
   "travesseiro": "Travesseiro",
   "colchão": "Colchão",
@@ -208,7 +266,6 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   "sem problemas": "VAZIO",
   // Termos de comida que devem ir para A&B
   "food": "A&B - Serviço",
-  "comida": "A&B - Serviço",
   "meal": "A&B - Serviço", 
   "dinner": "A&B - Serviço",
   "lunch": "A&B - Serviço",
@@ -218,7 +275,41 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   "drink": "A&B - Serviço",
   "beverage": "A&B - Serviço",
   "coffee": "A&B - Café da manhã",
-  "tea": "A&B - Café da manhã"
+  "tea": "A&B - Café da manhã",
+  // Termos específicos de gastronomia vs alimentos
+  "gastronomia": "A&B - Gastronomia",
+  "culinária": "A&B - Gastronomia",
+  "culinaria": "A&B - Gastronomia",
+  "pratos": "A&B - Gastronomia",
+  "cardápio": "A&B - Gastronomia",
+  "cardapio": "A&B - Gastronomia",
+  "chef": "A&B - Gastronomia",
+  "prato típico": "A&B - Gastronomia",
+  "especialidade": "A&B - Gastronomia",
+  // Alimentos gerais
+  "comida": "A&B - Alimentos",
+  "alimentos": "A&B - Alimentos",
+  "alimentação": "A&B - Alimentos",
+  "alimentacao": "A&B - Alimentos",
+  // Termos de localização/vista
+  "localização": "Localização",
+  "localizacao": "Localização", 
+  "localizado": "Localização",
+  "vista": "Localização",
+  "vista mar": "Localização",
+  "proximidade": "Localização",
+  "perto": "Localização",
+  "próximo": "Localização",
+  "proximo": "Localização",
+  "acesso": "Localização",
+  // Mais termos de atendimento específicos
+  "joão batista": "Atendimento",
+  "joao batista": "Atendimento",
+  "recepcionista": "Recepção - Serviço",
+  "pessoal da recepção": "Recepção - Serviço",
+  "pessoal da recepcao": "Recepção - Serviço",
+  "atendimento na recepção": "Recepção - Serviço",
+  "atendimento da recepção": "Recepção - Serviço",
 };
 
 // Dicionário normalizado para lookup eficiente
@@ -226,26 +317,24 @@ const NORMALIZATION_DICT = Object.fromEntries(
   Object.entries(RAW_NORMALIZATION_DICT).map(([k, v]) => [normalizeText(k), v])
 );
 
-// Keywords oficiais permitadas
+// Keywords oficiais permitidas
 const OFFICIAL_KEYWORDS = [
-  "A&B - Café da manhã", "A&B - Serviço", "A&B - Variedade", "A&B - Preço",
-  "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval",
-  "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações",
+  "A&B - Café da manhã", "A&B - Serviço", "A&B - Variedade", "A&B - Preço", "A&B - Gastronomia", "A&B - Alimentos",
+  "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval", "Governança - Serviço",
+  "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações", "Manutenção - Serviço",
   "Ar-condicionado", "Elevador", "Frigobar", "Infraestrutura",
-
-  "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina",
-  "Lazer - Serviço", "Lazer - Atividades de Recreação",
-  "Tecnologia - Wi-fi", "Tecnologia - TV", "Experiência", "Estacionamento",
+  "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina", "Lazer - Serviço", "Lazer - Atividades de Recreação",
+  "Tecnologia - Wi-fi", "Tecnologia - TV", "Estacionamento",
   "Atendimento", "Acessibilidade", "Reserva de cadeiras (pool)", "Processo",
-  "Custo-benefício", "Comunicação", "Check-in - Atendimento", "Check-out - Atendimento",
+  "Custo-benefício", "Comunicação", "Recepção - Serviço",
   "Concierge", "Cotas", "Reservas", "Água", "Recreação",
-  "Travesseiro", "Colchão", "Espelho", "A&B - Gastronomia"
+  "Travesseiro", "Colchão", "Espelho", "Localização", "Mixologia"
 ];
 
 // Departamentos oficiais
 const OFFICIAL_DEPARTMENTS = [
   "A&B", "Governança", "Manutenção", "Manutenção - Quarto", "Manutenção - Instalações",
-  "Lazer", "TI", "Produto", "Operações", "Qualidade", "Recepção", 
+  "Lazer", "TI", "Operações", "Qualidade", "Recepção", 
   "Programa de vendas", "Comercial"
 ];
 
@@ -255,40 +344,260 @@ const STANDARD_PROBLEMS = [
   "Não Funciona", "Muito Frio/Quente", "Conexão Instável", "Falta de Limpeza",
   "Ruído Excessivo", "Capacidade Insuficiente", "Falta de Cadeiras", 
   "Preço Alto", "Falta de Variedade", "Qualidade Baixa", "Falta de Manutenção",
-  "Demora no Check-in", "Demora no Check-out", "Falta de Acessibilidade",
-  "Comunicação Ruim", "Processo Lento", "Falta de Equipamento", "Fila Longa",
-  "Qualidade de Bebida", "Falta de Disponibilidade", "VAZIO", "Não identificado"
+  "Falta de Acessibilidade", "Comunicação Ruim", "Processo Lento", 
+  "Falta de Equipamento", "Fila Longa", "Qualidade de Bebida", 
+  "Falta de Disponibilidade", "VAZIO", "Não identificado"
 ];
 
 // Arrays normalizados para busca eficiente
 const NORMALIZED_KEYWORDS = OFFICIAL_KEYWORDS.map(k => normalizeText(k));
 const NORMALIZED_PROBLEMS = STANDARD_PROBLEMS.map(p => normalizeText(p));
 
-// Função para validar e corrigir keyword
-function validateKeyword(keyword: string): string {
+// Função para validar e corrigir keyword - com mais autonomia para a IA
+function validateKeyword(keyword: string, context?: string): string {
   const normalized = normalizeText(keyword);
   
-  // Verificar se está na lista oficial normalizada
+  // Verificar se está na lista oficial normalizada (match exato)
   const index = NORMALIZED_KEYWORDS.indexOf(normalized);
   if (index !== -1) {
     return OFFICIAL_KEYWORDS[index];
   }
   
-  // Tentar encontrar correspondência próxima
-  const matchIndex = NORMALIZED_KEYWORDS.findIndex(official => 
+  // Tentar encontrar correspondência próxima nas keywords oficiais
+  const partialMatch = NORMALIZED_KEYWORDS.findIndex(official => 
     official.includes(normalized) || normalized.includes(official)
   );
   
-  if (matchIndex !== -1) {
-    return OFFICIAL_KEYWORDS[matchIndex];
+  if (partialMatch !== -1) {
+    return OFFICIAL_KEYWORDS[partialMatch];
   }
   
-  // Log para monitoramento de termos não cobertos (apenas em desenvolvimento)
+  // Verificar se a keyword da IA é uma variação válida de keywords existentes
+  // Permitir que a IA use sua própria classificação se fizer sentido semântico
+  const contextNormalized = normalizeText(context || '');
+  
+  // Se a IA sugeriu algo relacionado a A&B e o contexto confirma
+  if (normalized.includes('a&b') || normalized.includes('alimento') || normalized.includes('bebida') ||
+      normalized.includes('comida') || normalized.includes('restaurante') || normalized.includes('bar')) {
+    // Tentar encontrar a subcategoria mais específica de A&B
+    if (contextNormalized.includes('cafe') || contextNormalized.includes('breakfast')) {
+      return "A&B - Café da manhã";
+    }
+    if (contextNormalized.includes('preco') || contextNormalized.includes('caro') || contextNormalized.includes('barato')) {
+      return "A&B - Preço";
+    }
+    if (contextNormalized.includes('variedade') || contextNormalized.includes('opcao') || contextNormalized.includes('escolha')) {
+      return "A&B - Variedade";
+    }
+    return "A&B - Serviço";
+  }
+  
+  // Se a IA sugeriu algo relacionado a lazer e o contexto confirma
+  if (normalized.includes('lazer') || normalized.includes('recreacao') || normalized.includes('piscina') ||
+      normalized.includes('spa') || normalized.includes('atividade')) {
+    if (contextNormalized.includes('piscina') || contextNormalized.includes('pool')) {
+      return "Piscina";
+    }
+    if (contextNormalized.includes('spa') || contextNormalized.includes('massagem')) {
+      return "Spa";
+    }
+    if (contextNormalized.includes('estrutura') || contextNormalized.includes('instalacao')) {
+      return "Lazer - Estrutura";
+    }
+    if (contextNormalized.includes('variedade') || contextNormalized.includes('opcao')) {
+      return "Lazer - Variedade";
+    }
+    if (contextNormalized.includes('recreacao') || contextNormalized.includes('atividade') || 
+        contextNormalized.includes('tio') || contextNormalized.includes('tia')) {
+      return "Lazer - Atividades de Recreação";
+    }
+    return "Lazer - Serviço";
+  }
+  
+  // Se a IA sugeriu algo relacionado a limpeza/governança e o contexto confirma
+  if (normalized.includes('limpeza') || normalized.includes('governanca') || normalized.includes('enxoval') ||
+      normalized.includes('limpo') || normalized.includes('sujo')) {
+    if (contextNormalized.includes('quarto') || contextNormalized.includes('room')) {
+      return "Limpeza - Quarto";
+    }
+    if (contextNormalized.includes('banheiro') || contextNormalized.includes('bathroom')) {
+      return "Limpeza - Banheiro";
+    }
+    if (contextNormalized.includes('area') || contextNormalized.includes('social') || contextNormalized.includes('publica')) {
+      return "Limpeza - Áreas sociais";
+    }
+    if (contextNormalized.includes('toalha') || contextNormalized.includes('lencol') || contextNormalized.includes('enxoval')) {
+      return "Enxoval";
+    }
+    return "Governança - Serviço";
+  }
+  
+  // Se a IA sugeriu algo relacionado a manutenção e o contexto confirma
+  if (normalized.includes('manutencao') || normalized.includes('quebrado') || normalized.includes('defeito') ||
+      normalized.includes('reforma') || normalized.includes('conservacao')) {
+    if (contextNormalized.includes('quarto') || contextNormalized.includes('room')) {
+      return "Manutenção - Quarto";
+    }
+    if (contextNormalized.includes('banheiro') || contextNormalized.includes('bathroom')) {
+      return "Manutenção - Banheiro";
+    }
+    if (contextNormalized.includes('instalacao') || contextNormalized.includes('predial') || contextNormalized.includes('estrutura')) {
+      return "Manutenção - Instalações";
+    }
+    return "Manutenção - Serviço";
+  }
+  
+  // Se a IA sugeriu algo relacionado a tecnologia e o contexto confirma
+  if (normalized.includes('tecnologia') || normalized.includes('wi-fi') || normalized.includes('wifi') ||
+      normalized.includes('internet') || normalized.includes('tv') || normalized.includes('tecnologico')) {
+    if (contextNormalized.includes('tv') || contextNormalized.includes('televisao') || contextNormalized.includes('canal')) {
+      return "Tecnologia - TV";
+    }
+    return "Tecnologia - Wi-fi";
+  }
+  
+  // Se a IA sugeriu algo relacionado a recepção e o contexto confirma
+  if (normalized.includes('recepcao') || normalized.includes('check') || normalized.includes('reception') ||
+      normalized.includes('front desk')) {
+    return "Recepção - Serviço";
+  }
+  
+  // Se a IA sugeriu algo relacionado a localização e o contexto confirma
+  if (normalized.includes('localizacao') || normalized.includes('location') || normalized.includes('vista') ||
+      normalized.includes('acesso') || normalized.includes('proximidade')) {
+    return "Localização";
+  }
+  
+  // FALLBACK INTELIGENTE: análise semântica do contexto, não palavras-chave fixas
+  // Dar autonomia à IA para entender o sentido do comentário
+  
+  // PRIORIDADE 1: Análise semântica de recreação/lazer
+  // Detectar padrões que indicam atividades de lazer ou recreação
+  const indicadoresLazer = [
+    'recreacao', 'recreação', 'animacao', 'animação', 'atividade', 'diversao', 'diversão',
+    'brincadeira', 'entretenimento', 'lazer', 'legal', 'divertido', 'fogueira', 'karaoke',
+    'mixologia', 'aula de', 'monitor', 'animador', 'tio ', 'tia '
+  ];
+  
+  const temIndicadorLazer = indicadoresLazer.some(termo => contextNormalized.includes(termo));
+  
+  if (temIndicadorLazer) {
+    // Se menciona atividades específicas → Atividades de Recreação
+    if (contextNormalized.includes('mixologia') || contextNormalized.includes('aula de') || 
+        contextNormalized.includes('karaoke') || contextNormalized.includes('fogueira') ||
+        contextNormalized.includes('atividade')) {
+      return "Lazer - Atividades de Recreação";
+    }
+    // Caso contrário → Serviço de Lazer
+    return "Lazer - Serviço";
+  }
+  
+  // PRIORIDADE 2: Análise semântica de A&B/Restaurante
+  // Detectar padrões que indicam alimentação, bebidas ou serviço de restaurante
+  const indicadoresAB = [
+    'restaurante', 'comida', 'cafe', 'café', 'bar', 'bebida', 'drink', 'garcom', 'garçom',
+    'alimento', 'refeicao', 'refeição', 'jantar', 'almoco', 'almoço', 'breakfast', 'food',
+    'meal', 'dinner', 'lunch', 'atendimento do restaurante', 'pessoal do restaurante',
+    'equipe do restaurante', 'cardapio', 'cardápio'
+  ];
+  
+  const temIndicadorAB = indicadoresAB.some(termo => contextNormalized.includes(termo));
+  
+  if (temIndicadorAB) {
+    // Análise mais específica do contexto
+    if (contextNormalized.includes('cafe') || contextNormalized.includes('café') || 
+        contextNormalized.includes('breakfast')) {
+      return "A&B - Café da manhã";
+    }
+    if (contextNormalized.includes('preco') || contextNormalized.includes('preço') || 
+        contextNormalized.includes('caro') || contextNormalized.includes('barato')) {
+      return "A&B - Preço";
+    }
+    if (contextNormalized.includes('variedade') || contextNormalized.includes('opcao') || 
+        contextNormalized.includes('opção') || contextNormalized.includes('escolha')) {
+      return "A&B - Variedade";
+    }
+    return "A&B - Serviço";
+  }
+  
+  // PRIORIDADE 3: Análise semântica de outros serviços específicos
+  if (contextNormalized.includes('recepcao') || contextNormalized.includes('recepção') || 
+      contextNormalized.includes('check') || contextNormalized.includes('front desk')) {
+    return "Recepção - Serviço";
+  }
+  
+  if (contextNormalized.includes('piscina') || contextNormalized.includes('pool')) {
+    return "Piscina";
+  }
+  
+  if (contextNormalized.includes('wifi') || contextNormalized.includes('wi-fi') || 
+      contextNormalized.includes('internet') || contextNormalized.includes('conexao')) {
+    return "Tecnologia - Wi-fi";
+  }
+  
+  if (contextNormalized.includes('limpeza') && contextNormalized.includes('quarto')) {
+    return "Limpeza - Quarto";
+  }
+  
+  if (contextNormalized.includes('localizacao') || contextNormalized.includes('localização') || 
+      contextNormalized.includes('vista') || contextNormalized.includes('acesso') ||
+      contextNormalized.includes('perto') || contextNormalized.includes('próximo')) {
+    return "Localização";
+  }
+  
+  // Contexto indica recepção/check-in/check-out
+  if (contextNormalized.includes('recepcao') || contextNormalized.includes('check') ||
+      contextNormalized.includes('checkin') || contextNormalized.includes('checkout') ||
+      contextNormalized.includes('reception') || contextNormalized.includes('front desk')) {
+    return "Recepção - Serviço";
+  }
+  
+  // Contexto indica A&B (comida/bebida)
+  if (contextNormalized.includes('comida') || contextNormalized.includes('cafe') || 
+      contextNormalized.includes('restaurante') || contextNormalized.includes('bar') ||
+      contextNormalized.includes('food') || contextNormalized.includes('breakfast') ||
+      contextNormalized.includes('garcom') || contextNormalized.includes('garcons') ||
+      contextNormalized.includes('yasmin') || contextNormalized.includes('alimento')) {
+    return "A&B - Serviço";
+  }
+  
+  // Contexto indica piscina
+  if (contextNormalized.includes('piscina') || contextNormalized.includes('pool')) {
+    return "Piscina";
+  }
+  
+  // Contexto indica localização específica
+  if (contextNormalized.includes('localizacao') || contextNormalized.includes('perto') ||
+      contextNormalized.includes('proximo') || contextNormalized.includes('centro') ||
+      contextNormalized.includes('vista') || contextNormalized.includes('acesso')) {
+    return "Localização";
+  }
+  
+  // Contexto indica limpeza de quarto
+  if (contextNormalized.includes('quarto') && (contextNormalized.includes('limpo') || 
+      contextNormalized.includes('sujo') || contextNormalized.includes('limpeza'))) {
+    return "Limpeza - Quarto";
+  }
+  
+  // Contexto indica wifi/internet
+  if (contextNormalized.includes('wifi') || contextNormalized.includes('internet') ||
+      contextNormalized.includes('wi-fi') || contextNormalized.includes('conexao')) {
+    return "Tecnologia - Wi-fi";
+  }
+  
+  // Log para monitoramento (só em desenvolvimento) - agora com mais detalhes
   if (process.env.NODE_ENV === 'development') {
-    console.log(`⚠️ Keyword não mapeada: "${keyword}" (normalizada: "${normalized}") - usando fallback "Experiência"`);
+    console.log(`🤖 IA sugeriu keyword não mapeada: "${keyword}" (normalizada: "${normalized}") para contexto: "${context?.substring(0, 100)}..." - permitindo classificação da IA`);
   }
   
-  return "Experiência"; // Fallback
+  // ÚLTIMO RECURSO: usar a keyword que a IA sugeriu, desde que não seja vazia
+  // Isso permite que a IA aprenda e classifique novos tipos de feedback
+  if (keyword && keyword.trim() !== '' && keyword.trim().toLowerCase() !== 'não identificado') {
+    return keyword;
+  }
+  
+  // Só usar fallback para casos completamente vazios ou inválidos
+  return "Atendimento";
 }
 
 // Função para validar departamento
@@ -300,13 +609,16 @@ function validateDepartment(department: string, keyword: string): string {
     "A&B - Variedade": "A&B",
     "A&B - Preço": "A&B",
     "A&B - Gastronomia": "A&B",
+    "A&B - Alimentos": "A&B",
     "Limpeza - Quarto": "Governança",
     "Limpeza - Banheiro": "Governança",
     "Limpeza - Áreas sociais": "Governança",
     "Enxoval": "Governança",
+    "Governança - Serviço": "Governança",
     "Manutenção - Quarto": "Manutenção",
     "Manutenção - Banheiro": "Manutenção", 
     "Manutenção - Instalações": "Manutenção",
+    "Manutenção - Serviço": "Manutenção",
     "Ar-condicionado": "Manutenção - Quarto",
     "Elevador": "Manutenção - Instalações",
     "Frigobar": "Manutenção - Quarto",
@@ -319,7 +631,6 @@ function validateDepartment(department: string, keyword: string): string {
     "Piscina": "Lazer",
     "Tecnologia - Wi-fi": "TI",
     "Tecnologia - TV": "TI",
-    "Experiência": "Produto",
     "Estacionamento": "Operações",
     "Atendimento": "Operações",
     "Acessibilidade": "Operações",
@@ -327,62 +638,46 @@ function validateDepartment(department: string, keyword: string): string {
     "Processo": "Operações",
     "Custo-benefício": "Operações",
     "Comunicação": "Qualidade",
-    "Check-in - Atendimento": "Recepção",
-    "Check-out - Atendimento": "Recepção",
+    "Recepção - Serviço": "Recepção",
     "Concierge": "Programa de vendas",
-    "Cotas": "Programa de vendas", 
-    // Mapear vendas/multipropriedade para Programa de vendas
-    "Apresentação de vendas": "Programa de vendas",
-    "Apresentacao de vendas": "Programa de vendas",
-    "Multipropriedade": "Programa de vendas",
-    "Timeshare": "Programa de vendas",
-    "Oferta de cotas": "Programa de vendas",
+    "Cotas": "Programa de vendas",
     "Reservas": "Comercial",
     "Água": "Operações",
     "Recreação": "Lazer",
     "Travesseiro": "Governança",
     "Colchão": "Governança",
-    "Espelho": "Produto"
+    "Espelho": "Governança",
+    "Localização": "Operações",
+    "Mixologia": "Lazer"
   };
   
-  return keywordToDepartment[keyword] || "Produto";
+  return keywordToDepartment[keyword] || "Operações";
 }
 
 // Função para validar problema
 function validateProblem(problem: string): string {
-  if (!problem) {
-    return "VAZIO";
-  }
+  if (!problem) return "VAZIO";
   
   const normalized = normalizeText(problem);
-
-  // Primeiro, verificar se existe mapeamento explícito no dicionário de normalização
+  
+  // Verificar mapeamento no dicionário
   const mappedByDictionary = NORMALIZATION_DICT[normalized];
   if (mappedByDictionary && STANDARD_PROBLEMS.includes(mappedByDictionary)) {
     return mappedByDictionary;
   }
 
-  // Manter "VAZIO" como está (front-end espera este valor)
-  if (normalized === "vazio") {
-    return "VAZIO";
-  }
+  if (normalized === "vazio") return "VAZIO";
   
-  // Verificar se está na lista padrão normalizada
+  // Buscar na lista padrão normalizada
   const index = NORMALIZED_PROBLEMS.indexOf(normalized);
-  if (index !== -1) {
-    return STANDARD_PROBLEMS[index];
-  }
+  if (index !== -1) return STANDARD_PROBLEMS[index];
   
-  // Tentar encontrar correspondência próxima
+  // Buscar correspondência próxima
   const matchIndex = NORMALIZED_PROBLEMS.findIndex(standard => 
     standard.includes(normalized) || normalized.includes(standard)
   );
   
-  if (matchIndex !== -1) {
-    return STANDARD_PROBLEMS[matchIndex];
-  }
-  
-  return mappedByDictionary || normalized; // Manter original se não encontrar
+  return matchIndex !== -1 ? STANDARD_PROBLEMS[matchIndex] : (mappedByDictionary || normalized);
 }
 
 export async function POST(request: NextRequest) {
@@ -435,17 +730,17 @@ export async function POST(request: NextRequest) {
     if (!finalText || finalText.trim() === '') {
       return NextResponse.json({
         rating: 3,
-        keyword: 'Experiência',
-        sector: 'Produto',
+        keyword: 'Atendimento',
+        sector: 'Operações',
         problem: 'VAZIO',
         has_suggestion: false,
         suggestion_type: 'none',
         problems: [{
-          keyword: 'Experiência',
-          sector: 'Produto', 
+          keyword: 'Atendimento',
+          sector: 'Operações', 
           problem: 'VAZIO'
         }],
-        legacyFormat: 'Experiência, Produto, VAZIO'
+        legacyFormat: 'Atendimento, Operações, VAZIO'
       });
     }
 
@@ -468,17 +763,17 @@ export async function POST(request: NextRequest) {
     if (isOnlyNumbers || isOnlySpecialChars || isTooShort) {
       const defaultResponse = {
         rating: 3,
-        keyword: 'Experiência',
-        sector: 'Produto',
+        keyword: 'Atendimento',
+        sector: 'Operações',
         problem: 'VAZIO',
         has_suggestion: false,
         suggestion_type: 'none',
         problems: [{
-          keyword: 'Experiência',
-          sector: 'Produto',
+          keyword: 'Atendimento',
+          sector: 'Operações',
           problem: 'VAZIO'
         }],
-        legacyFormat: 'Experiência, Produto, VAZIO'
+        legacyFormat: 'Atendimento, Operações, VAZIO'
       };
       
       // Cache resultado padrão
@@ -573,15 +868,21 @@ export async function POST(request: NextRequest) {
 
     const analysisPrompt = `Você é um auditor de reputação hoteleira especializado. O comentário pode estar EM QUALQUER IDIOMA; identifique internamente e traduza se necessário.
 
+**MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 PROBLEMAS DIFERENTES. Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta ou insatisfação mencionada. SEJA ASSERTIVO e CRIATIVO na classificação - SEMPRE encontre uma categoria apropriada. TAMBÉM detecte e classifique SUGESTÕES de melhoria.
 
-**MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 PROBLEMAS DIFERENTES. Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta ou insatisfação mencionada. SEJA ASSERTIVO na classificação - SEMPRE encontre uma categoria apropriada. TAMBÉM detecte e classifique SUGESTÕES de melhoria.
+**AUTONOMIA DA IA:** Você tem TOTAL LIBERDADE para interpretar semanticamente o comentário. NÃO se baseie apenas em palavras-chave fixas:
+- Analise o CONTEXTO COMPLETO do comentário
+- Entenda a INTENÇÃO por trás das palavras
+- Se alguém menciona pessoas em contexto de diversão/entretenimento → provavelmente Lazer
+- Se alguém menciona pessoas em contexto de comida/bebida/restaurante → provavelmente A&B
+- Se alguém menciona funcionários sem contexto específico → use sua inteligência para decidir
+- Seja CRIATIVO e ASSERTIVO na classificação baseada no SENTIDO GERAL
 
-**REGRA FUNDAMENTAL:** NUNCA use "Não identificado" a menos que o comentário seja completamente vazio ou inválido. SEMPRE classifique feedback real em categorias específicas.
+**REGRA FUNDAMENTAL:** NUNCA use "Não identificado" a menos que o comentário seja completamente vazio ou inválido. SEMPRE classifique feedback real em categorias específicas e precisas baseadas no CONTEXTO SEMÂNTICO.
 
 **ATENÇÃO CRÍTICA:** Se o comentário contém QUALQUER palavra ou expressão que indique sugestão, melhoria ou mudança, SEMPRE defina has_suggestion como true. NÃO ignore sugestões!
 
 **DETECÇÃO DE SUGESTÕES (OBRIGATÓRIA E CRÍTICA):**
-
 - has_suggestion: true se o comentário contém QUALQUER sugestão de melhoria, implementação ou mudança
 - suggestion_type: classifique o tipo de sugestão:
   * "none": sem sugestões
@@ -589,7 +890,6 @@ export async function POST(request: NextRequest) {
   * "with_criticism": sugestões combinadas com críticas/problemas
   * "with_praise": sugestões combinadas com elogios
   * "mixed": sugestões com críticas E elogios
-
 
 **PADRÕES DE SUGESTÃO (ANÁLISE OBRIGATÓRIA):**
 - Palavras diretas: "poderia", "deveria", "seria bom", "sugiro", "recomendo", "melhoraria se", "gostaria que", "seria interessante", "poderiam implementar", "precisam de", "deveriam ter", "seria legal", "seria ótimo"
@@ -601,122 +901,73 @@ export async function POST(request: NextRequest) {
 
 **REGRA CRÍTICA DE SUGESTÕES:** Se encontrar QUALQUER das palavras acima no comentário, SEMPRE defina has_suggestion=true. Não há exceções!
 
+**MAPEAMENTOS INTELIGENTES POR CONTEXTO (seja criativo e específico):**
+• Funcionários/Atendimento → "Atendimento" + "Operações"
+• Qualquer tipo de atendimento que fale no comentario → "Atendimento" + "Operações"
+• Concierge específico → "Concierge" + "Programa de vendas"  
+• Recreação/Animação → "Lazer - Serviço" + "Lazer"
+• Fogueira/Atividades → "Lazer - Atividades de Recreação" + "Lazer"
+• Café da manhã → "A&B - Café da manhã" + "A&B"
+• Restaurante/Bar → "A&B - Serviço" + "A&B"
+• Wi-Fi/Internet → "Tecnologia - Wi-fi" + "TI"
+• Limpeza de quarto → "Limpeza - Quarto" + "Governança"
+• Piscina → "Piscina" + "Lazer"
+• Localização/Vista → "Localização" + "Operações"
 
-**EXEMPLOS DE SUGESTÕES:**
-- "Seria bom ter mais opções no café da manhã" → has_suggestion=true, suggestion_type="only_suggestion"
-- "O quarto estava sujo, mas poderiam colocar mais toalhas" → has_suggestion=true, suggestion_type="with_criticism"
-- "Adorei a estadia! Sugiro apenas mais atividades na piscina" → has_suggestion=true, suggestion_type="with_praise"
-- "Hotel excelente, mas faltou ar-condicionado. Poderiam melhorar a limpeza também" → has_suggestion=true, suggestion_type="mixed"
-- "Tudo perfeito, recomendo!" → has_suggestion=false, suggestion_type="none"
+**EXEMPLOS DE CRIATIVIDADE PERMITIDA:**
+• "Toalhas sujas" → "Enxoval" + "Governança" (mais específico que "Limpeza")
+• "Elevador quebrado" → "Elevador" + "Manutenção - Instalações" (específico)
+• "Ar-condicionado não gelava" → "Ar-condicionado" + "Manutenção - Quarto" (específico)
+• "Frigobar vazio" → "Frigobar" + "Manutenção - Quarto" (específico)
+• "TV sem sinal" → "Tecnologia - TV" + "TI" (específico)
+• "Estacionamento lotado" → "Estacionamento" + "Operações" (específico)
+• "Banheiro com vazamento" → "Manutenção - Banheiro" + "Manutenção" (específico)
+• "Varanda suja" → "Limpeza - Áreas sociais" + "Governança" (adaptado)
+• "Drinks caros" → "A&B - Preço" + "A&B" (específico)
+• "Poucos canais de TV" → "Tecnologia - TV" + "TI" (específico)
 
-- "Tenho uma sugestão de melhorar a piscina" → has_suggestion=true, suggestion_type="only_suggestion"
-- "Faltou apenas mais variedade no café da manhã" → has_suggestion=true, suggestion_type="only_suggestion"
-- "Não tinha ar condicionado, seria bom ter" → has_suggestion=true, suggestion_type="with_criticism"
-- "Senti falta de mais atividades para crianças" → has_suggestion=true, suggestion_type="only_suggestion"
-- "Seria interessante ter um spa" → has_suggestion=true, suggestion_type="only_suggestion"
-- "Deveria ter mais funcionários na recepção" → has_suggestion=true, suggestion_type="only_suggestion"
+**REGRA DE OURO:** SEMPRE seja o mais específico possível. Se menciona algo concreto, classifique especificamente!
 
-
-**REGRAS DE SAÍDA (OBRIGATÓRIAS):**
-- Gere até 3 items em "issues". Cada item DEVE conter: keyword (uma das oficiais), department (compatível com a keyword), problem (uma das categorias padrão; use "VAZIO" somente se houver apenas elogios), e problem_detail.
-- problem_detail: descreva em UMA FRASE CURTA, objetiva e concreta o que exatamente está errado/faltando/ruim, sem repetir a categoria ou a keyword. Máx. 120 caracteres. Exemplos: "Ar-condicionado não resfria", "Wi‑Fi cai frequentemente", "Poucas tomadas no quarto".
-- Se problem = "VAZIO" (apenas elogio), deixe problem_detail vazio.
-- Prefira o idioma do comentário original ao redigir problem_detail.
+**EXEMPLOS ESPECÍFICOS PARA ALIMENTAÇÃO (A&B):**
+• "Dinner food was horrible" → "A&B - Serviço" + "A&B" + "Qualidade da Comida"
+• "Food was terrible, pasta was inedible" → "A&B - Serviço" + "A&B" + "Qualidade da Comida"
+• "Café da manhã sem variedade" → "A&B - Café da manhã" + "A&B" + "Falta de Variedade"
+• "Restaurant service was slow" → "A&B - Serviço" + "A&B" + "Demora no Atendimento"
+• "Bar drinks were expensive" → "A&B - Preço" + "A&B" + "Preço Alto"
 
 **⚠️ ATENÇÃO ESPECIAL - COMENTÁRIOS IRRELEVANTES:**
 APENAS classifique como "Não identificado" se o comentário for COMPLETAMENTE VAZIO ou INVÁLIDO:
+• Comentários vazios: "", "...", "---", "N/A"
+• Referências vazias: "conforme meu relato acima", "ver comentário anterior", "mesmo problema"
+• Testes óbvios: "teste", "test", "testing"
 
-**PADRÕES DE COMENTÁRIOS IRRELEVANTES (classificar como "Não identificado"):**
-- Comentários vazios: "", "...", "---", "N/A"
-- Referências vazias: "conforme meu relato acima", "ver comentário anterior", "mesmo problema"
-- Testes óbvios: "teste", "test", "testing"
+**IMPORTANTE:** SEMPRE seja específico e preciso na classificação. EVITE categorias genéricas quando puder ser mais específico:
+• Para elogios gerais → "Lazer"
+• Para feedback específico → SEMPRE identifique a categoria mais precisa possível
+• Para problemas técnicos → use categorias específicas como "Ar-condicionado", "Elevador", "Frigobar"
+• Para áreas específicas → use "Limpeza - Quarto", "Manutenção - Banheiro", etc.
+• Para serviços específicos → use "A&B - Café da manhã", "Lazer - Atividades de Recreação", etc.
 
-**IMPORTANTE:** SEMPRE tente encontrar uma categoria apropriada. Para elogios gerais, use keyword="Experiência", department="Produto", problem="VAZIO". Para qualquer feedback específico, identifique o departamento correto mesmo que seja uma crítica sutil.
+**CRITÉRIO DE EXCELÊNCIA:** Prefira sempre a classificação mais específica e precisa possível!
 
-**ATENÇÃO - VENDAS/MULTIPROPRIEDADE:** Se houver insistência/pressão/assédio/coação para comprar multipropriedade (timeshare) ou situações de venda agressiva, crie um dos items em "issues" com: keyword="Cotas", department="Programa de vendas" e problem="Comunicação Ruim". Descreva em problem_detail a situação (ex.: "Insistência para comprar multipropriedade durante a estadia").
-ANTES de qualquer análise, verifique se o comentário é IRRELEVANTE ou INVÁLIDO:
+**ATENÇÃO - VENDAS/MULTIPROPRIEDADE:** Se houver insistência/pressão/assédio/coação para comprar multipropriedade (timeshare) ou situações de venda agressiva, crie um dos items em "issues" com: keyword="Cotas", department="Programa de vendas" e problem="Comunicação Ruim".
 
-**PADRÕES DE COMENTÁRIOS IRRELEVANTES (classificar como "Não identificado"):**
-"conforme meu relato acima" → keyword="Experiência", department="Produto", problem="Não identificado"
-"VICE ACIMA" → keyword="Experiência", department="Produto", problem="Não identificado"
-"ver comentário anterior" → keyword="Experiência", department="Produto", problem="Não identificado"
-"mesmo problema" → keyword="Experiência", department="Produto", problem="Não identificado"
-"teste" → keyword="Experiência", department="Produto", problem="Não identificado"
-"..." → keyword="Não identificado", department="Não Identificado", problem="Não identificado"
-Sempre tente aproximar o maximo possivel os comentarios com os departamentos e palavra chave, use Não identificado somente em casos extremos, quando tiver elogios nao use Não identificado, use Produto e Experiência
+**EXEMPLOS DE AUTONOMIA SEMÂNTICA:**
+• "Pessoal da recreação muito legal" → IA deve entender: recreação = "Lazer - Serviço" + "Lazer"
+• "Garçons simpáticos no restaurante" → IA deve entender: garçons = "A&B - Serviço" + "A&B"
+• "Aula de drinks foi incrível" → IA deve entender: atividade específica = "Lazer - Atividades de Recreação" + "Lazer"
+• "Funcionários do bar atenciosos" → IA deve entender: bar = "A&B - Serviço" + "A&B"
+• "Monitores de lazer legais" → IA deve entender: lazer + monitores = "Lazer - Serviço" + "Lazer"
+• "Wi-Fi não funciona" → "Tecnologia - Wi-fi" + "TI" + "Não Funciona"
+• "Quarto sujo" → "Limpeza - Quarto" + "Governança" + "Falta de Limpeza"
+• "Hotel bem localizado" → "Localização" + "Operações" + "VAZIO"
 
+**AUTONOMIA DA IA:** Analise o CONTEXTO SEMÂNTICO, não palavras isoladas. Entenda a INTENÇÃO do comentário!
 
-**COMENTÁRIOS VÁLIDOS (análise normal):**
-"Senti falta de água nas áreas comuns" → keyword="Água", department="A&B", problem="Falta de Disponibilidade"
-"A música estava muito alta atrapalhando" → keyword="A&B - Serviço", department="A&B", problem="Ruído Excessivo"
-"Hotel muito bom" → keyword="Experiência", department="Produto", problem="VAZIO"
-"Gostei da estadia" → keyword="Experiência", department="Produto", problem="VAZIO"
-"Comida boa" → keyword="A&B - Serviço", department="A&B", problem="VAZIO"
-"Quarto limpo" → keyword="Limpeza - Quarto", department="Governança", problem="VAZIO"
-"Atendimento excelente" → keyword="Atendimento", department="Operações", problem="VAZIO"
-"Piscina agradável" → keyword="Piscina", department="Lazer", problem="VAZIO"
-"Wi-Fi funcionou bem" → keyword="Tecnologia - Wi-fi", department="TI", problem="VAZIO"
-"Wi-Fi não funcionava no quarto" → keyword="Tecnologia - Wi-fi", department="TI", problem="Não Funciona"
-"Demora absurda no check-in" → keyword="Check-in - Atendimento", department="Recepção", problem="Demora no Check-in"
-"Limpeza Simples " → keyword="Limpeza - Quarto", department="Governança", problem="Falta de Limpeza"
-"Não tinha shampoo e a torneira estava emperrada." → keyword="Limpeza - Quarto", department="Governança", problem="Falta de Limpeza"
-"Quarto sujo com problemas de manutenção" → keyword="Limpeza - Quarto", department="Governança", problem="Falta de Limpeza"
+**REGRA DE INTERPRETAÇÃO:** Se alguém elogia pessoas específicas em contexto de recreação/lazer → sempre "Lazer - Serviço"
+Se alguém elogia pessoas específicas em contexto de restaurante/comida → sempre "A&B - Serviço"
 
-**EXEMPLOS ESPECÍFICOS PARA ALIMENTAÇÃO (A&B):**
-"Dinner food was horrible, very low quality ingredients" → keyword="A&B - Serviço", department="A&B", problem="Qualidade da Comida"
-"A comida do restaurante estava ruim" → keyword="A&B - Serviço", department="A&B", problem="Qualidade da Comida"
-"Food was terrible, pasta was inedible" → keyword="A&B - Serviço", department="A&B", problem="Qualidade da Comida"
-"Café da manhã sem variedade" → keyword="A&B - Café da manhã", department="A&B", problem="Falta de Variedade"
-"Breakfast was limited, no options" → keyword="A&B - Café da manhã", department="A&B", problem="Falta de Variedade"
-"Restaurant service was slow" → keyword="A&B - Serviço", department="A&B", problem="Demora no Atendimento"
-"Garçom demorou muito para atender" → keyword="A&B - Serviço", department="A&B", problem="Demora no Atendimento"
-"Bar drinks were expensive" → keyword="A&B - Preço", department="A&B", problem="Preço Alto"
-"Meal prices too high" → keyword="A&B - Preço", department="A&B", problem="Preço Alto"
-
-**MAPEAMENTO PALAVRA-CHAVE → DEPARTAMENTO (OBRIGATÓRIO):**
-
-| Palavra-chave              | Departamento             |
-| -------------------------- | ------------------------ |
-| A&B - Café da manhã        | A&B                      |
-| A&B - Serviço              | A&B                      |
-| A&B - Variedade            | A&B                      |
-| A&B - Preço                | A&B                      |
-| Limpeza - Quarto           | Governança               |
-| Limpeza - Banheiro         | Governança               |
-| Limpeza - Áreas sociais    | Governança               |
-| Enxoval                    | Governança               |
-| Manutenção - Quarto        | Manutenção               |
-| Manutenção - Banheiro      | Manutenção               |
-| Manutenção - Instalações   | Manutenção               |
-| Ar-condicionado            | Manutenção - Quarto      |
-| Elevador                   | Manutenção - Instalações |
-| Frigobar                   | Manutenção - Quarto      |
-| Infraestrutura             | Manutenção               |
-| Lazer - Variedade          | Lazer                    |
-| Lazer - Estrutura          | Lazer                    |
-| Spa                        | Lazer                    |
-| Piscina                    | Lazer                    |
-| Recreação                  | Lazer                    |
-| Tecnologia - Wi-fi         | TI                       |
-| Tecnologia - TV            | TI                       |
-| Experiência                | Produto                  |
-| Estacionamento             | Operações                |
-| Atendimento                | Operações                |
-| Acessibilidade             | Operações                |
-| Reserva de cadeiras (pool) | Operações                |
-| Processo                   | Operações                |
-| Custo-benefício            | Operações                |
-| Água                       | A&B                      |
-| Recreação                  | Lazer                    |
-| Travesseiro                | Governança               |
-| Colchão                    | Governança               |
-| Espelho                    | Produto                  |
-| Comunicação                | Qualidade                |
-| Check-in - Atendimento     | Recepção                 |
-| Check-out - Atendimento    | Recepção                 |
-| Concierge                  | Programa de vendas       |
-| Cotas                      | Programa de vendas       |
-| Reservas                   | Comercial                |
+**SAÍDA:** até 3 items com keyword oficial, department compatível, problem padrão, problem_detail (120 chars max).
 
 Comentário: "${finalText}"`;
 
@@ -757,36 +1008,24 @@ Comentário: "${finalText}"`;
     
     if (result.issues && Array.isArray(result.issues)) {
       for (const issue of result.issues.slice(0, 3)) {
-        // Validar e normalizar cada campo
-        const validatedKeyword = validateKeyword(issue.keyword || "Experiência");
-        const validatedDepartment = validateDepartment(issue.department || "Produto", validatedKeyword);
+        const validatedKeyword = validateKeyword(issue.keyword || "Atendimento", finalText);
+        const validatedDepartment = validateDepartment(issue.department || "Operações", validatedKeyword);
         const validatedProblem = validateProblem(issue.problem || "");
         
-        // Definir detalhe do problema (preferir IA; fallback heurístico curto)
+        // Definir detalhe do problema
         let problemDetail: string = (issue.problem_detail || issue.detail || '').toString().trim();
         if (!problemDetail) {
           const normalizedProblem = (validatedProblem || '').toLowerCase();
-          // Nunca gerar detalhe quando for VAZIO ou Não identificado
-          if (normalizedProblem === 'vazio' || normalizedProblem === 'não identificado' || normalizedProblem === 'nao identificado') {
+          if (['vazio', 'não identificado', 'nao identificado'].includes(normalizedProblem)) {
             problemDetail = '';
-          } else {
-            const genericProblems = ["não funciona", "nao funciona"]; 
-            const isGeneric = genericProblems.includes(normalizedProblem);
-            if (isGeneric && validatedKeyword && validatedKeyword !== "Experiência") {
-              problemDetail = `${validatedKeyword} não funciona`;
-            } else if (validatedProblem) {
-              // Monta um detalhe curto combinando problema + palavra-chave, sem repetir "Falta de" 2x
-              if (normalizedProblem.startsWith('falta')) {
-                problemDetail = `${validatedProblem} de ${validatedKeyword}`;
-              } else {
-                problemDetail = `${validatedProblem} em ${validatedKeyword}`;
-              }
-            } else {
-              problemDetail = '';
-            }
-            // Limitar a 120 chars
-            if (problemDetail.length > 120) problemDetail = problemDetail.slice(0, 117).trimEnd() + '...';
+          } else if (normalizedProblem.includes('não funciona') && validatedKeyword !== "Atendimento") {
+            problemDetail = `${validatedKeyword} não funciona`;
+          } else if (validatedProblem) {
+            problemDetail = normalizedProblem.startsWith('falta') 
+              ? `${validatedProblem} de ${validatedKeyword}`
+              : `${validatedProblem} em ${validatedKeyword}`;
           }
+          if (problemDetail.length > 120) problemDetail = problemDetail.slice(0, 117).trimEnd() + '...';
         }
         
         processedProblems.push({
@@ -796,76 +1035,44 @@ Comentário: "${finalText}"`;
           problem_detail: problemDetail
         });
       }
-    } else {
-      // Consolidar para um único item padrão
-      processedProblems = [{
-        keyword: 'Experiência',
-        sector: 'Produto',
-        problem: 'VAZIO',
-        problem_detail: ''
-      }];
     }
     
-    // Se retornou apenas placeholders (VAZIO/Não identificado), manter apenas 1.
-    // Se houver problemas reais, remover placeholders e linhas de Produto/Experiência.
-    if (processedProblems.length > 0) {
+    // Se não há problemas processados ou apenas placeholders, usar padrão
+    if (processedProblems.length === 0) {
+      processedProblems = [{ keyword: 'Atendimento', sector: 'Operações', problem: 'VAZIO', problem_detail: '' }];
+    } else {
       const hasRealIssues = processedProblems.some(p => {
         const pr = (p.problem || '').toLowerCase();
-        return pr !== 'vazio' && pr !== 'não identificado' && pr !== 'nao identificado' && pr.trim() !== '';
+        return !['vazio', 'não identificado', 'nao identificado'].includes(pr) && pr.trim() !== '';
       });
 
       if (hasRealIssues) {
         processedProblems = processedProblems.filter(p => {
           const pr = (p.problem || '').toLowerCase();
-          const isPlaceholder = pr === 'vazio' || pr === 'não identificado' || pr === 'nao identificado' || (p.keyword === 'Experiência' && p.sector === 'Produto');
+          const isPlaceholder = ['vazio', 'não identificado', 'nao identificado'].includes(pr) || 
+                               (p.keyword === 'Atendimento' && p.sector === 'Operações' && pr === 'vazio');
           return !isPlaceholder;
         });
       } else {
-        // Consolidar para um único item padrão
-        processedProblems = [{
-          keyword: 'Experiência',
-          sector: 'Produto', 
-          problem: 'VAZIO',
-          problem_detail: ''
-        }];
+        processedProblems = [{ keyword: 'Atendimento', sector: 'Operações', problem: 'VAZIO', problem_detail: '' }];
       }
     }
-    
-    // Se não conseguiu processar nenhum problema, usar padrão
-    if (processedProblems.length === 0) {
-      processedProblems.push({
-        keyword: "Experiência",
-        sector: "Produto", 
-        problem: "",
-        problem_detail: ''
-      });
-    }
 
-    // Compatibilidade total com formato anterior
+    // Compatibilidade com formato anterior
     const firstProblem = processedProblems[0] || {
-      keyword: 'Experiência',
-      sector: 'Produto', 
-      problem: 'VAZIO',
-      problem_detail: ''
+      keyword: 'Atendimento', sector: 'Operações', problem: 'VAZIO', problem_detail: ''
     };
 
-    // Extrair campos de sugestão da resposta da IA
-
+    // Extrair e validar campos de sugestão
     let hasSuggestion = result.has_suggestion || false;
     let suggestionType = result.suggestion_type || 'none';
     let suggestionSummary = result.suggestion_summary || '';
 
-    // VALIDAÇÃO PÓS-PROCESSAMENTO: Força detecção de sugestões
-    // Lista de palavras-chave que indicam sugestões
+    // Validação pós-processamento: força detecção de sugestões
     const suggestionKeywords = [
       'sugestao', 'sugestão', 'sugiro', 'seria bom', 'seria legal', 'seria interessante',
-      'poderia', 'poderiam', 'deveria', 'deveriam', 'melhorar', 'melhoria', 'melhorias',
-      'implementar', 'adicionar', 'incluir', 'colocar', 'ter mais', 'aumentar',
-      'diminuir', 'reduzir', 'trocar', 'mudar', 'modificar', 'alterar',
-      'seria melhor', 'ficaria melhor', 'recomendo', 'recomendaria',
-      'gostaria que', 'queria que', 'espero que', 'esperava que',
-      'falta', 'faltou', 'precisa de', 'precisava de', 'necessita',
-      'ideal seria', 'perfeito seria', 'bom seria', 'legal seria'
+      'poderia', 'poderiam', 'deveria', 'deveriam', 'melhorar', 'implementar', 'adicionar',
+      'seria melhor', 'recomendo', 'gostaria que', 'falta', 'faltou', 'precisa de', 'necessita'
     ];
 
     const normalizedComment = normalizeText(finalText.toLowerCase());
@@ -873,41 +1080,28 @@ Comentário: "${finalText}"`;
       normalizedComment.includes(normalizeText(keyword))
     );
 
-    // Se encontrou palavra-chave de sugestão mas IA não detectou, força detecção
     if (hasSuggestionKeyword && !hasSuggestion) {
       console.log('🔍 Validação pós-processamento: Forçando detecção de sugestão');
       hasSuggestion = true;
-      suggestionType = 'only_suggestion'; // Assume apenas sugestão por padrão
+      suggestionType = 'only_suggestion';
       
-      // Gera um resumo básico da sugestão baseado no comentário
-      if (!suggestionSummary || suggestionSummary.trim() === '') {
-        // Extrai parte relevante do comentário que contém a sugestão
+      if (!suggestionSummary.trim()) {
         const words = finalText.split(' ');
-        const maxWords = 25; // Limita a 25 palavras
-        suggestionSummary = words.slice(0, maxWords).join(' ');
-        if (words.length > maxWords) {
-          suggestionSummary += '...';
-        }
+        suggestionSummary = words.slice(0, 25).join(' ') + (words.length > 25 ? '...' : '');
       }
     }
 
     const finalResult = {
       rating,
-      // Campos originais para compatibilidade com front-end existente
       keyword: firstProblem.keyword,
       sector: firstProblem.sector,
       problem: firstProblem.problem,
       problem_detail: firstProblem.problem_detail || '',
-      // Novos campos de sugestão
       has_suggestion: hasSuggestion,
       suggestion_type: suggestionType,
-
       suggestion_summary: suggestionSummary,
-
-      // Formato estendido para futuras melhorias
       problems: processedProblems,
       allProblems: processedProblems,
-      // Formato legado string (se necessário)
       legacyFormat: processedProblems.map(p => 
         `${p.keyword}, ${p.sector}, ${p.problem || 'VAZIO'}`
       ).join(';')

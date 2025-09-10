@@ -1,0 +1,57 @@
+{
+  "title": "Teste de Autonomia da IA - Classificação Inteligente",
+  "description": "Exemplos de como a IA agora pode classificar feedback de forma mais inteligente e específica",
+  "tests": [
+    {
+      "feedback": "O elevador estava quebrado e tivemos que subir 5 andares",
+      "expected_old": "Atendimento, Operações, Não identificado",
+      "expected_new": "Elevador, Manutenção - Instalações, Não Funciona",
+      "reasoning": "IA agora pode identificar 'elevador' especificamente ao invés de usar fallback genérico"
+    },
+    {
+      "feedback": "A varanda do quarto estava muito suja",
+      "expected_old": "Limpeza - Quarto, Governança, Falta de Limpeza",
+      "expected_new": "Limpeza - Áreas sociais, Governança, Falta de Limpeza",
+      "reasoning": "IA pode adaptar 'varanda' para categoria mais apropriada que genérica"
+    },
+    {
+      "feedback": "Os drinks do bar estavam muito caros",
+      "expected_old": "A&B - Serviço, A&B, Preço Alto",
+      "expected_new": "A&B - Preço, A&B, Preço Alto",
+      "reasoning": "IA pode usar subcategoria específica A&B - Preço ao invés de genérica"
+    },
+    {
+      "feedback": "TV do quarto sem sinal, não consegui assistir nada",
+      "expected_old": "Atendimento, Operações, Não identificado",
+      "expected_new": "Tecnologia - TV, TI, Não Funciona",
+      "reasoning": "IA pode classificar problema técnico específico ao invés de fallback"
+    },
+    {
+      "feedback": "Toalhas do banheiro estavam com cheiro ruim",
+      "expected_old": "Limpeza - Banheiro, Governança, Falta de Limpeza",
+      "expected_new": "Enxoval, Governança, Falta de Limpeza",
+      "reasoning": "IA pode ser mais específica - toalhas = enxoval, não apenas limpeza"
+    },
+    {
+      "feedback": "Estacionamento sempre lotado, difícil encontrar vaga",
+      "expected_old": "Atendimento, Operações, Não identificado",
+      "expected_new": "Estacionamento, Operações, Capacidade Insuficiente",
+      "reasoning": "IA pode identificar infraestrutura específica ao invés de genérico"
+    },
+    {
+      "feedback": "Frigobar do quarto vazio, não tinha nada",
+      "expected_old": "Atendimento, Operações, Falta de Disponibilidade",
+      "expected_new": "Frigobar, Manutenção - Quarto, Falta de Disponibilidade",
+      "reasoning": "IA pode classificar equipamento específico do quarto"
+    }
+  ],
+  "benefits": [
+    "IA não fica mais 'presa' em fallbacks genéricos como 'Atendimento'",
+    "Pode criar subcategorias específicas baseadas no contexto",
+    "Classificação mais precisa permite análises mais detalhadas",
+    "Sistema aprende melhor com feedbacks específicos",
+    "Reduz classificações incorretas por limitação de vocabulário",
+    "Permite identificar problemas específicos de infraestrutura",
+    "Melhora qualidade dos relatórios gerenciais"
+  ]
+}
