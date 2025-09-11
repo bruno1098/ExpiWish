@@ -2404,15 +2404,20 @@ const CommentModal = ({
          
 
           {/* Informações Adicionais - Design melhorado */}
-          {(currentFeedback.source || currentFeedback.language || currentFeedback.apartamento) && (
+          {(currentFeedback.source || currentFeedback.language || currentFeedback.apartamento || (isEditingMetadata || isEditingUnified)) && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-800 dark:to-slate-800 rounded-lg border border-gray-200 dark:border-gray-700">
-              {currentFeedback.source && (
+              
+              {/* Campo Fonte */}
+              {(currentFeedback.source || (isEditingMetadata || isEditingUnified)) && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Fonte</p>
                   {(isEditingMetadata || isEditingUnified) ? (
-                    <Select value={editedMetadata.source} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, source: value }))}>
+                    <Select 
+                      value={editedMetadata.source && editedMetadata.source.trim() !== '' ? editedMetadata.source : undefined} 
+                      onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, source: value }))}
+                    >
                       <SelectTrigger className="h-8 text-sm">
-                        <SelectValue />
+                        <SelectValue placeholder="Selecione a fonte" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Booking">Booking</SelectItem>
@@ -2421,21 +2426,31 @@ const CommentModal = ({
                         <SelectItem value="TripAdvisor">TripAdvisor</SelectItem>
                         <SelectItem value="Expedia">Expedia</SelectItem>
                         <SelectItem value="Hotels.com">Hotels.com</SelectItem>
+                        <SelectItem value="TrustYou Survey">TrustYou Survey</SelectItem>
+                        <SelectItem value="Agoda">Agoda</SelectItem>
+                        <SelectItem value="Kayak">Kayak</SelectItem>
+                        <SelectItem value="Priceline">Priceline</SelectItem>
+                        <SelectItem value="Trivago">Trivago</SelectItem>
                         <SelectItem value="Outro">Outro</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.source}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.source || 'Não informado'}</p>
                   )}
                 </div>
               )}
-              {currentFeedback.language && (
+
+              {/* Campo Idioma */}
+              {(currentFeedback.language || (isEditingMetadata || isEditingUnified)) && (
                 <div>
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Idioma</p>
                   {(isEditingMetadata || isEditingUnified) ? (
-                    <Select value={editedMetadata.language} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, language: value }))}>
+                    <Select 
+                      value={editedMetadata.language && editedMetadata.language.trim() !== '' ? editedMetadata.language : undefined} 
+                      onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, language: value }))}
+                    >
                       <SelectTrigger className="h-8 text-sm">
-                        <SelectValue />
+                        <SelectValue placeholder="Selecione o idioma" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pt">Português</SelectItem>
@@ -2448,25 +2463,29 @@ const CommentModal = ({
                       </SelectContent>
                     </Select>
                   ) : (
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.language}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.language || 'Não informado'}</p>
                   )}
                 </div>
               )}
-              {currentFeedback.apartamento && (
+
+              {/* Campo Apartamento - SEMPRE aparece no modo de edição */}
+              {(isEditingMetadata || isEditingUnified) ? (
                 <div>
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Apartamento</p>
-                  {(isEditingMetadata || isEditingUnified) ? (
-                    <Input 
-                      value={editedMetadata.apartamento} 
-                      onChange={(e) => setEditedMetadata(prev => ({ ...prev, apartamento: e.target.value }))}
-                      className="h-8 text-sm"
-                      placeholder="Número do apartamento"
-                    />
-                  ) : (
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.apartamento}</p>
-                  )}
+                  <Input 
+                    value={editedMetadata.apartamento || ''} 
+                    onChange={(e) => setEditedMetadata(prev => ({ ...prev, apartamento: e.target.value }))}
+                    className="h-8 text-sm"
+                    placeholder="Número do apartamento"
+                  />
                 </div>
-              )}
+              ) : currentFeedback.apartamento ? (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Apartamento</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{currentFeedback.apartamento}</p>
+                </div>
+              ) : null}
+
             </div>
           )}
         </div>

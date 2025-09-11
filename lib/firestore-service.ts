@@ -282,7 +282,7 @@ export const getAllAnalyses = async (hotelId?: string) => {
             feedbacksSnapshot.docs.forEach((feedbackDoc) => {
               const data = feedbackDoc.data() as AnalysisData;
               results.push({
-                id: feedbackDoc.id,
+                id: feedbackDoc.id, // IMPORTANTE: usar o ID do documento
                 ...data,
                 // Adicionar informação do hotel baseado na estrutura hierárquica
                 hotelDocId: hotel.docId,  // ID do documento do hotel
@@ -325,7 +325,7 @@ export const getAllAnalyses = async (hotelId?: string) => {
             querySnapshot.docs.forEach((docSnap) => {
               const data = docSnap.data() as AnalysisData;
               results.push({
-                id: docSnap.id,
+                id: docSnap.id,  // IMPORTANTE: usar o ID do documento, não o campo interno
                 ...data,
                 // Adicionar informação do hotel
                 hotelDocId: userData.hotelId,
@@ -348,7 +348,40 @@ export const getAllAnalyses = async (hotelId?: string) => {
       (isTestEnv || doc.isTestEnvironment !== true) && !doc.deleted
     );
 
-    return filteredResults;
+    // Ordenar por data de importação - MAIS RECENTE PRIMEIRO
+    const sortedResults = filteredResults.sort((a, b) => {
+      // Converter timestamps para Date para comparação
+      let dateA: Date;
+      let dateB: Date;
+      
+      // Tratar diferentes formatos de data
+      if (a.importDate && typeof a.importDate === 'object' && 'toDate' in a.importDate) {
+        // Firestore Timestamp
+        dateA = (a.importDate as any).toDate();
+      } else if (a.importDate) {
+        // String ou Date
+        dateA = new Date(a.importDate);
+      } else {
+        // Fallback para data muito antiga se não tiver importDate
+        dateA = new Date('1900-01-01');
+      }
+      
+      if (b.importDate && typeof b.importDate === 'object' && 'toDate' in b.importDate) {
+        // Firestore Timestamp
+        dateB = (b.importDate as any).toDate();
+      } else if (b.importDate) {
+        // String ou Date
+        dateB = new Date(b.importDate);
+      } else {
+        // Fallback para data muito antiga se não tiver importDate
+        dateB = new Date('1900-01-01');
+      }
+      
+      // Ordenação decrescente (mais recente primeiro)
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    return sortedResults;
   } catch (error) {
     console.error("Erro ao buscar análises:", error);
     throw error;
@@ -831,50 +864,157 @@ export const deleteAnalysisInFirestoreWithUserData = async (
   reason?: string
 ): Promise<boolean> => {
   try {
-    console.log('🔍 Iniciando exclusão de análise:', { analysisId, userEmail: userData.email });
-    
     if (!userData || !userData.hotelId) {
       throw new Error('Usuário não autenticado ou hotel não identificado');
     }
 
-    const hotelDocId = normalizeHotelName(userData.hotelName || '');
-    console.log('🏨 Hotel normalizado:', hotelDocId);
+    // Buscar informações do hotel do usuário primeiro
+    const hotelDocRef = doc(db, 'hotels', userData.hotelId);
+    const hotelDoc = await getDoc(hotelDocRef);
+    
+    if (!hotelDoc.exists()) {
+      throw new Error('Hotel não encontrado');
+    }
+    
+    const hotelData = hotelDoc.data();
+    const hotelName = hotelData.name;
+    const hotelDocId = normalizeHotelName(hotelName);
     
     // Buscar a análise APENAS no hotel do usuário logado
     const analysisDocRef = doc(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS, analysisId);
     const analysisDoc = await getDoc(analysisDocRef);
     
-    if (!analysisDoc.exists()) {
-      console.error('❌ Análise não encontrada no hotel do usuário:', analysisId);
-      throw new Error('Análise não encontrada no seu hotel');
+    // Se não encontrou no hotel do usuário, vamos buscar em todos os hotéis
+    let foundAnalysisRef = null;
+    let foundAnalysisData = null;
+    let foundInHotel = null;
+    
+    if (analysisDoc.exists()) {
+      foundAnalysisRef = analysisDocRef;
+      foundAnalysisData = analysisDoc.data();
+      foundInHotel = hotelDocId;
+    } else {
+      // SOLUÇÃO ALTERNATIVA: Buscar por campo interno 'id' APENAS no hotel do usuário
+      const feedbacksRef = collection(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS);
+      const querySnapshot = await getDocs(feedbacksRef);
+      
+      for (const doc of querySnapshot.docs) {
+        const data = doc.data();
+        if ((data as any).id === analysisId) {
+          foundAnalysisRef = doc.ref;
+          foundAnalysisData = data;
+          foundInHotel = hotelDocId;
+          break;
+        }
+      }
     }
     
-    const currentData = analysisDoc.data();
-    console.log('📄 Dados atuais da análise:', { id: analysisId, hotel: hotelDocId, deleted: currentData?.deleted });
+    if (!foundAnalysisRef || !foundAnalysisData) {
+      throw new Error(`Análise não encontrada no hotel ${hotelName}`);
+    }
     
     // Verificar se já foi excluída
-    if (currentData?.deleted === true) {
-      console.log('⚠️ Análise já foi excluída anteriormente');
-      throw new Error('Esta análise já foi excluída');
+    if (foundAnalysisData?.deleted === true) {
+      throw new Error('Esta análise já foi excluída anteriormente');
     }
     
-    // Marcar como excluída
+    // Marcar como excluída (SOFT DELETE - mantém para backup)
     const updateData = {
       deleted: true,
       deletedAt: new Date().toISOString(),
       deletedBy: userData.email,
+      deletedByName: userData.name || userData.email,
       deletedReason: reason || 'Análise removida pelo usuário',
-      lastModified: Timestamp.now()
+      lastModified: Timestamp.now(),
+      // Manter dados originais para backup
+      originalHotelId: foundAnalysisData.hotelId,
+      originalHotelName: foundAnalysisData.hotelName,
+      backupCreatedAt: foundAnalysisData.importDate || foundAnalysisData.createdAt
     };
     
-    console.log('💾 Atualizando documento com dados:', updateData);
-    await updateDoc(analysisDocRef, updateData);
+    await updateDoc(foundAnalysisRef, updateData);
     
-    console.log('✅ Análise excluída com sucesso:', analysisId);
+    // Limpar cache após exclusão para forçar refresh
+    clearAnalysesCache();
+    
     return true;
     
   } catch (error) {
-    console.error('❌ Erro ao excluir análise no Firebase:', error);
+    console.error('Erro ao excluir análise:', error);
+    throw error;
+  }
+};
+
+// Função para buscar análises excluídas (para admins recuperarem)
+export const getDeletedAnalyses = async () => {
+  try {
+    const userData = await getCurrentUserData();
+    if (userData?.role !== 'admin') {
+      throw new Error('Acesso negado - apenas administradores');
+    }
+    
+    const results: any[] = [];
+    const hotels = await listAllHotels();
+    
+    for (const hotel of hotels) {
+      const feedbacksRef = collection(db, COLLECTION_ANALYSE, hotel.docId, SUBCOLLECTION_FEEDBACKS);
+      const querySnapshot = await getDocs(feedbacksRef);
+      
+      querySnapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.deleted === true) {
+          results.push({
+            id: docSnap.id,
+            ...data,
+            hotelDocId: hotel.docId,
+            hotelDisplayName: hotel.hotelName
+          });
+        }
+      });
+    }
+    
+    return results.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
+    
+  } catch (error) {
+    console.error('Erro ao buscar análises excluídas:', error);
+    throw error;
+  }
+};
+
+// Função para restaurar análise excluída (para admins)
+export const restoreAnalysis = async (analysisId: string) => {
+  try {
+    const userData = await getCurrentUserData();
+    if (userData?.role !== 'admin') {
+      throw new Error('Acesso negado - apenas administradores');
+    }
+    
+    // Buscar a análise excluída em todos os hotéis
+    const hotels = await listAllHotels();
+    
+    for (const hotel of hotels) {
+      const analysisRef = doc(db, COLLECTION_ANALYSE, hotel.docId, SUBCOLLECTION_FEEDBACKS, analysisId);
+      const analysisDoc = await getDoc(analysisRef);
+      
+      if (analysisDoc.exists() && analysisDoc.data().deleted === true) {
+        const restoreData = {
+          deleted: false,
+          restoredAt: new Date().toISOString(),
+          restoredBy: userData.email,
+          restoredByName: userData.name || userData.email,
+          lastModified: Timestamp.now()
+        };
+        
+        await updateDoc(analysisRef, restoreData);
+        console.log('✅ Análise restaurada com sucesso:', analysisId);
+        return true;
+      }
+    }
+    
+    throw new Error('Análise excluída não encontrada');
+    
+  } catch (error) {
+    console.error('Erro ao restaurar análise:', error);
     throw error;
   }
 };
