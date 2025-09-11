@@ -23,7 +23,6 @@ import {
   Activity,
   UserCheck,
   AlertCircle,
-  Trash2
 } from "lucide-react"
 
 function Sidebar() {
@@ -99,8 +98,6 @@ function Sidebar() {
       href: "/admin/feedback-nao-identificados",
       color: "text-orange-400",
     },
-
-
     {
       label: "Gerenciar Usuários",
       icon: Users,
