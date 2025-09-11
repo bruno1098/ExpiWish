@@ -880,7 +880,6 @@ const commonKeywords = [
   'Piscina',
   'Tecnologia - Wi-fi',
   'Tecnologia - TV',
-  'Comodidade',
   'Estacionamento',
   'Atendimento',
   'Acessibilidade',
@@ -1178,8 +1177,8 @@ const CommentModal = ({
       ...editedProblems,
       { 
         id: `problem-${Date.now()}-${editedProblems.length}`,
-        keyword: 'Comodidade', 
-        sector: 'Produto', 
+        keyword: 'Insira palavra-chave', 
+        sector: 'Insira departamento', 
         problem: 'VAZIO',
         problem_detail: ''
 
