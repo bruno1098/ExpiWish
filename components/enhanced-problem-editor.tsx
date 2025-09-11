@@ -21,7 +21,8 @@ import {
   addDepartment,
   type DynamicLists 
 } from '@/lib/dynamic-lists-service';
-import { Textarea } from '@/components/ui/textarea'
+import { Textarea } from '@/components/ui/textarea';
+import QuickListManager from '@/components/quick-list-manager';
 
 // Cores para departamentos
 const getSectorColor = (sector: string) => {
@@ -128,6 +129,27 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
     
     loadDynamicLists();
   }, [toast]);
+
+  // Função para recarregar listas após alterações
+  const reloadLists = async () => {
+    try {
+      const updatedLists = await getDynamicLists();
+      setDynamicLists(updatedLists);
+      
+      // Verificar se o item atual ainda existe nas listas atualizadas
+      if (keyword && !updatedLists.keywords.includes(keyword)) {
+        setKeyword(''); // Limpar seleção se o item foi removido
+      }
+      if (sector && !updatedLists.departments.includes(sector)) {
+        setSector(''); // Limpar seleção se o item foi removido
+      }
+      if (problemText && !updatedLists.problems.includes(problemText)) {
+        setProblemText(''); // Limpar seleção se o item foi removido
+      }
+    } catch (error) {
+      console.error('Erro ao recarregar listas:', error);
+    }
+  };
 
   // Definir commonProblems baseado nas listas dinâmicas
   const commonProblems = dynamicLists?.problems || [];
@@ -383,9 +405,20 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Palavra-chave */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-            Palavra-chave
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+              Palavra-chave
+            </label>
+            {dynamicLists && (
+              <QuickListManager 
+                type="keyword"
+                lists={dynamicLists}
+                onListsUpdated={reloadLists}
+                currentValue={keyword}
+                onValueChange={setKeyword}
+              />
+            )}
+          </div>
           {keywordInputMode ? (
             <div className="space-y-2">
               <Input
@@ -488,9 +521,20 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
 
         {/* Departamento */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-            Departamento
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+              Departamento
+            </label>
+            {dynamicLists && (
+              <QuickListManager 
+                type="department"
+                lists={dynamicLists}
+                onListsUpdated={reloadLists}
+                currentValue={sector}
+                onValueChange={setSector}
+              />
+            )}
+          </div>
           {departmentInputMode ? (
             <div className="space-y-2">
               <Input
@@ -598,9 +642,20 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
 
         {/* Problema */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
-            Problema
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+              Problema
+            </label>
+            {dynamicLists && (
+              <QuickListManager 
+                type="problem"
+                lists={dynamicLists}
+                onListsUpdated={reloadLists}
+                currentValue={problemText}
+                onValueChange={setProblemText}
+              />
+            )}
+          </div>
           {problemInputMode ? (
             <div className="space-y-2">
               <Input
