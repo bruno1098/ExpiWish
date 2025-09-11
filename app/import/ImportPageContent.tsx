@@ -1251,7 +1251,7 @@ function ImportPageContent() {
         : new Date();
 
       const analysisToSave = {
-        id: generateUniqueId(),
+        // Remover o campo 'id' interno - o saveAnalysis vai gerar o ID do documento
         hotelId: hotelId,
         hotelName: hotelName,
         importDate: mostRecentFeedbackDate, // Usar a data mais recente dos feedbacks
