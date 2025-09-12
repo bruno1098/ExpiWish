@@ -198,8 +198,8 @@ export const saveAnalysis = async (analysisData: Omit<AnalysisData, 'importDate'
       cleanData.isTestEnvironment = true;
     }
     
-    // Gerar ID no formato ddmmaa_hhmmss
-    const feedbackId = generateUniqueId();
+    // Gerar ID incluindo hotelId para consistência com import
+    const feedbackId = `${hotelDocId}_${generateUniqueId()}`;
     
     // Estrutura correta: analyse/{hotelId}/feedbacks/{feedbackId}
     const feedbackDocRef = doc(

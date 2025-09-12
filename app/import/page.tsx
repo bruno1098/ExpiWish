@@ -28,8 +28,8 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 // Contador para garantir IDs únicos mesmo com timestamps idênticos
 let idCounter = 0;
 
-// Função para gerar ID único no formato ddmmaa_hhmmss_mmm_counter
-const generateUniqueId = () => {
+// Função para gerar ID único no formato hotelId_ddmmaa_hhmmss_mmm_counter
+const generateUniqueId = (hotelId: string) => {
   const now = new Date();
   const day = now.getDate().toString().padStart(2, '0');
   const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -43,8 +43,8 @@ const generateUniqueId = () => {
   idCounter = (idCounter + 1) % 10000; // Reset a cada 10000 para manter o ID curto
   const counter = idCounter.toString().padStart(4, '0');
   
-  // Formato: ddmmaa_hhmmss_mmm_counter
-  return `${day}${month}${year}_${hour}${minute}${second}_${millisecond}_${counter}`;
+  // Formato: hotelId_ddmmaa_hhmmss_mmm_counter
+  return `${hotelId}_${day}${month}${year}_${hour}${minute}${second}_${millisecond}_${counter}`;
 };
 
 // Componente loading simples

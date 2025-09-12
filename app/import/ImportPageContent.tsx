@@ -36,8 +36,8 @@ const REQUEST_DELAY = 50;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Função para gerar ID único no formato ddmmaa_hhmmss_mmm
-const generateUniqueId = () => {
+// Função para gerar ID único no formato hotelId_ddmmaa_hhmmss_mmm_counter
+const generateUniqueId = (hotelId: string) => {
   const now = new Date();
   const day = now.getDate().toString().padStart(2, '0');
   const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -47,8 +47,11 @@ const generateUniqueId = () => {
   const second = now.getSeconds().toString().padStart(2, '0');
   const millisecond = now.getMilliseconds().toString().padStart(3, '0');
   
-  // Formato: ddmmaa_hhmmss_mmm
-  return `${day}${month}${year}_${hour}${minute}${second}_${millisecond}`;
+  // Adicionar counter para garantir unicidade mesmo dentro do mesmo milissegundo
+  const counter = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  
+  // Formato: hotelId_ddmmaa_hhmmss_mmm_counter
+  return `${hotelId}_${day}${month}${year}_${hour}${minute}${second}_${millisecond}_${counter}`;
 };
 
 // Mensagens motivadoras baseadas no progresso
@@ -593,7 +596,7 @@ function ImportPageContent() {
             }
                 
             return {
-              id: generateUniqueId(),
+              id: generateUniqueId(hotelId),
               date: row.dataFeedback,
               comment: row.texto,
               rating: rating,
@@ -1117,7 +1120,7 @@ function ImportPageContent() {
                 }
                     
                 return {
-                  id: generateUniqueId(),
+                  id: generateUniqueId(hotelId),
                   date: row.dataFeedback,
                   comment: row.texto,
                   rating: rating,
@@ -1150,7 +1153,7 @@ function ImportPageContent() {
                 console.error(`Erro ao processar feedback após todas as tentativas:`, error);
                 
                 return {
-                  id: generateUniqueId(),
+                  id: generateUniqueId(hotelId),
                   date: row.dataFeedback,
                   comment: row.texto,
                   rating: 3,
