@@ -3684,6 +3684,44 @@ function AnalysisPageContent() {
   return (
     <div className="p-4 space-y-6 w-full min-h-screen">
       <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
+      {/* Estilos específicos para tooltips */}
+      <style dangerouslySetInnerHTML={{ 
+        __html: `
+          /* FORÇA MÁXIMA para tooltips ficarem por cima */
+          [data-radix-tooltip-content] {
+            z-index: 999999 !important;
+            position: fixed !important;
+          }
+          
+          [data-radix-popper-content-wrapper] {
+            z-index: 999999 !important;
+          }
+          
+          /* Override das classes do shadcn */
+          .z-50[data-radix-tooltip-content] {
+            z-index: 999999 !important;
+          }
+          
+          /* Força para todos os portais do Radix */
+          [data-radix-portal] {
+            z-index: 999999 !important;
+          }
+          
+          .comment-tooltip {
+            z-index: 999999 !important;
+            background: white !important;
+            border: 1px solid #e5e7eb !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+            color: #374151 !important;
+          }
+          
+          .dark .comment-tooltip {
+            background: #1f2937 !important;
+            border-color: #374151 !important;
+            color: #f9fafb !important;
+          }
+        `
+      }} />
       <TooltipProvider>
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -4225,7 +4263,13 @@ function AnalysisPageContent() {
                                   }
                                 </p>
                               </TooltipTrigger>
-                              <TooltipContent className="max-w-md text-sm leading-relaxed p-3">
+                              <TooltipContent 
+                                className="max-w-md text-sm leading-relaxed p-3 !z-[99999] comment-tooltip"
+                                side="bottom"
+                                sideOffset={10}
+                                avoidCollisions={true}
+                                collisionPadding={20}
+                              >
                                 {feedback.comment}
                               </TooltipContent>
                             </Tooltip>
@@ -4310,7 +4354,13 @@ function AnalysisPageContent() {
                                                 {trimmedProblem.substring(0, 18)}
                                               </Badge>
                                             </TooltipTrigger>
-                                            <TooltipContent className="max-w-sm text-xs leading-relaxed">
+                                            <TooltipContent 
+                                              className="max-w-sm text-xs leading-relaxed !z-[999999] comment-tooltip"
+                                              side="bottom"
+                                              sideOffset={10}
+                                              avoidCollisions={true}
+                                              collisionPadding={20}
+                                            >
                                               {feedback.problem_detail}
                                             </TooltipContent>
                                           </Tooltip>
