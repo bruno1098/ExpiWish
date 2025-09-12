@@ -680,6 +680,90 @@ function validateProblem(problem: string): string {
   return matchIndex !== -1 ? STANDARD_PROBLEMS[matchIndex] : (mappedByDictionary || normalized);
 }
 
+// Roteador de elogios - reclassifica feedbacks com problem="VAZIO" baseado no contexto semântico
+function reroutePraiseKeyword(keyword: string, problem: string, context?: string): string {
+  // Só atua em elogios puros (problem="VAZIO") que foram classificados como "Atendimento"
+  if (problem !== 'VAZIO' || normalizeText(keyword) !== normalizeText('Atendimento')) {
+    return keyword;
+  }
+  
+  const c = normalizeText(context || '');
+  const has = (arr: string[]) => arr.some(t => c.includes(normalizeText(t)));
+
+  // 🔥 DETECÇÃO AGRESSIVA DE ÁREAS ESPECÍFICAS
+  
+  // PRIORIDADE 1: A&B - detecção muito mais ampla
+  if (has(['restaurante', 'restaurant', 'bar', 'garcom', 'garçom', 'garcons', 'garçons', 'malta', 'food', 'meal', 'dinner', 'lunch'])) {
+    return 'A&B - Serviço';
+  }
+  if (has(['cafe', 'café', 'breakfast', 'café da manhã', 'cafe da manha'])) {
+    return 'A&B - Café da manhã';
+  }
+
+  // PRIORIDADE 2: Lazer - detecção muito mais ampla
+  if (has(['piscina', 'pool', 'praia', 'beach'])) {
+    return 'Piscina';
+  }
+  if (has(['bingo', 'karaoke', 'fogueira', 'mixologia', 'aula', 'atividade', 'brincadeira', 'animacao', 'animação'])) {
+    return 'Lazer - Atividades de Recreação';
+  }
+  if (has(['recreacao', 'recreação', 'monitor', 'monitores', 'tio', 'tia', 'lucas', 'claudia', 'entretenimento', 'diversao', 'diversão', 'lazer'])) {
+    return 'Lazer - Serviço';
+  }
+  if (has(['spa', 'massagem'])) {
+    return 'Spa';
+  }
+
+  // PRIORIDADE 3: Recepção - detecta contexto de check-in/out
+  if (has(['check in', 'check-in', 'check out', 'check-out', 'recepcao', 'recepção', 'front desk', 'reception'])) {
+    return 'Recepção - Serviço';
+  }
+
+  // PRIORIDADE 4: Governança - detecta contexto de limpeza/arrumação
+  if (has(['quarto', 'room']) && has(['limpo', 'limpeza', 'cheiroso', 'arrumacao', 'arrumação', 'organizado'])) {
+    return 'Limpeza - Quarto';
+  }
+  if (has(['banheiro', 'bathroom']) && has(['limpo', 'limpeza', 'cheiroso'])) {
+    return 'Limpeza - Banheiro';
+  }
+  if (has(['toalha', 'lençol', 'lencol', 'enxoval', 'roupa de cama'])) {
+    return 'Enxoval';
+  }
+
+  // PRIORIDADE 5: Tecnologia - detecta contexto técnico
+  if (has(['wifi', 'wi-fi', 'internet', 'conexao', 'conexão', 'sinal'])) {
+    return 'Tecnologia - Wi-fi';
+  }
+  if (has(['tv', 'televisao', 'televisão', 'canal', 'canais'])) {
+    return 'Tecnologia - TV';
+  }
+
+  // PRIORIDADE 6: Localização - detecta contexto geográfico
+  if (has(['localizacao', 'localização', 'perto', 'próximo', 'proximo', 'vista', 'acesso', 'posição', 'situado'])) {
+    return 'Localização';
+  }
+
+  // PRIORIDADE 7: Infraestrutura específica
+  if (has(['elevador'])) return 'Elevador';
+  if (has(['frigobar'])) return 'Frigobar';
+  if (has(['ar condicionado', 'ar-condicionado'])) return 'Ar-condicionado';
+
+  // 🚨 ÚLTIMA CHECAGEM: Se menciona nomes próprios comuns do setor hoteleiro
+  if (has(['heny', 'juliete', 'jane', 'lucas', 'claudia'])) {
+    // Se menciona nomes + contexto de comida/restaurante → A&B
+    if (has(['restaurante', 'refeicao', 'refeição', 'comida', 'food', 'meal'])) {
+      return 'A&B - Serviço';
+    }
+    // Se menciona nomes + contexto de recreação → Lazer
+    if (has(['recreacao', 'recreação', 'brincadeira', 'atividade', 'diversao', 'diversão', 'animacao', 'animação'])) {
+      return 'Lazer - Serviço';
+    }
+  }
+
+  // FALLBACK: sem pistas específicas, mantém "Atendimento" para elogios genéricos
+  return 'Atendimento';
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Verificar rate limit
@@ -868,7 +952,20 @@ export async function POST(request: NextRequest) {
 
     const analysisPrompt = `Você é um auditor de reputação hoteleira especializado. O comentário pode estar EM QUALQUER IDIOMA; identifique internamente e traduza se necessário.
 
-**MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 PROBLEMAS DIFERENTES. Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta ou insatisfação mencionada. SEJA ASSERTIVO e CRIATIVO na classificação - SEMPRE encontre uma categoria apropriada. TAMBÉM detecte e classifique SUGESTÕES de melhoria.
+**MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 ASPECTOS DIFERENTES (problemas, elogios ou sugestões). Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta, insatisfação OU ELOGIO mencionado. SEJA ASSERTIVO e CRIATIVO na classificação - SEMPRE encontre uma categoria apropriada.
+
+**⚠️ REGRA FUNDAMENTAL - NUNCA AGRUPE TUDO EM "ATENDIMENTO":**
+- Se o comentário menciona BAR → sempre "A&B - Serviço" + "A&B"
+- Se o comentário menciona RESTAURANTE → sempre "A&B - Serviço" + "A&B" 
+- Se o comentário menciona PISCINA → sempre "Piscina" + "Lazer"
+- Se o comentário menciona BINGO/RECREAÇÃO/TIO/TIA → sempre "Lazer - Atividades de Recreação" + "Lazer"
+- Se o comentário menciona CAFÉ DA MANHÃ → sempre "A&B - Café da manhã" + "A&B"
+- Se o comentário menciona WI-FI/INTERNET → sempre "Tecnologia - Wi-fi" + "TI"
+
+**REGRA MÚLTIPLOS ELOGIOS OBRIGATÓRIA:** Se o comentário menciona VÁRIAS áreas positivas, você DEVE criar múltiplos issues:
+- "Piscina incrível e bingo divertido" → Issue 1: "Piscina" + Issue 2: "Lazer - Atividades de Recreação"
+- "Bar excelente e restaurante bom" → Issue 1: "A&B - Serviço" (bar) + Issue 2: "A&B - Serviço" (restaurante) 
+- "Funcionários do restaurante e rapazes do bar" → Issue 1: "A&B - Serviço" (restaurante) + Issue 2: "A&B - Serviço" (bar)
 
 **AUTONOMIA DA IA:** Você tem TOTAL LIBERDADE para interpretar semanticamente o comentário. NÃO se baseie apenas em palavras-chave fixas:
 - Analise o CONTEXTO COMPLETO do comentário
@@ -902,8 +999,6 @@ export async function POST(request: NextRequest) {
 **REGRA CRÍTICA DE SUGESTÕES:** Se encontrar QUALQUER das palavras acima no comentário, SEMPRE defina has_suggestion=true. Não há exceções!
 
 **MAPEAMENTOS INTELIGENTES POR CONTEXTO (seja criativo e específico):**
-• Funcionários/Atendimento → "Atendimento" + "Operações"
-• Qualquer tipo de atendimento que fale no comentario → "Atendimento" + "Operações"
 • Concierge específico → "Concierge" + "Programa de vendas"  
 • Recreação/Animação → "Lazer - Serviço" + "Lazer"
 • Fogueira/Atividades → "Lazer - Atividades de Recreação" + "Lazer"
@@ -913,6 +1008,21 @@ export async function POST(request: NextRequest) {
 • Limpeza de quarto → "Limpeza - Quarto" + "Governança"
 • Piscina → "Piscina" + "Lazer"
 • Localização/Vista → "Localização" + "Operações"
+
+**REGRAS PARA ELOGIOS (problem="VAZIO") - PRIORIDADE MÁXIMA:**
+- **MÚLTIPLOS ELOGIOS**: Se o comentário menciona várias áreas positivas, crie um issue separado para cada uma
+- Escolha SEMPRE a keyword do principal aspecto/área citada (não "Atendimento"):
+  * café da manhã → "A&B - Café da manhã"
+  * restaurante/bar/garçom → "A&B - Serviço"
+  * piscina → "Piscina"
+  * recreação/monitor/animação → "Lazer - Serviço" ou "Lazer - Atividades de Recreação"
+  * check-in/check-out/recepção → "Recepção - Serviço"
+  * wi-fi/internet → "Tecnologia - Wi-fi"
+  * limpeza de quarto/banheiro → "Limpeza - Quarto"/"Limpeza - Banheiro"
+  * localização/vista → "Localização"
+- Quando houver pessoas + área específica (ex: garçons no restaurante), PRIORIZE a área específica ("A&B - Serviço"), NÃO "Atendimento"
+- SÓ use "Atendimento" quando o elogio é sobre equipe genérica SEM qualquer pista de serviço/área específica
+- Gere até 3 issues, mas mantenha "VAZIO" em problem quando for elogio puro
 
 **EXEMPLOS DE CRIATIVIDADE PERMITIDA:**
 • "Toalhas sujas" → "Enxoval" + "Governança" (mais específico que "Limpeza")
@@ -927,6 +1037,50 @@ export async function POST(request: NextRequest) {
 • "Poucos canais de TV" → "Tecnologia - TV" + "TI" (específico)
 
 **REGRA DE OURO:** SEMPRE seja o mais específico possível. Se menciona algo concreto, classifique especificamente!
+
+**EXEMPLOS DE CLASSIFICAÇÃO CORRETA PARA ELOGIOS:**
+• "Equipe do restaurante foi maravilhosa" → keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
+• "Café da manhã excelente e variado" → keyword="A&B - Café da manhã", dept="A&B", problem="VAZIO"
+• "Piscina incrível para as crianças" → keyword="Piscina", dept="Lazer", problem="VAZIO"
+• "Check-in rápido e cordial" → keyword="Recepção - Serviço", dept="Recepção", problem="VAZIO"
+• "Wi-Fi perfeito em todo hotel" → keyword="Tecnologia - Wi-fi", dept="TI", problem="VAZIO"
+• "Quarto muito limpo e cheiroso" → keyword="Limpeza - Quarto", dept="Governança", problem="VAZIO"
+• "Hotel muito bem localizado" → keyword="Localização", dept="Operações", problem="VAZIO"
+• "Garçons muito atenciosos no bar" → keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
+• "Monitores foram incríveis com as crianças" → keyword="Lazer - Serviço", dept="Lazer", problem="VAZIO"
+• "Mixologia fantástica!" → keyword="Lazer - Atividades de Recreação", dept="Lazer", problem="VAZIO"
+• "Fogueira muito legal à noite" → keyword="Lazer - Atividades de Recreação", dept="Lazer", problem="VAZIO"
+• "Funcionários simpáticos" (SEM contexto específico) → keyword="Atendimento", dept="Operações", problem="VAZIO"
+
+**EXEMPLOS ESPECÍFICOS DOS ERROS IDENTIFICADOS:**
+• "tenho uma sugestao de melhorar a piscina, que é aumentar ela" →
+  - keyword="Piscina", dept="Lazer", problem="Espaço Insuficiente", has_suggestion=true
+• "Muito bom a noite de bingo com a tia Claudia" →
+  - keyword="Lazer - Atividades de Recreação", dept="Lazer", problem="VAZIO"
+• "funcionários do restaurante Malta foram incríveis" →
+  - keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
+• "rapazes do bar tornaram momentos na piscina melhores" →
+  - Issue 1: keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
+  - Issue 2: keyword="Piscina", dept="Lazer", problem="VAZIO"
+• "tio Lucas com brincadeiras tornou tudo divertido" →
+  - keyword="Lazer - Atividades de Recreação", dept="Lazer", problem="VAZIO"
+
+**EXEMPLOS DE MÚLTIPLOS ELOGIOS (CRÍTICO - GERE VÁRIOS ISSUES):**
+• "Café da manhã excelente, piscina limpa e wi-fi rápido" → 
+  - Issue 1: "A&B - Café da manhã", "A&B", "VAZIO"
+  - Issue 2: "Piscina", "Lazer", "VAZIO"  
+  - Issue 3: "Tecnologia - Wi-fi", "TI", "VAZIO"
+• "funcionários do restaurante e rapazes do bar excelentes" →
+  - Issue 1: "A&B - Serviço", "A&B", "VAZIO" (restaurante)
+  - Issue 2: "A&B - Serviço", "A&B", "VAZIO" (bar)
+• "Recreação divertida, restaurante bom e localização perfeita" →
+  - Issue 1: "Lazer - Serviço", "Lazer", "VAZIO" 
+  - Issue 2: "A&B - Serviço", "A&B", "VAZIO"
+  - Issue 3: "Localização", "Operações", "VAZIO"
+• "bingo com tia Claudia e bar na piscina excelentes" →
+  - Issue 1: "Lazer - Atividades de Recreação", "Lazer", "VAZIO"
+  - Issue 2: "A&B - Serviço", "A&B", "VAZIO"
+  - Issue 3: "Piscina", "Lazer", "VAZIO"
 
 **EXEMPLOS ESPECÍFICOS PARA ALIMENTAÇÃO (A&B):**
 • "Dinner food was horrible" → "A&B - Serviço" + "A&B" + "Qualidade da Comida"
@@ -1008,9 +1162,15 @@ Comentário: "${finalText}"`;
     
     if (result.issues && Array.isArray(result.issues)) {
       for (const issue of result.issues.slice(0, 3)) {
-        const validatedKeyword = validateKeyword(issue.keyword || "Atendimento", finalText);
-        const validatedDepartment = validateDepartment(issue.department || "Operações", validatedKeyword);
+        let validatedKeyword = validateKeyword(issue.keyword || "Atendimento", finalText);
+        let validatedDepartment = validateDepartment(issue.department || "Operações", validatedKeyword);
         const validatedProblem = validateProblem(issue.problem || "");
+        
+        // 🎯 ROTEADOR DE ELOGIOS: Se for elogio puro (problem="VAZIO"), refine a keyword pelo contexto
+        if (validatedProblem === 'VAZIO') {
+          validatedKeyword = reroutePraiseKeyword(validatedKeyword, validatedProblem, finalText);
+          validatedDepartment = validateDepartment(validatedDepartment, validatedKeyword);
+        }
         
         // Definir detalhe do problema
         let problemDetail: string = (issue.problem_detail || issue.detail || '').toString().trim();
@@ -1055,6 +1215,48 @@ Comentário: "${finalText}"`;
         });
       } else {
         processedProblems = [{ keyword: 'Atendimento', sector: 'Operações', problem: 'VAZIO', problem_detail: '' }];
+      }
+    }
+
+    // 🔥 DETECÇÃO ADICIONAL DE MÚLTIPLAS ÁREAS (pós-processamento agressivo)
+    // Se só gerou 1 problema "Atendimento + VAZIO" mas o texto claramente menciona múltiplas áreas
+    if (processedProblems.length === 1 && processedProblems[0].keyword === 'Atendimento' && processedProblems[0].problem === 'VAZIO') {
+      const contextNormalized = normalizeText(finalText);
+      const additionalIssues: Array<{keyword: string, sector: string, problem: string, problem_detail?: string}> = [];
+      
+      // Detectar áreas específicas mencionadas no texto
+      const areaDetections = [
+        { keywords: ['piscina', 'pool'], result: { keyword: 'Piscina', sector: 'Lazer', problem: 'VAZIO' }},
+        { keywords: ['bingo', 'karaoke', 'fogueira', 'tio', 'tia', 'lucas', 'claudia', 'recreacao', 'recreação'], result: { keyword: 'Lazer - Atividades de Recreação', sector: 'Lazer', problem: 'VAZIO' }},
+        { keywords: ['restaurante', 'malta', 'heny', 'juliete', 'jane'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
+        { keywords: ['bar', 'drink', 'bebida'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
+        { keywords: ['cafe da manha', 'café da manhã', 'breakfast'], result: { keyword: 'A&B - Café da manhã', sector: 'A&B', problem: 'VAZIO' }},
+        { keywords: ['wifi', 'wi-fi', 'internet'], result: { keyword: 'Tecnologia - Wi-fi', sector: 'TI', problem: 'VAZIO' }}
+      ];
+
+      for (const detection of areaDetections) {
+        const hasArea = detection.keywords.some(keyword => contextNormalized.includes(normalizeText(keyword)));
+        if (hasArea) {
+          // Evitar duplicatas
+          const alreadyExists = additionalIssues.some(issue => issue.keyword === detection.result.keyword);
+          if (!alreadyExists) {
+            additionalIssues.push(detection.result);
+          }
+        }
+      }
+
+      // Se detectou áreas específicas, substitui o "Atendimento" genérico
+      if (additionalIssues.length > 0) {
+        // Manter "Atendimento" apenas se for realmente genérico (sem menção de áreas específicas)
+        const hasGenericPraise = contextNormalized.includes('funcionario') && 
+                                !contextNormalized.includes('restaurante') && 
+                                !contextNormalized.includes('bar') && 
+                                !contextNormalized.includes('piscina') &&
+                                !contextNormalized.includes('recreacao');
+        
+        processedProblems = hasGenericPraise 
+          ? [processedProblems[0], ...additionalIssues.slice(0, 2)] // Manter Atendimento + até 2 áreas específicas
+          : additionalIssues.slice(0, 3); // Só áreas específicas, até 3
       }
     }
 
