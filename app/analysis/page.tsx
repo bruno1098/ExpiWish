@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback, memo, useRef } from "react"
 import { useSlideUpCounter, useSlideUpDecimal } from "@/hooks/use-slide-up-counter"
 import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -552,6 +552,9 @@ const SuggestionEditor = ({
   const [summaryInputMode, setSummaryInputMode] = useState(false);
   const [summaryInput, setSummaryInput] = useState(suggestion.suggestion_summary);
   const [summaryJustEdited, setSummaryJustEdited] = useState(false);
+  
+  // 🚀 OTIMIZAÇÃO: useRef para timeout cleanup
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Opções de tipo de sugestão
   const suggestionTypes = [
@@ -562,6 +565,16 @@ const SuggestionEditor = ({
     { value: 'with_praise', label: 'Com Elogio' },
     { value: 'none', label: 'Sem Sugestão' }
   ];
+
+  // 🚀 CLEANUP: Limpar timeout no unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Atualizar apenas quando a suggestion prop mudar (não quando os states internos mudarem)
   useEffect(() => {
@@ -611,7 +624,14 @@ const SuggestionEditor = ({
       suggestion_summary: summaryInput // Usar o valor atual do input
     });
     
-    setTimeout(() => setSummaryJustEdited(false), 3000);
+    // 🚀 OTIMIZAÇÃO: Timeout com cleanup
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      setSummaryJustEdited(false);
+      timeoutRef.current = null;
+    }, 3000);
   };
 
   return (
@@ -980,7 +1000,7 @@ const StatsCard = ({ icon: Icon, title, value, change, color, gradient }: {
             )}>
               {String(animatedValue).split('').map((digit, index) => (
                 <span 
-                  key={`digit-${index}-${Date.now()}`}
+                  key={`digit-${index}-${animatedValue}`} // Key estável baseado no valor
                   className={cn(
                     "number-digit",
                     isAnimating ? "animating" : ""
@@ -1055,18 +1075,28 @@ const CommentModal = ({
     newData?: any;
   }>>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  
+  // 🚀 OTIMIZAÇÃO: Refs para timeout cleanup
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const deleteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Usar o feedback correto baseado no currentIndex da lista allFeedbacks (que é filteredFeedbacks)
   const currentFeedback = allFeedbacks && allFeedbacks.length > 0 && currentIndex >= 0 && currentIndex < allFeedbacks.length 
     ? allFeedbacks[currentIndex] 
     : feedback
   
-  useEffect(() => {
-    // Inicializar problemas para edição
+  // 🚀 OTIMIZADO: Stable ID generator para evitar re-renders desnecessários
+  const generateStableId = useRef(0)
+  const getStableId = useCallback(() => {
+    return `stable-${generateStableId.current++}`
+  }, [])
+
+  // 🚀 OTIMIZADO: Memoizar problemas processados para evitar recálculo
+  const processedProblems = useMemo(() => {
     if (currentFeedback.allProblems && currentFeedback.allProblems.length > 0) {
-      setEditedProblems(currentFeedback.allProblems.map((problem, index) => ({
-        id: `problem-${Date.now()}-${index}`,
+      return currentFeedback.allProblems.map((problem, index) => ({
+        id: `problem-${currentFeedback.id}-${index}`, // ID estável baseado no feedback
         ...problem
-      })))
+      }))
     } else {
       // Converter formato antigo para novo
       const keywords = splitByDelimiter(currentFeedback.keyword)
@@ -1078,7 +1108,7 @@ const CommentModal = ({
       
       for (let i = 0; i < maxLength; i++) {
         problemsArray.push({
-          id: `problem-${Date.now()}-${i}`,
+          id: `problem-${currentFeedback.id}-${i}`, // ID estável
           keyword: keywords[i] || keywords[0] || 'Não identificado',
           sector: sectors[i] || sectors[0] || 'Não identificado', 
           problem: problems[i] || problems[0] || '',
@@ -1086,12 +1116,31 @@ const CommentModal = ({
         })
       }
       
-      setEditedProblems(problemsArray)
+      return problemsArray
     }
-  }, [currentFeedback, isEditing])
+  }, [currentFeedback.allProblems, currentFeedback.keyword, currentFeedback.sector, currentFeedback.problem, currentFeedback.id])
+
+  // 🚀 OTIMIZADO: useEffect com cleanup e dependências otimizadas
+  useEffect(() => {
+    setEditedProblems(processedProblems)
+  }, [processedProblems])
+  
+  // 🚀 CLEANUP: Limpar timeouts no unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (deleteTimeoutRef.current) {
+        clearTimeout(deleteTimeoutRef.current);
+        deleteTimeoutRef.current = null;
+      }
+    };
+  }, []);
   
   // Função para navegar entre feedbacks
-  const handleNavigate = (direction: 'prev' | 'next') => {
+  const handleNavigate = useCallback((direction: 'prev' | 'next') => {
     if (!onNavigate || !allFeedbacks.length) return
     
     const newIndex = direction === 'prev' 
@@ -1099,109 +1148,120 @@ const CommentModal = ({
       : Math.min(allFeedbacks.length - 1, currentIndex + 1)
     
     onNavigate(newIndex)
-  }
+  }, [onNavigate, allFeedbacks.length, currentIndex])
+
+  // 🚀 OTIMIZADO: Memoizar metadados para evitar re-renders
+  const processedMetadata = useMemo(() => ({
+    sentiment: currentFeedback.sentiment || '',
+    rating: currentFeedback.rating || 0,
+    language: currentFeedback.language || '',
+    source: currentFeedback.source || '',
+    apartamento: currentFeedback.apartamento || ''
+  }), [currentFeedback.sentiment, currentFeedback.rating, currentFeedback.language, currentFeedback.source, currentFeedback.apartamento])
 
   // Inicializar metadados para edição
   useEffect(() => {
-    setEditedMetadata({
-      sentiment: currentFeedback.sentiment || '',
-      rating: currentFeedback.rating || 0,
-      language: currentFeedback.language || '',
-      source: currentFeedback.source || '',
-      apartamento: currentFeedback.apartamento || ''
-    })
-  }, [currentFeedback])
+    setEditedMetadata(processedMetadata)
+  }, [processedMetadata])
+
+  // 🚀 OTIMIZADO: Memoizar sugestões para evitar re-renders
+  const processedSuggestions = useMemo(() => [{
+    id: `suggestion-${currentFeedback.id}-0`, // ID estável
+    has_suggestion: currentFeedback.has_suggestion || false,
+    suggestion_type: currentFeedback.suggestion_type || '',
+    suggestion_summary: currentFeedback.suggestion_summary || ''
+  }], [currentFeedback.id, currentFeedback.has_suggestion, currentFeedback.suggestion_type, currentFeedback.suggestion_summary])
 
   // Inicializar sugestões para edição
   useEffect(() => {
-    setEditedSuggestions([{
-      id: `suggestion-${Date.now()}-0`,
-      has_suggestion: currentFeedback.has_suggestion || false,
-      suggestion_type: currentFeedback.suggestion_type || '',
-      suggestion_summary: currentFeedback.suggestion_summary || ''
-    }])
-  }, [currentFeedback])
+    setEditedSuggestions(processedSuggestions)
+  }, [processedSuggestions])
+
+  // 🚀 OTIMIZADO: useCallback para handlers estáveis
+  const resetEditingStates = useCallback(() => {
+    setIsEditing(false)
+    setIsEditingMetadata(false)
+  }, [])
 
   // Atualizar feedback quando o índice mudar
   useEffect(() => {
     if (allFeedbacks.length > 0 && allFeedbacks[currentIndex]) {
-      // Reset do estado de edição quando navegar
-      setIsEditing(false)
-      setIsEditingMetadata(false)
+      resetEditingStates()
     }
-  }, [currentIndex, allFeedbacks])
+  }, [currentIndex, allFeedbacks.length, resetEditingStates])
   
-  const copyComment = () => {
+  const copyComment = useCallback(() => {
     navigator.clipboard.writeText(currentFeedback.comment)
     toast({
       title: "Comentário Copiado",
       description: "O comentário foi copiado para a área de transferência.",
     })
-  }
+  }, [currentFeedback.comment, toast])
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     return formatDateBR(dateString);
-  }
+  }, [])
 
-  const handleStartEdit = () => {
+  const handleStartEdit = useCallback(() => {
     setIsEditing(true)
-  }
+  }, [])
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setIsEditing(false)
+    setIsEditingMetadata(false)
+    setIsEditingUnified(false)
     // Resetar para os valores originais
     if (feedback.allProblems && feedback.allProblems.length > 0) {
       setEditedProblems(feedback.allProblems.map((problem, index) => ({
-        id: `problem-${Date.now()}-${index}`,
+        id: `problem-${feedback.id}-${index}`, // ID estável baseado no feedback
         ...problem
       })))
     }
-  }
+  }, [feedback.allProblems])
 
-  const handleUpdateProblem = (id: string, updated: {keyword: string, sector: string, problem: string, problem_detail?: string}) => {
+  const handleUpdateProblem = useCallback((id: string, updated: {keyword: string, sector: string, problem: string, problem_detail?: string}) => {
     const newProblems = editedProblems.map(p => 
       p.id === id ? { ...p, ...updated } : p
     )
     setEditedProblems(newProblems)
-  }
+  }, [editedProblems])
 
-  const handleRemoveProblem = (id: string) => {
+  const handleRemoveProblem = useCallback((id: string) => {
     if (editedProblems.length > 1) {
       const newProblems = editedProblems.filter(p => p.id !== id)
       setEditedProblems(newProblems)
     }
-  }
+  }, [editedProblems])
 
-  const handleAddProblem = () => {
+  const handleAddProblem = useCallback(() => {
     setEditedProblems([
       ...editedProblems,
       { 
-        id: `problem-${Date.now()}-${editedProblems.length}`,
+        id: `problem-${currentFeedback.id}-${editedProblems.length}`, // ID estável
         keyword: 'Insira palavra-chave', 
         sector: 'Insira departamento', 
         problem: 'VAZIO',
         problem_detail: ''
-
       }
     ])
-  }
+  }, [editedProblems, currentFeedback.id])
 
   // Funções para gerenciar sugestões (similar aos problemas)
-  const handleUpdateSuggestion = (id: string, updated: {has_suggestion: boolean, suggestion_type: string, suggestion_summary: string}) => {
+  const handleUpdateSuggestion = useCallback((id: string, updated: {has_suggestion: boolean, suggestion_type: string, suggestion_summary: string}) => {
     const newSuggestions = editedSuggestions.map(s => 
       s.id === id ? { ...s, ...updated } : s
     )
     setEditedSuggestions(newSuggestions)
-  }
+  }, [editedSuggestions])
 
-  const handleRemoveSuggestion = (id: string) => {
+  const handleRemoveSuggestion = useCallback((id: string) => {
     if (editedSuggestions.length > 1) {
       const newSuggestions = editedSuggestions.filter(s => s.id !== id)
       setEditedSuggestions(newSuggestions)
     }
-  }
+  }, [editedSuggestions])
 
-  const handleAddSuggestion = () => {
+  const handleAddSuggestion = useCallback(() => {
     // Limitar a no máximo 3 sugestões por comentário
     if (editedSuggestions.length >= 3) {
       toast({
@@ -1215,17 +1275,17 @@ const CommentModal = ({
     setEditedSuggestions([
       ...editedSuggestions,
       { 
-        id: `suggestion-${Date.now()}-${editedSuggestions.length}`,
+        id: `suggestion-${currentFeedback.id}-${editedSuggestions.length}`, // ID estável
         has_suggestion: true,
         suggestion_type: 'only_suggestion',
         suggestion_summary: ''
 
       }
     ])
-  }
+  }, [editedSuggestions, toast, currentFeedback.id])
 
   // Função para buscar histórico de edições
-  const handleShowEditHistory = async () => {
+  const handleShowEditHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
       // Buscar histórico de edições recentes do Firebase
@@ -1262,13 +1322,13 @@ const CommentModal = ({
     } finally {
       setLoadingHistory(false);
     }
-  }
+  }, [currentFeedback.id, userData?.hotelId, toast])
 
-  const handleStartEditMetadata = () => {
+  const handleStartEditMetadata = useCallback(() => {
     setIsEditingMetadata(true)
-  }
+  }, [])
 
-  const handleCancelEditMetadata = () => {
+  const handleCancelEditMetadata = useCallback(() => {
     setIsEditingMetadata(false)
     // Resetar para os valores originais
     setEditedMetadata({
@@ -1278,10 +1338,10 @@ const CommentModal = ({
       source: currentFeedback.source || '',
       apartamento: currentFeedback.apartamento || ''
     })
-  }
+  }, [currentFeedback])
 
   // Funções unificadas para edição de metadados e análise
-  const handleStartEditUnified = () => {
+  const handleStartEditUnified = useCallback(() => {
     setIsEditingUnified(true)
     setIsEditing(true)
     setIsEditingMetadata(true)
@@ -1297,14 +1357,14 @@ const CommentModal = ({
     
     // Inicializar sugestões editadas com valores originais - agora como array
     setEditedSuggestions([{
-      id: `suggestion-${Date.now()}-0`,
+      id: `suggestion-${currentFeedback.id}-0`, // ID estável
       has_suggestion: currentFeedback.has_suggestion || false,
       suggestion_type: currentFeedback.suggestion_type || 'none',
       suggestion_summary: currentFeedback.suggestion_summary || ''
     }])
-  }
+  }, [currentFeedback])
 
-  const handleCancelEditUnified = () => {
+  const handleCancelEditUnified = useCallback(() => {
     setIsEditingUnified(false)
     setIsEditing(false)
     setIsEditingMetadata(false)
@@ -1321,21 +1381,21 @@ const CommentModal = ({
     // Resetar problemas para os valores originais
     if (currentFeedback.allProblems && currentFeedback.allProblems.length > 0) {
       setEditedProblems(currentFeedback.allProblems.map((problem, index) => ({
-        id: `problem-${Date.now()}-${index}`,
+        id: `problem-${currentFeedback.id}-${index}`, // ID estável
         ...problem
       })))
     }
     
     // Resetar sugestões para os valores originais
     setEditedSuggestions([{
-      id: `suggestion-${Date.now()}-0`,
+      id: `suggestion-${currentFeedback.id}-0`, // ID estável
       has_suggestion: currentFeedback.has_suggestion || false,
       suggestion_type: currentFeedback.suggestion_type || '',
       suggestion_summary: currentFeedback.suggestion_summary || ''
     }])
-  }
+  }, [currentFeedback])
 
-  const handleSaveUnified = async () => {
+  const handleSaveUnified = useCallback(async () => {
     // Evitar múltiplas execuções simultâneas
     if (isSaving) {
       console.log('⚠️ Salvamento já em andamento, ignorando nova chamada');
@@ -1445,9 +1505,13 @@ const CommentModal = ({
       })
       
       // Fechar modal após um pequeno delay para mostrar o toast
-      setTimeout(() => {
-        setIsOpen(false)
-      }, 1000)
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        setIsOpen(false);
+        saveTimeoutRef.current = null;
+      }, 1000);
       
     } catch (error) {
       console.error('Erro ao salvar:', error)
@@ -1460,9 +1524,9 @@ const CommentModal = ({
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [currentFeedback, editedMetadata, editedProblems, editedSuggestions, isSaving, onFeedbackUpdated, toast])
 
-  const handleSaveMetadata = async () => {
+  const handleSaveMetadata = useCallback(async () => {
     setIsSaving(true)
     
     try {
@@ -1507,9 +1571,9 @@ const CommentModal = ({
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [currentFeedback, editedMetadata, isSaving, onFeedbackUpdated, toast])
 
-  const handleSaveSuggestions = async () => {
+  const handleSaveSuggestions = useCallback(async () => {
     setIsSaving(true)
     
     try {
@@ -1579,9 +1643,9 @@ const CommentModal = ({
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [currentFeedback, editedSuggestions, isSaving, onFeedbackUpdated, toast])
 
-  const handleSaveChanges = async () => {
+  const handleSaveChanges = useCallback(async () => {
     setIsSaving(true)
     
     try {
@@ -1655,9 +1719,13 @@ const CommentModal = ({
       })
       
       // Fechar modal após um pequeno delay para mostrar o toast
-      setTimeout(() => {
-        setIsOpen(false)
-      }, 1000)
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        setIsOpen(false);
+        saveTimeoutRef.current = null;
+      }, 1000);
       
     } catch (error) {
       console.error('Erro ao salvar:', error)
@@ -1669,12 +1737,12 @@ const CommentModal = ({
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [currentFeedback, editedProblems, editedMetadata, editedSuggestions, isSaving, onFeedbackUpdated, toast])
 
-  const handleDeleteFeedback = () => {
+  const handleDeleteFeedback = useCallback(() => {
     onDeleteFeedback?.(feedback)
     setIsOpen(false)
-  }
+  }, [feedback, onDeleteFeedback])
 
   // Função para buscar histórico de edições no CommentModal
   const handleShowEditHistoryModal = async () => {
@@ -2333,7 +2401,7 @@ const CommentModal = ({
                           size="sm"
                           onClick={() => {
                             setEditedSuggestions([{
-                              id: `suggestion-${Date.now()}-0`,
+                              id: `suggestion-${feedback.id}-0`, // ID estável
                               has_suggestion: feedback.has_suggestion || false,
                               suggestion_type: feedback.suggestion_type || 'none',
                               suggestion_summary: feedback.suggestion_summary || ''
@@ -3153,7 +3221,6 @@ function AnalysisPageContent() {
   
   // Estados principais
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
-  const [filteredFeedbacks, setFilteredFeedbacks] = useState<Feedback[]>([])
   const [analyses, setAnalyses] = useState<Analysis[]>([])
   const [loading, setLoading] = useState(true)
   
@@ -3305,13 +3372,7 @@ function AnalysisPageContent() {
       )
     )
     
-    // Atualizar também os feedbacks filtrados
-    setFilteredFeedbacks(prevFiltered => 
-      prevFiltered.map(f => 
-        f.id === updatedFeedback.id ? updatedFeedback : f
-      )
-    )
-    
+    // 🚀 OTIMIZADO: filteredFeedbacks agora é calculado automaticamente via useMemo
     // Se feedback foi deletado, iniciar animação antes de remover
     if (updatedFeedback.deleted) {
       // Adicionar à lista de feedbacks sendo excluídos
@@ -3320,11 +3381,9 @@ function AnalysisPageContent() {
       // Mostrar indicador de exclusão
       setShowDeletedIndicator(true)
       
-      // Remover da lista após a animação (500ms)
+      // 🚀 OTIMIZADO: filteredFeedbacks é recalculado automaticamente
+      // Remover apenas da lista de animação após a animação (500ms)
       setTimeout(() => {
-        setFilteredFeedbacks(prevFiltered => 
-          prevFiltered.filter(f => f.id !== updatedFeedback.id)
-        )
         setDeletingFeedbacks(prev => {
           const newSet = new Set(prev)
           newSet.delete(updatedFeedback.id)
@@ -3337,13 +3396,7 @@ function AnalysisPageContent() {
         setShowDeletedIndicator(false)
       }, 2000)
     } else {
-      // Atualizar feedback editado com animação
-      setFilteredFeedbacks(prevFiltered => 
-        prevFiltered.map(f => 
-          f.id === updatedFeedback.id ? updatedFeedback : f
-        )
-      )
-      
+      // 🚀 OTIMIZADO: feedback é atualizado automaticamente via useMemo
       // Adicionar animação de edição
       setEditingFeedbacks(prev => new Set([...Array.from(prev), updatedFeedback.id]))
       
@@ -3513,58 +3566,82 @@ function AnalysisPageContent() {
     }
   }
 
-  // Aplicar filtros
-  useEffect(() => {
-    let filtered = feedbacks.filter((feedback) => {
-      // Excluir feedbacks marcados como deletados
-      const isNotDeleted = !feedback.deleted
-      const matchesSentiment = sentimentFilter === "all" || feedback.sentiment === sentimentFilter
-      const matchesSector = sectorFilter === "all" || feedback.sector.toLowerCase().includes(sectorFilter.toLowerCase())
-      const matchesKeyword = keywordFilter === "all" || feedback.keyword.toLowerCase().includes(keywordFilter.toLowerCase())
-      const matchesProblem = problemFilter === "all" || feedback.problem?.toLowerCase().includes(problemFilter.toLowerCase())
-      const matchesImport = importFilter === "all" || feedback.importId === importFilter
-      
-      // Filtro de data por range
-      let matchesDateRange = true
-      if (dateRange?.from || dateRange?.to) {
-        const feedbackDate = new Date(feedback.date)
-        if (dateRange.from && feedbackDate < dateRange.from) {
-          matchesDateRange = false
-        }
-        if (dateRange.to && feedbackDate > dateRange.to) {
-          matchesDateRange = false
-        }
-      }
-      const matchesSearch = !searchTerm || feedback.comment.toLowerCase().includes(searchTerm.toLowerCase())
+  // 🚀 OTIMIZAÇÃO CRÍTICA: Função de filtro memoizada para evitar recálculos
+  const filterFeedback = useCallback((feedback: any) => {
+    // Early returns para máxima performance
+    if (feedback.deleted) return false
+    if (sentimentFilter !== "all" && feedback.sentiment !== sentimentFilter) return false
+    if (importFilter !== "all" && feedback.importId !== importFilter) return false
+    
+    // Cache das operações toLowerCase para evitar recálculos
+    if (sectorFilter !== "all") {
+      const sectorLower = feedback.sector?.toLowerCase() || ''
+      const filterLower = sectorFilter.toLowerCase()
+      if (!sectorLower.includes(filterLower)) return false
+    }
+    
+    if (keywordFilter !== "all") {
+      const keywordLower = feedback.keyword?.toLowerCase() || ''
+      const filterLower = keywordFilter.toLowerCase()
+      if (!keywordLower.includes(filterLower)) return false
+    }
+    
+    if (problemFilter !== "all" && feedback.problem) {
+      const problemLower = feedback.problem.toLowerCase()
+      const filterLower = problemFilter.toLowerCase()
+      if (!problemLower.includes(filterLower)) return false
+    }
+    
+    if (searchTerm) {
+      const commentLower = feedback.comment?.toLowerCase() || ''
+      const searchLower = searchTerm.toLowerCase()
+      if (!commentLower.includes(searchLower)) return false
+    }
+    
+    // Filtro de data otimizado (só calcula se necessário)
+    if (dateRange?.from || dateRange?.to) {
+      const feedbackDate = new Date(feedback.date)
+      if (dateRange.from && feedbackDate < dateRange.from) return false
+      if (dateRange.to && feedbackDate > dateRange.to) return false
+    }
+    
+    return true
+  }, [sentimentFilter, sectorFilter, keywordFilter, problemFilter, importFilter, searchTerm, dateRange])
 
-      return isNotDeleted && matchesSentiment && matchesSector && matchesKeyword && matchesProblem && matchesImport && matchesDateRange && matchesSearch
-    })
+  // 🚀 OTIMIZAÇÃO CRÍTICA: Função de sort memoizada
+  const sortFunction = useCallback((a: any, b: any) => {
+    const dateA = new Date((a as any).importDate?.seconds ? (a as any).importDate.seconds * 1000 : (a as any).importDate || 0)
+    const dateB = new Date((b as any).importDate?.seconds ? (b as any).importDate.seconds * 1000 : (b as any).importDate || 0)
+    return dateB.getTime() - dateA.getTime()
+  }, [])
 
-    // Ordenar por data de importação para agrupar visualmente
-    filtered.sort((a, b) => {
-      const dateA = new Date((a as any).importDate?.seconds ? (a as any).importDate.seconds * 1000 : (a as any).importDate || 0)
-      const dateB = new Date((b as any).importDate?.seconds ? (b as any).importDate.seconds * 1000 : (b as any).importDate || 0)
-      return dateB.getTime() - dateA.getTime()
-    })
+  // 🚀 OTIMIZAÇÃO CRÍTICA: useMemo para filtros (evita recálculo a cada render)
+  const filteredFeedbacks = useMemo(() => {
+    if (!feedbacks.length) return []
+    
+    const filtered = feedbacks.filter(filterFeedback)
+    filtered.sort(sortFunction)
+    return filtered
+  }, [feedbacks, filterFeedback, sortFunction])
 
-    setFilteredFeedbacks(filtered)
-  }, [feedbacks, sentimentFilter, sectorFilter, keywordFilter, problemFilter, importFilter, dateRange, searchTerm])
-
-  // Calcular estatísticas baseadas nos feedbacks filtrados
-  const stats = {
+  // 🚀 OTIMIZADO: Stats calculados com useMemo
+  const stats = useMemo(() => ({
     total: filteredFeedbacks.length,
     positive: filteredFeedbacks.filter(f => f.sentiment === 'positive').length,
     negative: filteredFeedbacks.filter(f => f.sentiment === 'negative').length,
     neutral: filteredFeedbacks.filter(f => f.sentiment === 'neutral').length,
     averageRating: filteredFeedbacks.length > 0 ? (filteredFeedbacks.reduce((acc, f) => acc + f.rating, 0) / filteredFeedbacks.length).toFixed(1) : '0'
-  }
+  }), [filteredFeedbacks])
 
-  // Obter listas únicas para filtros
-  const sectors = Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.sector))))
-  const keywords = Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.keyword))))
-  const problems = Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.problem || ''))))
+  // 🚀 OTIMIZADO: Listas de filtros memoizadas
+  const filterOptions = useMemo(() => ({
+    sectors: Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.sector)))),
+    keywords: Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.keyword)))),
+    problems: Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.problem || ''))))
+  }), [feedbacks])
 
-  const clearFilters = () => {
+  // 🚀 OTIMIZADO: clearFilters com useCallback para estabilidade
+  const clearFilters = useCallback(() => {
     setSentimentFilter("all")
     setSectorFilter("all")
     setKeywordFilter("all")
@@ -3573,9 +3650,11 @@ function AnalysisPageContent() {
     setDateRange(undefined)
     setQuickDateFilter("")
     setSearchTerm("")
-  }
+  }, [])
 
-  const exportData = () => {
+  // 🚀 OTIMIZADO: exportData com useCallback
+  // 🚀 OTIMIZADO: exportData com useCallback
+  const exportData = useCallback(() => {
     const dataStr = JSON.stringify(filteredFeedbacks, null, 2)
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
     const exportFileDefaultName = `analise-feedbacks-${new Date().toISOString().split('T')[0]}.json`
@@ -3589,7 +3668,7 @@ function AnalysisPageContent() {
       title: "Dados Exportados",
       description: `${filteredFeedbacks.length} feedbacks exportados com sucesso`,
     })
-  }
+  }, [filteredFeedbacks, toast])
 
   if (loading) {
     return (
@@ -3740,7 +3819,7 @@ function AnalysisPageContent() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os departamentos</SelectItem>
-                    {sectors.map((sector) => (
+                    {filterOptions.sectors.map((sector) => (
                       <SelectItem key={sector} value={sector}>{sector}</SelectItem>
                     ))}
                   </SelectContent>
@@ -3759,7 +3838,7 @@ function AnalysisPageContent() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas as palavras-chave</SelectItem>
-                    {keywords.slice(0, 20).map((keyword) => (
+                    {filterOptions.keywords.slice(0, 20).map((keyword) => (
                       <SelectItem key={keyword} value={keyword}>{keyword}</SelectItem>
                     ))}
                   </SelectContent>
@@ -3775,7 +3854,7 @@ function AnalysisPageContent() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os problemas</SelectItem>
-                    {problems.slice(0, 20).map((problem) => (
+                    {filterOptions.problems.slice(0, 20).map((problem) => (
                       <SelectItem key={problem} value={problem}>{problem}</SelectItem>
                     ))}
                   </SelectContent>
