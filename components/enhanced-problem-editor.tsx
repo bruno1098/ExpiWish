@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -79,6 +79,10 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
 }) => {
   const { toast } = useToast();
   
+  // 🚀 OTIMIZAÇÃO: Refs para cleanup de timeouts
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const successTimeoutRefs = useRef<NodeJS.Timeout[]>([]);
+  
   // Estados locais
   const [keyword, setKeyword] = useState(problem.keyword);
   const [sector, setSector] = useState(problem.sector);
@@ -154,25 +158,70 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
   // Definir commonProblems baseado nas listas dinâmicas
   const commonProblems = dynamicLists?.problems || [];
 
-  // Notificar mudanças para o componente pai
+  // 🚀 OTIMIZAÇÃO: Debounce para evitar calls excessivos durante digitação
   useEffect(() => {
-    onUpdate({ keyword, sector, problem: problemText, problem_detail: problemDetail })
+    // Limpar timeout anterior se existir
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    
+    updateTimeoutRef.current = setTimeout(() => {
+      onUpdate({ keyword, sector, problem: problemText, problem_detail: problemDetail })
+      updateTimeoutRef.current = null;
+    }, 300) // 300ms debounce
+    
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
+      }
+    }
   }, [keyword, sector, problemText, problemDetail, onUpdate])
 
-  // Função para mostrar feedback visual de sucesso
+  // 🚀 CLEANUP: Limpar todos os timeouts no unmount
+  useEffect(() => {
+    return () => {
+      // Limpar timeout de update
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+      // Limpar timeouts de success feedback
+      successTimeoutRefs.current.forEach(timeoutId => clearTimeout(timeoutId));
+      successTimeoutRefs.current = [];
+    };
+  }, []);
+
+  // 🚀 OTIMIZADO: Função para mostrar feedback visual de sucesso com cleanup
   const showSuccessFeedback = useCallback((type: 'keyword' | 'problem' | 'department') => {
+    const timeoutId = setTimeout(() => {
+      switch (type) {
+        case 'keyword':
+          setKeywordJustSaved(false);
+          break;
+        case 'problem':
+          setProblemJustSaved(false);
+          break;
+        case 'department':
+          setDepartmentJustSaved(false);
+          break;
+      }
+      // Remover da lista de timeouts ativos
+      successTimeoutRefs.current = successTimeoutRefs.current.filter(id => id !== timeoutId);
+    }, 3000);
+    
+    // Adicionar à lista de timeouts para cleanup
+    successTimeoutRefs.current.push(timeoutId);
+    
+    // Definir estado imediatamente
     switch (type) {
       case 'keyword':
         setKeywordJustSaved(true);
-        setTimeout(() => setKeywordJustSaved(false), 3000);
         break;
       case 'problem':
         setProblemJustSaved(true);
-        setTimeout(() => setProblemJustSaved(false), 3000);
         break;
       case 'department':
         setDepartmentJustSaved(true);
-        setTimeout(() => setDepartmentJustSaved(false), 3000);
         break;
     }
   }, []);
