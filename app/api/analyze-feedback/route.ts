@@ -94,17 +94,19 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   "garcom": "A&B - Serviço",
   "garcons": "A&B - Serviço",
   "bar": "A&B - Serviço",
-  "bingo": "Lazer - Atividades de Recreação",
-  "recreação": "Lazer - Atividades de Recreação",
-  "recreacao": "Lazer - Atividades de Recreação", 
+  "bingo": "Lazer - Atividades de Lazer",
+  "recreação": "Lazer - Atividades de Lazer",
+  "recreacao": "Lazer - Atividades de Lazer",
+  "Lazer": "Lazer - Atividades de Lazer", 
+  "Paz": "Lazer - Atividades de Lazer", 
   "tia da recreação": "Lazer - Serviço",
   "tio": "Lazer - Serviço",
   "tia": "Lazer - Serviço",
   "monitores": "Lazer - Serviço",
   "monitor": "Lazer - Serviço",
-  "karaokê": "Lazer - Atividades de Recreação",
-  "karaoke": "Lazer - Atividades de Recreação",
-  "fogueira": "Lazer - Atividades de Recreação",
+  "karaokê": "Lazer - Atividades de Lazer",
+  "karaoke": "Lazer - Atividades de Lazer",
+  "fogueira": "Lazer - Atividades de Lazer",
   "piscina fria": "Muito Frio/Quente",
   "janela suja": "Falta de Limpeza",
   "janelas sujas": "Falta de Limpeza",
@@ -235,7 +237,7 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   "equipe da recreação": "Lazer - Serviço",
   "pessoal da recreação": "Lazer - Serviço",
   "funcionários da recreação": "Lazer - Serviço",
-  "animação": "Lazer - Atividades de Recreação",
+  "animação": "Lazer - Atividades de Lazer",
   "animadores": "Lazer - Serviço",
   "música": "Lazer - Serviço",
   "musica": "Lazer - Serviço",
@@ -323,7 +325,7 @@ const OFFICIAL_KEYWORDS = [
   "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval", "Governança - Serviço",
   "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações", "Manutenção - Serviço",
   "Ar-condicionado", "Elevador", "Frigobar", "Infraestrutura",
-  "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina", "Lazer - Serviço", "Lazer - Atividades de Recreação",
+  "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina", "Lazer - Serviço", "Lazer - Atividades de Lazer",
   "Tecnologia - Wi-fi", "Tecnologia - TV", "Estacionamento",
   "Atendimento", "Acessibilidade", "Reserva de cadeiras (pool)", "Processo",
   "Custo-benefício", "Comunicação", "Recepção - Serviço",
@@ -409,7 +411,7 @@ function validateKeyword(keyword: string, context?: string): string {
     }
     if (contextNormalized.includes('recreacao') || contextNormalized.includes('atividade') || 
         contextNormalized.includes('tio') || contextNormalized.includes('tia')) {
-      return "Lazer - Atividades de Recreação";
+      return "Lazer - Atividades de Lazer";
     }
     return "Lazer - Serviço";
   }
@@ -482,11 +484,11 @@ function validateKeyword(keyword: string, context?: string): string {
   const temIndicadorLazer = indicadoresLazer.some(termo => contextNormalized.includes(termo));
   
   if (temIndicadorLazer) {
-    // Se menciona atividades específicas → Atividades de Recreação
+    // Se menciona atividades específicas → Atividades de Lazer
     if (contextNormalized.includes('mixologia') || contextNormalized.includes('aula de') || 
         contextNormalized.includes('karaoke') || contextNormalized.includes('fogueira') ||
         contextNormalized.includes('atividade')) {
-      return "Lazer - Atividades de Recreação";
+      return "Lazer - Atividades de Lazer";
     }
     // Caso contrário → Serviço de Lazer
     return "Lazer - Serviço";
@@ -626,7 +628,7 @@ function validateDepartment(department: string, keyword: string): string {
     "Lazer - Variedade": "Lazer",
     "Lazer - Estrutura": "Lazer",
     "Lazer - Serviço": "Lazer",
-    "Lazer - Atividades de Recreação": "Lazer",
+    "Lazer - Atividades de Lazer": "Lazer",
     "Spa": "Lazer",
     "Piscina": "Lazer",
     "Tecnologia - Wi-fi": "TI",
@@ -705,7 +707,7 @@ function reroutePraiseKeyword(keyword: string, problem: string, context?: string
     return 'Piscina';
   }
   if (has(['bingo', 'karaoke', 'fogueira', 'mixologia', 'aula', 'atividade', 'brincadeira', 'animacao', 'animação'])) {
-    return 'Lazer - Atividades de Recreação';
+    return 'Lazer - Atividades de Lazer';
   }
   if (has(['recreacao', 'recreação', 'monitor', 'monitores', 'tio', 'tia', 'lucas', 'claudia', 'entretenimento', 'diversao', 'diversão', 'lazer'])) {
     return 'Lazer - Serviço';
@@ -958,12 +960,12 @@ export async function POST(request: NextRequest) {
 - Se o comentário menciona BAR → sempre "A&B - Serviço" + "A&B"
 - Se o comentário menciona RESTAURANTE → sempre "A&B - Serviço" + "A&B" 
 - Se o comentário menciona PISCINA → sempre "Piscina" + "Lazer"
-- Se o comentário menciona BINGO/RECREAÇÃO/TIO/TIA → sempre "Lazer - Atividades de Recreação" + "Lazer"
+- Se o comentário menciona BINGO/RECREAÇÃO/TIO/TIA → sempre "Lazer - Atividades de Lazer" + "Lazer"
 - Se o comentário menciona CAFÉ DA MANHÃ → sempre "A&B - Café da manhã" + "A&B"
 - Se o comentário menciona WI-FI/INTERNET → sempre "Tecnologia - Wi-fi" + "TI"
 
 **REGRA MÚLTIPLOS ELOGIOS OBRIGATÓRIA:** Se o comentário menciona VÁRIAS áreas positivas, você DEVE criar múltiplos issues:
-- "Piscina incrível e bingo divertido" → Issue 1: "Piscina" + Issue 2: "Lazer - Atividades de Recreação"
+- "Piscina incrível e bingo divertido" → Issue 1: "Piscina" + Issue 2: "Lazer - Atividades de Lazer"
 - "Bar excelente e restaurante bom" → Issue 1: "A&B - Serviço" (bar) + Issue 2: "A&B - Serviço" (restaurante) 
 - "Funcionários do restaurante e rapazes do bar" → Issue 1: "A&B - Serviço" (restaurante) + Issue 2: "A&B - Serviço" (bar)
 
@@ -1001,7 +1003,7 @@ export async function POST(request: NextRequest) {
 **MAPEAMENTOS INTELIGENTES POR CONTEXTO (seja criativo e específico):**
 • Concierge específico → "Concierge" + "Programa de vendas"  
 • Recreação/Animação → "Lazer - Serviço" + "Lazer"
-• Fogueira/Atividades → "Lazer - Atividades de Recreação" + "Lazer"
+• Fogueira/Atividades → "Lazer - Atividades de Lazer" + "Lazer"
 • Café da manhã → "A&B - Café da manhã" + "A&B"
 • Restaurante/Bar → "A&B - Serviço" + "A&B"
 • Wi-Fi/Internet → "Tecnologia - Wi-fi" + "TI"
@@ -1015,7 +1017,7 @@ export async function POST(request: NextRequest) {
   * café da manhã → "A&B - Café da manhã"
   * restaurante/bar/garçom → "A&B - Serviço"
   * piscina → "Piscina"
-  * recreação/monitor/animação → "Lazer - Serviço" ou "Lazer - Atividades de Recreação"
+  * recreação/monitor/animação → "Lazer - Serviço" ou "Lazer - Atividades de Lazer"
   * check-in/check-out/recepção → "Recepção - Serviço"
   * wi-fi/internet → "Tecnologia - Wi-fi"
   * limpeza de quarto/banheiro → "Limpeza - Quarto"/"Limpeza - Banheiro"
@@ -1048,22 +1050,22 @@ export async function POST(request: NextRequest) {
 • "Hotel muito bem localizado" → keyword="Localização", dept="Operações", problem="VAZIO"
 • "Garçons muito atenciosos no bar" → keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
 • "Monitores foram incríveis com as crianças" → keyword="Lazer - Serviço", dept="Lazer", problem="VAZIO"
-• "Mixologia fantástica!" → keyword="Lazer - Atividades de Recreação", dept="Lazer", problem="VAZIO"
-• "Fogueira muito legal à noite" → keyword="Lazer - Atividades de Recreação", dept="Lazer", problem="VAZIO"
+• "Mixologia fantástica!" → keyword="Lazer - Atividades de Lazer", dept="Lazer", problem="VAZIO"
+• "Fogueira muito legal à noite" → keyword="Lazer - Atividades de Lazer", dept="Lazer", problem="VAZIO"
 • "Funcionários simpáticos" (SEM contexto específico) → keyword="Atendimento", dept="Operações", problem="VAZIO"
 
 **EXEMPLOS ESPECÍFICOS DOS ERROS IDENTIFICADOS:**
 • "tenho uma sugestao de melhorar a piscina, que é aumentar ela" →
   - keyword="Piscina", dept="Lazer", problem="Espaço Insuficiente", has_suggestion=true
 • "Muito bom a noite de bingo com a tia Claudia" →
-  - keyword="Lazer - Atividades de Recreação", dept="Lazer", problem="VAZIO"
+  - keyword="Lazer - Atividades de Lazer", dept="Lazer", problem="VAZIO"
 • "funcionários do restaurante Malta foram incríveis" →
   - keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
 • "rapazes do bar tornaram momentos na piscina melhores" →
   - Issue 1: keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
   - Issue 2: keyword="Piscina", dept="Lazer", problem="VAZIO"
 • "tio Lucas com brincadeiras tornou tudo divertido" →
-  - keyword="Lazer - Atividades de Recreação", dept="Lazer", problem="VAZIO"
+  - keyword="Lazer - Atividades de Lazer", dept="Lazer", problem="VAZIO"
 
 **EXEMPLOS DE MÚLTIPLOS ELOGIOS (CRÍTICO - GERE VÁRIOS ISSUES):**
 • "Café da manhã excelente, piscina limpa e wi-fi rápido" → 
@@ -1078,7 +1080,7 @@ export async function POST(request: NextRequest) {
   - Issue 2: "A&B - Serviço", "A&B", "VAZIO"
   - Issue 3: "Localização", "Operações", "VAZIO"
 • "bingo com tia Claudia e bar na piscina excelentes" →
-  - Issue 1: "Lazer - Atividades de Recreação", "Lazer", "VAZIO"
+  - Issue 1: "Lazer - Atividades de Lazer", "Lazer", "VAZIO"
   - Issue 2: "A&B - Serviço", "A&B", "VAZIO"
   - Issue 3: "Piscina", "Lazer", "VAZIO"
 
@@ -1100,7 +1102,7 @@ APENAS classifique como "Não identificado" se o comentário for COMPLETAMENTE V
 • Para feedback específico → SEMPRE identifique a categoria mais precisa possível
 • Para problemas técnicos → use categorias específicas como "Ar-condicionado", "Elevador", "Frigobar"
 • Para áreas específicas → use "Limpeza - Quarto", "Manutenção - Banheiro", etc.
-• Para serviços específicos → use "A&B - Café da manhã", "Lazer - Atividades de Recreação", etc.
+• Para serviços específicos → use "A&B - Café da manhã", "Lazer - Atividades de Lazer", etc.
 
 **CRITÉRIO DE EXCELÊNCIA:** Prefira sempre a classificação mais específica e precisa possível!
 
@@ -1109,7 +1111,7 @@ APENAS classifique como "Não identificado" se o comentário for COMPLETAMENTE V
 **EXEMPLOS DE AUTONOMIA SEMÂNTICA:**
 • "Pessoal da recreação muito legal" → IA deve entender: recreação = "Lazer - Serviço" + "Lazer"
 • "Garçons simpáticos no restaurante" → IA deve entender: garçons = "A&B - Serviço" + "A&B"
-• "Aula de drinks foi incrível" → IA deve entender: atividade específica = "Lazer - Atividades de Recreação" + "Lazer"
+• "Aula de drinks foi incrível" → IA deve entender: atividade específica = "Lazer - Atividades de Lazer" + "Lazer"
 • "Funcionários do bar atenciosos" → IA deve entender: bar = "A&B - Serviço" + "A&B"
 • "Monitores de lazer legais" → IA deve entender: lazer + monitores = "Lazer - Serviço" + "Lazer"
 • "Wi-Fi não funciona" → "Tecnologia - Wi-fi" + "TI" + "Não Funciona"
@@ -1227,7 +1229,7 @@ Comentário: "${finalText}"`;
       // Detectar áreas específicas mencionadas no texto
       const areaDetections = [
         { keywords: ['piscina', 'pool'], result: { keyword: 'Piscina', sector: 'Lazer', problem: 'VAZIO' }},
-        { keywords: ['bingo', 'karaoke', 'fogueira', 'tio', 'tia', 'lucas', 'claudia', 'recreacao', 'recreação'], result: { keyword: 'Lazer - Atividades de Recreação', sector: 'Lazer', problem: 'VAZIO' }},
+        { keywords: ['bingo', 'karaoke', 'fogueira', 'tio', 'tia', 'lucas', 'claudia', 'recreacao', 'recreação'], result: { keyword: 'Lazer - Atividades de Lazer', sector: 'Lazer', problem: 'VAZIO' }},
         { keywords: ['restaurante', 'malta', 'heny', 'juliete', 'jane'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
         { keywords: ['bar', 'drink', 'bebida'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
         { keywords: ['cafe da manha', 'café da manhã', 'breakfast'], result: { keyword: 'A&B - Café da manhã', sector: 'A&B', problem: 'VAZIO' }},
