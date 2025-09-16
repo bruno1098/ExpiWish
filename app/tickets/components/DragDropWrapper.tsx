@@ -14,9 +14,10 @@ import {
 interface DragDropWrapperProps {
   onDragEnd: (event: DragEndEvent) => void;
   children: React.ReactNode;
+  disabled?: boolean;
 }
 
-export function DragDropWrapper({ onDragEnd, children }: DragDropWrapperProps) {
+export function DragDropWrapper({ onDragEnd, children, disabled = false }: DragDropWrapperProps) {
   const [mounted, setMounted] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -37,13 +38,21 @@ export function DragDropWrapper({ onDragEnd, children }: DragDropWrapperProps) {
   }
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (disabled) return;
     setActiveId(event.active.id as string);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
-    onDragEnd(event);
+    if (!disabled) {
+      onDragEnd(event);
+    }
   };
+
+  // Se disabled, apenas retornar os children sem DndContext
+  if (disabled) {
+    return <>{children}</>;
+  }
 
   return (
     <DndContext
