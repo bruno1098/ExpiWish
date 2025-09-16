@@ -166,6 +166,23 @@ export function TicketBoard({
             Gerencie problemas técnicos e solicitações da plataforma ExpiWish
             {!isAdmin && " (Visualização - Somente admins podem alterar status)"}
           </p>
+          
+          {/* Legenda sutil das cores */}
+          <div className="flex items-center gap-4 text-xs text-muted-foreground/70 mt-1">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-500"></div>
+              <span>Alta</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+              <span>Média</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span>Baixa</span>
+            </div>
+            <div className="text-xs opacity-50 ml-2">• = mensagem nova</div>
+          </div>
         </div>
 
         {/* Estatísticas rápidas */}

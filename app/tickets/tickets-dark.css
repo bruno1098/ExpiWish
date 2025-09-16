@@ -1,0 +1,283 @@
+/* ===== TICKETS INTERFACE DARK THEME - FORÇADO ===== */
+/* Este arquivo aplica estilos APENAS para a página de tickets no modo escuro */
+
+/* FORÇA GERAL PARA TODOS OS ELEMENTOS DA PÁGINA TICKETS */
+.dark .tickets-page * {
+  --tw-bg-opacity: 1 !important;
+}
+
+/* FORÇA OS CARDS DOS TICKETS - Seletor mais específico */
+.dark .tickets-page > div > div:nth-child(3) > div > div,
+.dark .tickets-page .grid-cols-1 > div,
+.dark .tickets-page .grid-cols-3 > div,
+.dark .tickets-page [class*="border-l-4"],
+.dark .tickets-page .cursor-pointer {
+  background: linear-gradient(135deg, 
+    rgba(17, 24, 39, 0.95) 0%, 
+    rgba(31, 41, 55, 0.90) 100%) !important;
+  border-right: 1px solid rgb(55, 65, 81) !important;
+  border-top: 1px solid rgb(55, 65, 81) !important;
+  border-bottom: 1px solid rgb(55, 65, 81) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 
+              0 2px 4px -1px rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(8px) !important;
+  transition: all 0.3s ease !important;
+}
+
+.dark .tickets-page > div > div:nth-child(3) > div > div:hover,
+.dark .tickets-page .grid-cols-1 > div:hover,
+.dark .tickets-page .grid-cols-3 > div:hover,
+.dark .tickets-page [class*="border-l-4"]:hover,
+.dark .tickets-page .cursor-pointer:hover {
+  background: linear-gradient(135deg, 
+    rgba(31, 41, 55, 0.98) 0%, 
+    rgba(55, 65, 81, 0.95) 100%) !important;
+  border-right-color: rgb(75, 85, 99) !important;
+  border-top-color: rgb(75, 85, 99) !important;
+  border-bottom-color: rgb(75, 85, 99) !important;
+  box-shadow: 0 10px 20px -4px rgba(0, 0, 0, 0.5), 
+              0 4px 8px -1px rgba(0, 0, 0, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+/* APLICAÇÃO GERAL - TODOS os cards na página de tickets */
+.dark .tickets-page [class*="border-l-4"] {
+  background: linear-gradient(135deg, 
+    rgba(17, 24, 39, 0.95) 0%, 
+    rgba(31, 41, 55, 0.90) 100%) !important;
+  border-right: 1px solid rgb(55, 65, 81) !important;
+  border-top: 1px solid rgb(55, 65, 81) !important;
+  border-bottom: 1px solid rgb(55, 65, 81) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 
+              0 2px 4px -1px rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(8px) !important;
+  transition: all 0.3s ease !important;
+}
+
+.dark .tickets-page [class*="border-l-4"]:hover {
+  background: linear-gradient(135deg, 
+    rgba(31, 41, 55, 0.98) 0%, 
+    rgba(55, 65, 81, 0.95) 100%) !important;
+  border-right-color: rgb(75, 85, 99) !important;
+  border-top-color: rgb(75, 85, 99) !important;
+  border-bottom-color: rgb(75, 85, 99) !important;
+  box-shadow: 0 10px 20px -4px rgba(0, 0, 0, 0.5), 
+              0 4px 8px -1px rgba(0, 0, 0, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+/* MELHORIA ESPECÍFICA PARA COLUNAS DO KANBAN */
+.dark .tickets-page .grid > div {
+  background: linear-gradient(135deg, 
+    rgba(17, 24, 39, 0.3) 0%, 
+    rgba(31, 41, 55, 0.2) 100%) !important;
+  border: 1px solid rgba(55, 65, 81, 0.5) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* Headers das colunas */
+.dark .tickets-page h3,
+.dark .tickets-page .font-medium {
+  color: rgb(243, 244, 246) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Cores específicas das colunas baseadas no background original */
+.dark .tickets-page .bg-blue-50,
+.dark .tickets-page [class*="bg-blue"] {
+  background: linear-gradient(135deg, 
+    rgba(37, 99, 235, 0.15) 0%, 
+    rgba(59, 130, 246, 0.10) 100%) !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.dark .tickets-page .bg-orange-50,
+.dark .tickets-page [class*="bg-orange"] {
+  background: linear-gradient(135deg, 
+    rgba(234, 88, 12, 0.15) 0%, 
+    rgba(251, 146, 60, 0.10) 100%) !important;
+  border: 1px solid rgba(251, 146, 60, 0.3) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.dark .tickets-page .bg-green-50,
+.dark .tickets-page [class*="bg-green"] {
+  background: linear-gradient(135deg, 
+    rgba(16, 185, 129, 0.15) 0%, 
+    rgba(52, 211, 153, 0.10) 100%) !important;
+  border: 1px solid rgba(52, 211, 153, 0.3) !important;
+  backdrop-filter: blur(8px) !important;
+}
+.dark .tickets-page .bg-blue-50 {
+  background: linear-gradient(135deg, 
+    rgba(37, 99, 235, 0.15) 0%, 
+    rgba(59, 130, 246, 0.10) 100%) !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+}
+
+.dark .tickets-page .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Colunas específicas - Em Andamento (laranja) */
+.dark .tickets-page .bg-orange-50 {
+  background: linear-gradient(135deg, 
+    rgba(234, 88, 12, 0.15) 0%, 
+    rgba(251, 146, 60, 0.10) 100%) !important;
+  border: 1px solid rgba(251, 146, 60, 0.3) !important;
+}
+
+.dark .tickets-page .border-orange-200 {
+  border-color: rgba(251, 146, 60, 0.4) !important;
+}
+
+/* Colunas específicas - Concluídos (verde) */
+.dark .tickets-page .bg-green-50 {
+  background: linear-gradient(135deg, 
+    rgba(16, 185, 129, 0.15) 0%, 
+    rgba(52, 211, 153, 0.10) 100%) !important;
+  border: 1px solid rgba(52, 211, 153, 0.3) !important;
+}
+
+.dark .tickets-page .border-green-200 {
+  border-color: rgba(52, 211, 153, 0.4) !important;
+}
+
+/* Prioridade Alta - Border vermelha mais visível */
+.dark .tickets-page .border-red-500 {
+  border-left: 4px solid rgb(239, 68, 68) !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.2) !important;
+}
+
+/* Prioridade Média - Border amarela mais visível */
+.dark .tickets-page .border-yellow-500 {
+  border-left: 4px solid rgb(245, 158, 11) !important;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.2) !important;
+}
+
+/* Prioridade Baixa - Border verde mais visível */
+.dark .tickets-page .border-green-500 {
+  border-left: 4px solid rgb(34, 197, 94) !important;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2) !important;
+}
+
+/* Status Badges melhorados */
+.dark .tickets-page .bg-blue-100 {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: rgb(147, 197, 253) !important;
+  border: 1px solid rgba(59, 130, 246, 0.4) !important;
+}
+
+.dark .tickets-page .bg-orange-100 {
+  background: rgba(251, 146, 60, 0.2) !important;
+  color: rgb(251, 191, 36) !important;
+  border: 1px solid rgba(251, 146, 60, 0.4) !important;
+}
+
+.dark .tickets-page .bg-green-100 {
+  background: rgba(52, 211, 153, 0.2) !important;
+  color: rgb(110, 231, 183) !important;
+  border: 1px solid rgba(52, 211, 153, 0.4) !important;
+}
+
+/* Text colors para melhor contraste */
+.dark .tickets-page .text-blue-800 {
+  color: rgb(147, 197, 253) !important;
+}
+
+.dark .tickets-page .text-orange-800 {
+  color: rgb(251, 191, 36) !important;
+}
+
+.dark .tickets-page .text-green-800 {
+  color: rgb(110, 231, 183) !important;
+}
+
+/* Priority badges melhorados */
+.dark .tickets-page .text-red-700 {
+  color: rgb(248, 180, 180) !important;
+}
+
+.dark .tickets-page .text-yellow-700 {
+  color: rgb(253, 230, 138) !important;
+}
+
+.dark .tickets-page .text-green-700 {
+  color: rgb(110, 231, 183) !important;
+}
+
+.dark .tickets-page .border-red-500.border {
+  border-color: rgba(220, 38, 38, 0.6) !important;
+  background: rgba(220, 38, 38, 0.1) !important;
+}
+
+.dark .tickets-page .border-yellow-500.border {
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  background: rgba(245, 158, 11, 0.1) !important;
+}
+
+.dark .tickets-page .border-green-500.border {
+  border-color: rgba(5, 150, 105, 0.6) !important;
+  background: rgba(5, 150, 105, 0.1) !important;
+}
+
+/* Filtros e busca */
+.dark .tickets-page .container > div:first-child [data-testid="card"] {
+  background: linear-gradient(135deg, 
+    rgba(17, 24, 39, 0.95) 0%, 
+    rgba(31, 41, 55, 0.90) 100%) !important;
+  border: 1px solid rgb(55, 65, 81) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+/* Estados vazios */
+.dark .tickets-page .text-muted-foreground {
+  color: rgb(156, 163, 175) !important;
+}
+
+/* Melhorar estatísticas no header */
+.dark .tickets-page .text-red-600 {
+  color: rgb(248, 113, 113) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Avatar melhorado */
+.dark .tickets-page [data-testid="avatar-fallback"] {
+  background: linear-gradient(135deg, rgb(55, 65, 81), rgb(75, 85, 99)) !important;
+  color: rgb(243, 244, 246) !important;
+  border: 1px solid rgb(107, 114, 128) !important;
+}
+
+/* Badges de contagem nas colunas */
+.dark .tickets-page .bg-secondary {
+  background: rgba(55, 65, 81, 0.8) !important;
+  color: rgb(209, 213, 219) !important;
+  border: 1px solid rgba(75, 85, 99, 0.6) !important;
+}
+
+/* Badges de contagem nas colunas */
+.dark .tickets-page .bg-secondary {
+  background: rgba(55, 65, 81, 0.8) !important;
+  color: rgb(209, 213, 219) !important;
+  border: 1px solid rgba(75, 85, 99, 0.6) !important;
+}
+
+/* Animação para tickets atrasados */
+.dark .tickets-page .ring-2.ring-red-500 {
+  border: 2px solid rgba(239, 68, 68, 0.8) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2), 
+              0 4px 6px -1px rgba(239, 68, 68, 0.4) !important;
+  animation: pulse-red 2s infinite !important;
+}
+
+@keyframes pulse-red {
+  0%, 100% { 
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2), 
+                0 4px 6px -1px rgba(239, 68, 68, 0.4); 
+  }
+  50% { 
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3), 
+                0 4px 6px -1px rgba(239, 68, 68, 0.5); 
+  }
+}

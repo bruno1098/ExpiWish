@@ -73,6 +73,16 @@ export function DraggableTicket({
     onStatusChange(ticket.id, newStatus);
   };
 
+  // Verificar se há comentários não lidos (baseado em comentários recentes)
+  const hasUnreadMessages = ticket.comments && ticket.comments.length > 0 && 
+    ticket.comments.some(comment => {
+      // Considera "não lido" se há comentários nas últimas 2 horas
+      // e se não é o próprio usuário que comentou
+      const commentTime = comment.createdAt.toDate().getTime();
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+      return commentTime > twoHoursAgo;
+    });
+
   return (
     <div
       ref={setNodeRef}
@@ -90,6 +100,7 @@ export function DraggableTicket({
         onClick={onTicketClick}
         showHotel={showHotel}
         isDragging={isDragging}
+        hasUnreadMessages={hasUnreadMessages}
       />
       
       {/* Quick status change buttons */}
@@ -114,7 +125,7 @@ export function DraggableTicket({
                   key={prevStatus.id}
                   size="sm"
                   variant="ghost"
-                  className="h-6 w-6 p-0 bg-background/80 backdrop-blur-sm"
+                  className="h-6 w-6 p-0 bg-background/90 backdrop-blur-sm border border-border/50 hover:bg-accent/80 transition-all"
                   onClick={(e: React.MouseEvent) => {
                     e.stopPropagation();
                     handleStatusChange(prevStatus.id);
@@ -133,7 +144,7 @@ export function DraggableTicket({
                   key={nextStatus.id}
                   size="sm"
                   variant="ghost"
-                  className="h-6 w-6 p-0 bg-background/80 backdrop-blur-sm"
+                  className="h-6 w-6 p-0 bg-background/90 backdrop-blur-sm border border-border/50 hover:bg-accent/80 transition-all"
                   onClick={(e: React.MouseEvent) => {
                     e.stopPropagation();
                     handleStatusChange(nextStatus.id);
