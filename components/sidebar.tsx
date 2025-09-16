@@ -23,6 +23,7 @@ import {
   Activity,
   UserCheck,
   AlertCircle,
+  Ticket,
 } from "lucide-react"
 
 function Sidebar() {
@@ -40,6 +41,7 @@ function Sidebar() {
       href: "/dashboard",
     color: "text-blue-400",
   },
+
   {
     label: "Importar Dados",
     icon: FileUp,
@@ -64,6 +66,12 @@ function Sidebar() {
     color: "text-orange-400",
     href: "/analysis/unidentified",
   },
+   {
+    label: "Tickets",
+    icon: Ticket,
+    href: "/tickets",
+    color: "text-red-400",
+  },
     {
       label: "Meu Perfil",
       icon: User,
@@ -86,6 +94,7 @@ function Sidebar() {
       href: "/admin",
       color: "text-red-400",
     },
+  
     {
       label: "Gestão de Hotéis",
       icon: BarChart3,
@@ -103,6 +112,12 @@ function Sidebar() {
       icon: Users,
       href: "/admin/usuarios",
       color: "text-blue-400",
+    },
+      {
+      label: "Tickets da Plataforma",
+      icon: Ticket,
+      href: "/tickets",
+      color: "text-red-400",
     },
     {
       label: "Configuração",
