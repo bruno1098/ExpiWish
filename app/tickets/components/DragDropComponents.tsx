@@ -77,10 +77,11 @@ export function DraggableTicket({
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
+      {...(isAdmin ? listeners : {})}
+      {...(isAdmin ? attributes : {})}
       className={cn(
-        'group relative transition-all duration-200 cursor-grab active:cursor-grabbing',
+        'group relative transition-all duration-200',
+        isAdmin ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
         isDragging && 'opacity-50 scale-105 shadow-lg z-50'
       )}
     >

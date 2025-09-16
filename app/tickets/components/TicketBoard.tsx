@@ -121,6 +121,11 @@ export function TicketBoard({
     
     if (!over) return;
     
+    // Apenas admins podem mover tickets via drag and drop
+    if (!isAdmin) {
+      return;
+    }
+    
     const sourceStatus = active.data.current?.status as TicketStatus;
     const targetStatus = over.id as TicketStatus;
     
@@ -129,7 +134,7 @@ export function TicketBoard({
     
     // Alterar status do ticket
     onStatusChange(active.id as string, targetStatus);
-  }, [onStatusChange]);
+  }, [onStatusChange, isAdmin]);
 
   // Calcular estatísticas
   const stats = {
@@ -149,7 +154,7 @@ export function TicketBoard({
   }
 
   return (
-    <DragDropWrapper onDragEnd={handleDragEnd}>
+    <DragDropWrapper onDragEnd={handleDragEnd} disabled={!isAdmin}>
       <div className="space-y-6">
       {/* Header com filtros e ações */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -159,6 +164,7 @@ export function TicketBoard({
           </h1>
           <p className="text-muted-foreground">
             Gerencie problemas técnicos e solicitações da plataforma ExpiWish
+            {!isAdmin && " (Visualização - Somente admins podem alterar status)"}
           </p>
         </div>
 

@@ -169,12 +169,8 @@ export const getTickets = async (
     
     // Aplicar filtros no cliente para evitar necessidade de índices
     tickets = tickets.filter(ticket => {
-      // Filtro para staff - só vê tickets do próprio hotel
-      if (currentUser.role === 'staff' && currentUser.hotelId) {
-        if (ticket.createdBy?.hotelId !== currentUser.hotelId) {
-          return false;
-        }
-      }
+      // REMOVIDO: Filtro para staff - agora todos podem ver todos os tickets
+      // Tickets são globais para melhor colaboração e transparência
       
       // Filtro de arquivados
       if (ticket.isArchived === true) {
@@ -281,6 +277,13 @@ export const updateTicket = async (
     const currentTicket = await getTicketById(id);
     if (!currentTicket) {
       throw new Error('Ticket não encontrado');
+    }
+    
+    // Verificar permissão para mudança de status - apenas admins podem alterar
+    if (updateData.status && updateData.status !== currentTicket.status) {
+      if (currentUser.role !== 'admin') {
+        throw new Error('Apenas administradores podem alterar o status dos tickets');
+      }
     }
     
     // Preparar dados de atualização
@@ -439,12 +442,8 @@ export const subscribeToTickets = (
       
       // Aplicar filtros no cliente
       tickets = tickets.filter(ticket => {
-        // Filtro para staff - só vê tickets do próprio hotel
-        if (currentUser.role === 'staff' && currentUser.hotelId) {
-          if (ticket.createdBy?.hotelId !== currentUser.hotelId) {
-            return false;
-          }
-        }
+        // REMOVIDO: Filtro para staff - agora todos podem ver todos os tickets
+        // Tickets são globais para melhor colaboração e transparência
         
         // Filtro de arquivados
         if (ticket.isArchived === true) {
