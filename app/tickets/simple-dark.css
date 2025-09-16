@@ -1,0 +1,100 @@
+/* TICKETS DARK THEME - SIMPLES E EFETIVO */
+
+/* Cards dos tickets */
+.dark .tickets-page .bg-card {
+  background: linear-gradient(135deg, 
+    rgba(17, 24, 39, 0.95), 
+    rgba(31, 41, 55, 0.90)) !important;
+  border-color: rgb(55, 65, 81) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark .tickets-page .hover\:shadow-md:hover {
+  box-shadow: 0 10px 20px -4px rgba(0, 0, 0, 0.5) !important;
+  transform: translateY(-2px);
+}
+
+/* Melhoria nas cores das colunas */
+.dark .tickets-page .bg-blue-50 {
+  background: rgba(37, 99, 235, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.dark .tickets-page .bg-orange-50 {
+  background: rgba(234, 88, 12, 0.15) !important;
+  border-color: rgba(251, 146, 60, 0.3) !important;
+}
+
+.dark .tickets-page .bg-green-50 {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border-color: rgba(52, 211, 153, 0.3) !important;
+}
+
+/* Melhorar cores dos badges de status */
+.dark .tickets-page .bg-blue-100 {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: rgb(147, 197, 253) !important;
+}
+
+.dark .tickets-page .bg-orange-100 {
+  background: rgba(251, 146, 60, 0.2) !important;
+  color: rgb(251, 191, 36) !important;
+}
+
+.dark .tickets-page .bg-green-100 {
+  background: rgba(52, 211, 153, 0.2) !important;
+  color: rgb(110, 231, 183) !important;
+}
+
+/* Cores de texto melhoradas */
+.dark .tickets-page .text-blue-800 {
+  color: rgb(147, 197, 253) !important;
+}
+
+.dark .tickets-page .text-orange-800 {
+  color: rgb(251, 191, 36) !important;
+}
+
+.dark .tickets-page .text-green-800 {
+  color: rgb(110, 231, 183) !important;
+}
+
+/* Prioridade mais visível */
+.dark .tickets-page .text-red-600 {
+  color: rgb(248, 113, 113) !important;
+}
+
+.dark .tickets-page .text-red-700 {
+  color: rgb(248, 180, 180) !important;
+}
+
+.dark .tickets-page .text-yellow-700 {
+  color: rgb(253, 230, 138) !important;
+}
+
+.dark .tickets-page .text-green-700 {
+  color: rgb(110, 231, 183) !important;
+}
+
+/* Indicador de mensagens não lidas - modo escuro */
+.dark .tickets-page .ring-blue-400 {
+  --tw-ring-color: rgba(96, 165, 250, 0.4) !important;
+}
+
+.dark .tickets-page .bg-blue-500 {
+  background: rgb(59, 130, 246) !important;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Legenda das cores - modo escuro */
+.dark .tickets-page .bg-red-500 {
+  background: rgb(239, 68, 68) !important;
+}
+
+.dark .tickets-page .bg-yellow-500 {
+  background: rgb(245, 158, 11) !important;
+}
+
+.dark .tickets-page .bg-green-500 {
+  background: rgb(34, 197, 94) !important;
+}

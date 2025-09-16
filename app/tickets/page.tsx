@@ -21,6 +21,7 @@ import {
   TicketFilters 
 } from '@/types/ticket';
 import { devLog, devError } from '@/lib/dev-logger';
+import './simple-dark.css'; // CSS específico para tickets
 
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -203,7 +204,7 @@ export default function TicketsPage() {
 
   return (
     <RequireAuth>
-      <div className="container mx-auto p-6 space-y-6">
+      <div className="container mx-auto p-6 space-y-6 tickets-page">
         <TicketBoard
           tickets={tickets}
           onTicketClick={handleTicketClick}

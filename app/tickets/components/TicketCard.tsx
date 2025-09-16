@@ -72,6 +72,7 @@ interface TicketCardProps {
   onStatusChange?: (ticketId: string, newStatus: TicketStatus) => void;
   isDragging?: boolean;
   showHotel?: boolean; // Para admin ver qual hotel
+  hasUnreadMessages?: boolean; // Indica se há mensagens não lidas
 }
 
 export function TicketCard({ 
@@ -79,7 +80,8 @@ export function TicketCard({
   onClick, 
   onStatusChange, 
   isDragging = false,
-  showHotel = false
+  showHotel = false,
+  hasUnreadMessages = false
 }: TicketCardProps) {
   const CategoryIcon = categoryIcons[ticket.category] || HelpCircle;
   const StatusIcon = statusIcons[ticket.status] || AlertTriangle;
@@ -116,13 +118,19 @@ export function TicketCard({
   return (
     <Card 
       className={cn(
-        "cursor-pointer transition-all duration-200 hover:shadow-md group border-l-4",
+        "cursor-pointer transition-all duration-200 hover:shadow-md group border-l-4 relative",
         isDragging && "opacity-50 rotate-2",
         TICKET_PRIORITY_COLORS[ticket.priority],
-        isOverdue && "ring-2 ring-red-500 ring-opacity-50"
+        isOverdue && "ring-2 ring-red-500 ring-opacity-50",
+        hasUnreadMessages && "ring-1 ring-blue-400 ring-opacity-30"
       )}
       onClick={handleClick}
     >
+      {/* Indicador sutil de mensagens não lidas */}
+      {hasUnreadMessages && (
+        <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse shadow-sm" />
+      )}
+      
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
