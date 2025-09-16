@@ -30,6 +30,7 @@ function Sidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(true)
   const [isClient, setIsClient] = useState(false)
+  const [showPulseAnimation, setShowPulseAnimation] = useState(false)
   const { userData } = useAuth()
   const isAdmin = userData?.role === 'admin'
 
@@ -55,6 +56,12 @@ function Sidebar() {
     href: "/analysis",
   },
   {
+    label: "Tickets",
+    icon: Ticket,
+    href: "/tickets",
+    color: "text-red-400",
+  },
+  {
     label: "Histórico",
     icon: History,
     color: "text-amber-400",
@@ -66,12 +73,7 @@ function Sidebar() {
     color: "text-orange-400",
     href: "/analysis/unidentified",
   },
-   {
-    label: "Tickets",
-    icon: Ticket,
-    href: "/tickets",
-    color: "text-red-400",
-  },
+   
     {
       label: "Meu Perfil",
       icon: User,
@@ -141,6 +143,19 @@ function Sidebar() {
     setIsClient(true)
   }, [])
 
+  // Iniciar animação de pulse quando userData estiver disponível (login)
+  useEffect(() => {
+    if (userData && isClient) {
+      setShowPulseAnimation(true)
+      // Parar a animação após 5 segundos
+      const timer = setTimeout(() => {
+        setShowPulseAnimation(false)
+      }, 3000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [userData, isClient])
+
   // Resetar para fechado sempre que a rota mudar
   useEffect(() => {
     setCollapsed(true)
@@ -171,14 +186,46 @@ function Sidebar() {
       <div className="absolute right-0 top-5 transform translate-x-1/2 z-50">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center justify-center h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 hover:scale-110 hover:shadow-xl"
-        >
-          {collapsed ? (
-            <ChevronRight size={18} className="transition-transform duration-300 ease-out" />
-          ) : (
-            <ChevronLeft size={18} className="transition-transform duration-300 ease-out" />
+          className={cn(
+            "relative flex items-center justify-center h-10 w-10 rounded-full transition-all duration-300 overflow-hidden group",
+            "bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600",
+            "hover:from-blue-600 hover:via-indigo-600 hover:to-purple-700",
+            "shadow-lg hover:shadow-xl hover:shadow-blue-500/25",
+            "transform hover:scale-110 active:scale-95",
+            "border border-white/20",
+            showPulseAnimation && "animate-subtle-bounce"
           )}
+        >
+          {/* Gradient overlay para efeito hover */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          
+          {/* Ring de pulse automático */}
+          {showPulseAnimation && (
+            <div className="absolute inset-0 rounded-full border-2 border-blue-400 animate-ping" />
+          )}
+          
+          {/* Ícone da seta */}
+          <div className="relative z-10 transition-transform duration-300 ease-out group-hover:scale-110">
+            {collapsed ? (
+              <ChevronRight size={20} className="text-white drop-shadow-sm transition-all duration-300" />
+            ) : (
+              <ChevronLeft size={20} className="text-white drop-shadow-sm transition-all duration-300" />
+            )}
+          </div>
+          
+          {/* Shine effect */}
+          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-in-out" />
         </button>
+        
+        {/* Tooltip quando colapsado */}
+        {collapsed && showPulseAnimation && (
+          <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
+            <div className="bg-slate-800 text-white text-xs px-3 py-2 rounded-lg shadow-lg border border-slate-700 animate-fade-in">
+              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 rotate-45 w-2 h-2 bg-slate-800 border-l border-t border-slate-700"></div>
+              Clique para expandir o menu
+            </div>
+          </div>
+        )}
       </div>
       
       <div className="space-y-4 py-4 flex flex-col h-full">
