@@ -335,7 +335,7 @@ const OFFICIAL_KEYWORDS = [
 
 // Departamentos oficiais
 const OFFICIAL_DEPARTMENTS = [
-  "A&B", "Governança", "Manutenção", "Manutenção - Quarto", "Manutenção - Instalações",
+  "A&B", "Governança", "Limpeza", "Manutenção",
   "Lazer", "TI", "Operações", "Qualidade", "Recepção", 
   "Programa de vendas", "Comercial"
 ];
@@ -612,18 +612,18 @@ function validateDepartment(department: string, keyword: string): string {
     "A&B - Preço": "A&B",
     "A&B - Gastronomia": "A&B",
     "A&B - Alimentos": "A&B",
-    "Limpeza - Quarto": "Governança",
-    "Limpeza - Banheiro": "Governança",
-    "Limpeza - Áreas sociais": "Governança",
+    "Limpeza - Quarto": "Limpeza",
+    "Limpeza - Banheiro": "Limpeza",
+    "Limpeza - Áreas sociais": "Limpeza",
     "Enxoval": "Governança",
     "Governança - Serviço": "Governança",
     "Manutenção - Quarto": "Manutenção",
     "Manutenção - Banheiro": "Manutenção", 
     "Manutenção - Instalações": "Manutenção",
     "Manutenção - Serviço": "Manutenção",
-    "Ar-condicionado": "Manutenção - Quarto",
-    "Elevador": "Manutenção - Instalações",
-    "Frigobar": "Manutenção - Quarto",
+    "Ar-condicionado": "Manutenção",
+    "Elevador": "Manutenção",
+    "Frigobar": "Manutenção",
     "Infraestrutura": "Manutenção",
     "Lazer - Variedade": "Lazer",
     "Lazer - Estrutura": "Lazer",
