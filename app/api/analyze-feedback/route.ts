@@ -335,7 +335,7 @@ const OFFICIAL_KEYWORDS = [
 
 // Departamentos oficiais
 const OFFICIAL_DEPARTMENTS = [
-  "A&B", "Governança", "Limpeza", "Manutenção", "Manutenção - Quarto", "Manutenção - Instalações",
+  "A&B", "Governança", "Limpeza", "Manutenção",
   "Lazer", "TI", "Operações", "Qualidade", "Recepção", 
   "Programa de vendas", "Comercial"
 ];
