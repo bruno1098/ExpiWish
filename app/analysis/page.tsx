@@ -1046,6 +1046,8 @@ const CommentModal = ({
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  // 🔒 DEBOUNCE STATE - previne cliques múltiplos rápidos
+  const [lastSaveTime, setLastSaveTime] = useState(0)
   const [isEditingMetadata, setIsEditingMetadata] = useState(false)
   const [editedMetadata, setEditedMetadata] = useState({
     sentiment: '',
@@ -1120,10 +1122,26 @@ const CommentModal = ({
     }
   }, [currentFeedback.allProblems, currentFeedback.keyword, currentFeedback.sector, currentFeedback.problem, currentFeedback.id])
 
-  // 🚀 OTIMIZADO: useEffect com cleanup e dependências otimizadas
+  // 🚀 OTIMIZADO: useEffect com cleanup e dependências otimizadas + proteção race condition
   useEffect(() => {
-    setEditedProblems(processedProblems)
-  }, [processedProblems])
+    console.log('🔄 useEffect editedProblems - isSaving:', isSaving, 'currentFeedback.id:', currentFeedback.id);
+    console.log('🔍 processedProblems:', processedProblems.length, 'editedProblems:', editedProblems.length);
+    
+    // � CORREÇÃO: Comparar apenas se realmente mudou para evitar loop infinito
+    const newKeywords = processedProblems.map(p => p.keyword).join(';');
+    const currentKeywords = editedProblems.map(p => p.keyword).join(';');
+    
+    // ✅ LÓGICA OTIMIZADA: só atualiza se dados realmente mudaram E não está salvando
+    if (!isSaving && newKeywords !== currentKeywords) {
+      console.log('✅ Atualizando editedProblems para feedback:', currentFeedback.id);
+      console.log('📋 Keywords mudaram de:', currentKeywords, 'para:', newKeywords);
+      setEditedProblems(processedProblems)
+    } else if (isSaving) {
+      console.log('🔒 Bloqueando atualização durante salvamento ativo');
+    } else {
+      console.log('⏭️ Sem mudanças nos dados, pulando atualização');
+    }
+  }, [processedProblems, isSaving, currentFeedback.id])
   
   // 🚀 CLEANUP: Limpar timeouts no unmount
   useEffect(() => {
@@ -1159,10 +1177,18 @@ const CommentModal = ({
     apartamento: currentFeedback.apartamento || ''
   }), [currentFeedback.sentiment, currentFeedback.rating, currentFeedback.language, currentFeedback.source, currentFeedback.apartamento])
 
-  // Inicializar metadados para edição
+  // Inicializar metadados para edição com proteção contra race condition
   useEffect(() => {
-    setEditedMetadata(processedMetadata)
-  }, [processedMetadata])
+    console.log('� useEffect editedMetadata - isSaving:', isSaving, 'currentFeedback.id:', currentFeedback.id);
+    
+    // ✅ SEMPRE atualizar quando o feedback mudar ou após salvamento bem-sucedido
+    if (!isSaving) {
+      console.log('✅ Atualizando editedMetadata para feedback:', currentFeedback.id);
+      setEditedMetadata(processedMetadata)
+    } else {
+      console.log('🔒 Bloqueando atualização de metadata durante salvamento');
+    }
+  }, [processedMetadata, isSaving, currentFeedback.id])
 
   // 🚀 OTIMIZADO: Memoizar sugestões para evitar re-renders
   const processedSuggestions = useMemo(() => [{
@@ -1172,23 +1198,40 @@ const CommentModal = ({
     suggestion_summary: currentFeedback.suggestion_summary || ''
   }], [currentFeedback.id, currentFeedback.has_suggestion, currentFeedback.suggestion_type, currentFeedback.suggestion_summary])
 
-  // Inicializar sugestões para edição
+  // Inicializar sugestões para edição com proteção contra race condition
   useEffect(() => {
-    setEditedSuggestions(processedSuggestions)
-  }, [processedSuggestions])
+    console.log('� useEffect editedSuggestions - isSaving:', isSaving, 'currentFeedback.id:', currentFeedback.id);
+    
+    // ✅ SEMPRE atualizar quando o feedback mudar ou após salvamento bem-sucedido
+    if (!isSaving) {
+      console.log('✅ Atualizando editedSuggestions para feedback:', currentFeedback.id);
+      setEditedSuggestions(processedSuggestions)
+    } else {
+      console.log('🔒 Bloqueando atualização de sugestões durante salvamento');
+    }
+  }, [processedSuggestions, isSaving, currentFeedback.id])
 
-  // 🚀 OTIMIZADO: useCallback para handlers estáveis
+  // 🚀 OTIMIZADO: useCallback para handlers estáveis com proteção contra race conditions
   const resetEditingStates = useCallback(() => {
+    // 🔒 PROTEÇÃO: não resetar estados durante salvamento ativo
+    if (isSaving) {
+      console.log('⚠️ Não resetando estados durante salvamento ativo');
+      return;
+    }
+    
+    // 🔄 RESET EM BATCH - previne estados inconsistentes  
     setIsEditing(false)
     setIsEditingMetadata(false)
-  }, [])
+    setIsEditingUnified(false)
+  }, [isSaving])
 
-  // Atualizar feedback quando o índice mudar
+  // Atualizar feedback quando o índice mudar - com proteção contra race condition
   useEffect(() => {
-    if (allFeedbacks.length > 0 && allFeedbacks[currentIndex]) {
+    if (allFeedbacks.length > 0 && allFeedbacks[currentIndex] && !isSaving) {
+      // 🔒 PROTEÇÃO: só reseta se não estiver salvando
       resetEditingStates()
     }
-  }, [currentIndex, allFeedbacks.length, resetEditingStates])
+  }, [currentIndex, allFeedbacks.length, resetEditingStates, isSaving])
   
   const copyComment = useCallback(() => {
     navigator.clipboard.writeText(currentFeedback.comment)
@@ -1203,13 +1246,26 @@ const CommentModal = ({
   }, [])
 
   const handleStartEdit = useCallback(() => {
+    // 🔒 PROTEÇÃO: evitar iniciar edição durante salvamento
+    if (isSaving) {
+      console.log('⚠️ Não é possível iniciar edição durante salvamento');
+      return;
+    }
     setIsEditing(true)
-  }, [])
+  }, [isSaving])
 
   const handleCancelEdit = useCallback(() => {
+    // 🔒 PROTEÇÃO: evitar cancelar durante salvamento
+    if (isSaving) {
+      console.log('⚠️ Não é possível cancelar durante salvamento');
+      return;
+    }
+    
+    // 🔄 ESTADO EM BATCH - previne inconsistências
     setIsEditing(false)
     setIsEditingMetadata(false)
     setIsEditingUnified(false)
+    
     // Resetar para os valores originais
     if (feedback.allProblems && feedback.allProblems.length > 0) {
       setEditedProblems(feedback.allProblems.map((problem, index) => ({
@@ -1217,14 +1273,23 @@ const CommentModal = ({
         ...problem
       })))
     }
-  }, [feedback.allProblems])
+  }, [feedback.allProblems, isSaving])
 
   const handleUpdateProblem = useCallback((id: string, updated: {keyword: string, sector: string, problem: string, problem_detail?: string}) => {
+    console.log('🔄 handleUpdateProblem chamado:', {
+      id,
+      updated,
+      currentEditedProblems: editedProblems.length,
+      isSaving
+    });
+    
     const newProblems = editedProblems.map(p => 
       p.id === id ? { ...p, ...updated } : p
     )
+    
+    console.log('✅ Novos problemas após atualização:', newProblems);
     setEditedProblems(newProblems)
-  }, [editedProblems])
+  }, [editedProblems, isSaving])
 
   const handleRemoveProblem = useCallback((id: string) => {
     if (editedProblems.length > 1) {
@@ -1342,8 +1407,15 @@ const CommentModal = ({
 
   // Funções unificadas para edição de metadados e análise
   const handleStartEditUnified = useCallback(() => {
+    // 🔒 PROTEÇÃO: só inicia edição se não estiver salvando
+    if (isSaving) {
+      console.log('⚠️ Não é possível iniciar edição durante salvamento');
+      return;
+    }
+
+    // 🔄 ESTADO EM BATCH - previne race conditions
     setIsEditingUnified(true)
-    setIsEditing(true)
+    setIsEditing(true) 
     setIsEditingMetadata(true)
     
     // Inicializar metadados editados com valores originais
@@ -1362,9 +1434,16 @@ const CommentModal = ({
       suggestion_type: currentFeedback.suggestion_type || 'none',
       suggestion_summary: currentFeedback.suggestion_summary || ''
     }])
-  }, [currentFeedback])
+  }, [currentFeedback, isSaving])
 
   const handleCancelEditUnified = useCallback(() => {
+    // 🔒 PROTEÇÃO: prevenir cancelamento durante salvamento
+    if (isSaving) {
+      console.log('⚠️ Não é possível cancelar durante salvamento');
+      return;
+    }
+
+    // 🔄 ESTADO EM BATCH - previne inconsistências
     setIsEditingUnified(false)
     setIsEditing(false)
     setIsEditingMetadata(false)
@@ -1393,28 +1472,66 @@ const CommentModal = ({
       suggestion_type: currentFeedback.suggestion_type || '',
       suggestion_summary: currentFeedback.suggestion_summary || ''
     }])
-  }, [currentFeedback])
+  }, [currentFeedback, isSaving])
 
   const handleSaveUnified = useCallback(async () => {
-    // Evitar múltiplas execuções simultâneas
+    // 🔒 PROTEÇÃO CONTRA RACE CONDITIONS - evitar múltiplas execuções simultâneas
     if (isSaving) {
       console.log('⚠️ Salvamento já em andamento, ignorando nova chamada');
       return;
     }
+
+    // 🕐 DEBOUNCE - evitar cliques múltiplos rápidos (mínimo 1 segundo entre saves)
+    const now = Date.now();
+    if (now - lastSaveTime < 1000) {
+      console.log('⚠️ Tentativa de salvamento muito rápida, ignorando (debounce)');
+      return;
+    }
+    setLastSaveTime(now);
     
     console.log('🚀 Iniciando salvamento unificado para feedback:', currentFeedback.id);
+    console.log('📊 Estado atual dos editedProblems:', editedProblems);
+    console.log('📊 Dados originais do currentFeedback:', {
+      keyword: currentFeedback.keyword,
+      sector: currentFeedback.sector, 
+      problem: currentFeedback.problem,
+      allProblems: currentFeedback.allProblems
+    });
     setIsSaving(true)
     
     try {
+      // 🛡️ VALIDAÇÃO: Verificar se ainda estamos no contexto correto
+      if (!currentFeedback?.id) {
+        console.error('❌ Feedback inválido para salvamento');
+        return;
+      }
+
       // Converter problemas editados para string
       const keywords = editedProblems.map(p => p.keyword).join(';')
       const sectors = editedProblems.map(p => p.sector).join(';')
       const problems = editedProblems.map(p => p.problem).join(';')
       
       console.log('🔄 Salvando dados unificados:')
-      console.log('Keywords:', keywords)
-      console.log('Sectors:', sectors)
-      console.log('Problems:', problems)
+      console.log('📝 Keywords antes:', currentFeedback.keyword)
+      console.log('📝 Keywords depois:', keywords)
+      console.log('📝 Sectors antes:', currentFeedback.sector)
+      console.log('📝 Sectors depois:', sectors)
+      console.log('📝 Problems antes:', currentFeedback.problem)
+      console.log('📝 Problems depois:', problems)
+      console.log('✏️ editedProblems completo:', editedProblems)
+      
+      // 🚨 VALIDAÇÃO: verificar se há mudanças reais
+      const hasChanges = (
+        keywords !== (currentFeedback.keyword || '') ||
+        sectors !== (currentFeedback.sector || '') ||
+        problems !== (currentFeedback.problem || '')
+      );
+      
+      console.log('🔍 Detectou mudanças?', hasChanges);
+      
+      if (!hasChanges) {
+        console.log('⚠️ Nenhuma mudança detectada na análise, mas prosseguindo com o salvamento...');
+      }
       
       // Criar feedback atualizado com metadados, análise e sugestões
       const updatedFeedback = {
@@ -1490,7 +1607,8 @@ const CommentModal = ({
         page: 'analysis-unified'
       })
       
-      // Resetar estados de edição
+      // 🔄 ATUALIZAÇÃO DE ESTADO EM BATCH - evita race conditions
+      // Resetar estados de edição em uma única operação
       setIsEditingUnified(false)
       setIsEditing(false)
       setIsEditingMetadata(false)
@@ -1498,20 +1616,50 @@ const CommentModal = ({
       // Chamar callback para atualizar a lista principal
       onFeedbackUpdated?.(updatedFeedback)
       
+      console.log('✅ Salvamento concluído. Dados disponíveis para nova edição.');
+      
+      // 🔄 FORÇAR ATUALIZAÇÃO: depois de resetar isSaving, forçar nova inicialização
+      // Isso garante que os editedProblems sejam atualizados com os novos dados
+      setTimeout(() => {
+        console.log('🔄 Forçando reinicialização dos dados editados após salvamento...');
+        setEditedProblems(prevProblems => {
+          console.log('📊 Problemas antes da reinicialização:', prevProblems);
+          const newProblems = updatedFeedback.allProblems || processedProblems;
+          console.log('📊 Novos problemas após reinicialização:', newProblems);
+          return newProblems.map((problem, index) => {
+            // 🔧 CORREÇÃO: Extrair id para evitar duplicação na propriedade
+            const { id: _, ...problemWithoutId } = problem;
+            return {
+              id: `problem-${updatedFeedback.id}-${index}`,
+              ...problemWithoutId
+            };
+          });
+        });
+      }, 100);
+      
+      
       toast({
         title: "Dados Atualizados",
         description: "Metadados e análise foram salvos com sucesso.",
         duration: 2000,
       })
       
-      // Fechar modal após um pequeno delay para mostrar o toast
+      // 🕐 TIMEOUT SEGURO - limpar timeout anterior e definir novo
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
-      }
-      saveTimeoutRef.current = setTimeout(() => {
-        setIsOpen(false);
         saveTimeoutRef.current = null;
-      }, 1000);
+      }
+      
+      // Fechar modal após delay para mostrar o toast - usando Promise para evitar race condition
+      await new Promise(resolve => {
+        saveTimeoutRef.current = setTimeout(() => {
+          if (saveTimeoutRef.current) { // Verificar se ainda é válido
+            setIsOpen(false);
+            saveTimeoutRef.current = null;
+            resolve(void 0);
+          }
+        }, 1000);
+      });
       
     } catch (error) {
       console.error('Erro ao salvar:', error)
@@ -1522,11 +1670,18 @@ const CommentModal = ({
         duration: 3000,
       })
     } finally {
+      console.log('🔓 Resetando estado isSaving - dados prontos para nova edição');
       setIsSaving(false)
     }
-  }, [currentFeedback, editedMetadata, editedProblems, editedSuggestions, isSaving, onFeedbackUpdated, toast])
+  }, [currentFeedback, editedMetadata, editedProblems, editedSuggestions, isSaving, onFeedbackUpdated, toast, lastSaveTime, processedProblems])
 
   const handleSaveMetadata = useCallback(async () => {
+    // 🔒 PROTEÇÃO CONTRA RACE CONDITION - evitar execução simultânea
+    if (isSaving) {
+      console.log('⚠️ Salvamento de metadados já em andamento, ignorando nova chamada');
+      return;
+    }
+    
     setIsSaving(true)
     
     try {
@@ -1574,6 +1729,12 @@ const CommentModal = ({
   }, [currentFeedback, editedMetadata, isSaving, onFeedbackUpdated, toast])
 
   const handleSaveSuggestions = useCallback(async () => {
+    // 🔒 PROTEÇÃO CONTRA RACE CONDITION - evitar execução simultânea
+    if (isSaving) {
+      console.log('⚠️ Salvamento de sugestões já em andamento, ignorando nova chamada');
+      return;
+    }
+    
     setIsSaving(true)
     
     try {
@@ -1646,6 +1807,12 @@ const CommentModal = ({
   }, [currentFeedback, editedSuggestions, isSaving, onFeedbackUpdated, toast])
 
   const handleSaveChanges = useCallback(async () => {
+    // 🔒 PROTEÇÃO CONTRA RACE CONDITION - evitar execução simultânea
+    if (isSaving) {
+      console.log('⚠️ Salvamento de análise já em andamento, ignorando nova chamada');
+      return;
+    }
+    
     setIsSaving(true)
     
     try {
