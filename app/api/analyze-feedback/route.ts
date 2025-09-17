@@ -100,7 +100,7 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   "Lazer": "Lazer - Atividades de Lazer", 
   "Paz": "Lazer - Atividades de Lazer", 
   "tia da recreação": "Lazer - Serviço",
-  "tio": "Lazer - Serviço",
+  "tio da recreação": "Lazer - Serviço",
   "tia": "Lazer - Serviço",
   "monitores": "Lazer - Serviço",
   "monitor": "Lazer - Serviço",
@@ -312,6 +312,14 @@ const RAW_NORMALIZATION_DICT: Record<string, string> = {
   "pessoal da recepcao": "Recepção - Serviço",
   "atendimento na recepção": "Recepção - Serviço",
   "atendimento da recepção": "Recepção - Serviço",
+  // Amenities de banheiro - Manutenção
+  "shampoo": "Manutenção - Serviço",
+  "condicionador": "Manutenção - Serviço",
+  "sabonete": "Manutenção - Serviço",
+  "amenities": "Manutenção - Serviço",
+  "produtos de higiene": "Manutenção - Serviço",
+  "produtos do banheiro": "Manutenção - Serviço",
+  "hidratante": "Manutenção - Serviço",
 };
 
 // Dicionário normalizado para lookup eficiente
@@ -695,7 +703,7 @@ function reroutePraiseKeyword(keyword: string, problem: string, context?: string
   // 🔥 DETECÇÃO AGRESSIVA DE ÁREAS ESPECÍFICAS
   
   // PRIORIDADE 1: A&B - detecção muito mais ampla
-  if (has(['restaurante', 'restaurant', 'bar', 'garcom', 'garçom', 'garcons', 'garçons', 'malta', 'food', 'meal', 'dinner', 'lunch'])) {
+  if (has(['restaurante', 'restaurant', 'bar', 'garcom', 'garçom', 'garcons', 'garçons', 'food', 'meal', 'dinner', 'lunch'])) {
     return 'A&B - Serviço';
   }
   if (has(['cafe', 'café', 'breakfast', 'café da manhã', 'cafe da manha'])) {
@@ -709,7 +717,12 @@ function reroutePraiseKeyword(keyword: string, problem: string, context?: string
   if (has(['bingo', 'karaoke', 'fogueira', 'mixologia', 'aula', 'atividade', 'brincadeira', 'animacao', 'animação'])) {
     return 'Lazer - Atividades de Lazer';
   }
-  if (has(['recreacao', 'recreação', 'monitor', 'monitores', 'tio', 'tia', 'lucas', 'claudia', 'entretenimento', 'diversao', 'diversão', 'lazer'])) {
+  if (has(['recreacao', 'recreação', 'monitor', 'monitores', 'lucas', 'claudia', 'entretenimento', 'diversao', 'diversão', 'lazer'])) {
+    return 'Lazer - Serviço';
+  }
+  
+  // Detecção específica de tio/tia apenas em contexto de lazer
+  if ((has(['tio', 'tia']) && has(['recreacao', 'recreação', 'brincadeira', 'atividade', 'diversao', 'diversão', 'animacao', 'animação', 'lazer', 'piscina']))) {
     return 'Lazer - Serviço';
   }
   if (has(['spa', 'massagem'])) {
@@ -721,7 +734,15 @@ function reroutePraiseKeyword(keyword: string, problem: string, context?: string
     return 'Recepção - Serviço';
   }
 
-  // PRIORIDADE 4: Governança - detecta contexto de limpeza/arrumação
+  // PRIORIDADE 4: Manutenção - detecta contexto de manutenção
+  if (has(['parafuso', 'conserto', 'reparo', 'manutencao', 'manutenção', 'quebrado', 'defeito'])) {
+    return 'Manutenção - Serviço';
+  }
+  if (has(['shampoo', 'condicionador', 'sabonete', 'amenities', 'produtos de higiene', 'hidratante'])) {
+    return 'Manutenção - Serviço';
+  }
+
+  // PRIORIDADE 5: Governança - detecta contexto de limpeza/arrumação
   if (has(['quarto', 'room']) && has(['limpo', 'limpeza', 'cheiroso', 'arrumacao', 'arrumação', 'organizado'])) {
     return 'Limpeza - Quarto';
   }
@@ -732,7 +753,7 @@ function reroutePraiseKeyword(keyword: string, problem: string, context?: string
     return 'Enxoval';
   }
 
-  // PRIORIDADE 5: Tecnologia - detecta contexto técnico
+  // PRIORIDADE 6: Tecnologia - detecta contexto técnico
   if (has(['wifi', 'wi-fi', 'internet', 'conexao', 'conexão', 'sinal'])) {
     return 'Tecnologia - Wi-fi';
   }
@@ -740,12 +761,12 @@ function reroutePraiseKeyword(keyword: string, problem: string, context?: string
     return 'Tecnologia - TV';
   }
 
-  // PRIORIDADE 6: Localização - detecta contexto geográfico
+  // PRIORIDADE 7: Localização - detecta contexto geográfico
   if (has(['localizacao', 'localização', 'perto', 'próximo', 'proximo', 'vista', 'acesso', 'posição', 'situado'])) {
     return 'Localização';
   }
 
-  // PRIORIDADE 7: Infraestrutura específica
+  // PRIORIDADE 8: Infraestrutura específica
   if (has(['elevador'])) return 'Elevador';
   if (has(['frigobar'])) return 'Frigobar';
   if (has(['ar condicionado', 'ar-condicionado'])) return 'Ar-condicionado';
@@ -1230,7 +1251,7 @@ Comentário: "${finalText}"`;
       const areaDetections = [
         { keywords: ['piscina', 'pool'], result: { keyword: 'Piscina', sector: 'Lazer', problem: 'VAZIO' }},
         { keywords: ['bingo', 'karaoke', 'fogueira', 'tio', 'tia', 'lucas', 'claudia', 'recreacao', 'recreação'], result: { keyword: 'Lazer - Atividades de Lazer', sector: 'Lazer', problem: 'VAZIO' }},
-        { keywords: ['restaurante', 'malta', 'heny', 'juliete', 'jane'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
+        { keywords: ['restaurante', 'heny', 'juliete', 'jane'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
         { keywords: ['bar', 'drink', 'bebida'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
         { keywords: ['cafe da manha', 'café da manhã', 'breakfast'], result: { keyword: 'A&B - Café da manhã', sector: 'A&B', problem: 'VAZIO' }},
         { keywords: ['wifi', 'wi-fi', 'internet'], result: { keyword: 'Tecnologia - Wi-fi', sector: 'TI', problem: 'VAZIO' }}
