@@ -69,19 +69,24 @@ interface EnhancedProblemEditorProps {
   }) => void;
   onRemove?: () => void;
   canRemove?: boolean;
+  organizedKeywords?: Record<string, string[]>; // keywords organizados por tópicos
+  onKeywordsUpdated?: () => void; // callback para atualizar keywords na página principal
 }
 
 export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({ 
   problem, 
   onUpdate, 
   onRemove, 
-  canRemove = true 
+  canRemove = true,
+  organizedKeywords,
+  onKeywordsUpdated
 }) => {
   const { toast } = useToast();
   
-  // 🚀 OTIMIZAÇÃO: Refs para cleanup de timeouts
+    // 🚀 OTIMIZAÇÃO: Refs para timeout cleanup
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const successTimeoutRefs = useRef<NodeJS.Timeout[]>([]);
+  const selectContentRef = useRef<HTMLDivElement>(null);
   
   // Estados locais
   const [keyword, setKeyword] = useState(problem.keyword);
@@ -137,8 +142,15 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
   // Função para recarregar listas após alterações
   const reloadLists = async () => {
     try {
+      console.log('🔄 Recarregando listas dinâmicas...');
       const updatedLists = await getDynamicLists();
       setDynamicLists(updatedLists);
+      console.log('✅ Listas atualizadas:', updatedLists);
+      
+      // Chamar callback para atualizar keywords na página principal
+      if (onKeywordsUpdated) {
+        onKeywordsUpdated();
+      }
       
       // Verificar se o item atual ainda existe nas listas atualizadas
       if (keyword && !updatedLists.keywords.includes(keyword)) {
@@ -524,7 +536,39 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <Select value={keyword} onValueChange={setKeyword}>
+              <Select value={keyword} onValueChange={setKeyword} onOpenChange={(open) => {
+                // Quando abrir, rolar para o topo com múltiplas tentativas
+                if (open) {
+                  // Tentativa imediata
+                  setTimeout(() => {
+                    const selectors = [
+                      '[data-radix-select-content]',
+                      '[role="listbox"]',
+                      '.max-h-80'
+                    ];
+                    
+                    for (const selector of selectors) {
+                      const element = document.querySelector(selector);
+                      if (element) {
+                        element.scrollTop = 0;
+                        console.log('🔝 Scroll resetado para o topo:', selector);
+                        break;
+                      }
+                    }
+                  }, 10);
+                  
+                  // Tentativa adicional após mais tempo
+                  setTimeout(() => {
+                    const elements = document.querySelectorAll('[data-radix-select-content], [role="listbox"], .max-h-80');
+                    elements.forEach((element, index) => {
+                      if (element) {
+                        element.scrollTop = 0;
+                        console.log(`🔝 Scroll resetado (tentativa 2) - elemento ${index}`);
+                      }
+                    });
+                  }, 100);
+                }
+              }}>
                 <SelectTrigger className={cn(
                   "h-9",
                   keywordJustSaved 
@@ -548,9 +592,32 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  {dynamicLists?.keywords.map((kw) => (
-                    <SelectItem key={kw} value={kw}>{kw}</SelectItem>
-                  ))}
+                  {organizedKeywords ? (
+                    // Renderizar keywords organizados por tópicos
+                    Object.entries(organizedKeywords).map(([topic, keywords]) => (
+                      <div key={topic}>
+                        <div className="px-2 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b">
+                          📁 {topic}
+                        </div>
+                        {keywords.map((kw: string) => (
+                          <SelectItem key={kw} value={kw} className="pl-6">
+                            <div className="flex items-center gap-2">
+                              <div className={cn(
+                                "w-2 h-2 rounded-full", 
+                                getSectorColor(topic).split(' ').find(c => c.startsWith('from-'))?.replace('from-', 'bg-') || 'bg-gray-300'
+                              )} />
+                              {kw}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))
+                  ) : (
+                    // Renderização tradicional quando organizedKeywords não está disponível
+                    dynamicLists?.keywords.map((kw) => (
+                      <SelectItem key={kw} value={kw}>{kw}</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <Button 
