@@ -536,6 +536,90 @@ import React from 'react';
 
 export type { DynamicLists };
 
+// Função para mover keyword entre departamentos/tópicos
+export const moveKeywordToDepartment = async (
+  keyword: string, 
+  sourceDepartment: string,
+  targetDepartment: string
+): Promise<boolean> => {
+  try {
+    // Criar a nova keyword com o prefixo do departamento alvo
+    let newKeyword = keyword;
+    
+    // Remover prefixo atual se existir
+    const cleanKeyword = keyword.replace(/^[^-]+ - /, '');
+    
+    // Adicionar novo prefixo baseado no departamento alvo
+    switch (targetDepartment) {
+      case 'A&B':
+        newKeyword = `A&B - ${cleanKeyword}`;
+        break;
+      case 'Governança':
+        // Governança geralmente não tem prefixo para palavras específicas
+        if (!['Enxoval', 'Travesseiro', 'Colchão', 'Espelho'].includes(cleanKeyword)) {
+          newKeyword = `Governança - ${cleanKeyword}`;
+        } else {
+          newKeyword = cleanKeyword;
+        }
+        break;
+      case 'Limpeza':
+        newKeyword = `Limpeza - ${cleanKeyword}`;
+        break;
+      case 'Manutenção':
+        // Algumas palavras de manutenção não têm prefixo
+        if (!['Ar-condicionado', 'Elevador', 'Frigobar', 'Infraestrutura'].includes(cleanKeyword)) {
+          newKeyword = `Manutenção - ${cleanKeyword}`;
+        } else {
+          newKeyword = cleanKeyword;
+        }
+        break;
+      case 'Lazer':
+        if (!['Spa', 'Piscina', 'Recreação', 'Mixologia'].includes(cleanKeyword)) {
+          newKeyword = `Lazer - ${cleanKeyword}`;
+        } else {
+          newKeyword = cleanKeyword;
+        }
+        break;
+      case 'TI':
+        newKeyword = `Tecnologia - ${cleanKeyword}`;
+        break;
+      case 'Recepção':
+        if (!cleanKeyword.startsWith('Check-')) {
+          newKeyword = `Recepção - ${cleanKeyword}`;
+        } else {
+          newKeyword = cleanKeyword;
+        }
+        break;
+      case 'Outros':
+        // Para "Outros", manter apenas o texto limpo
+        newKeyword = cleanKeyword;
+        break;
+      default:
+        // Manter como está se não reconhecer o departamento
+        newKeyword = keyword;
+    }
+    
+    // Se a palavra não mudou, não fazer nada
+    if (newKeyword === keyword) {
+      return true;
+    }
+    
+    // Editar a keyword (remove a antiga e adiciona a nova)
+    const success = await editKeyword(keyword, newKeyword);
+    
+    if (success) {
+      console.log(`✅ Keyword movida: "${keyword}" → "${newKeyword}" (${sourceDepartment} → ${targetDepartment})`);
+    } else {
+      console.error(`❌ Falha ao mover keyword: "${keyword}" → "${newKeyword}"`);
+    }
+    
+    return success;
+  } catch (error) {
+    console.error('Erro ao mover keyword entre departamentos:', error);
+    return false;
+  }
+};
+
 /**
  * Hook personalizado para gerenciar listas dinâmicas
  */

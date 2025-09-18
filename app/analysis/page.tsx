@@ -58,6 +58,7 @@ import {
 } from "lucide-react"
 import { useSearchParams } from 'next/navigation'
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
+import { getDynamicLists } from '@/lib/dynamic-lists-service'
 import SharedDashboardLayout from "../shared-layout"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
@@ -914,6 +915,64 @@ const commonKeywords = [
   'Reservas'
 ];
 
+// Função para organizar keywords por tópicos/departamentos
+const organizeKeywordsByTopics = (allKeywords: string[]) => {
+  const topics: Record<string, string[]> = {}
+  
+  // Definir a ordem dos tópicos
+  const topicOrder = ['A&B', 'Governança', 'Limpeza', 'Manutenção', 'Lazer', 'TI', 'Operações', 'Recepção', 'Qualidade', 'Comercial', 'Programa de vendas', 'Outros']
+  
+  // Agrupar keywords por tópicos
+  allKeywords.forEach(keyword => {
+    let topic = 'Outros' // Fallback padrão
+    
+    // Identificar tópico baseado no prefixo da keyword
+    if (keyword.startsWith('A&B')) {
+      topic = 'A&B'
+    } else if (keyword.startsWith('Governança') || keyword === 'Enxoval' || keyword === 'Travesseiro' || keyword === 'Colchão' || keyword === 'Espelho') {
+      topic = 'Governança'  
+    } else if (keyword.startsWith('Limpeza')) {
+      topic = 'Limpeza'
+    } else if (keyword.startsWith('Manutenção') || keyword === 'Ar-condicionado' || keyword === 'Elevador' || keyword === 'Frigobar' || keyword === 'Infraestrutura') {
+      topic = 'Manutenção'
+    } else if (keyword.startsWith('Lazer') || keyword === 'Spa' || keyword === 'Piscina' || keyword === 'Recreação' || keyword === 'Mixologia') {
+      topic = 'Lazer'
+    } else if (keyword.startsWith('Tecnologia')) {
+      topic = 'TI'
+    } else if (keyword.startsWith('Recepção') || keyword.startsWith('Check-in') || keyword.startsWith('Check-out')) {
+      topic = 'Recepção'
+    } else if (keyword === 'Comunicação') {
+      topic = 'Qualidade'
+    } else if (keyword === 'Reservas') {
+      topic = 'Comercial'
+    } else if (keyword === 'Concierge' || keyword === 'Cotas') {
+      topic = 'Programa de vendas'
+    } else if (keyword === 'Atendimento' || keyword === 'Acessibilidade' || keyword === 'Reserva de cadeiras (pool)' || keyword === 'Processo' || keyword === 'Custo-benefício' || keyword === 'Estacionamento' || keyword === 'Água' || keyword === 'Localização') {
+      topic = 'Operações'
+    }
+    
+    if (!topics[topic]) {
+      topics[topic] = []
+    }
+    topics[topic].push(keyword)
+  })
+  
+  // Ordenar keywords dentro de cada tópico
+  Object.keys(topics).forEach(topic => {
+    topics[topic].sort()
+  })
+  
+  // Retornar apenas tópicos que têm keywords, na ordem definida
+  const organizedTopics: Record<string, string[]> = {}
+  topicOrder.forEach(topic => {
+    if (topics[topic] && topics[topic].length > 0) {
+      organizedTopics[topic] = topics[topic]
+    }
+  })
+  
+  return organizedTopics
+}
+
 // Função para obter a cor com base no departamento
 const getSectorColor = (sector: string) => {
   return sectorColors[sector.trim()] || 'bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-900/40 dark:to-slate-900/40 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 shadow-sm';
@@ -1030,7 +1089,9 @@ const CommentModal = ({
   userData,
   allFeedbacks = [],
   currentIndex = 0,
-  onNavigate
+  organizedKeywords = {},
+  onNavigate,
+  onKeywordsUpdated
 }: { 
   feedback: Feedback, 
   onFeedbackUpdated?: (updatedFeedback: Feedback) => void,
@@ -1038,7 +1099,9 @@ const CommentModal = ({
   userData?: any,
   allFeedbacks?: Feedback[],
   currentIndex?: number,
-  onNavigate?: (index: number) => void
+  organizedKeywords?: Record<string, string[]>,
+  onNavigate?: (index: number) => void,
+  onKeywordsUpdated?: () => void
 }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
@@ -1046,6 +1109,52 @@ const CommentModal = ({
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [dynamicKeywords, setDynamicKeywords] = useState<string[]>([])
+  const [localOrganizedKeywords, setLocalOrganizedKeywords] = useState<Record<string, string[]>>({})
+
+  // Carregar keywords dinâmicas quando o modal abre
+  useEffect(() => {
+    const loadDynamicKeywords = async () => {
+      try {
+        const lists = await getDynamicLists()
+        setDynamicKeywords(lists.keywords)
+        console.log('🔍 CommentModal carregou dynamicKeywords:', lists.keywords.length)
+      } catch (error) {
+        console.error('Erro ao carregar keywords dinâmicas:', error)
+      }
+    }
+    
+    if (isOpen) {
+      loadDynamicKeywords()
+    }
+  }, [isOpen])
+
+  // Atualizar organizedKeywords quando dynamicKeywords mudarem
+  useEffect(() => {
+    if (dynamicKeywords.length > 0) {
+      const organized = organizeKeywordsByTopics(dynamicKeywords)
+      setLocalOrganizedKeywords(organized)
+      console.log('🔍 CommentModal organizou keywords:', Object.keys(organized).length, 'tópicos')
+    }
+  }, [dynamicKeywords])
+
+  // Recarregar keywords quando houver atualização
+  const handleKeywordsUpdate = () => {
+    const loadDynamicKeywords = async () => {
+      try {
+        const lists = await getDynamicLists()
+        setDynamicKeywords(lists.keywords)
+        console.log('🔄 Keywords atualizadas no modal:', lists.keywords.length)
+      } catch (error) {
+        console.error('Erro ao recarregar keywords:', error)
+      }
+    }
+    
+    loadDynamicKeywords()
+    if (onKeywordsUpdated) {
+      onKeywordsUpdated()
+    }
+  }
   // 🔒 DEBOUNCE STATE - previne cliques múltiplos rápidos
   const [lastSaveTime, setLastSaveTime] = useState(0)
   const [isEditingMetadata, setIsEditingMetadata] = useState(false)
@@ -2396,6 +2505,8 @@ const CommentModal = ({
                       onUpdate={(updated) => handleUpdateProblem(problem.id, updated)}
                       onRemove={() => handleRemoveProblem(problem.id)}
                       canRemove={editedProblems.length > 1}
+                      organizedKeywords={Object.keys(localOrganizedKeywords).length > 0 ? localOrganizedKeywords : organizedKeywords}
+                      onKeywordsUpdated={handleKeywordsUpdate}
                     />
                   ))}
 
@@ -3020,12 +3131,14 @@ const ProblemEditor = ({
   problem, 
   onUpdate, 
   onRemove, 
-  canRemove = true 
+  canRemove = true,
+  organizedKeywords = {}
 }: { 
   problem: { id: string; keyword: string; sector: string; problem: string };
   onUpdate: (updated: { keyword: string; sector: string; problem: string }) => void;
   onRemove?: () => void;
   canRemove?: boolean;
+  organizedKeywords?: Record<string, string[]>;
 }) => {
   const [keyword, setKeyword] = useState(problem.keyword);
   const [sector, setSector] = useState(problem.sector);
@@ -3036,6 +3149,22 @@ const ProblemEditor = ({
   const [problemInput, setProblemInput] = useState('');
   const [keywordJustEdited, setKeywordJustEdited] = useState(false);
   const [problemJustEdited, setProblemJustEdited] = useState(false);
+  const [dynamicKeywords, setDynamicKeywords] = useState<string[]>([]);
+
+  // Carregar keywords dinâmicas quando o componente monta
+  useEffect(() => {
+    const loadDynamicKeywords = async () => {
+      try {
+        const lists = await getDynamicLists()
+        setDynamicKeywords(lists.keywords)
+        console.log('🔍 ProblemEditor carregou dynamicKeywords:', lists.keywords.length)
+      } catch (error) {
+        console.error('Erro ao carregar keywords dinâmicas no ProblemEditor:', error)
+      }
+    }
+    
+    loadDynamicKeywords()
+  }, [])
 
   useEffect(() => {
     onUpdate({ keyword, sector, problem: problemText });
@@ -3199,14 +3328,79 @@ const ProblemEditor = ({
                   </div>
                 </div>
               ) : (
-                <Select value={keyword} onValueChange={setKeyword}>
+                <Select value={keyword} onValueChange={setKeyword} onOpenChange={(open) => {
+                  // Quando abrir, rolar para o topo com múltiplas tentativas
+                  if (open) {
+                    // Tentativa imediata
+                    setTimeout(() => {
+                      const selectors = [
+                        '[data-radix-select-content]',
+                        '[role="listbox"]',
+                        '.max-h-80'
+                      ];
+                      
+                      for (const selector of selectors) {
+                        const element = document.querySelector(selector);
+                        if (element) {
+                          element.scrollTop = 0;
+                          console.log('🔝 Scroll resetado para o topo:', selector);
+                          break;
+                        }
+                      }
+                    }, 10);
+                    
+                    // Tentativa adicional após mais tempo
+                    setTimeout(() => {
+                      const elements = document.querySelectorAll('[data-radix-select-content], [role="listbox"], .max-h-80');
+                      elements.forEach((element, index) => {
+                        if (element) {
+                          element.scrollTop = 0;
+                          console.log(`🔝 Scroll resetado (tentativa 2) - elemento ${index}`);
+                        }
+                      });
+                    }, 100);
+                  }
+                }}>
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="Selecione palavra-chave" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {commonKeywords.map((kw) => (
-                      <SelectItem key={kw} value={kw}>{kw}</SelectItem>
-                    ))}
+                  <SelectContent className="max-h-80 overflow-y-auto">
+                    {(() => {
+                      // Usar organizedKeywords primeiro se disponível, senão organizar dynamicKeywords local
+                      const keywordsToUse = Object.keys(organizedKeywords).length > 0 
+                        ? organizedKeywords 
+                        : organizeKeywordsByTopics(dynamicKeywords);
+                      
+                      console.log('🔍 Usando keywords no ProblemEditor:', {
+                        organizedKeywordsAvailable: Object.keys(organizedKeywords).length > 0,
+                        dynamicKeywordsLength: dynamicKeywords.length,
+                        finalKeywordsCount: Object.values(keywordsToUse).flat().length
+                      });
+                      
+                      return Object.entries(keywordsToUse).map(([topic, keywords]) => (
+                        <div key={topic}>
+                          <div className="px-2 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b">
+                            📁 {topic}
+                          </div>
+                          {keywords.map((kw: string) => (
+                            <SelectItem key={kw} value={kw} className="pl-6">
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "w-2 h-2 rounded-full", 
+                                  getSectorColor(topic).split(' ').find(c => c.startsWith('from-'))?.replace('from-', 'bg-') || 'bg-gray-300'
+                                )} />
+                                {kw}
+                                {!dynamicKeywords.includes(kw) && (
+                                  <Badge variant="outline" className="text-xs ml-auto">
+                                    Custom
+                                  </Badge>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))
+                    })()}
                   </SelectContent>
                 </Select>
               )}
@@ -3419,6 +3613,28 @@ function AnalysisPageContent() {
   
   // Estado para navegação entre feedbacks
   const [currentModalIndex, setCurrentModalIndex] = useState(0)
+  
+  // Estado para keywords organizadas por tópicos (incluindo personalizadas dos feedbacks)
+  const [organizedKeywords, setOrganizedKeywords] = useState<Record<string, string[]>>({})
+  
+  // Estado para listas dinâmicas do Firebase
+  const [dynamicKeywords, setDynamicKeywords] = useState<string[]>([])
+  
+  // Função para carregar e sincronizar listas dinâmicas
+  const refreshDynamicKeywords = async () => {
+    try {
+      const lists = await getDynamicLists()
+      setDynamicKeywords(lists.keywords)
+      console.log('📝 Keywords dinâmicas atualizadas:', lists.keywords.length)
+    } catch (error) {
+      console.error('Erro ao carregar listas dinâmicas:', error)
+    }
+  }
+  
+  // Carregar listas dinâmicas quando componente monta
+  useEffect(() => {
+    refreshDynamicKeywords()
+  }, [])
 
   const searchParams = useSearchParams()
   const id = searchParams.get('id')
@@ -3465,6 +3681,74 @@ function AnalysisPageContent() {
         })
         
         setFeedbacks(allFeedbacks)
+        
+        // Coletar todas as keywords únicas (pré-definidas + Firebase + feedbacks)
+        const uniqueKeywords = new Set<string>()
+        
+        // Carregar keywords personalizadas do Firebase primeiro
+        try {
+          // Usar listas dinâmicas já carregadas ou recarregar se necessário
+          if (dynamicKeywords.length === 0) {
+            await refreshDynamicKeywords()
+          }
+          console.log('📋 Keywords do Firebase carregadas:', dynamicKeywords.length)
+          
+          // Adicionar todas as keywords do Firebase (já inclui as padrão + personalizadas)
+          dynamicKeywords.forEach(keyword => uniqueKeywords.add(keyword))
+        } catch (error) {
+          console.error('❌ Erro ao carregar keywords do Firebase:', error)
+          // Fallback: usar apenas commonKeywords
+          commonKeywords.forEach(keyword => uniqueKeywords.add(keyword))
+        }
+        
+        // Função para validar formato de keyword customizado
+        const firebaseKeywords = Array.from(uniqueKeywords) // Keywords já carregadas do Firebase
+        const isValidKeyword = (keyword: string): boolean => {
+          if (!keyword || typeof keyword !== 'string') return false
+          
+          // Se está nas keywords do Firebase, é válido
+          if (firebaseKeywords.includes(keyword)) return true
+          
+          // Verificar se segue o formato "Departamento - Especificação"
+          const keywordPattern = /^[A-Za-z&\s]+ - .+$/
+          if (!keywordPattern.test(keyword)) return false
+          
+          // Verificar se não contém caracteres suspeitos (; , múltiplos separadores)
+          if (keyword.includes(';') || keyword.includes(',') || keyword.includes('|')) return false
+          
+          return true
+        }
+        
+        // Adicionar apenas keywords válidos dos feedbacks
+        allFeedbacks.forEach(feedback => {
+          // Keywords individuais
+          if (feedback.keyword && feedback.keyword.trim() !== '') {
+            const keyword = feedback.keyword.trim()
+            if (isValidKeyword(keyword)) {
+              uniqueKeywords.add(keyword)
+            }
+          }
+          
+          // Keywords dos problemas (allProblems)
+          if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+            feedback.allProblems.forEach((problem: any) => {
+              if (problem.keyword && problem.keyword.trim() !== '') {
+                const keyword = problem.keyword.trim()
+                if (isValidKeyword(keyword)) {
+                  uniqueKeywords.add(keyword)
+                }
+              }
+            })
+          }
+        })
+        
+        // Organizar keywords por tópicos
+        const keywordArray = Array.from(uniqueKeywords).sort()
+        console.log('🔍 Keywords válidos encontrados:', keywordArray.length)
+        console.log('📋 Keywords filtrados:', keywordArray.slice(0, 10), '...') // Mostrar só os primeiros 10
+        
+        const organized = organizeKeywordsByTopics(keywordArray)
+        setOrganizedKeywords(organized)
         
         toast({
           title: "Dados Carregados",
@@ -4608,6 +4892,8 @@ function AnalysisPageContent() {
                             userData={userData}
                             allFeedbacks={filteredFeedbacks}
                             currentIndex={realIndex >= 0 ? realIndex : 0}
+                            organizedKeywords={organizedKeywords}
+                            onKeywordsUpdated={refreshDynamicKeywords}
                             onNavigate={(newIndex) => {
                               // Garantir que o newIndex está dentro dos limites dos feedbacks filtrados
                               if (newIndex >= 0 && newIndex < filteredFeedbacks.length) {
