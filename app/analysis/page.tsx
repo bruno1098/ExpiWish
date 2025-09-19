@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback, memo, useRef } from "react"
+import { useSearchParams } from 'next/navigation'
 import { useSlideUpCounter, useSlideUpDecimal } from "@/hooks/use-slide-up-counter"
 import { Card } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -56,7 +57,6 @@ import {
   Clock
 
 } from "lucide-react"
-import { useSearchParams } from 'next/navigation'
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
 import { getDynamicLists } from '@/lib/dynamic-lists-service'
 import SharedDashboardLayout from "../shared-layout"
@@ -3579,6 +3579,7 @@ export default function AnalysisPage() {
 
 function AnalysisPageContent() {
   const { userData } = useAuth()
+  const searchParams = useSearchParams()
   
   // Estados principais
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([])
@@ -3616,6 +3617,14 @@ function AnalysisPageContent() {
   
   // Estado para keywords organizadas por tópicos (incluindo personalizadas dos feedbacks)
   const [organizedKeywords, setOrganizedKeywords] = useState<Record<string, string[]>>({})
+
+  // Estado para destacar comentário específico vindo da URL
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null)
+
+  // Função para gerar ID único do comentário (mesma lógica do ProblemsVisualizationOptions)
+  const generateCommentId = (feedback: Feedback) => {
+    return `${feedback.date}_${feedback.author || 'unknown'}_${(feedback.comment || '').substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_')}`
+  }
   
   // Estado para listas dinâmicas do Firebase
   const [dynamicKeywords, setDynamicKeywords] = useState<string[]>([])
@@ -3636,7 +3645,6 @@ function AnalysisPageContent() {
     refreshDynamicKeywords()
   }, [])
 
-  const searchParams = useSearchParams()
   const id = searchParams.get('id')
   const { toast } = useToast()
 
@@ -3768,6 +3776,70 @@ function AnalysisPageContent() {
 
     loadFirebaseData()
   }, [])
+
+  // Processar parâmetros da URL para navegar para comentário específico
+  useEffect(() => {
+    const commentId = searchParams.get('commentId')
+    const comment = searchParams.get('comment')
+    const hotelName = searchParams.get('hotelName')
+    const date = searchParams.get('date')
+    const author = searchParams.get('author')
+    const rating = searchParams.get('rating')
+    const department = searchParams.get('department')
+    const keyword = searchParams.get('keyword')
+    const problem = searchParams.get('problem')
+
+    if (commentId && comment && feedbacks.length > 0) {
+      // Definir filtros para facilitar encontrar o comentário
+      if (hotelName && hotelName !== 'Unknown') {
+        // Se o hotel específico estiver disponível, podemos filtrar por ele
+        console.log('🎯 Comentário de hotel específico:', hotelName)
+      }
+      
+      if (department && department !== '') {
+        setSectorFilter(department)
+      }
+      
+      if (keyword && keyword !== '') {
+        setKeywordFilter(keyword)
+      }
+      
+      if (problem && problem !== '') {
+        setProblemFilter(problem)
+      }
+
+      // Definir termo de busca baseado no comentário
+      if (comment && comment.length > 20) {
+        // Usar uma parte do comentário para busca
+        const searchTerm = comment.substring(0, 50)
+        setSearchTerm(searchTerm)
+      }
+
+      // Destacar o comentário específico
+      setHighlightedCommentId(commentId)
+      
+      // Scroll para o comentário após um delay para garantir que o filtro foi aplicado
+      setTimeout(() => {
+        const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
+        if (commentElement) {
+          commentElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          })
+          // Destacar temporariamente
+          commentElement.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2')
+          setTimeout(() => {
+            commentElement.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2')
+          }, 3000)
+        }
+      }, 1000)
+
+      // Remover o destaque após alguns segundos
+      setTimeout(() => {
+        setHighlightedCommentId(null)
+      }, 5000)
+    }
+  }, [searchParams, feedbacks])
 
   // Aplicar filtros de data rápidos
   const applyQuickDateFilter = (filter: string) => {
@@ -4684,13 +4756,18 @@ function AnalysisPageContent() {
                             {groupFeedbacks.map((feedback, feedbackIndex) => {
                               // Encontrar o índice real do feedback na lista filtrada
                               const realIndex = filteredFeedbacks.findIndex(f => f.id === feedback.id);
+                              const commentId = generateCommentId(feedback);
+                              const isHighlighted = highlightedCommentId === commentId;
+                              
                               return (
                       <div 
                         key={feedback.id} 
+                        data-comment-id={commentId}
                         className={cn(
                           "grid grid-cols-12 hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors min-h-[80px] relative w-full",
                           deletingFeedbacks.has(feedback.id) && "feedback-deleting",
-                          editingFeedbacks.has(feedback.id) && "feedback-editing"
+                          editingFeedbacks.has(feedback.id) && "feedback-editing",
+                          isHighlighted && "bg-blue-50 dark:bg-blue-950/30 border-2 border-blue-300 dark:border-blue-700"
                         )}
                       >
                         {/* Flag de editado */}
