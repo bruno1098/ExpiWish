@@ -30,11 +30,13 @@ import {
   X, 
   Building2, 
   AlertCircle, 
+  AlertTriangle,
   Tag, 
   Globe, 
   BarChart3 
 } from "lucide-react";
 import { formatDateBR, filterValidFeedbacks } from "@/lib/utils";
+import { ProblemsVisualizationOptions } from './ProblemsVisualizationOptions';
 
 // Definir a interface AnalysisData
 interface AnalysisData {
@@ -828,6 +830,47 @@ function DashboardContent() {
       .map(([keyword, count]) => ({ label: keyword, value: count }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 20);
+  };
+
+  // Nova função para processar problem_detail específicos
+  const processProblemDetailsDistribution = (data: any[]) => {
+    const problemDetails: Record<string, any> = {};
+    
+    data.forEach(feedback => {
+      if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+        feedback.allProblems.forEach((problemObj: any) => {
+          if (problemObj.problem_detail && problemObj.problem_detail.trim() !== '') {
+            const key = `${problemObj.problem}_${problemObj.problem_detail}`;
+            if (!problemDetails[key]) {
+              problemDetails[key] = {
+                problem: problemObj.problem,
+                problem_detail: problemObj.problem_detail,
+                sector: problemObj.sector || problemObj.keyword,
+                count: 0,
+                totalRating: 0,
+                examples: [],
+                suggestions: new Set()
+              };
+            }
+            problemDetails[key].count++;
+            problemDetails[key].totalRating += feedback.rating || 0;
+            problemDetails[key].examples.push(feedback.comment);
+            if (feedback.suggestion_summary) {
+              problemDetails[key].suggestions.add(feedback.suggestion_summary);
+            }
+          }
+        });
+      }
+    });
+
+    return Object.values(problemDetails)
+      .map((detail: any) => ({
+        ...detail,
+        averageRating: detail.count > 0 ? detail.totalRating / detail.count : 0,
+        suggestions: Array.from(detail.suggestions)
+      }))
+      .sort((a: any, b: any) => b.count - a.count)
+      .slice(0, 30);
   };
 
   const processSectorDistribution = () => {
@@ -1639,26 +1682,40 @@ function DashboardContent() {
           </Card>
         </TabsContent>
 
-        {/* Problemas */}
-        <TabsContent value="problems" className="space-y-4">
-          {/* Nova Análise Avançada de Problemas */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900">Análise Avançada de Problemas</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  Visualização detalhada dos problemas com contexto específico e agrupamentos inteligentes
-                </p>
-              </div>
-              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                Nova Funcionalidade
-              </Badge>
+        {/* Problemas - NOVA VISUALIZAÇÃO DETALHADA */}
+        <TabsContent value="problems" className="space-y-6">
+          {/* Novo Sistema de Visualização de Problemas Detalhados */}
+          <ProblemsVisualizationOptions 
+            filteredData={filteredData}
+            setSelectedItem={setSelectedItem}
+            setChartDetailOpen={setChartDetailOpen}
+          />
+
+          {/* Gráfico de Backup (caso necessário) - Mantido como fallback */}
+          <Card className="p-6 mt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">📊 Visão Clássica - Problemas Resumidos</h3>
+              <Button
+                onClick={() => handleViewChart('problem', 'Principais Problemas', processProblemDistribution(filteredData), 'bar')}
+                variant="outline"
+                size="sm"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Ver Completo
+              </Button>
             </div>
-            
-            <AdvancedProblemsView 
-              feedbacks={filteredData} 
-              selectedHotel={selectedHotel}
-            />
+            <p className="text-sm text-muted-foreground mb-4">
+              Para comparação: visualização resumida tradicional (genérica)
+            </p>
+            <div className="h-[400px]">
+              <ProblemsChart 
+                data={processProblemDistribution(filteredData).slice(0, 15)}
+                onClick={(item: any, index: number) => {
+                  console.log(`Clique no problema: ${item.label || item.name}`);
+                  handleChartClick(item, 'problem');
+                }}
+              />
+            </div>
           </Card>
         </TabsContent>
 
