@@ -71,6 +71,463 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
   // Estados para filtros de comentários
   const [commentFilter, setCommentFilter] = useState<'all' | 'critical' | 'positive' | 'with-suggestions'>('all');
   const [sortComments, setSortComments] = useState<'recent' | 'oldest' | 'rating-asc' | 'rating-desc'>('recent');
+  
+  // Estados para os cartões detalhados de departamento
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+  // RENDERIZAÇÃO ESPECIAL: Cartões Detalhados de Departamento
+  if (item.isDepartmentCards && item.problems) {
+    const toggleCardExpansion = (problemId: string) => {
+      setExpandedCards(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(problemId)) {
+          newSet.delete(problemId);
+        } else {
+          newSet.add(problemId);
+        }
+        return newSet;
+      });
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Header do departamento com estatísticas completas */}
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+          <h3 className="text-2xl font-bold text-purple-800 dark:text-purple-200 mb-4 flex items-center gap-2">
+            🏢 {item.departmentName} - Análise Completa Detalhada
+          </h3>
+          
+          {/* Estatísticas principais em grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-4">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <div className="text-2xl font-bold text-purple-600">{item.totalProblems}</div>
+              <div className="text-xs text-gray-600 dark:text-gray-300">Tipos de Problemas</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <div className="text-2xl font-bold text-blue-600">{item.totalFeedbacks}</div>
+              <div className="text-xs text-gray-600 dark:text-gray-300">Feedbacks Totais</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <div className="text-2xl font-bold text-red-600">{item.criticalCount}</div>
+              <div className="text-xs text-gray-600 dark:text-gray-300">Críticos (≤2⭐)</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <div className="text-2xl font-bold text-green-600">{item.positiveCount}</div>
+              <div className="text-xs text-gray-600 dark:text-gray-300">Positivos (≥4⭐)</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <div className="text-2xl font-bold text-orange-600">{item.averageRating.toFixed(1)}⭐</div>
+              <div className="text-xs text-gray-600 dark:text-gray-300">Rating Médio</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <div className="text-2xl font-bold text-indigo-600">
+                {((item.criticalCount / item.totalFeedbacks) * 100).toFixed(1)}%
+              </div>
+              <div className="text-xs text-gray-600 dark:text-gray-300">Taxa Crítica</div>
+            </div>
+          </div>
+
+          {/* Barra de progresso dos ratings */}
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
+            <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">📊 Distribuição de Ratings:</h4>
+            {(() => {
+              const allRatings = item.problems.reduce((acc: number[], problem: any) => [...acc, ...problem.ratings], []);
+              const ratingCounts = [5, 4, 3, 2, 1].map(rating => ({
+                rating,
+                count: allRatings.filter((r: number) => r === rating).length,
+                percentage: allRatings.length > 0 ? (allRatings.filter((r: number) => r === rating).length / allRatings.length) * 100 : 0
+              }));
+
+              return (
+                <div className="space-y-2">
+                  {ratingCounts.map(({ rating, count, percentage }) => (
+                    <div 
+                      key={rating} 
+                      className="flex items-center gap-3 group cursor-help transition-all duration-300 hover:bg-purple-50 dark:hover:bg-purple-950/30 p-2 rounded-lg"
+                      title={`${rating}⭐: ${count} avaliações (${percentage.toFixed(1)}%) - ${rating >= 4 ? 'Excelente' : rating === 3 ? 'Regular' : 'Crítico'} | Clique para filtrar por esta avaliação`}
+                      onClick={() => {
+                        // Poderia implementar filtro por rating aqui
+                        console.log(`Filtrar por rating ${rating}⭐`);
+                      }}
+                    >
+                      <span className="w-8 text-sm font-medium group-hover:text-purple-700 dark:group-hover:text-purple-300 transition-colors duration-200">{rating}⭐</span>
+                      <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-6 relative group-hover:shadow-md transition-all duration-300">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 group-hover:brightness-110 group-hover:saturate-110 ${
+                            rating >= 4 ? 'bg-green-500 group-hover:bg-green-600' : 
+                            rating === 3 ? 'bg-yellow-500 group-hover:bg-yellow-600' : 'bg-red-500 group-hover:bg-red-600'
+                          }`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white mix-blend-difference group-hover:font-semibold transition-all duration-200">
+                          {count} ({percentage.toFixed(1)}%)
+                        </span>
+                      </div>
+                      <div className="w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Lista de problemas como cartões super detalhados */}
+        <div className="space-y-6">
+          {item.problems.sort((a: any, b: any) => b.count - a.count).map((problem: any, index: number) => {
+            const isExpanded = expandedCards.has(problem.id || problem.problem);
+            const avgRating = problem.ratings.length > 0 
+              ? (problem.ratings.reduce((a: number, b: number) => a + b, 0) / problem.ratings.length) 
+              : 0;
+            const criticalCount = problem.ratings.filter((r: number) => r <= 2).length;
+            const positiveCount = problem.ratings.filter((r: number) => r >= 4).length;
+            const moderateCount = problem.ratings.filter((r: number) => r === 3).length;
+            const criticalPercentage = ((criticalCount / problem.count) * 100);
+            const positivePercentage = ((positiveCount / problem.count) * 100);
+
+            return (
+              <Card key={problem.id || problem.problem} className={`overflow-hidden transition-all duration-300 transform ${
+                isExpanded ? 'shadow-xl border-purple-200 dark:border-purple-700 scale-102' : 'shadow-md hover:shadow-lg hover:scale-101 border-gray-200 dark:border-gray-700'
+              } hover:border-purple-300 dark:hover:border-purple-600 cursor-pointer group`}>
+                
+                {/* Header do cartão com ranking */}
+                <div className={`bg-gradient-to-r from-purple-50 via-white to-pink-50 dark:from-purple-950/30 dark:via-gray-800 dark:to-pink-950/30 p-6 border-b border-gray-200 dark:border-gray-700 transition-all duration-300 ${
+                  !isExpanded ? 'group-hover:from-purple-100 group-hover:to-pink-100 dark:group-hover:from-purple-950/40 dark:group-hover:to-pink-950/40' : ''
+                }`}>
+                  <div className="flex items-start gap-4">
+                    {/* Número do ranking */}
+                    <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-white ${
+                      index < 3 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' : 
+                      index < 5 ? 'bg-gradient-to-r from-blue-400 to-blue-600' :
+                      'bg-gradient-to-r from-gray-400 to-gray-600'
+                    }`}>
+                      #{index + 1}
+                    </div>
+
+                    {/* Informações principais */}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-3 break-words">
+                        🎯 {problem.problem}
+                      </h4>
+                      
+                      {/* Badges informativos */}
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200">
+                          📊 {problem.count} ocorrências
+                        </Badge>
+                        <Badge className={`${
+                          avgRating <= 2 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200' :
+                          avgRating <= 3 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200' :
+                          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
+                        }`}>
+                          ⭐ {avgRating.toFixed(2)} rating médio
+                        </Badge>
+                        {criticalCount > 0 && (
+                          <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">
+                            🚨 {criticalCount} críticos ({criticalPercentage.toFixed(1)}%)
+                          </Badge>
+                        )}
+                        {positiveCount > 0 && (
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200">
+                            ✅ {positiveCount} positivos ({positivePercentage.toFixed(1)}%)
+                          </Badge>
+                        )}
+                        {problem.problem_detail && problem.problem_detail.trim() !== '' && (
+                          <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors duration-200 cursor-help animate-pulse"
+                            title={`Detalhes disponíveis: ${problem.problem_detail.substring(0, 100)}${problem.problem_detail.length > 100 ? '...' : ''}`}
+                          >
+                            📝 Detalhes disponíveis
+                          </Badge>
+                        )}
+                        {problem.suggestions.size > 0 && (
+                          <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200">
+                            💡 {problem.suggestions.size} sugestões
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Mini estatísticas visuais */}
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">
+                          <div className="text-lg font-bold text-red-600">{criticalCount}</div>
+                          <div className="text-xs text-red-500">Críticos</div>
+                        </div>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded-lg">
+                          <div className="text-lg font-bold text-yellow-600">{moderateCount}</div>
+                          <div className="text-xs text-yellow-500">Moderados</div>
+                        </div>
+                        <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">
+                          <div className="text-lg font-bold text-green-600">{positiveCount}</div>
+                          <div className="text-xs text-green-500">Positivos</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botão de expandir */}
+                    <Button
+                      variant={isExpanded ? "default" : "outline"}
+                      onClick={() => toggleCardExpansion(problem.id || problem.problem)}
+                      className={`flex items-center gap-2 transition-all duration-300 ${
+                        isExpanded ? 'bg-purple-600 hover:bg-purple-700 text-white' : 
+                        'border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-300'
+                      }`}
+                    >
+                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                      <span className="hidden sm:inline">
+                        {isExpanded ? 'Recolher Detalhes' : 'Ver Detalhes Completos'}
+                      </span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Conteúdo expandido super detalhado */}
+                {isExpanded && (
+                  <div className="p-6 space-y-6 bg-gray-50/50 dark:bg-gray-900/50">
+                    
+                    {/* Detalhes do problema (se houver) */}
+                    {problem.problem_detail && problem.problem_detail.trim() !== '' && (
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-5 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <h5 className="font-bold text-blue-800 dark:text-blue-200 mb-3 flex items-center gap-2">
+                          📝 Detalhes Específicos do Problema:
+                        </h5>
+                        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-blue-100 dark:border-blue-900">
+                          <p className="text-gray-800 dark:text-gray-200 leading-relaxed font-medium">
+                            {problem.problem_detail}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Análise de ratings detalhada */}
+                    <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+                        📈 Análise Detalhada de Ratings:
+                      </h5>
+                      <div className="grid grid-cols-5 gap-3 mb-4">
+                        {[5, 4, 3, 2, 1].map(rating => {
+                          const count = problem.ratings.filter((r: number) => r === rating).length;
+                          const percentage = problem.ratings.length > 0 ? (count / problem.ratings.length) * 100 : 0;
+                          
+                          return (
+                            <div key={rating} className={`text-center p-3 rounded-lg ${
+                              rating >= 4 ? 'bg-green-50 dark:bg-green-900/20' :
+                              rating === 3 ? 'bg-yellow-50 dark:bg-yellow-900/20' :
+                              'bg-red-50 dark:bg-red-900/20'
+                            }`}>
+                              <div className="text-2xl font-bold">{count}</div>
+                              <div className="text-sm font-medium">{rating}⭐</div>
+                              <div className="text-xs text-gray-500">{percentage.toFixed(1)}%</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Barra de progresso visual */}
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+                        {[5, 4, 3, 2, 1].map(rating => {
+                          const count = problem.ratings.filter((r: number) => r === rating).length;
+                          const percentage = problem.ratings.length > 0 ? (count / problem.ratings.length) * 100 : 0;
+                          
+                          return percentage > 0 ? (
+                            <div
+                              key={rating}
+                              className={`h-full float-left ${
+                                rating >= 4 ? 'bg-green-500' :
+                                rating === 3 ? 'bg-yellow-500' :
+                                'bg-red-500'
+                              }`}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Sugestões (se houver) */}
+                    {problem.suggestions.size > 0 && (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 p-5 rounded-lg border border-green-200 dark:border-green-800">
+                        <h5 className="font-bold text-green-800 dark:text-green-200 mb-3 flex items-center gap-2">
+                          💡 Sugestões Identificadas ({problem.suggestions.size}):
+                        </h5>
+                        <div className="space-y-2">
+                          {Array.from(problem.suggestions).slice(0, 5).map((suggestion: any, sugIndex: number) => (
+                            <div key={sugIndex} className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-green-100 dark:border-green-900">
+                              <p className="text-green-800 dark:text-green-200 font-medium">
+                                "{''+suggestion}"
+                              </p>
+                            </div>
+                          ))}
+                          {problem.suggestions.size > 5 && (
+                            <div className="text-center text-green-600 dark:text-green-400 text-sm font-medium">
+                              ... e mais {problem.suggestions.size - 5} sugestões
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Exemplos de comentários mais detalhados */}
+                    <div className="bg-white dark:bg-gray-800 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <h5 className="font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          💬 Comentários de Exemplo ({problem.examples.length} total):
+                        </span>
+                        {problem.examples.length > 5 && (
+                          <span className="text-sm text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                            Mostrando 5 de {problem.examples.length}
+                          </span>
+                        )}
+                      </h5>
+                      
+                      <div className="space-y-4">
+                        {problem.examples
+                          .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .slice(0, 5)
+                          .map((example: any, exIndex: number) => (
+                          <div key={exIndex} className={`p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-md ${
+                            example.rating <= 2 ? 'bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800' :
+                            example.rating === 3 ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800' :
+                            'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'
+                          }`}>
+                            {/* Header do comentário */}
+                            <div className="flex items-center justify-between gap-4 mb-3">
+                              <div className="flex items-center gap-3 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                                    {example.author || 'Anônimo'}
+                                  </span>
+                                  <span className="text-gray-500">•</span>
+                                  <span className="text-gray-600 dark:text-gray-400">
+                                    {new Date(example.date).toLocaleDateString('pt-BR')}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 ml-2">
+                                  {[1, 2, 3, 4, 5].map(star => (
+                                    <span key={star} className={`${
+                                      star <= (example.rating || 0) ? 'text-yellow-400' : 'text-gray-300'
+                                    } text-lg`}>
+                                      ⭐
+                                    </span>
+                                  ))}
+                                  <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    ({example.rating}/5)
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  const params = new URLSearchParams({
+                                    highlight: `${example.date}_${example.author || 'unknown'}_${(example.text || example.comment || '').substring(0, 50).replace(/[^a-zA-Z0-9]/g, '_')}`,
+                                    comment: (example.text || example.comment || '').substring(0, 200)
+                                  });
+                                  window.open(`/analysis?${params.toString()}`, '_blank');
+                                }}
+                                className="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-200 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                              >
+                                <Edit className="w-4 h-4" />
+                                <span className="ml-1 hidden sm:inline">Editar</span>
+                              </Button>
+                            </div>
+                            
+                            {/* Conteúdo do comentário */}
+                            <div className="space-y-3">
+                              <p className="text-gray-800 dark:text-gray-200 leading-relaxed text-sm">
+                                {example.text || example.comment}
+                              </p>
+                              
+                              {/* Detalhes específicos se houver */}
+                              {example.problem_detail && example.problem_detail.trim() !== '' && (
+                                <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded border-l-4 border-blue-400">
+                                  <div className="text-xs font-semibold text-blue-800 dark:text-blue-200 mb-1">
+                                    📝 Detalhes específicos:
+                                  </div>
+                                  <div className="text-sm text-blue-700 dark:text-blue-300">
+                                    {example.problem_detail}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Sugestões no comentário */}
+                              {(example.suggestion || example.suggestion_summary) && (
+                                <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded border-l-4 border-green-400">
+                                  <div className="text-xs font-semibold text-green-800 dark:text-green-200 mb-1">
+                                    💡 Sugestão identificada:
+                                  </div>
+                                  <div className="text-sm text-green-700 dark:text-green-300">
+                                    {example.suggestion || example.suggestion_summary}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Botão para ver mais comentários */}
+                      {problem.examples.length > 5 && (
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Poderia abrir modal com todos os comentários ou expandir
+                              alert(`Este problema tem ${problem.examples.length} comentários ao total. Funcionalidade para ver todos pode ser implementada.`);
+                            }}
+                            className="text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            Ver todos os {problem.examples.length} comentários
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Palavras-chave relacionadas */}
+                    {problem.keywords && problem.keywords.size > 0 && (
+                      <div className="bg-indigo-50 dark:bg-indigo-950/20 p-5 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                        <h5 className="font-bold text-indigo-800 dark:text-indigo-200 mb-3 flex items-center gap-2">
+                          🎯 Palavras-chave Relacionadas ({problem.keywords.size}):
+                        </h5>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from(problem.keywords).map((keyword: any, kwIndex: number) => (
+                            <Badge 
+                              key={kwIndex} 
+                              variant="outline" 
+                              className="bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-600"
+                            >
+                              {keyword}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Resumo final */}
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+          <h4 className="text-lg font-bold text-gray-800 dark:text-gray-200 mb-3">
+            📋 Resumo da Análise - {item.departmentName}
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
+            <div>• <strong>{item.totalProblems}</strong> tipos diferentes de problemas identificados</div>
+            <div>• <strong>{item.totalFeedbacks}</strong> feedbacks analisados no total</div>
+            <div>• <strong>{((item.criticalCount / item.totalFeedbacks) * 100).toFixed(1)}%</strong> dos casos são críticos (≤2⭐)</div>
+            <div>• <strong>{((item.positiveCount / item.totalFeedbacks) * 100).toFixed(1)}%</strong> dos casos são positivos (≥4⭐)</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Função para redirecionar para a tela de análise com comentário específico
   const redirectToAnalysisWithComment = (comment: any, commentIndex: number) => {
@@ -331,13 +788,30 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
                       },
                       label: (context: any) => {
                         const rating = ratingCounts[context.dataIndex];
+                        
+                        // Calcular estatísticas extras
+                        const criticalCount = ratings.filter(r => r <= 2).length;
+                        const positiveCount = ratings.filter(r => r >= 4).length;
+                        const criticalPercentage = ((criticalCount / totalRatings) * 100).toFixed(1);
+                        const positivePercentage = ((positiveCount / totalRatings) * 100).toFixed(1);
+
                         return [
-                          `${rating.count} avaliações (${rating.percentage}%)`,
-                          `Média geral: ${avgRating}⭐`,
-                          `Total de avaliações: ${totalRatings}`
+                          `📊 ${rating.count} avaliações (${rating.percentage}%)`,
+                          `📈 Média geral: ${avgRating}⭐ de ${totalRatings} avaliações`,
+                          '',
+                          `🚨 Total críticos (≤2⭐): ${criticalCount} (${criticalPercentage}%)`,
+                          `✅ Total positivos (≥4⭐): ${positiveCount} (${positivePercentage}%)`,
+                          '',
+                          type === 'problem' ? `🎯 Problema: ${item.problem}` : 
+                          type === 'department' ? `🏢 Departamento: ${item.name}` :
+                          type === 'conversational' ? `💬 Feedback individual` : 'Análise geral'
                         ];
                       }
-                    }
+                    },
+                    maxWidth: 350,
+                    bodyFont: { size: 11 },
+                    titleFont: { size: 12, weight: 'bold' as const },
+                    padding: 12
                   }
                 },
                 scales: {
@@ -380,7 +854,7 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
                 
                 if (type === 'problem') {
                   // Para problemas específicos, contar ocorrências por departamento
-                  Array.from(item.departments).forEach((dept: any) => {
+                  Array.from(item.departments || []).forEach((dept: any) => {
                     if (!departmentData[dept]) {
                       departmentData[dept] = { problems: 0, comments: 0, avgRating: 0 };
                     }
@@ -470,7 +944,7 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
               let keywordData: { [key: string]: { count: number, ratings: number[] } } = {};
               
               if (type === 'problem') {
-                Array.from(item.keywords).forEach((keyword: any) => {
+                Array.from(item.keywords || []).forEach((keyword: any) => {
                   if (!keywordData[keyword]) {
                     keywordData[keyword] = { count: 0, ratings: [] };
                   }
@@ -478,7 +952,7 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
                 });
                 // Adicionar ratings se disponível
                 if (item.ratings) {
-                  Array.from(item.keywords).forEach((keyword: any, index: number) => {
+                  Array.from(item.keywords || []).forEach((keyword: any, index: number) => {
                     if (keywordData[keyword] && item.ratings[index]) {
                       keywordData[keyword].ratings.push(item.ratings[index]);
                     }
@@ -936,6 +1410,7 @@ export function ProblemsVisualizationOptions({
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
   const [detailModalType, setDetailModalType] = useState<'problem' | 'department' | 'executive' | 'conversational'>('problem');
+  const [modalFilteredData, setModalFilteredData] = useState<Feedback[]>([]);  // Dados filtrados para o modal
 
   // Função para abrir modal de detalhes avançados
   const openDetailModal = (item: any, type: 'problem' | 'department' | 'executive' | 'conversational') => {
@@ -2112,12 +2587,13 @@ export function ProblemsVisualizationOptions({
       </p>
       
       <Tabs defaultValue="option1" className="w-full">
-        <TabsList className="grid grid-cols-2 lg:grid-cols-5 w-full mb-6">
+        <TabsList className="grid grid-cols-2 lg:grid-cols-6 w-full mb-6">
           <TabsTrigger value="option1">📋 Cartões Detalhados</TabsTrigger>
           <TabsTrigger value="option2">🏢 Por Departamento</TabsTrigger>
           <TabsTrigger value="option3">📊 Resumo Executivo</TabsTrigger>
           <TabsTrigger value="option4">💬 Análise Conversacional</TabsTrigger>
           <TabsTrigger value="option5">📈 Central de Gráficos</TabsTrigger>
+          <TabsTrigger value="option6">🧪 Gráficos Teste</TabsTrigger>
         </TabsList>
 
         {/* OPÇÃO 1: DASHBOARD DE CARTÕES DETALHADOS COM MÚLTIPLAS VISUALIZAÇÕES */}
@@ -4608,6 +5084,388 @@ export function ProblemsVisualizationOptions({
             </Card>
           </div>
         </TabsContent>
+
+        {/* OPÇÃO 6: GRÁFICOS TESTE - UM GRÁFICO POR DEPARTAMENTO */}
+        <TabsContent value="option6" className="space-y-6">
+          <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800">
+            <h3 className="text-2xl font-bold text-purple-800 dark:text-purple-200 mb-2 flex items-center gap-2">
+              🧪 Gráficos Teste - Por Departamento
+            </h3>
+            <p className="text-sm text-purple-600 dark:text-purple-300 mb-6">
+              Visualização individual de cada departamento com problemas e palavras-chave. Clique nos botões para ver detalhes completos.
+            </p>
+            
+            {(() => {
+              // Processar dados por departamento
+              const problemsData = processProblemsData();
+              
+              // Agrupar dados por departamento
+              const departmentData = problemsData.reduce((acc: any, problem: any) => {
+                const dept = problem.department;
+                if (!acc[dept]) {
+                  acc[dept] = {
+                    problems: {},
+                    keywords: {},
+                    ratings: [],
+                    totalFeedbacks: 0,
+                    examples: []
+                  };
+                }
+                
+                // Problemas
+                if (!acc[dept].problems[problem.problem]) {
+                  acc[dept].problems[problem.problem] = 0;
+                }
+                acc[dept].problems[problem.problem]++;
+                
+                // Palavras-chave
+                if (!acc[dept].keywords[problem.keyword]) {
+                  acc[dept].keywords[problem.keyword] = 0;
+                }
+                acc[dept].keywords[problem.keyword]++;
+                
+                acc[dept].ratings.push(problem.rating);
+                acc[dept].totalFeedbacks++;
+                acc[dept].examples.push(problem);
+                
+                return acc;
+              }, {});
+
+              // Criar cards para cada departamento
+              return Object.entries(departmentData).map(([department, data]: [string, any]) => {
+                const avgRating = (data.ratings.reduce((a: number, b: number) => a + b, 0) / data.ratings.length).toFixed(1);
+                const criticalCount = data.ratings.filter((r: number) => r <= 2).length;
+                const criticalPercentage = ((criticalCount / data.totalFeedbacks) * 100).toFixed(1);
+                
+                // Top 8 problemas do departamento
+                const topProblems = Object.entries(data.problems)
+                  .map(([problem, count]: [string, any]) => ({
+                    problem: problem.length > 30 ? problem.substring(0, 30) + '...' : problem,
+                    fullProblem: problem,
+                    count
+                  }))
+                  .sort((a, b) => b.count - a.count)
+                  .slice(0, 8);
+
+                // Top 6 palavras-chave do departamento
+                const topKeywords = Object.entries(data.keywords)
+                  .map(([keyword, count]: [string, any]) => ({
+                    keyword: keyword.length > 25 ? keyword.substring(0, 25) + '...' : keyword,
+                    fullKeyword: keyword,
+                    count
+                  }))
+                  .sort((a, b) => b.count - a.count)
+                  .slice(0, 6);
+
+                return (
+                  <div key={department} className="mb-8">
+                    <Card className="p-6 bg-white dark:bg-gray-800 shadow-lg border-l-4 border-purple-500">
+                      {/* Header do Departamento */}
+                      <div className="mb-6">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                          <div>
+                            <h4 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                              🏢 {department}
+                            </h4>
+                            <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600 dark:text-gray-300">
+                              <span>📊 {data.totalFeedbacks} feedbacks</span>
+                              <span>⭐ Rating médio: {avgRating}</span>
+                              <span className="text-red-500">🚨 {criticalCount} críticos ({criticalPercentage}%)</span>
+                            </div>
+                          </div>
+                          
+                          {/* Botões para ver detalhes */}
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            {/* Botão para ver detalhes gerais do departamento */}
+                            <Button
+                              onClick={() => {
+                                const departmentDetails = {
+                                  name: department,
+                                  totalFeedbacks: data.totalFeedbacks,
+                                  averageRating: parseFloat(avgRating),
+                                  criticalCount,
+                                  allExamples: data.examples,
+                                  problemDistribution: Object.entries(data.problems).map(([problem, count]) => ({ problem, count })),
+                                  keywordDistribution: Object.entries(data.keywords).map(([keyword, count]) => ({ keyword, count }))
+                                };
+                                setSelectedDetailItem(departmentDetails);
+                                setModalFilteredData([]); // Resetar dados filtrados
+                                setDetailModalType('department');
+                                setDetailModalOpen(true);
+                              }}
+                              variant="outline"
+                              className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-300 dark:hover:bg-purple-900/20 flex items-center gap-2"
+                            >
+                              <Eye className="w-4 h-4" />
+                              Ver Detalhes
+                            </Button>
+
+                            {/* Botão para ver cartões detalhados (tabela filtrada) */}
+                            <Button
+                              onClick={() => {
+                                // Filtrar os problemas detalhados apenas para este departamento
+                                const departmentDetailedProblems = Object.values(detailedProblems).filter((problem: any) => {
+                                  // Verificar se o problema pertence a este departamento
+                                  return problem.departments.has(department) || problem.department === department;
+                                });
+
+                                if (departmentDetailedProblems.length > 0) {
+                                  // Criar um item especial para mostrar os cartões detalhados
+                                  setSelectedDetailItem({
+                                    isDepartmentCards: true, // Flag especial para identificar este tipo
+                                    department: department,
+                                    departmentName: department,
+                                    problems: departmentDetailedProblems,
+                                    totalProblems: departmentDetailedProblems.length,
+                                    totalFeedbacks: departmentDetailedProblems.reduce((sum: number, p: any) => sum + p.count, 0),
+                                    averageRating: parseFloat(avgRating),
+                                    criticalCount,
+                                    positiveCount: departmentDetailedProblems.reduce((sum: number, p: any) => 
+                                      sum + p.examples.filter((ex: any) => ex.rating >= 4).length, 0
+                                    )
+                                  });
+                                  
+                                  setModalFilteredData([]); // Não precisa de dados filtrados especiais
+                                  setDetailModalType('problem');
+                                  setDetailModalOpen(true);
+                                } else {
+                                  alert(`Nenhum problema detalhado encontrado para o departamento ${department}`);
+                                }
+                              }}
+                              className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"
+                            >
+                              <Grid3X3 className="w-4 h-4" />
+                              Ver Cartões Detalhados
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Gráficos lado a lado */}
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        
+                        {/* Gráfico de Problemas */}
+                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                          <h5 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                            🎯 Top Problemas - {department}
+                          </h5>
+                          <div className="h-64">
+                            {(() => {
+                              const problemChartData = {
+                                labels: topProblems.map(p => p.problem),
+                                datasets: [{
+                                  label: 'Ocorrências',
+                                  data: topProblems.map(p => p.count),
+                                  backgroundColor: topProblems.map((_, index) => {
+                                    const colors = [
+                                      'rgba(239, 68, 68, 0.8)',   // Vermelho
+                                      'rgba(245, 158, 11, 0.8)',  // Laranja
+                                      'rgba(234, 179, 8, 0.8)',   // Amarelo
+                                      'rgba(34, 197, 94, 0.8)',   // Verde
+                                      'rgba(59, 130, 246, 0.8)',  // Azul
+                                      'rgba(147, 51, 234, 0.8)',  // Roxo
+                                      'rgba(236, 72, 153, 0.8)',  // Rosa
+                                      'rgba(99, 102, 241, 0.8)'   // Indigo
+                                    ];
+                                    return colors[index % colors.length];
+                                  }),
+                                  borderColor: topProblems.map((_, index) => {
+                                    const colors = [
+                                      'rgb(239, 68, 68)',   // Vermelho
+                                      'rgb(245, 158, 11)',  // Laranja
+                                      'rgb(234, 179, 8)',   // Amarelo
+                                      'rgb(34, 197, 94)',   // Verde
+                                      'rgb(59, 130, 246)',  // Azul
+                                      'rgb(147, 51, 234)',  // Roxo
+                                      'rgb(236, 72, 153)',  // Rosa
+                                      'rgb(99, 102, 241)'   // Indigo
+                                    ];
+                                    return colors[index % colors.length];
+                                  }),
+                                  borderWidth: 2,
+                                  borderRadius: 6
+                                }]
+                              };
+
+                              const problemChartOptions = {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: { display: false },
+                                  tooltip: {
+                                    callbacks: {
+                                      title: (context: any) => {
+                                        const problemItem = topProblems[context[0].dataIndex];
+                                        return problemItem.fullProblem;
+                                      },
+                                      label: (context: any) => {
+                                        const problemItem = topProblems[context.dataIndex];
+                                        const percentage = ((problemItem.count / data.totalFeedbacks) * 100).toFixed(1);
+                                        
+                                        // Buscar problem details nos dados detalhados
+                                        const detailData = Object.values(detailedProblems).find((detailedProblem: any) => 
+                                          detailedProblem.problem === problemItem.fullProblem && detailedProblem.problem_detail
+                                        ) as any;
+                                        const problemDetail = detailData?.problem_detail ? String(detailData.problem_detail) : null;
+
+                                        const tooltipLines = [
+                                          `📊 ${problemItem.count} ocorrências (${percentage}%)`,
+                                          `🏢 Departamento: ${department}`,
+                                          `📈 Total de feedbacks: ${data.totalFeedbacks}`,
+                                          `⭐ Rating médio do dept: ${avgRating}/5`
+                                        ];
+
+                                        if (problemDetail && problemDetail.length > 0) {
+                                          const shortDetail = problemDetail.length > 100 ? problemDetail.substring(0, 100) + '...' : problemDetail;
+                                          tooltipLines.push(`📝 Detalhe: ${shortDetail}`);
+                                        }
+
+                                        return tooltipLines;
+                                      }
+                                    },
+                                    maxWidth: 300,
+                                    bodyFont: { size: 11 },
+                                    titleFont: { size: 12, weight: 'bold' as const },
+                                    padding: 12
+                                  }
+                                },
+                                scales: {
+                                  y: {
+                                    beginAtZero: true,
+                                    ticks: { stepSize: 1 }
+                                  },
+                                  x: {
+                                    ticks: {
+                                      font: { size: 9 },
+                                      maxRotation: 45,
+                                      minRotation: 45
+                                    }
+                                  }
+                                }
+                              };
+
+                              return <Bar data={problemChartData} options={problemChartOptions} />;
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* Gráfico de Palavras-chave */}
+                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                          <h5 className="font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                            🎯 Top Palavras-chave - {department}
+                          </h5>
+                          <div className="h-64">
+                            {(() => {
+                              const keywordChartData = {
+                                labels: topKeywords.map(k => k.keyword),
+                                datasets: [{
+                                  label: 'Menções',
+                                  data: topKeywords.map(k => k.count),
+                                  backgroundColor: [
+                                    'rgba(99, 102, 241, 0.8)',   // Indigo
+                                    'rgba(236, 72, 153, 0.8)',   // Rosa
+                                    'rgba(34, 197, 94, 0.8)',    // Verde
+                                    'rgba(245, 158, 11, 0.8)',   // Laranja
+                                    'rgba(147, 51, 234, 0.8)',   // Roxo
+                                    'rgba(59, 130, 246, 0.8)'    // Azul
+                                  ],
+                                  borderColor: [
+                                    'rgb(99, 102, 241)',
+                                    'rgb(236, 72, 153)',
+                                    'rgb(34, 197, 94)',
+                                    'rgb(245, 158, 11)',
+                                    'rgb(147, 51, 234)',
+                                    'rgb(59, 130, 246)'
+                                  ],
+                                  borderWidth: 2
+                                }]
+                              };
+
+                              const keywordChartOptions = {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: { 
+                                    display: true,
+                                    position: 'bottom' as const,
+                                    labels: { font: { size: 10 } }
+                                  },
+                                  tooltip: {
+                                    callbacks: {
+                                      title: (context: any) => {
+                                        const keywordItem = topKeywords[context[0].dataIndex];
+                                        return keywordItem.fullKeyword;
+                                      },
+                                      label: (context: any) => {
+                                        const keywordItem = topKeywords[context.dataIndex];
+                                        const percentage = ((keywordItem.count / data.totalFeedbacks) * 100).toFixed(1);
+                                        
+                                        // Buscar exemplos de problemas relacionados a essa palavra-chave
+                                        const relatedProblems = Object.entries(data.problems)
+                                          .filter(([problem]) => problem.toLowerCase().includes(keywordItem.fullKeyword.toLowerCase()))
+                                          .slice(0, 3);
+
+                                        const tooltipLines = [
+                                          `📊 ${keywordItem.count} menções (${percentage}%)`,
+                                          `🏢 Departamento: ${department}`,
+                                          `📈 Total de feedbacks: ${data.totalFeedbacks}`,
+                                          `⭐ Rating médio do dept: ${avgRating}/5`
+                                        ];
+
+                                        if (relatedProblems.length > 0) {
+                                          tooltipLines.push('');
+                                          tooltipLines.push('🎯 Problemas relacionados:');
+                                          relatedProblems.forEach(([problem, count]) => {
+                                            const shortProblem = problem.length > 40 ? problem.substring(0, 40) + '...' : problem;
+                                            tooltipLines.push(`• ${shortProblem} (${count}x)`);
+                                          });
+                                        }
+
+                                        return tooltipLines;
+                                      }
+                                    },
+                                    maxWidth: 320,
+                                    bodyFont: { size: 11 },
+                                    titleFont: { size: 12, weight: 'bold' as const },
+                                    padding: 12
+                                  }
+                                }
+                              };
+
+                              return <Doughnut data={keywordChartData} options={keywordChartOptions} />;
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer com estatísticas extras */}
+                      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                            <div className="text-lg font-bold text-red-600">{criticalCount}</div>
+                            <div className="text-xs text-red-500">Casos Críticos</div>
+                          </div>
+                          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                            <div className="text-lg font-bold text-blue-600">{Object.keys(data.problems).length}</div>
+                            <div className="text-xs text-blue-500">Tipos de Problemas</div>
+                          </div>
+                          <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                            <div className="text-lg font-bold text-green-600">{Object.keys(data.keywords).length}</div>
+                            <div className="text-xs text-green-500">Palavras-chave</div>
+                          </div>
+                          <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg">
+                            <div className="text-lg font-bold text-purple-600">{avgRating}⭐</div>
+                            <div className="text-xs text-purple-500">Rating Médio</div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </TabsContent>
       </Tabs>
       
       {/* MODAL DE DETALHES AVANÇADOS */}
@@ -4647,7 +5505,7 @@ export function ProblemsVisualizationOptions({
               <AdvancedDetailView 
                 item={selectedDetailItem}
                 type={detailModalType}
-                filteredData={filteredData}
+                filteredData={modalFilteredData.length > 0 ? modalFilteredData : filteredData}
                 executiveSummary={getExecutiveSummary()}
               />
             </div>
