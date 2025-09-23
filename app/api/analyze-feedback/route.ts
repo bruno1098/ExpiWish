@@ -1,9 +1,38 @@
 import OpenAI from "openai";
 import { NextRequest, NextResponse } from "next/server";
 
-// Cache em memória para análises repetidas
+// Cache em memória para análises repetidas com limpeza automática
 const analysisCache = new Map<string, any>();
 const CACHE_EXPIRY = 30 * 60 * 1000; // 30 minutos
+const MAX_CACHE_SIZE = 1000; // Limite de itens no cache
+
+// Limpeza automática do cache a cada 15 minutos
+setInterval(() => {
+  const now = Date.now();
+  const keysToDelete: string[] = [];
+  
+  analysisCache.forEach((value, key) => {
+    if (now - value.timestamp > CACHE_EXPIRY) {
+      keysToDelete.push(key);
+    }
+  });
+  
+  keysToDelete.forEach(key => analysisCache.delete(key));
+  
+  // Se ainda tiver muitos itens, remove os mais antigos
+  if (analysisCache.size > MAX_CACHE_SIZE) {
+    const oldestEntries: Array<[string, number]> = [];
+    analysisCache.forEach((value, key) => {
+      oldestEntries.push([key, value.timestamp]);
+    });
+    
+    oldestEntries.sort((a, b) => a[1] - b[1]);
+    const toDelete = oldestEntries.slice(0, oldestEntries.length - MAX_CACHE_SIZE);
+    toDelete.forEach(([key]) => analysisCache.delete(key));
+  }
+  
+  console.log(`🧹 [CACHE-CLEANUP] Limpeza realizada. Itens no cache: ${analysisCache.size}`);
+}, 15 * 60 * 1000); // 15 minutos
 
 // Controle de rate limiting
 let requestCount = 0;
@@ -25,301 +54,609 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-// Dicionário raw antes da normalização
+// Dicionário raw aprimorado baseado nos feedbacks da cliente
 const RAW_NORMALIZATION_DICT: Record<string, string> = {
-  // Keywords genéricas
-  "serviço / café da manhã": "A&B - Serviço", 
-  "café da manhã": "A&B - Café da manhã",
-  "check-in": "Recepção - Serviço",
-  "check in": "Recepção - Serviço",
-  "check-out": "Recepção - Serviço",
-  "check out": "Recepção - Serviço",
-  "wifi": "Tecnologia - Wi-fi",
-  "wi-fi": "Tecnologia - Wi-fi",
-  "wi fi": "Tecnologia - Wi-fi",
-  "internet": "Tecnologia - Wi-fi",
-  "ar condicionado": "Ar-condicionado",
-  "ar-condicionado": "Ar-condicionado",
-  "estrutura de lazer": "Lazer - Estrutura",
-  "lazer estrutura": "Lazer - Estrutura",
-  "manutenção do banheiro": "Manutenção - Banheiro",
-  "manutenção do quarto": "Manutenção - Quarto", 
-  "manutenção quarto": "Manutenção - Quarto",
-  "limpeza do quarto": "Limpeza - Quarto",
-  "limpeza quarto": "Limpeza - Quarto",
-  "limpeza do banheiro": "Limpeza - Banheiro",
-  "limpeza banheiro": "Limpeza - Banheiro",
-  "limpeza das áreas sociais": "Limpeza - Áreas sociais",
-  "limpeza áreas sociais": "Limpeza - Áreas sociais",
-  // Problemas padronizados
-  "lento": "Demora no Atendimento",
-  "demora no atendimento": "Demora no Atendimento",
-  "atendimento lento": "Demora no Atendimento",
-  "serviço lento": "Demora no Atendimento",
-  "ruído": "Ruído Excessivo",
-  "barulho": "Ruído Excessivo",
-  "ruído excessivo": "Ruído Excessivo",
-  "muito barulho": "Ruído Excessivo",
-  "barulhos": "Ruído Excessivo",
-  "barulhento": "Ruído Excessivo",
-  "barulhenta": "Ruído Excessivo",
-  "carrinho": "Ruído Excessivo",
-  "carrinhos": "Ruído Excessivo",
-  "carrinho de serviço": "Ruído Excessivo",
-  "carrinhos de serviço": "Ruído Excessivo",
-  "quarto pequeno": "Espaço Insuficiente",
-  "espaço pequeno": "Espaço Insuficiente",
-  "pouco espaço": "Espaço Insuficiente",
-  "comida ruim": "Qualidade da Comida",
-  "qualidade da comida": "Qualidade da Comida",
-  "comida sem sabor": "Qualidade da Comida",
-  "não funciona": "Não Funciona",
-  "quebrado": "Não Funciona",
-  "com defeito": "Não Funciona",
-  "conexão ruim": "Conexão Instável",
-  "internet lenta": "Conexão Instável",
-  "wifi lento": "Conexão Instável",
-  "falta de limpeza": "Falta de Limpeza",
-  "sujo": "Falta de Limpeza",
-  "sem limpeza": "Falta de Limpeza",
-  "preço alto": "Preço Alto",
-  "caro": "Preço Alto",
-  "muito caro": "Preço Alto",
-  "falta de variedade": "Falta de Variedade",
-  "pouca variedade": "Falta de Variedade",
-  "sem variedade": "Falta de Variedade",
-  // Normalizações para as novas keywords dos Excel
+  // === A&B - ALIMENTOS & BEBIDAS - SEÇÃO EXPANDIDA ===
+  
+  // Serviço (garçons, bartenders, atendimento restaurante/bar)
   "garçom": "A&B - Serviço",
-  "garçons": "A&B - Serviço", 
-  "garcom": "A&B - Serviço",
+  "garcom": "A&B - Serviço", 
+  "garçons": "A&B - Serviço",
   "garcons": "A&B - Serviço",
+  "garçonete": "A&B - Serviço",
+  "garconete": "A&B - Serviço",
+  "garçonetes": "A&B - Serviço",
+  "garconetes": "A&B - Serviço",
+  "waiter": "A&B - Serviço",
+  "waiters": "A&B - Serviço",
+  "waitress": "A&B - Serviço",
+  "bartender": "A&B - Serviço",
+  "barman": "A&B - Serviço",
+  "atendente": "A&B - Serviço",
+  "atendentes": "A&B - Serviço",
   "bar": "A&B - Serviço",
-  "bingo": "Lazer - Atividades de Lazer",
-  "recreação": "Lazer - Atividades de Lazer",
-  "recreacao": "Lazer - Atividades de Lazer",
-  "Lazer": "Lazer - Atividades de Lazer", 
-  "Paz": "Lazer - Atividades de Lazer", 
-  "tia da recreação": "Lazer - Serviço",
-  "tio da recreação": "Lazer - Serviço",
-  "tia": "Lazer - Serviço",
-  "monitores": "Lazer - Serviço",
-  "monitor": "Lazer - Serviço",
-  "karaokê": "Lazer - Atividades de Lazer",
-  "karaoke": "Lazer - Atividades de Lazer",
-  "fogueira": "Lazer - Atividades de Lazer",
-  "piscina fria": "Muito Frio/Quente",
-  "janela suja": "Falta de Limpeza",
-  "janelas sujas": "Falta de Limpeza",
-  "janelas do quarto sujas": "Falta de Limpeza",
-  "cheiro de mofo": "Falta de Limpeza",
-  "mofo": "Falta de Limpeza",
-  "poucos pontos de luz": "Falta de Equipamento",
-  "baixa iluminação": "Falta de Equipamento",
-  "pouca luminosidade": "Falta de Equipamento",
-  "falta de luminosidade": "Falta de Equipamento",
-  // Adições baseadas nas edições recentes (iluminação/tomadas)
-  "poucos pontos de luz elétrica": "Falta de Equipamento",
-  "poucos pontos de energia": "Falta de Equipamento",
-  "poucos pontos de tomada": "Falta de Equipamento",
-  "poucas tomadas": "Falta de Equipamento",
-  "tomadas insuficientes": "Falta de Equipamento",
-  "tomada insuficiente": "Falta de Equipamento",
-  "falta de tomada": "Falta de Equipamento",
-  "falta de tomadas": "Falta de Equipamento",
-  "iluminação insuficiente": "Falta de Equipamento",
-  "iluminacao insuficiente": "Falta de Equipamento",
-  // Adições baseadas nas edições recentes (modernização/antigo)
-  "falta de modernização": "Falta de Manutenção",
-  "falta de modernizacao": "Falta de Manutenção",
-  "hotel antigo": "Falta de Manutenção",
-  "estrutura antiga": "Falta de Manutenção",
-  "instalações antigas": "Falta de Manutenção",
-  "instalacoes antigas": "Falta de Manutenção",
-  "precisa modernizar": "Falta de Manutenção",
-  "precisa de modernização": "Falta de Manutenção",
-  "precisa de modernizacao": "Falta de Manutenção",
-  "precisa de reforma": "Falta de Manutenção",
-  "precisa reforma": "Falta de Manutenção",
-  "cofre": "Não Funciona",
-  "fechadura": "Não Funciona",
-  "torneira": "Não Funciona",
-  "espirra água": "Falta de Manutenção",
-  "quadro reduzido": "Capacidade Insuficiente",
-  "maior variedade de frutas": "Falta de Variedade",
-  "qualidade do café da manhã": "Qualidade da Comida",
-  "abordagem repetitiva": "Comunicação Ruim",
-  // Regras específicas para pressões de venda / multipropriedade / timeshare
-  "insistência": "Comunicação Ruim",
-  "insistencia": "Comunicação Ruim",
-  "insistente": "Comunicação Ruim",
-  "insistiram": "Comunicação Ruim",
-  "pressão": "Comunicação Ruim",
-  "pressao": "Comunicação Ruim",
-  "pressionaram": "Comunicação Ruim",
-  "coação": "Comunicação Ruim",
-  "coacao": "Comunicação Ruim",
-  "assédio": "Comunicação Ruim",
-  "assedio": "Comunicação Ruim",
-  "venda agressiva": "Cotas",
-  "vendas agressivas": "Cotas",
-  "apresentação de vendas": "Cotas",
-  "apresentacao de vendas": "Cotas",
-  "multipropriedade": "Cotas",
-  "timeshare": "Cotas",
-  "compra de multipropriedade": "Cotas",
-  "insistência para comprar": "Cotas",
-  "pressão para comprar": "Cotas",
-  "coagidos": "Cotas",
-  "salas de trabalho": "Falta de Disponibilidade",
-  // Elogios de atendimento e simpatia - direcionamento para Atendimento/Operações
-  "simpático": "Atendimento",
-  "simpática": "Atendimento",
-  "simpaticos": "Atendimento",
-  "simpaticas": "Atendimento",
-  "simpáticos": "Atendimento",
-  "simpáticas": "Atendimento",
-  "gentil": "Atendimento",
-  "gentis": "Atendimento",
-  "educado": "Atendimento",
-  "educada": "Atendimento",
-  "educados": "Atendimento",
-  "educadas": "Atendimento",
-  "cordial": "Atendimento",
-  "cordiais": "Atendimento",
-  "solicito": "Atendimento",
-  "solicita": "Atendimento",
-  "solícito": "Atendimento",
-  "solícita": "Atendimento",
-  "solícitos": "Atendimento",
-  "solícitas": "Atendimento",
-  "amável": "Atendimento",
-  "amáveis": "Atendimento",
-  "prestativo": "Atendimento",
-  "prestativa": "Atendimento",
-  "prestativos": "Atendimento",
-  "prestativas": "Atendimento",
-  "bem atendido": "Atendimento",
-  "bem atendida": "Atendimento",
-  "bem atendidos": "Atendimento",
-  "bem atendidas": "Atendimento",
-  "bem recebido": "Atendimento",
-  "bem recebida": "Atendimento",
-  "bem recebidos": "Atendimento",
-  "bem recebidas": "Atendimento",
-  "recepcionistas": "Atendimento",
-  "funcionários simpáticos": "Atendimento",
-  "funcionarios simpaticos": "Atendimento",
-  "funcionária simpática": "Atendimento",
-  "funcionario simpatico": "Atendimento",
-  "staff simpático": "Atendimento",
-  "staff simpatico": "Atendimento",
-  "equipe simpática": "Atendimento",
-  "equipe simpatica": "Atendimento",
-  "atendimento excelente": "Atendimento",
-  "atendimento ótimo": "Atendimento",
-  "atendimento otimo": "Atendimento",
-  "atendimento muito bom": "Atendimento",
-  "bom atendimento": "Atendimento",
-  "ótimo atendimento": "Atendimento",
-  "otimo atendimento": "Atendimento",
-  "excelente atendimento": "Atendimento",
-  // Termos específicos de concierge
-  "concierge": "Concierge",
-  "concierges": "Concierge", 
-  "atendimento da concierge": "Concierge",
-  "atendimento do concierge": "Concierge",
-  "serviço de concierge": "Concierge",
-  "concierge excelente": "Concierge",
-  "concierge ótima": "Concierge",
-  "concierge perfeita": "Concierge",
-  // Termos de recreação/animação (evitando duplicatas)
-  "equipe de recreação": "Lazer - Serviço",
-  "equipe da recreação": "Lazer - Serviço",
-  "pessoal da recreação": "Lazer - Serviço",
-  "funcionários da recreação": "Lazer - Serviço",
-  "animação": "Lazer - Atividades de Lazer",
-  "animadores": "Lazer - Serviço",
-  "música": "Lazer - Serviço",
-  "musica": "Lazer - Serviço",
-  "som": "Lazer - Serviço",
   "restaurante": "A&B - Serviço",
-  "travesseiro": "Travesseiro",
-  "colchão": "Colchão",
-  "colchao": "Colchão",
-  "espelho": "Espelho",
-  // Normalizações para problemas específicos
-  "fila": "Fila Longa",
-  "fila longa": "Fila Longa", 
-  "fila no check-in": "Fila Longa",
-  "bebida ruim": "Qualidade de Bebida",
-  "drink ruim": "Qualidade de Bebida",
-  "sem espelho": "Falta de Equipamento",
-  "faltando espelho": "Falta de Equipamento",
-  "água indisponível": "Falta de Disponibilidade",
-  "sem água": "Falta de Disponibilidade",
-  "música alta": "Ruído Excessivo",
-  "som alto": "Ruído Excessivo",
-  "música muito alta": "Ruído Excessivo",
-  "barulho da música": "Ruído Excessivo",
-  "volume alto": "Ruído Excessivo",
-  "senti falta": "Falta de Disponibilidade",
-  "faltou": "Falta de Disponibilidade",
-  "não tinha": "Falta de Disponibilidade",
-  "sem problemas": "VAZIO",
-  // Termos de comida que devem ir para A&B
-  "food": "A&B - Serviço",
-  "meal": "A&B - Serviço", 
-  "dinner": "A&B - Serviço",
-  "lunch": "A&B - Serviço",
-  "breakfast": "A&B - Café da manhã",
-  "pasta": "A&B - Serviço",
   "restaurant": "A&B - Serviço",
-  "drink": "A&B - Serviço",
-  "beverage": "A&B - Serviço",
+  "atendimento restaurante": "A&B - Serviço",
+  "serviço restaurante": "A&B - Serviço",
+  "equipe restaurante": "A&B - Serviço",
+  "staff restaurante": "A&B - Serviço",
+  "atendimento do restaurante": "A&B - Serviço",
+  "serviço do restaurante": "A&B - Serviço",
+  "equipe do restaurante": "A&B - Serviço",
+  "funcionários do restaurante": "A&B - Serviço",
+  "pessoal do restaurante": "A&B - Serviço",
+  "atendimento bar": "A&B - Serviço",
+  "serviço bar": "A&B - Serviço",
+  "atendimento do bar": "A&B - Serviço",
+  "serviço do bar": "A&B - Serviço",
+  "quadro reduzido": "A&B - Serviço",
+  "poucos garçons": "A&B - Serviço",
+  "falta garçom": "A&B - Serviço",
+  "demora garçom": "A&B - Serviço",
+  "demora atendimento": "A&B - Serviço",
+  "atendimento demorado": "A&B - Serviço",
+  "atendimento lento": "A&B - Serviço",
+  "serviço lento": "A&B - Serviço",
+  "serviço demorado": "A&B - Serviço",
+  "espera longa": "A&B - Serviço",
+  "muito tempo esperando": "A&B - Serviço",
+  "cardápio": "A&B - Serviço",
+  "cardapio": "A&B - Serviço",
+  "menu": "A&B - Serviço",
+  "transparência cardápio": "A&B - Serviço",
+  "transparência do cardápio": "A&B - Serviço",
+  "cardápios": "A&B - Serviço",
+
+  // Café da manhã - EXPANDIDO
+  "cafe": "A&B - Café da manhã",
+  "café": "A&B - Café da manhã",
+  "cafe da manha": "A&B - Café da manhã",
+  "café da manhã": "A&B - Café da manhã",
+  "breakfast": "A&B - Café da manhã",
+  "morning meal": "A&B - Café da manhã",
+  "breakfast buffet": "A&B - Café da manhã",
+  "buffet cafe": "A&B - Café da manhã",
+  "buffet café": "A&B - Café da manhã",
+  "buffet matinal": "A&B - Café da manhã",
+  "café matinal": "A&B - Café da manhã",
+  "refeição matinal": "A&B - Café da manhã",
+  "pequeno almoço": "A&B - Café da manhã",
+  "desjejum": "A&B - Café da manhã",
+  "manhã": "A&B - Café da manhã",
+  "matinal": "A&B - Café da manhã",
   "coffee": "A&B - Café da manhã",
-  "tea": "A&B - Café da manhã",
-  // Termos específicos de gastronomia vs alimentos
+  "qualidade do café": "A&B - Café da manhã",
+
+  // Almoço/Jantar - EXPANDIDO
+  "almoco": "A&B - Almoço",
+  "almoço": "A&B - Almoço",
+  "lunch": "A&B - Almoço",
+  "almoçar": "A&B - Almoço",
+  "almocar": "A&B - Almoço",
+  "janta": "A&B - Almoço",
+  "jantar": "A&B - Almoço",
+  "dinner": "A&B - Almoço",
+  "refeição": "A&B - Almoço",
+  "refeicao": "A&B - Almoço",
+  "meal": "A&B - Almoço",
+  "buffet almoço": "A&B - Almoço",
+  "buffet jantar": "A&B - Almoço",
+  "lunch buffet": "A&B - Almoço",
+  "dinner buffet": "A&B - Almoço",
+  "refeição principal": "A&B - Almoço",
+  "main meal": "A&B - Almoço",
+  "evening meal": "A&B - Almoço",
+  "noon meal": "A&B - Almoço",
+  "meio-dia": "A&B - Almoço",
+  "meio dia": "A&B - Almoço",
+  "noite": "A&B - Almoço",
+  "vespertino": "A&B - Almoço",
+  "noturno": "A&B - Almoço",
+
+  // Bebidas - NOVO
+  "bebida": "A&B - Serviço",
+  "bebidas": "A&B - Serviço",
+  "drink": "A&B - Serviço",
+  "drinks": "A&B - Serviço",
+  "cerveja": "A&B - Serviço",
+  "beer": "A&B - Serviço",
+  "vinho": "A&B - Serviço",
+  "wine": "A&B - Serviço",
+  "caipirinha": "A&B - Serviço",
+  "cocktail": "A&B - Serviço",
+  "coquetail": "A&B - Serviço",
+  "refrigerante": "A&B - Serviço",
+  "soda": "A&B - Serviço",
+  "agua": "A&B - Serviço",
+  "água": "A&B - Serviço",
+  "water": "A&B - Serviço",
+  "suco": "A&B - Serviço",
+  "juice": "A&B - Serviço",
+  "cha": "A&B - Serviço",
+  "chá": "A&B - Serviço",
+  "tea": "A&B - Serviço",
+  "cappuccino": "A&B - Serviço",
+  "expresso": "A&B - Serviço",
+  "espresso": "A&B - Serviço",
+  "beverage": "A&B - Serviço",
+
+  // Alimentos específicos - NOVO EXPANDIDO
+  "comida": "A&B - Alimentos",
+  "food": "A&B - Alimentos",
+  "prato": "A&B - Alimentos",
+  "pratos": "A&B - Alimentos",
+  "dish": "A&B - Alimentos",
+  "dishes": "A&B - Alimentos",
+  "alimentos": "A&B - Alimentos",
+  "alimentação": "A&B - Alimentos",
+  "carne": "A&B - Alimentos",
+  "meat": "A&B - Alimentos",
+  "frango": "A&B - Alimentos",
+  "chicken": "A&B - Alimentos",
+  "peixe": "A&B - Alimentos",
+  "fish": "A&B - Alimentos",
+  "salada": "A&B - Alimentos",
+  "saladas": "A&B - Alimentos",
+  "fruta": "A&B - Alimentos",
+  "frutas": "A&B - Alimentos",
+  "fruit": "A&B - Alimentos",
+  "fruits": "A&B - Alimentos",
+  "verdura": "A&B - Alimentos",
+  "verduras": "A&B - Alimentos",
+  "vegetables": "A&B - Alimentos",
+  "legume": "A&B - Alimentos",
+  "legumes": "A&B - Alimentos",
+  "arroz": "A&B - Alimentos",
+  "rice": "A&B - Alimentos",
+  "feijao": "A&B - Alimentos",
+  "feijão": "A&B - Alimentos",
+  "beans": "A&B - Alimentos",
+  "macarrao": "A&B - Alimentos",
+  "macarrão": "A&B - Alimentos",
+  "pasta": "A&B - Alimentos",
+  "massa": "A&B - Alimentos",
+  "massas": "A&B - Alimentos",
+  "sopa": "A&B - Alimentos",
+  "soup": "A&B - Alimentos",
+  "sobremesa": "A&B - Alimentos",
+  "sobremesas": "A&B - Alimentos",
+  "dessert": "A&B - Alimentos",
+  "doce": "A&B - Alimentos",
+  "doces": "A&B - Alimentos",
+  "sweet": "A&B - Alimentos",
+  "sweets": "A&B - Alimentos",
+  "bolo": "A&B - Alimentos",
+  "cake": "A&B - Alimentos",
+  "pao": "A&B - Alimentos",
+  "pão": "A&B - Alimentos",
+  "paes": "A&B - Alimentos",
+  "pães": "A&B - Alimentos",
+  "bread": "A&B - Alimentos",
+  "queijo": "A&B - Alimentos",
+  "cheese": "A&B - Alimentos",
+  "presunto": "A&B - Alimentos",
+  "ham": "A&B - Alimentos",
+  "ovo": "A&B - Alimentos",
+  "ovos": "A&B - Alimentos",
+  "eggs": "A&B - Alimentos",
+  "leite": "A&B - Alimentos",
+  "milk": "A&B - Alimentos",
+  "iogurte": "A&B - Alimentos",
+  "yogurt": "A&B - Alimentos",
+  "cereal": "A&B - Alimentos",
+  "cereais": "A&B - Alimentos",
+  "granola": "A&B - Alimentos",
+  "mel": "A&B - Alimentos",
+  "honey": "A&B - Alimentos",
+  "geleia": "A&B - Alimentos",
+  "jam": "A&B - Alimentos",
+  "manteiga": "A&B - Alimentos",
+  "butter": "A&B - Alimentos",
+  "margarina": "A&B - Alimentos",
+  "margarine": "A&B - Alimentos",
+  "bacon": "A&B - Alimentos",
+  "linguica": "A&B - Alimentos",
+  "linguiça": "A&B - Alimentos",
+  "sausage": "A&B - Alimentos",
+  "salsicha": "A&B - Alimentos",
+  "hamburguer": "A&B - Alimentos",
+  "hambúrguer": "A&B - Alimentos",
+  "hamburger": "A&B - Alimentos",
+  "pizza": "A&B - Alimentos",
+  "sanduiche": "A&B - Alimentos",
+  "sanduíche": "A&B - Alimentos",
+  "sandwich": "A&B - Alimentos",
+  "qualidade da comida": "A&B - Alimentos",
+  "food quality": "A&B - Alimentos",
+
+  // Variedade - EXPANDIDO
+  "variedade": "A&B - Variedade",
+  "variety": "A&B - Variedade",
+  "opcao": "A&B - Variedade",
+  "opção": "A&B - Variedade",
+  "opcoes": "A&B - Variedade",
+  "opções": "A&B - Variedade",
+  "options": "A&B - Variedade",
+  "escolha": "A&B - Variedade",
+  "escolhas": "A&B - Variedade",
+  "choice": "A&B - Variedade",
+  "choices": "A&B - Variedade",
+  "diversidade": "A&B - Variedade",
+  "diversity": "A&B - Variedade",
+  "selection": "A&B - Variedade",
+  "selecao": "A&B - Variedade",
+  "seleção": "A&B - Variedade",
+  "alternativa": "A&B - Variedade",
+  "alternativas": "A&B - Variedade",
+  "alternative": "A&B - Variedade",
+  "alternatives": "A&B - Variedade",
+  "pouca variedade": "A&B - Variedade",
+  "sem variedade": "A&B - Variedade",
+  "falta variedade": "A&B - Variedade",
+  "falta de variedade": "A&B - Variedade",
+  "pouca opcao": "A&B - Variedade",
+  "pouca opção": "A&B - Variedade",
+  "poucas opcoes": "A&B - Variedade",
+  "poucas opções": "A&B - Variedade",
+  "sempre igual": "A&B - Variedade",
+  "sempre a mesma": "A&B - Variedade",
+  "repetitivo": "A&B - Variedade",
+  "monotono": "A&B - Variedade",
+  "monótono": "A&B - Variedade",
+  "boring": "A&B - Variedade",
+  "limited": "A&B - Variedade",
+  "limitado": "A&B - Variedade",
+  "limitada": "A&B - Variedade",
+  "carne seca": "A&B - Variedade",
+  "queijo coalho": "A&B - Variedade",
+  "não estavam disponíveis": "A&B - Variedade",
+  "indisponível": "A&B - Variedade",
+  "falta de": "A&B - Variedade",
+  "sem": "A&B - Variedade",
+
+  // Preços - EXPANDIDO  
+  "preco": "A&B - Preço",
+  "preço": "A&B - Preço",
+  "precos": "A&B - Preço",
+  "preços": "A&B - Preço",
+  "price": "A&B - Preço",
+  "prices": "A&B - Preço",
+  "caro": "A&B - Preço",
+  "cara": "A&B - Preço",
+  "caros": "A&B - Preço",
+  "caras": "A&B - Preço",
+  "expensive": "A&B - Preço",
+  "costly": "A&B - Preço",
+  "custo": "A&B - Preço",
+  "cost": "A&B - Preço",
+  "valor": "A&B - Preço",
+  "value": "A&B - Preço",
+  "preço alto": "A&B - Preço",
+  "preços altos": "A&B - Preço",
+  "muito caro": "A&B - Preço",
+  "very expensive": "A&B - Preço",
+  "too expensive": "A&B - Preço",
+  "overpriced": "A&B - Preço",
+  "superfaturado": "A&B - Preço",
+  "absurdo": "A&B - Preço",
+  "absurd": "A&B - Preço",
+  "exagerado": "A&B - Preço",
+  "exaggerated": "A&B - Preço",
+  "alto": "A&B - Preço",
+  "alta": "A&B - Preço",
+  "altos": "A&B - Preço",
+  "altas": "A&B - Preço",
+  "high": "A&B - Preço",
+
+  // Gastronomia - NOVO
   "gastronomia": "A&B - Gastronomia",
-  "culinária": "A&B - Gastronomia",
+  "culinária": "A&B - Gastronomia", 
   "culinaria": "A&B - Gastronomia",
-  "pratos": "A&B - Gastronomia",
-  "cardápio": "A&B - Gastronomia",
-  "cardapio": "A&B - Gastronomia",
+  "cuisine": "A&B - Gastronomia",
   "chef": "A&B - Gastronomia",
   "prato típico": "A&B - Gastronomia",
   "especialidade": "A&B - Gastronomia",
-  // Alimentos gerais
-  "comida": "A&B - Alimentos",
-  "alimentos": "A&B - Alimentos",
-  "alimentação": "A&B - Alimentos",
-  "alimentacao": "A&B - Alimentos",
-  // Termos de localização/vista
-  "localização": "Localização",
-  "localizacao": "Localização", 
-  "localizado": "Localização",
-  "vista": "Localização",
-  "vista mar": "Localização",
-  "proximidade": "Localização",
-  "perto": "Localização",
-  "próximo": "Localização",
-  "proximo": "Localização",
-  "acesso": "Localização",
-  // Mais termos de atendimento específicos
-  "joão batista": "Atendimento",
-  "joao batista": "Atendimento",
-  "recepcionista": "Recepção - Serviço",
-  "pessoal da recepção": "Recepção - Serviço",
-  "pessoal da recepcao": "Recepção - Serviço",
-  "atendimento na recepção": "Recepção - Serviço",
-  "atendimento da recepção": "Recepção - Serviço",
-  // Amenities de banheiro - Manutenção
-  "shampoo": "Manutenção - Serviço",
-  "condicionador": "Manutenção - Serviço",
-  "sabonete": "Manutenção - Serviço",
-  "amenities": "Manutenção - Serviço",
-  "produtos de higiene": "Manutenção - Serviço",
-  "produtos do banheiro": "Manutenção - Serviço",
-  "hidratante": "Manutenção - Serviço",
+  "specialty": "A&B - Gastronomia",
+  "típico": "A&B - Gastronomia",
+  "regional": "A&B - Gastronomia",
+  "local": "A&B - Gastronomia",
+  
+  // === SEÇÃO DUPLICADAS REMOVIDAS - MANTENDO APENAS A VERSÃO PRINCIPAL ===
+  // (Todas essas chaves já existem na seção expandida acima)
+
+  // === LIMPEZA - EXPANDIDO ===
+  // Termos gerais de limpeza
+  "limpeza": "Limpeza - Quarto",
+  "limpo": "Limpeza - Quarto",
+  "limpa": "Limpeza - Quarto",
+  "limpas": "Limpeza - Quarto",
+  "limpos": "Limpeza - Quarto",
+  "sujo": "Limpeza - Quarto",
+  "suja": "Limpeza - Quarto",
+  "sujas": "Limpeza - Quarto",
+  "sujos": "Limpeza - Quarto",
+  "dirty": "Limpeza - Quarto",
+  "clean": "Limpeza - Quarto",
+  "cleaning": "Limpeza - Quarto",
+  "higiene": "Limpeza - Quarto",
+  "higienizado": "Limpeza - Quarto",
+  "higienizada": "Limpeza - Quarto",
+  "hygienic": "Limpeza - Quarto",
+  "hygiene": "Limpeza - Quarto",
+  "sanitizado": "Limpeza - Quarto",
+  "sanitizada": "Limpeza - Quarto",
+  "sanitize": "Limpeza - Quarto",
+  "desinfectado": "Limpeza - Quarto",
+  "desinfetado": "Limpeza - Quarto",
+  "mal cheiroso": "Governança - Mofo",
+  "cheiro ruim": "Governança - Mofo",
+  "fedorento": "Governança - Mofo",
+  "smelly": "Governança - Mofo",
+  "bad smell": "Governança - Mofo",
+  "odor": "Governança - Mofo",
+  "odour": "Governança - Mofo",
+  "cheiro": "Governança - Mofo",
+  "smell": "Governança - Mofo",
+  "fedor": "Governança - Mofo",
+  "mau cheiro": "Governança - Mofo",
+  "cheiro forte": "Governança - Mofo",
+  "mofo": "Governança - Mofo",
+  "mofado": "Governança - Mofo",
+  "umidade": "Governança - Mofo",
+  "úmido": "Governança - Mofo",
+  "humid": "Governança - Mofo",
+  "abafado": "Governança - Mofo",
+  "perfumado": "Limpeza - Quarto",
+  "cheiroso": "Limpeza - Quarto",
+  "fragrante": "Limpeza - Quarto",
+  "fragrant": "Limpeza - Quarto",
+  
+  // Limpeza específica do banheiro
+  "banheiro sujo": "Limpeza - Banheiro",
+  "bathroom dirty": "Limpeza - Banheiro",
+  "banheiro limpo": "Limpeza - Banheiro",
+  "bathroom clean": "Limpeza - Banheiro",
+  "vaso sanitário": "Limpeza - Banheiro",
+  "vaso sanitario": "Limpeza - Banheiro",
+  "privada": "Limpeza - Banheiro",
+  "toilet": "Limpeza - Banheiro",
+  "pia": "Limpeza - Banheiro",
+  "sink": "Limpeza - Banheiro",
+  "lavatório": "Limpeza - Banheiro",
+  "lavatorio": "Limpeza - Banheiro",
+  "washbasin": "Limpeza - Banheiro",
+  "box": "Limpeza - Banheiro",
+  "shower": "Limpeza - Banheiro",
+  "ducha": "Limpeza - Banheiro",
+  "chuveiro": "Limpeza - Banheiro",
+  "banheira": "Limpeza - Banheiro",
+  "bathtub": "Limpeza - Banheiro",
+  "tub": "Limpeza - Banheiro",
+  "azulejo": "Limpeza - Banheiro",
+  "azulejos": "Limpeza - Banheiro",
+  "tiles": "Limpeza - Banheiro",
+  "tile": "Limpeza - Banheiro",
+  "rejunte": "Limpeza - Banheiro",
+  "grout": "Limpeza - Banheiro",
+  "piso": "Limpeza - Banheiro",
+  "floor": "Limpeza - Banheiro",
+  "chão": "Limpeza - Banheiro",
+  "espelho": "Limpeza - Banheiro",
+  "mirror": "Limpeza - Banheiro",
+  "vidro": "Limpeza - Banheiro",
+  "glass": "Limpeza - Banheiro",
+  
+  // Produtos de limpeza e amenities
+  "saboneteira": "Limpeza - Banheiro",
+  "saboneteira vazia": "Limpeza - Banheiro",
+  "soap dispenser": "Limpeza - Banheiro",
+  "sabonete": "Limpeza - Banheiro",
+  "sabão": "Limpeza - Banheiro",
+  "soap": "Limpeza - Banheiro",
+  "shampoo": "Limpeza - Banheiro",
+  "condicionador": "Limpeza - Banheiro",
+  "conditioner": "Limpeza - Banheiro",
+  "gel": "Limpeza - Banheiro",
+  "shower gel": "Limpeza - Banheiro",
+  "body wash": "Limpeza - Banheiro",
+  "toalha": "Limpeza - Banheiro",
+  "toalhas": "Limpeza - Banheiro",
+  "towel": "Limpeza - Banheiro",
+  "towels": "Limpeza - Banheiro",
+  "toalha suja": "Limpeza - Banheiro",
+  "toalha limpa": "Limpeza - Banheiro",
+  "toalha molhada": "Limpeza - Banheiro",
+  "toalha úmida": "Limpeza - Banheiro",
+  "toalha umida": "Limpeza - Banheiro",
+  "wet towel": "Limpeza - Banheiro",
+  "damp towel": "Limpeza - Banheiro",
+  "papel higiênico": "Limpeza - Banheiro",
+  "papel higienico": "Limpeza - Banheiro",
+  "toilet paper": "Limpeza - Banheiro",
+  "papel": "Limpeza - Banheiro",
+  "tissue": "Limpeza - Banheiro",
+  
+  // Limpeza do quarto
+  "quarto sujo": "Limpeza - Quarto",
+  "room dirty": "Limpeza - Quarto",
+  "quarto limpo": "Limpeza - Quarto",
+  "room clean": "Limpeza - Quarto",
+  "cama": "Limpeza - Quarto",
+  "bed": "Limpeza - Quarto",
+  "cama suja": "Limpeza - Quarto",
+  "cama limpa": "Limpeza - Quarto",
+  "lençol": "Limpeza - Quarto",
+  "lencol": "Limpeza - Quarto",
+  "lençóis": "Limpeza - Quarto",
+  "lencois": "Limpeza - Quarto",
+  "sheet": "Limpeza - Quarto",
+  "sheets": "Limpeza - Quarto",
+  "bedsheet": "Limpeza - Quarto",
+  "bedsheets": "Limpeza - Quarto",
+  "lençol sujo": "Limpeza - Quarto",
+  "lençol limpo": "Limpeza - Quarto",
+  "sheet dirty": "Limpeza - Quarto",
+  "sheet clean": "Limpeza - Quarto",
+  "fronha": "Limpeza - Quarto",
+  "pillowcase": "Limpeza - Quarto",
+  "pillow case": "Limpeza - Quarto",
+  "travesseiro": "Limpeza - Quarto",
+  "pillow": "Limpeza - Quarto",
+  "almofada": "Limpeza - Quarto",
+  "cushion": "Limpeza - Quarto",
+  "cobertor": "Limpeza - Quarto",
+  "blanket": "Limpeza - Quarto",
+  "edredom": "Limpeza - Quarto",
+  "duvet": "Limpeza - Quarto",
+  "comforter": "Limpeza - Quarto",
+  "colcha": "Limpeza - Quarto",
+  "bedspread": "Limpeza - Quarto",
+  "carpete": "Limpeza - Quarto",
+  "carpet": "Limpeza - Quarto",
+  "tapete": "Limpeza - Quarto",
+  "rug": "Limpeza - Quarto",
+  "cortina": "Limpeza - Quarto",
+  "cortinas": "Limpeza - Quarto",
+  "curtain": "Limpeza - Quarto",
+  "curtains": "Limpeza - Quarto",
+  "persiana": "Limpeza - Quarto",
+  "blinds": "Limpeza - Quarto",
+  "móvel": "Limpeza - Quarto",
+  "móveis": "Limpeza - Quarto",
+  "movel": "Limpeza - Quarto",
+  "moveis": "Limpeza - Quarto",
+  "furniture": "Limpeza - Quarto",
+  "mesa": "Limpeza - Quarto",
+  "table": "Limpeza - Quarto",
+  "cadeira": "Limpeza - Quarto",
+  "chair": "Limpeza - Quarto",
+  "poltrona": "Limpeza - Quarto",
+  "armchair": "Limpeza - Quarto",
+  "guarda-roupa": "Limpeza - Quarto",
+  "guarda roupa": "Limpeza - Quarto",
+  "wardrobe": "Limpeza - Quarto",
+  "closet": "Limpeza - Quarto",
+  "armario": "Limpeza - Quarto",
+  "armário": "Limpeza - Quarto",
+  "cabinet": "Limpeza - Quarto",
+  
+  // Limpeza áreas sociais
+  "área social": "Limpeza - Áreas sociais",
+  "area social": "Limpeza - Áreas sociais",
+  "common area": "Limpeza - Áreas sociais",
+  "lobby": "Limpeza - Áreas sociais",
+  "saguao": "Limpeza - Áreas sociais",
+  "saguão": "Limpeza - Áreas sociais",
+  "hall": "Limpeza - Áreas sociais",
+  "corredor": "Limpeza - Áreas sociais",
+  "corridor": "Limpeza - Áreas sociais",
+  "hallway": "Limpeza - Áreas sociais",
+  "elevador": "Limpeza - Áreas sociais",
+  "elevator": "Limpeza - Áreas sociais",
+  "escada": "Limpeza - Áreas sociais",
+  "stairs": "Limpeza - Áreas sociais",
+  "staircase": "Limpeza - Áreas sociais",
+  "varanda": "Limpeza - Quarto",
+  "sacada": "Limpeza - Quarto",
+  "balcony": "Limpeza - Quarto",
+  "terraço": "Limpeza - Quarto",
+  "terrace": "Limpeza - Quarto",
+  "deck": "Limpeza - Quarto",
+
+  // === MANUTENÇÃO - EXPANDIDO ===
+  "cofre não funcionava": "Manutenção - Quarto",
+  "cofre": "Manutenção - Quarto",
+  "luzes ao lado da cama": "Manutenção - Quarto",
+  "luz não funciona": "Manutenção - Quarto",
+  "porta da varanda": "Manutenção - Quarto",
+  "janela não fechava": "Manutenção - Quarto",
+  "fechadura": "Manutenção - Quarto",
+  "ar condicionado": "Ar-condicionado",
+  "ar-condicionado": "Ar-condicionado",
+  
+  // Frigobar - Dividido entre contextos
+  "frigobar quebrado": "Manutenção - Frigobar",
+  "frigobar não funciona": "Manutenção - Frigobar",
+  "frigobar com defeito": "Manutenção - Frigobar",
+  "frigobar organizado": "Governança - Frigobar",
+  "frigobar bagunçado": "Governança - Frigobar",
+  "frigobar desorganizado": "Governança - Frigobar",
+  "frigobar limpo": "Governança - Frigobar",
+  "frigobar sujo": "Governança - Frigobar",
+  "frigobar arrumado": "Governança - Frigobar",
+  "frigobar faltando": "Governança - Frigobar",
+  "organizar frigobar": "Governança - Frigobar",
+  "faltar frigobar": "Governança - Frigobar",
+  
+  // Banheiro - ÚNICO (sem duplicatas)
+  "torneira": "Manutenção - Banheiro",
+  "torneira jorra água": "Manutenção - Banheiro",
+  "chuveiro difícil": "Manutenção - Banheiro",
+  "box do chuveiro": "Manutenção - Banheiro",
+  "lixeira": "Manutenção - Banheiro",
+  "lixeira quebrada": "Manutenção - Banheiro",
+  
+  // Instalações e jardinagem
+  "hidromassagem": "Lazer - Estrutura",
+  "hidromassagem quebrada": "Lazer - Estrutura",
+  "jardim": "Manutenção - Jardinagem",
+  "jardinagem": "Manutenção - Jardinagem",
+  "plantas": "Manutenção - Jardinagem",
+  "gramado": "Manutenção - Jardinagem",
+  "grama": "Manutenção - Jardinagem",
+  "paisagismo": "Manutenção - Jardinagem",
+  "vegetação": "Manutenção - Jardinagem",
+  "flores": "Manutenção - Jardinagem",
+  "árvores": "Manutenção - Jardinagem",
+  "arvores": "Manutenção - Jardinagem",
+  "área verde": "Manutenção - Jardinagem",
+  "area verde": "Manutenção - Jardinagem",
+  "espaço verde": "Manutenção - Jardinagem",
+  "espaco verde": "Manutenção - Jardinagem",
+  
+  // Estacionamento (movido para Recepção)
+  "estacionamento": "Recepção - Estacionamento",
+  "parking": "Recepção - Estacionamento",
+  "vaga": "Recepção - Estacionamento",
+  "vagas": "Recepção - Estacionamento",
+  "carro": "Recepção - Estacionamento",
+  "veiculo": "Recepção - Estacionamento",
+  "veículo": "Recepção - Estacionamento",
+  
+  // Acessibilidade (movido para Produto)
+  "acessibilidade": "Produto - Acessibilidade",
+  "acessível": "Produto - Acessibilidade",
+  "accessível": "Produto - Acessibilidade",
+  "rampa": "Produto - Acessibilidade",
+  "rampas": "Produto - Acessibilidade",
+  "deficiente": "Produto - Acessibilidade",
+  "mobilidade reduzida": "Produto - Acessibilidade",
+  "cadeirante": "Produto - Acessibilidade",
+  "wheelchair": "Produto - Acessibilidade",
+  
+  // Custo-benefício (movido para Produto)
+  "custo beneficio": "Produto - Custo-benefício",
+  "custo-beneficio": "Produto - Custo-benefício",
+  "custo benefício": "Produto - Custo-benefício",
+  "custo-benefício": "Produto - Custo-benefício",
+  "valor pelo dinheiro": "Produto - Custo-benefício",
+  "vale a pena": "Produto - Custo-benefício",
+  "value for money": "Produto - Custo-benefício",
+  
+  // Processo (movido para Qualidade)
+  "processo": "Qualidade - Processo",
+  "processos": "Qualidade - Processo",
+  "procedimento": "Qualidade - Processo",
+  "procedimentos": "Qualidade - Processo",
+  "qualidade": "Qualidade - Processo",
+  "padronização": "Qualidade - Processo",
+  "padronizacao": "Qualidade - Processo",
+  "protocolo": "Qualidade - Processo",
+  "protocolos": "Qualidade - Processo",
+  
+  // === FINAL DO DICIONÁRIO ===
+  // (Todas as duplicatas foram removidas - mantendo apenas as definições originais expandidas acima)
 };
 
 // Dicionário normalizado para lookup eficiente
@@ -327,43 +664,89 @@ const NORMALIZATION_DICT = Object.fromEntries(
   Object.entries(RAW_NORMALIZATION_DICT).map(([k, v]) => [normalizeText(k), v])
 );
 
-// Keywords oficiais permitidas
+// Keywords oficiais permitidas (removidas: Água, Reserva de cadeiras)
 const OFFICIAL_KEYWORDS = [
-  "A&B - Café da manhã", "A&B - Serviço", "A&B - Variedade", "A&B - Preço", "A&B - Gastronomia", "A&B - Alimentos",
-  "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval", "Governança - Serviço",
-  "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações", "Manutenção - Serviço",
-  "Ar-condicionado", "Elevador", "Frigobar", "Infraestrutura",
+  "A&B - Café da manhã", "A&B - Almoço", "A&B - Serviço", "A&B - Variedade", "A&B - Preço", "A&B - Gastronomia", "A&B - Alimentos",
+  "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval", "Governança - Serviço", "Governança - Mofo", "Governança - Frigobar",
+  "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações", "Manutenção - Serviço", "Manutenção - Jardinagem", "Manutenção - Frigobar",
+  "Ar-condicionado", "Elevador",
   "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina", "Lazer - Serviço", "Lazer - Atividades de Lazer",
-  "Tecnologia - Wi-fi", "Tecnologia - TV", "Estacionamento",
-  "Atendimento", "Acessibilidade", "Reserva de cadeiras (pool)", "Processo",
-  "Custo-benefício", "Comunicação", "Recepção - Serviço",
-  "Concierge", "Cotas", "Reservas", "Água", "Recreação",
-  "Travesseiro", "Colchão", "Espelho", "Localização", "Mixologia"
+  "Tecnologia - Wi-fi", "Tecnologia - TV", "Academia",
+  "Atendimento", "Processo", "Produto - Acessibilidade", "Produto - Custo-benefício", "Produto - Preço",
+  "Comunicação", "Recepção - Serviço", "Recepção - Estacionamento", "Check-in - Atendimento Recepção", "Check-out - Atendimento Recepção",
+  "Concierge", "Cotas", "Reservas",
+  "Travesseiro", "Colchão", "Espelho", "Localização", "Mixologia", "Qualidade - Processo"
 ];
 
-// Departamentos oficiais
+// Departamentos oficiais (mudança: Programa de vendas → EG)
 const OFFICIAL_DEPARTMENTS = [
-  "A&B", "Governança", "Limpeza", "Manutenção",
+  "A&B", "Governança", "Limpeza", "Manutenção", "Produto",
   "Lazer", "TI", "Operações", "Qualidade", "Recepção", 
-  "Programa de vendas", "Comercial"
+  "EG", "Comercial", "Academia"
 ];
 
-// Problemas padronizados
+// Problemas padronizados expandidos e melhorados
 const STANDARD_PROBLEMS = [
-  "Demora no Atendimento", "Espaço Insuficiente", "Qualidade da Comida",
-  "Não Funciona", "Muito Frio/Quente", "Conexão Instável", "Falta de Limpeza",
-  "Ruído Excessivo", "Capacidade Insuficiente", "Falta de Cadeiras", 
-  "Preço Alto", "Falta de Variedade", "Qualidade Baixa", "Falta de Manutenção",
-  "Falta de Acessibilidade", "Comunicação Ruim", "Processo Lento", 
-  "Falta de Equipamento", "Fila Longa", "Qualidade de Bebida", 
-  "Falta de Disponibilidade", "VAZIO", "Não identificado"
+  // Problemas de funcionamento
+  "Não Funciona", "Funciona Mal", "Quebrado", "Com Defeito", "Intermitente",
+  
+  // Problemas de atendimento
+  "Demora no Atendimento", "Atendimento Rude", "Atendimento Despreparado", "Falta de Staff", "Staff Insuficiente",
+  
+  // Problemas de qualidade
+  "Qualidade Baixa", "Qualidade da Comida", "Qualidade de Bebida", "Sabor Ruim", "Comida Fria", "Bebida Quente",
+  
+  // Problemas de limpeza e higiene
+  "Falta de Limpeza", "Sujo", "Mal Cheiroso", "Mofo", "Manchas", "Cabelos", "Lixo Acumulado",
+  
+  // Problemas de manutenção
+  "Falta de Manutenção", "Desgastado", "Precisando Troca", "Enferrujado", "Descascado", "Rachado",
+  
+  // Problemas de disponibilidade
+  "Falta de Disponibilidade", "Indisponível", "Esgotado", "Sem Estoque", "Fora de Funcionamento",
+  
+  // Problemas de variedade e opções
+  "Falta de Variedade", "Pouca Variedade", "Sem Opções", "Limitado", "Repetitivo", "Monótono",
+  
+  // Problemas de espaço e estrutura
+  "Espaço Insuficiente", "Muito Pequeno", "Apertado", "Lotado", "Superlotado", "Sem Lugar",
+  
+  // Problemas de temperatura
+  "Muito Frio", "Muito Quente", "Temperatura Inadequada", "Não Resfria", "Não Esquenta",
+  
+  // Problemas de ruído
+  "Ruído Excessivo", "Muito Barulho", "Barulhento", "Som Alto", "Música Alta", "Conversas Altas",
+  
+  // Problemas de equipamento
+  "Falta de Equipamento", "Equipamento Velho", "Equipamento Inadequado", "Sem Equipamento",
+  
+  // Problemas de preço
+  "Preço Alto", "Muito Caro", "Custo Elevado", "Fora do Padrão", "Não Vale o Preço",
+  
+  // Problemas de conexão e tecnologia
+  "Conexão Instável", "Internet Lenta", "Sem Sinal", "Wi-fi Cai", "TV Sem Sinal", "Canais Limitados",
+  
+  // Problemas de comunicação
+  "Comunicação Ruim", "Informação Incorreta", "Não Informaram", "Desinformação", "Falta de Transparência",
+  
+  // Problemas de processo
+  "Processo Lento", "Burocrático", "Complicado", "Demorado", "Confuso", "Desorganizado",
+  
+  // Problemas de capacidade
+  "Capacidade Insuficiente", "Poucos Funcionários", "Fila Longa", "Espera Longa", "Sobrecarga",
+  
+  // Problemas específicos
+  "Localização Ruim", "Difícil Acesso", "Longe", "Vista Obstruída", "Isolamento Ruim",
+  
+  // Casos especiais
+  "VAZIO", "Não Identificado", "Sugestão de Melhoria", "Elogio"
 ];
 
 // Arrays normalizados para busca eficiente
 const NORMALIZED_KEYWORDS = OFFICIAL_KEYWORDS.map(k => normalizeText(k));
 const NORMALIZED_PROBLEMS = STANDARD_PROBLEMS.map(p => normalizeText(p));
 
-// Função para validar e corrigir keyword - com mais autonomia para a IA
+// Função para validar e corrigir keyword - baseada nas correções da cliente
 function validateKeyword(keyword: string, context?: string): string {
   const normalized = normalizeText(keyword);
   
@@ -382,282 +765,288 @@ function validateKeyword(keyword: string, context?: string): string {
     return OFFICIAL_KEYWORDS[partialMatch];
   }
   
-  // Verificar se a keyword da IA é uma variação válida de keywords existentes
-  // Permitir que a IA use sua própria classificação se fizer sentido semântico
+  // Verificar no dicionário de normalização
   const contextNormalized = normalizeText(context || '');
+  const dictMatch = NORMALIZATION_DICT[contextNormalized] || NORMALIZATION_DICT[normalized];
+  if (dictMatch && OFFICIAL_KEYWORDS.includes(dictMatch)) {
+    return dictMatch;
+  }
   
-  // Se a IA sugeriu algo relacionado a A&B e o contexto confirma
+  // PRIORIDADE 1: A&B - baseado nas correções da cliente
   if (normalized.includes('a&b') || normalized.includes('alimento') || normalized.includes('bebida') ||
-      normalized.includes('comida') || normalized.includes('restaurante') || normalized.includes('bar')) {
-    // Tentar encontrar a subcategoria mais específica de A&B
-    if (contextNormalized.includes('cafe') || contextNormalized.includes('breakfast')) {
+      normalized.includes('comida') || normalized.includes('restaurante') || normalized.includes('bar') ||
+      normalized.includes('garcom') || normalized.includes('garcon') || normalized.includes('waiter')) {
+    
+    // Café da manhã tem prioridade
+    if (contextNormalized.includes('cafe') || contextNormalized.includes('breakfast') || 
+        contextNormalized.includes('manha') || contextNormalized.includes('morning')) {
       return "A&B - Café da manhã";
     }
-    if (contextNormalized.includes('preco') || contextNormalized.includes('caro') || contextNormalized.includes('barato')) {
+    
+    // Almoço e Janta
+    if (contextNormalized.includes('almoco') || contextNormalized.includes('almoço') || 
+        contextNormalized.includes('lunch') || contextNormalized.includes('janta') || 
+        contextNormalized.includes('jantar') || contextNormalized.includes('dinner') ||
+        contextNormalized.includes('refeicao') || contextNormalized.includes('refeição')) {
+      return "A&B - Almoço";
+    }
+    
+    // Preço
+    if (contextNormalized.includes('preco') || contextNormalized.includes('caro') || 
+        contextNormalized.includes('expensive') || contextNormalized.includes('price')) {
       return "A&B - Preço";
     }
-    if (contextNormalized.includes('variedade') || contextNormalized.includes('opcao') || contextNormalized.includes('escolha')) {
+    
+    // Variedade
+    if (contextNormalized.includes('variedade') || contextNormalized.includes('opcao') || 
+        contextNormalized.includes('falta de') || contextNormalized.includes('sem')) {
       return "A&B - Variedade";
     }
+    
+    // Gastronomia
+    if (contextNormalized.includes('gastronomia') || contextNormalized.includes('chef') || 
+        contextNormalized.includes('culinaria') || contextNormalized.includes('prato')) {
+      return "A&B - Gastronomia";
+    }
+    
+    // Qualidade da comida
+    if (contextNormalized.includes('qualidade') || contextNormalized.includes('sabor') || 
+        contextNormalized.includes('ruim') || contextNormalized.includes('gostoso')) {
+      return "A&B - Alimentos";
+    }
+    
+    // Default A&B
     return "A&B - Serviço";
   }
   
-  // Se a IA sugeriu algo relacionado a lazer e o contexto confirma
-  if (normalized.includes('lazer') || normalized.includes('recreacao') || normalized.includes('piscina') ||
-      normalized.includes('spa') || normalized.includes('atividade')) {
-    if (contextNormalized.includes('piscina') || contextNormalized.includes('pool')) {
-      return "Piscina";
-    }
-    if (contextNormalized.includes('spa') || contextNormalized.includes('massagem')) {
-      return "Spa";
-    }
-    if (contextNormalized.includes('estrutura') || contextNormalized.includes('instalacao')) {
-      return "Lazer - Estrutura";
-    }
-    if (contextNormalized.includes('variedade') || contextNormalized.includes('opcao')) {
-      return "Lazer - Variedade";
-    }
-    if (contextNormalized.includes('recreacao') || contextNormalized.includes('atividade') || 
-        contextNormalized.includes('tio') || contextNormalized.includes('tia')) {
-      return "Lazer - Atividades de Lazer";
-    }
-    return "Lazer - Serviço";
-  }
-  
-  // Se a IA sugeriu algo relacionado a limpeza/governança e o contexto confirma
-  if (normalized.includes('limpeza') || normalized.includes('governanca') || normalized.includes('enxoval') ||
-      normalized.includes('limpo') || normalized.includes('sujo')) {
-    if (contextNormalized.includes('quarto') || contextNormalized.includes('room')) {
-      return "Limpeza - Quarto";
-    }
-    if (contextNormalized.includes('banheiro') || contextNormalized.includes('bathroom')) {
-      return "Limpeza - Banheiro";
-    }
-    if (contextNormalized.includes('area') || contextNormalized.includes('social') || contextNormalized.includes('publica')) {
-      return "Limpeza - Áreas sociais";
-    }
-    if (contextNormalized.includes('toalha') || contextNormalized.includes('lencol') || contextNormalized.includes('enxoval')) {
-      return "Enxoval";
-    }
-    return "Governança - Serviço";
-  }
-  
-  // Se a IA sugeriu algo relacionado a manutenção e o contexto confirma
+  // PRIORIDADE 2: Manutenção vs Produto (baseado nas correções da cliente)
   if (normalized.includes('manutencao') || normalized.includes('quebrado') || normalized.includes('defeito') ||
-      normalized.includes('reforma') || normalized.includes('conservacao')) {
-    if (contextNormalized.includes('quarto') || contextNormalized.includes('room')) {
-      return "Manutenção - Quarto";
-    }
-    if (contextNormalized.includes('banheiro') || contextNormalized.includes('bathroom')) {
+      contextNormalized.includes('nao funciona') || contextNormalized.includes('conserto')) {
+    
+    if (contextNormalized.includes('banheiro') || contextNormalized.includes('chuveiro') || 
+        contextNormalized.includes('torneira') || contextNormalized.includes('box')) {
       return "Manutenção - Banheiro";
     }
-    if (contextNormalized.includes('instalacao') || contextNormalized.includes('predial') || contextNormalized.includes('estrutura')) {
-      return "Manutenção - Instalações";
+    
+    if (contextNormalized.includes('quarto') || contextNormalized.includes('cofre') || 
+        contextNormalized.includes('luz') || contextNormalized.includes('porta')) {
+      return "Manutenção - Quarto";
     }
+    
     return "Manutenção - Serviço";
   }
   
-  // Se a IA sugeriu algo relacionado a tecnologia e o contexto confirma
-  if (normalized.includes('tecnologia') || normalized.includes('wi-fi') || normalized.includes('wifi') ||
-      normalized.includes('internet') || normalized.includes('tv') || normalized.includes('tecnologico')) {
-    if (contextNormalized.includes('tv') || contextNormalized.includes('televisao') || contextNormalized.includes('canal')) {
-      return "Tecnologia - TV";
+  // PRIORIDADE 3: Produto (baseado nas correções da cliente)
+  if (normalized.includes('produto') || normalized.includes('qualidade') ||
+      contextNormalized.includes('cobertas') || contextNormalized.includes('fino') || 
+      contextNormalized.includes('pequeno') || contextNormalized.includes('frigobar')) {
+    
+    if (contextNormalized.includes('coberta') || contextNormalized.includes('toalha') || 
+        contextNormalized.includes('lencol') || contextNormalized.includes('enxoval')) {
+      return "Enxoval";
     }
-    return "Tecnologia - Wi-fi";
+    
+    if (contextNormalized.includes('frigobar') || contextNormalized.includes('minibar')) {
+      return "Frigobar";
+    }
+    
+    if (contextNormalized.includes('travesseiro')) {
+      return "Travesseiro";
+    }
+    
+    if (contextNormalized.includes('colchao') || contextNormalized.includes('colchão')) {
+      return "Colchão";
+    }
+    
+    return "Enxoval";
   }
   
-  // Se a IA sugeriu algo relacionado a recepção e o contexto confirma
-  if (normalized.includes('recepcao') || normalized.includes('check') || normalized.includes('reception') ||
-      normalized.includes('front desk')) {
-    return "Recepção - Serviço";
+  // PRIORIDADE 4: Limpeza (baseado nas correções da cliente)
+  if (normalized.includes('limpeza') || normalized.includes('limpo') || normalized.includes('sujo') ||
+      contextNormalized.includes('saboneteira') || contextNormalized.includes('cortinas')) {
+    
+    if (contextNormalized.includes('banheiro') || contextNormalized.includes('saboneteira')) {
+      return "Limpeza - Banheiro";
+    }
+    
+    if (contextNormalized.includes('quarto') || contextNormalized.includes('cortinas')) {
+      return "Limpeza - Quarto";
+    }
+    
+    if (contextNormalized.includes('restaurante') || contextNormalized.includes('area social')) {
+      return "Limpeza - Áreas sociais";
+    }
+    
+    return "Limpeza - Quarto";
   }
   
-  // Se a IA sugeriu algo relacionado a localização e o contexto confirma
-  if (normalized.includes('localizacao') || normalized.includes('location') || normalized.includes('vista') ||
-      normalized.includes('acesso') || normalized.includes('proximidade')) {
-    return "Localização";
-  }
-  
-  // FALLBACK INTELIGENTE: análise semântica do contexto, não palavras-chave fixas
-  // Dar autonomia à IA para entender o sentido do comentário
-  
-  // PRIORIDADE 1: Análise semântica de recreação/lazer
-  // Detectar padrões que indicam atividades de lazer ou recreação
-  const indicadoresLazer = [
-    'recreacao', 'recreação', 'animacao', 'animação', 'atividade', 'diversao', 'diversão',
-    'brincadeira', 'entretenimento', 'lazer', 'legal', 'divertido', 'fogueira', 'karaoke',
-    'mixologia', 'aula de', 'monitor', 'animador', 'tio ', 'tia '
-  ];
-  
-  const temIndicadorLazer = indicadoresLazer.some(termo => contextNormalized.includes(termo));
-  
-  if (temIndicadorLazer) {
-    // Se menciona atividades específicas → Atividades de Lazer
-    if (contextNormalized.includes('mixologia') || contextNormalized.includes('aula de') || 
-        contextNormalized.includes('karaoke') || contextNormalized.includes('fogueira') ||
-        contextNormalized.includes('atividade')) {
+  // PRIORIDADE 5: Lazer (baseado nas correções da cliente)  
+  if (normalized.includes('lazer') || normalized.includes('recreacao') || normalized.includes('piscina') ||
+      normalized.includes('atividade') || normalized.includes('bingo') || normalized.includes('monitor')) {
+    
+    if (contextNormalized.includes('piscina') || contextNormalized.includes('pool')) {
+      return "Piscina";
+    }
+    
+    if (contextNormalized.includes('academia') || contextNormalized.includes('gym')) {
+      return "Academia";
+    }
+    
+    if (contextNormalized.includes('spa') || contextNormalized.includes('massagem')) {
+      return "Spa";
+    }
+    
+    if (contextNormalized.includes('hidromassagem')) {
+      return "Lazer - Estrutura";
+    }
+    
+    if (contextNormalized.includes('bingo') || contextNormalized.includes('karaoke') || 
+        contextNormalized.includes('fogueira') || contextNormalized.includes('atividade') ||
+        contextNormalized.includes('mixologia')) {
       return "Lazer - Atividades de Lazer";
     }
-    // Caso contrário → Serviço de Lazer
+    
+    if (contextNormalized.includes('tio') || contextNormalized.includes('tia') || 
+        contextNormalized.includes('monitor') || contextNormalized.includes('recreacao')) {
+      return "Lazer - Serviço";
+    }
+    
+    if (contextNormalized.includes('estrutura') || contextNormalized.includes('instalacao') ||
+        contextNormalized.includes('brinquedo') || contextNormalized.includes('salao')) {
+      return "Lazer - Estrutura";
+    }
+    
     return "Lazer - Serviço";
   }
   
-  // PRIORIDADE 2: Análise semântica de A&B/Restaurante
-  // Detectar padrões que indicam alimentação, bebidas ou serviço de restaurante
-  const indicadoresAB = [
-    'restaurante', 'comida', 'cafe', 'café', 'bar', 'bebida', 'drink', 'garcom', 'garçom',
-    'alimento', 'refeicao', 'refeição', 'jantar', 'almoco', 'almoço', 'breakfast', 'food',
-    'meal', 'dinner', 'lunch', 'atendimento do restaurante', 'pessoal do restaurante',
-    'equipe do restaurante', 'cardapio', 'cardápio'
-  ];
-  
-  const temIndicadorAB = indicadoresAB.some(termo => contextNormalized.includes(termo));
-  
-  if (temIndicadorAB) {
-    // Análise mais específica do contexto
-    if (contextNormalized.includes('cafe') || contextNormalized.includes('café') || 
-        contextNormalized.includes('breakfast')) {
-      return "A&B - Café da manhã";
+  // PRIORIDADE 6: Tecnologia
+  if (normalized.includes('tecnologia') || normalized.includes('wi-fi') || normalized.includes('wifi') ||
+      normalized.includes('internet') || normalized.includes('tv') || normalized.includes('streaming')) {
+    
+    if (contextNormalized.includes('tv') || contextNormalized.includes('televisao') || 
+        contextNormalized.includes('streaming') || contextNormalized.includes('canais')) {
+      return "Tecnologia - TV";
     }
-    if (contextNormalized.includes('preco') || contextNormalized.includes('preço') || 
-        contextNormalized.includes('caro') || contextNormalized.includes('barato')) {
-      return "A&B - Preço";
-    }
-    if (contextNormalized.includes('variedade') || contextNormalized.includes('opcao') || 
-        contextNormalized.includes('opção') || contextNormalized.includes('escolha')) {
-      return "A&B - Variedade";
-    }
-    return "A&B - Serviço";
-  }
-  
-  // PRIORIDADE 3: Análise semântica de outros serviços específicos
-  if (contextNormalized.includes('recepcao') || contextNormalized.includes('recepção') || 
-      contextNormalized.includes('check') || contextNormalized.includes('front desk')) {
-    return "Recepção - Serviço";
-  }
-  
-  if (contextNormalized.includes('piscina') || contextNormalized.includes('pool')) {
-    return "Piscina";
-  }
-  
-  if (contextNormalized.includes('wifi') || contextNormalized.includes('wi-fi') || 
-      contextNormalized.includes('internet') || contextNormalized.includes('conexao')) {
+    
     return "Tecnologia - Wi-fi";
   }
   
-  if (contextNormalized.includes('limpeza') && contextNormalized.includes('quarto')) {
-    return "Limpeza - Quarto";
-  }
-  
-  if (contextNormalized.includes('localizacao') || contextNormalized.includes('localização') || 
-      contextNormalized.includes('vista') || contextNormalized.includes('acesso') ||
-      contextNormalized.includes('perto') || contextNormalized.includes('próximo')) {
-    return "Localização";
-  }
-  
-  // Contexto indica recepção/check-in/check-out
-  if (contextNormalized.includes('recepcao') || contextNormalized.includes('check') ||
-      contextNormalized.includes('checkin') || contextNormalized.includes('checkout') ||
-      contextNormalized.includes('reception') || contextNormalized.includes('front desk')) {
+  // PRIORIDADE 7: Recepção
+  if (normalized.includes('recepcao') || normalized.includes('check') || normalized.includes('reception')) {
     return "Recepção - Serviço";
   }
   
-  // Contexto indica A&B (comida/bebida)
-  if (contextNormalized.includes('comida') || contextNormalized.includes('cafe') || 
-      contextNormalized.includes('restaurante') || contextNormalized.includes('bar') ||
-      contextNormalized.includes('food') || contextNormalized.includes('breakfast') ||
-      contextNormalized.includes('garcom') || contextNormalized.includes('garcons') ||
-      contextNormalized.includes('yasmin') || contextNormalized.includes('alimento')) {
-    return "A&B - Serviço";
+  // PRIORIDADE 8: EG (antigo Programa de vendas)
+  if (normalized.includes('concierge')) {
+    return "Concierge";
   }
   
-  // Contexto indica piscina
-  if (contextNormalized.includes('piscina') || contextNormalized.includes('pool')) {
-    return "Piscina";
+  if (normalized.includes('multipropriedade') || normalized.includes('timeshare') || 
+      normalized.includes('pressao') || normalized.includes('insistencia') || normalized.includes('cotas')) {
+    return "Cotas";
   }
   
-  // Contexto indica localização específica
-  if (contextNormalized.includes('localizacao') || contextNormalized.includes('perto') ||
-      contextNormalized.includes('proximo') || contextNormalized.includes('centro') ||
-      contextNormalized.includes('vista') || contextNormalized.includes('acesso')) {
+  // PRIORIDADE 9: Localização
+  if (normalized.includes('localizacao') || normalized.includes('location') || normalized.includes('vista') ||
+      normalized.includes('acesso') || normalized.includes('proximidade') || normalized.includes('perto')) {
     return "Localização";
   }
   
-  // Contexto indica limpeza de quarto
-  if (contextNormalized.includes('quarto') && (contextNormalized.includes('limpo') || 
-      contextNormalized.includes('sujo') || contextNormalized.includes('limpeza'))) {
-    return "Limpeza - Quarto";
-  }
-  
-  // Contexto indica wifi/internet
-  if (contextNormalized.includes('wifi') || contextNormalized.includes('internet') ||
-      contextNormalized.includes('wi-fi') || contextNormalized.includes('conexao')) {
-    return "Tecnologia - Wi-fi";
-  }
-  
-  // Log para monitoramento (só em desenvolvimento) - agora com mais detalhes
+  // Log para desenvolvimento
   if (process.env.NODE_ENV === 'development') {
-    console.log(`🤖 IA sugeriu keyword não mapeada: "${keyword}" (normalizada: "${normalized}") para contexto: "${context?.substring(0, 100)}..." - permitindo classificação da IA`);
+    console.log(`🤖 Keyword não mapeada: "${keyword}" (contexto: "${context?.substring(0, 50)}...")`);
   }
   
-  // ÚLTIMO RECURSO: usar a keyword que a IA sugeriu, desde que não seja vazia
-  // Isso permite que a IA aprenda e classifique novos tipos de feedback
+  // Permitir que IA proponha classificação se não for vazia
   if (keyword && keyword.trim() !== '' && keyword.trim().toLowerCase() !== 'não identificado') {
     return keyword;
   }
   
-  // Só usar fallback para casos completamente vazios ou inválidos
+  // Fallback padrão
   return "Atendimento";
 }
 
-// Função para validar departamento
+// Função para validar departamento baseado nas correções da cliente
 function validateDepartment(department: string, keyword: string): string {
-  // Mapeamento keyword -> departamento
+  // Mapeamento keyword -> departamento baseado nas respostas da cliente
   const keywordToDepartment: Record<string, string> = {
+    // A&B - Alimentos & Bebidas
     "A&B - Café da manhã": "A&B",
+    "A&B - Almoço": "A&B",
     "A&B - Serviço": "A&B", 
     "A&B - Variedade": "A&B",
     "A&B - Preço": "A&B",
     "A&B - Gastronomia": "A&B",
     "A&B - Alimentos": "A&B",
+    
+    // Limpeza
     "Limpeza - Quarto": "Limpeza",
     "Limpeza - Banheiro": "Limpeza",
     "Limpeza - Áreas sociais": "Limpeza",
-    "Enxoval": "Governança",
+    
+    // Governança/Produto (baseado nas correções da cliente)
+    "Enxoval": "Produto", // Cliente preferiu Produto para enxoval/cobertas
     "Governança - Serviço": "Governança",
+    "Governança - Mofo": "Governança",
+    "Governança - Frigobar": "Governança",
+    
+    // Manutenção
     "Manutenção - Quarto": "Manutenção",
     "Manutenção - Banheiro": "Manutenção", 
     "Manutenção - Instalações": "Manutenção",
     "Manutenção - Serviço": "Manutenção",
+    "Manutenção - Jardinagem": "Manutenção",
+    "Manutenção - Frigobar": "Manutenção",
+    
+    // Infraestrutura específica
     "Ar-condicionado": "Manutenção",
     "Elevador": "Manutenção",
-    "Frigobar": "Manutenção",
-    "Infraestrutura": "Manutenção",
+    
+    // Lazer
     "Lazer - Variedade": "Lazer",
     "Lazer - Estrutura": "Lazer",
     "Lazer - Serviço": "Lazer",
     "Lazer - Atividades de Lazer": "Lazer",
     "Spa": "Lazer",
     "Piscina": "Lazer",
+    "Academia": "Academia", // Cliente disse que academia é departamento próprio
+    
+    // Tecnologia
     "Tecnologia - Wi-fi": "TI",
     "Tecnologia - TV": "TI",
-    "Estacionamento": "Operações",
+    
+    // Operações (removido estacionamento)
     "Atendimento": "Operações",
-    "Acessibilidade": "Operações",
-    "Reserva de cadeiras (pool)": "Operações",
-    "Processo": "Operações",
-    "Custo-benefício": "Operações",
-    "Comunicação": "Qualidade",
-    "Recepção - Serviço": "Recepção",
-    "Concierge": "Programa de vendas",
-    "Cotas": "Programa de vendas",
-    "Reservas": "Comercial",
-    "Água": "Operações",
-    "Recreação": "Lazer",
-    "Travesseiro": "Governança",
-    "Colchão": "Governança",
-    "Espelho": "Governança",
     "Localização": "Operações",
+    
+    // Produto (atualizações conforme solicitado)
+    "Produto - Acessibilidade": "Produto",
+    "Produto - Custo-benefício": "Produto",
+    "Produto - Preço": "Produto",
+    
+    // Qualidade (processo foi movido para cá)
+    "Qualidade - Processo": "Qualidade",
+    
+    // Comunicação e Qualidade
+    "Comunicação": "Qualidade",
+    
+    // Recepção (inclui estacionamento agora)
+    "Recepção - Serviço": "Recepção",
+    "Recepção - Estacionamento": "Recepção",
+    "Check-in - Atendimento Recepção": "Recepção", // Nova keyword específica
+    "Check-out - Atendimento Recepção": "Recepção", // Nova keyword específica
+    
+    // EG (antigo Programa de vendas)
+    "Concierge": "EG",
+    "Cotas": "EG",
+    
+    // Comercial
+    "Reservas": "Comercial",
+    
+    // Produto (itens físicos)
+    "Travesseiro": "Produto",
+    "Colchão": "Produto",
+    "Espelho": "Produto",
     "Mixologia": "Lazer"
   };
   
@@ -690,7 +1079,7 @@ function validateProblem(problem: string): string {
   return matchIndex !== -1 ? STANDARD_PROBLEMS[matchIndex] : (mappedByDictionary || normalized);
 }
 
-// Roteador de elogios - reclassifica feedbacks com problem="VAZIO" baseado no contexto semântico
+// Roteador de elogios melhorado - baseado nas correções da cliente
 function reroutePraiseKeyword(keyword: string, problem: string, context?: string): string {
   // Só atua em elogios puros (problem="VAZIO") que foram classificados como "Atendimento"
   if (problem !== 'VAZIO' || normalizeText(keyword) !== normalizeText('Atendimento')) {
@@ -700,90 +1089,189 @@ function reroutePraiseKeyword(keyword: string, problem: string, context?: string
   const c = normalizeText(context || '');
   const has = (arr: string[]) => arr.some(t => c.includes(normalizeText(t)));
 
-  // 🔥 DETECÇÃO AGRESSIVA DE ÁREAS ESPECÍFICAS
+  // 🔥 DETECÇÃO BASEADA NAS CORREÇÕES DA CLIENTE - PRIORIDADE MÁXIMA
   
-  // PRIORIDADE 1: A&B - detecção muito mais ampla
-  if (has(['restaurante', 'restaurant', 'bar', 'garcom', 'garçom', 'garcons', 'garçons', 'food', 'meal', 'dinner', 'lunch'])) {
+  // PRIORIDADE 1: A&B - detecção muito mais ampla baseada nas correções
+  if (has(['garçom', 'garçonete', 'garçons', 'garcons', 'garcom', 'garconete', 'waiter', 'waitress', 'bartender'])) {
     return 'A&B - Serviço';
   }
-  if (has(['cafe', 'café', 'breakfast', 'café da manhã', 'cafe da manha'])) {
+  
+  if (has(['restaurante', 'restaurant', 'bar', 'food', 'meal', 'dinner', 'lunch', 'atendimento do restaurante', 'pessoal do restaurante', 'equipe do restaurante', 'yasmin'])) {
+    return 'A&B - Serviço';
+  }
+  
+  if (has(['cafe', 'café', 'breakfast', 'café da manhã', 'cafe da manha', 'coffee'])) {
     return 'A&B - Café da manhã';
   }
+  
+  if (has(['cardápio', 'cardapio', 'menu', 'transparência']) && has(['restaurante', 'bar', 'comida'])) {
+    return 'A&B - Serviço';
+  }
 
-  // PRIORIDADE 2: Lazer - detecção muito mais ampla
+  // PRIORIDADE 2: Lazer - detecção expandida baseada nas correções
   if (has(['piscina', 'pool', 'praia', 'beach'])) {
     return 'Piscina';
   }
-  if (has(['bingo', 'karaoke', 'fogueira', 'mixologia', 'aula', 'atividade', 'brincadeira', 'animacao', 'animação'])) {
+  
+  if (has(['academia', 'gym', 'fitness'])) {
+    return 'Academia';
+  }
+  
+  if (has(['spa', 'massagem', 'massage'])) {
+    return 'Spa';
+  }
+  
+  if (has(['hidromassagem', 'jacuzzi']) || (has(['quebrada', 'funcionando']) && has(['hidromassagem']))) {
+    return 'Lazer - Estrutura';
+  }
+  
+  if (has(['bingo', 'karaoke', 'fogueira', 'mixologia', 'aula', 'atividade', 'brincadeira', 'animacao', 'animação', 'entretenimento'])) {
     return 'Lazer - Atividades de Lazer';
   }
-  if (has(['recreacao', 'recreação', 'monitor', 'monitores', 'lucas', 'claudia', 'entretenimento', 'diversao', 'diversão', 'lazer'])) {
+  
+  if (has(['recreacao', 'recreação', 'monitor', 'monitores', 'tio', 'tia', 'lucas', 'claudia', 'diversao', 'diversão', 'lazer', 'equipe de recreação', 'pessoal da recreação'])) {
     return 'Lazer - Serviço';
   }
   
-  // Detecção específica de tio/tia apenas em contexto de lazer
-  if ((has(['tio', 'tia']) && has(['recreacao', 'recreação', 'brincadeira', 'atividade', 'diversao', 'diversão', 'animacao', 'animação', 'lazer', 'piscina']))) {
-    return 'Lazer - Serviço';
-  }
-  if (has(['spa', 'massagem'])) {
-    return 'Spa';
+  if (has(['brinquedos infláveis', 'salão de jogos', 'salao de jogos', 'estrutura de lazer'])) {
+    return 'Lazer - Estrutura';
   }
 
-  // PRIORIDADE 3: Recepção - detecta contexto de check-in/out
-  if (has(['check in', 'check-in', 'check out', 'check-out', 'recepcao', 'recepção', 'front desk', 'reception'])) {
+  // PRIORIDADE 3: Recepção - Check-in/Check-out específicos
+  if (has(['check in', 'check-in', 'checkin'])) {
+    return 'Check-in - Atendimento Recepção';
+  }
+  
+  if (has(['check out', 'check-out', 'checkout'])) {
+    return 'Check-out - Atendimento Recepção';
+  }
+
+  // PRIORIDADE 4: Recepção (outros serviços)
+  if (has(['recepcao', 'recepção', 'front desk', 'reception', 'recepcionista', 'joao batista', 'joão batista'])) {
     return 'Recepção - Serviço';
   }
 
-  // PRIORIDADE 4: Manutenção - detecta contexto de manutenção
-  if (has(['parafuso', 'conserto', 'reparo', 'manutencao', 'manutenção', 'quebrado', 'defeito'])) {
-    return 'Manutenção - Serviço';
-  }
-  if (has(['shampoo', 'condicionador', 'sabonete', 'amenities', 'produtos de higiene', 'hidratante'])) {
-    return 'Manutenção - Serviço';
-  }
-
-  // PRIORIDADE 5: Governança - detecta contexto de limpeza/arrumação
-  if (has(['quarto', 'room']) && has(['limpo', 'limpeza', 'cheiroso', 'arrumacao', 'arrumação', 'organizado'])) {
-    return 'Limpeza - Quarto';
-  }
-  if (has(['banheiro', 'bathroom']) && has(['limpo', 'limpeza', 'cheiroso'])) {
-    return 'Limpeza - Banheiro';
-  }
-  if (has(['toalha', 'lençol', 'lencol', 'enxoval', 'roupa de cama'])) {
-    return 'Enxoval';
-  }
-
-  // PRIORIDADE 6: Tecnologia - detecta contexto técnico
-  if (has(['wifi', 'wi-fi', 'internet', 'conexao', 'conexão', 'sinal'])) {
+  // PRIORIDADE 4: Tecnologia - detecção expandida
+  if (has(['wifi', 'wi-fi', 'internet', 'conexao', 'conexão', 'sinal', 'rede'])) {
     return 'Tecnologia - Wi-fi';
   }
-  if (has(['tv', 'televisao', 'televisão', 'canal', 'canais'])) {
+  
+  if (has(['tv', 'televisao', 'televisão', 'canal', 'canais', 'streaming', 'netflix', 'youtube'])) {
     return 'Tecnologia - TV';
   }
 
-  // PRIORIDADE 7: Localização - detecta contexto geográfico
-  if (has(['localizacao', 'localização', 'perto', 'próximo', 'proximo', 'vista', 'acesso', 'posição', 'situado'])) {
+  // PRIORIDADE 5: Limpeza e Governança - baseado nas correções da cliente
+  if (has(['quarto', 'room']) && has(['limpo', 'limpeza', 'cheiroso', 'arrumacao', 'arrumação', 'organizado', 'arrumado'])) {
+    return 'Limpeza - Quarto';
+  }
+  
+  if (has(['banheiro', 'bathroom']) && has(['limpo', 'limpeza', 'cheiroso', 'arrumado'])) {
+    return 'Limpeza - Banheiro';
+  }
+  
+  if (has(['restaurante', 'area social', 'areas sociais']) && has(['limpo', 'limpeza', 'organizado'])) {
+    return 'Limpeza - Áreas sociais';
+  }
+
+  // PRIORIDADE 5.5: Governança - Mofo e cheiro
+  if (has(['mofo', 'mofado', 'cheiro forte', 'mau cheiro', 'mal cheiroso', 'fedorento', 'umidade', 'úmido', 'abafado'])) {
+    return 'Governança - Mofo';
+  }
+
+  // PRIORIDADE 6: Produto - baseado nas correções da cliente
+  if (has(['toalha', 'lençol', 'lencol', 'enxoval', 'roupa de cama', 'coberta', 'cobertas'])) {
+    return 'Enxoval';
+  }
+  
+  if (has(['travesseiro', 'pillow'])) {
+    return 'Travesseiro';
+  }
+  
+  if (has(['colchao', 'colchão', 'mattress'])) {
+    return 'Colchão';
+  }
+  
+  // PRIORIDADE 6.5: Frigobar - contexto específico
+  if (has(['frigobar', 'minibar', 'geladeira pequena'])) {
+    // Verificar contexto para decidir entre Governança ou Manutenção
+    if (has(['quebrado', 'não funciona', 'defeito', 'estragado', 'com problema'])) {
+      return 'Manutenção - Frigobar';
+    } else if (has(['organizar', 'bagunçado', 'desorganizado', 'limpo', 'sujo', 'arrumado', 'faltando'])) {
+      return 'Governança - Frigobar';
+    }
+    // Default para Governança (organização é mais comum)
+    return 'Governança - Frigobar';
+  }
+
+  // PRIORIDADE 7: Manutenção - baseado nas correções
+  if (has(['cofre', 'safe']) && !has(['quebrado', 'nao funciona', 'defeito'])) {
+    return 'Manutenção - Quarto'; // Se não há problema, pode ser elogio ao funcionamento
+  }
+  
+  if (has(['ar condicionado', 'ar-condicionado', 'ac', 'climatização'])) {
+    return 'Ar-condicionado';
+  }
+  
+  if (has(['elevador', 'elevator'])) {
+    return 'Elevador';
+  }
+
+  // PRIORIDADE 7.5: Manutenção - Jardinagem
+  if (has(['jardim', 'jardinagem', 'plantas', 'gramado', 'grama', 'paisagismo', 'vegetação', 'flores', 'árvores', 'arvores', 'área verde', 'area verde', 'espaço verde', 'espaco verde'])) {
+    return 'Manutenção - Jardinagem';
+  }
+
+  // PRIORIDADE 8: Localização - detecção expandida
+  if (has(['localizacao', 'localização', 'perto', 'próximo', 'proximo', 'vista', 'acesso', 'posição', 'situado', 'location', 'convenient', 'close'])) {
     return 'Localização';
   }
 
-  // PRIORIDADE 8: Infraestrutura específica
-  if (has(['elevador'])) return 'Elevador';
-  if (has(['frigobar'])) return 'Frigobar';
-  if (has(['ar condicionado', 'ar-condicionado'])) return 'Ar-condicionado';
+  // PRIORIDADE 9: EG (antigo Programa de vendas) - baseado nas correções
+  if (has(['concierge', 'keila', 'isabel']) && !has(['varias pessoas', 'várias pessoas', 'equipe'])) {
+    return 'Concierge';
+  }
 
-  // 🚨 ÚLTIMA CHECAGEM: Se menciona nomes próprios comuns do setor hoteleiro
-  if (has(['heny', 'juliete', 'jane', 'lucas', 'claudia'])) {
-    // Se menciona nomes + contexto de comida/restaurante → A&B
-    if (has(['restaurante', 'refeicao', 'refeição', 'comida', 'food', 'meal'])) {
-      return 'A&B - Serviço';
-    }
-    // Se menciona nomes + contexto de recreação → Lazer
-    if (has(['recreacao', 'recreação', 'brincadeira', 'atividade', 'diversao', 'diversão', 'animacao', 'animação'])) {
-      return 'Lazer - Serviço';
-    }
+  // PRIORIDADE 10: Estacionamento (movido para Recepção)
+  if (has(['estacionamento', 'parking', 'vaga', 'carro'])) {
+    return 'Recepção - Estacionamento';
+  }
+
+  // 🚨 REGRA ESPECIAL DA CLIENTE: Funcionários específicos por departamento
+  // Se conseguir identificar o departamento da pessoa, usar departamento específico
+  
+  // Nomes conhecidos da equipe A&B
+  if (has(['heny', 'juliete', 'jane', 'yasmin']) || 
+      (has(['equipe', 'pessoal', 'funcionarios', 'staff']) && has(['restaurante', 'bar', 'a&b', 'alimentos', 'bebidas']))) {
+    return 'A&B - Serviço';
+  }
+  
+  // Nomes conhecidos da equipe Lazer  
+  if (has(['lucas', 'claudia']) || 
+      (has(['equipe', 'pessoal', 'funcionarios', 'staff']) && has(['recreacao', 'lazer', 'atividades', 'monitor']))) {
+    return 'Lazer - Serviço';
+  }
+
+  // PRIORIDADE 11: Produto - novas palavras-chave
+  if (has(['acessibilidade', 'acessível', 'accessível', 'rampa', 'deficiente', 'mobilidade reduzida'])) {
+    return 'Produto - Acessibilidade';
+  }
+  
+  if (has(['custo beneficio', 'custo-beneficio', 'custo benefício', 'custo-benefício', 'valor pelo dinheiro', 'vale a pena'])) {
+    return 'Produto - Custo-benefício';
+  }
+  
+  if (has(['preço', 'preco', 'preços', 'precos', 'caro', 'barato', 'valor', 'price']) && 
+      !has(['frigobar', 'minibar', 'a&b', 'restaurante', 'bar', 'bebida', 'comida'])) {
+    return 'Produto - Preço';
+  }
+
+  // PRIORIDADE 12: Qualidade - Processo
+  if (has(['processo', 'procedimento', 'qualidade', 'padronização', 'padronizacao', 'protocolo'])) {
+    return 'Qualidade - Processo';
   }
 
   // FALLBACK: sem pistas específicas, mantém "Atendimento" para elogios genéricos
+  // Esta é a regra da cliente: quando não consegue identificar departamento específico
   return 'Atendimento';
 }
 
@@ -808,7 +1296,7 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
     const headerApiKey = authHeader?.replace('Bearer ', '');
 
-    // Log para debug
+    // Log para debug (sem expor API key)
     console.log("🔍 [ANALYZE-FEEDBACK] Processando feedback:", {
       hasText: !!finalText,
       textLength: finalText?.length || 0,
@@ -834,18 +1322,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!finalText || finalText.trim() === '') {
+    if (!finalText || finalText.trim() === '' || finalText.trim().length < 3) {
+      console.log("⚠️ [ANALYZE-FEEDBACK] Texto muito curto ou vazio, retornando padrão");
       return NextResponse.json({
         rating: 3,
         keyword: 'Atendimento',
         sector: 'Operações',
         problem: 'VAZIO',
+        problem_detail: '',
         has_suggestion: false,
         suggestion_type: 'none',
+        suggestion_summary: '',
         problems: [{
           keyword: 'Atendimento',
           sector: 'Operações', 
-          problem: 'VAZIO'
+          problem: 'VAZIO',
+          problem_detail: ''
+        }],
+        allProblems: [{
+          keyword: 'Atendimento',
+          sector: 'Operações', 
+          problem: 'VAZIO',
+          problem_detail: ''
         }],
         legacyFormat: 'Atendimento, Operações, VAZIO'
       });
@@ -902,7 +1400,7 @@ export async function POST(request: NextRequest) {
     console.log("🤖 [ANALYZE-FEEDBACK] Enviando para OpenAI:", {
       model,
       textPreview: finalText.substring(0, 100) + '...',
-      apiKeyPrefix: apiKey.substring(0, 7) + '...',
+      hasApiKey: !!apiKey,
       environment: process.env.NODE_ENV,
       timestamp: new Date().toISOString(),
       requestId: Math.random().toString(36).substring(7)
@@ -929,13 +1427,13 @@ export async function POST(request: NextRequest) {
           },
           suggestion_type: {
             type: "string",
-            enum: ["none", "only_suggestion", "with_criticism", "with_praise", "mixed"],
-            description: "Tipo de sugestão: 'none'=sem sugestões, 'only_suggestion'=apenas sugestões, 'with_criticism'=sugestões com críticas, 'with_praise'=sugestões com elogios, 'mixed'=sugestões com críticas E elogios"
+            enum: ["none", "improvement_only", "improvement_with_criticism", "improvement_with_praise", "mixed_feedback"],
+            description: "Tipo de sugestão: 'none'=sem sugestões, 'improvement_only'=apenas sugestão sem crítica, 'improvement_with_criticism'=sugestão por causa de problema, 'improvement_with_praise'=sugestão somada a elogio, 'mixed_feedback'=sugestão com múltiplos aspectos"
           },
           suggestion_summary: {
             type: "string",
-            description: "Resumo objetivo da(s) sugestão(ões) mencionada(s) no comentário. Máximo 200 caracteres. Deixe vazio se has_suggestion for false."
-
+            maxLength: 200,
+            description: "Resumo EXCLUSIVAMENTE da sugestão de melhoria mencionada. NÃO inclua o problema, apenas a melhoria sugerida. Exemplos: 'Aumentar variedade de frutas no café', 'Colocar mais tomadas no quarto', 'Melhorar aquecimento da piscina'. Vazio se has_suggestion=false."
           },
           issues: {
             type: "array",
@@ -960,7 +1458,8 @@ export async function POST(request: NextRequest) {
                  },
                 problem_detail: {
                   type: "string",
-                  description: "Breve detalhe objetivo do problema: o que exatamente não funciona/falta/está ruim. Ex.: 'Ar-condicionado sem resfriar', 'Wi‑Fi cai toda hora', 'Poucas tomadas no quarto'. Máx. 120 caracteres."
+                  maxLength: 120,
+                  description: "Descrição ESPECÍFICA do que exatamente aconteceu/não funciona. DIFERENTE do problem (categoria) e suggestion (melhoria). Exemplos: 'Cofre não respondia mesmo com senha correta', 'Saboneteira permaneceu vazia toda estadia', 'Garçom demorava 20+ min para atender pedidos'. Vazio apenas para elogios puros."
                 }
               },
               required: ["keyword", "department", "problem"]
@@ -973,180 +1472,241 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const analysisPrompt = `Você é um auditor de reputação hoteleira especializado. O comentário pode estar EM QUALQUER IDIOMA; identifique internamente e traduza se necessário.
+    const analysisPrompt = `Você é um auditor de reputação hoteleira com expertise em classificação precisa de feedbacks. O comentário pode estar EM QUALQUER IDIOMA; identifique internamente e traduza se necessário.
 
-**MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 ASPECTOS DIFERENTES (problemas, elogios ou sugestões). Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta, insatisfação OU ELOGIO mencionado. SEJA ASSERTIVO e CRIATIVO na classificação - SEMPRE encontre uma categoria apropriada.
+**🎯 MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 ASPECTOS DIFERENTES (problemas, elogios ou sugestões). Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta, insatisfação OU ELOGIO mencionado. SEJA ASSERTIVO e CRIATIVO na classificação.
 
-**⚠️ REGRA FUNDAMENTAL - NUNCA AGRUPE TUDO EM "ATENDIMENTO":**
-- Se o comentário menciona BAR → sempre "A&B - Serviço" + "A&B"
-- Se o comentário menciona RESTAURANTE → sempre "A&B - Serviço" + "A&B" 
-- Se o comentário menciona PISCINA → sempre "Piscina" + "Lazer"
-- Se o comentário menciona BINGO/RECREAÇÃO/TIO/TIA → sempre "Lazer - Atividades de Lazer" + "Lazer"
-- Se o comentário menciona CAFÉ DA MANHÃ → sempre "A&B - Café da manhã" + "A&B"
-- Se o comentário menciona WI-FI/INTERNET → sempre "Tecnologia - Wi-fi" + "TI"
+**⚠️ IMPORTANTE: ENTENDA A DIFERENÇA ENTRE OS CAMPOS:**
 
-**REGRA MÚLTIPLOS ELOGIOS OBRIGATÓRIA:** Se o comentário menciona VÁRIAS áreas positivas, você DEVE criar múltiplos issues:
-- "Piscina incrível e bingo divertido" → Issue 1: "Piscina" + Issue 2: "Lazer - Atividades de Lazer"
-- "Bar excelente e restaurante bom" → Issue 1: "A&B - Serviço" (bar) + Issue 2: "A&B - Serviço" (restaurante) 
-- "Funcionários do restaurante e rapazes do bar" → Issue 1: "A&B - Serviço" (restaurante) + Issue 2: "A&B - Serviço" (bar)
+**🔍 PROBLEMA (problem):** Categoria padronizada do problema (ex: "Não Funciona", "Falta de Limpeza", "Demora no Atendimento", "VAZIO")
+**📝 PROBLEM_DETAIL:** Descrição ESPECÍFICA e DETALHADA do que exatamente aconteceu (máx 120 chars)
+**💡 SUGESTÃO:** Campo SEPARADO para sugestões de melhoria (suggestion_summary)
 
-**AUTONOMIA DA IA:** Você tem TOTAL LIBERDADE para interpretar semanticamente o comentário. NÃO se baseie apenas em palavras-chave fixas:
-- Analise o CONTEXTO COMPLETO do comentário
-- Entenda a INTENÇÃO por trás das palavras
-- Se alguém menciona pessoas em contexto de diversão/entretenimento → provavelmente Lazer
-- Se alguém menciona pessoas em contexto de comida/bebida/restaurante → provavelmente A&B
-- Se alguém menciona funcionários sem contexto específico → use sua inteligência para decidir
-- Seja CRIATIVO e ASSERTIVO na classificação baseada no SENTIDO GERAL
+**EXEMPLOS DA DIFERENÇA:**
+• Comentário: "Cofre não abria mesmo digitando senha correta"
+  - problem: "Não Funciona" (categoria padrão)
+  - problem_detail: "Cofre não respondia mesmo com senha correta digitada" (detalhe específico)
+  - suggestion: "" (não há sugestão)
 
-**REGRA FUNDAMENTAL:** NUNCA use "Não identificado" a menos que o comentário seja completamente vazio ou inválido. SEMPRE classifique feedback real em categorias específicas e precisas baseadas no CONTEXTO SEMÂNTICO.
+• Comentário: "Banheiro sujo, deveriam limpar melhor"  
+  - problem: "Falta de Limpeza" (categoria padrão)
+  - problem_detail: "Banheiro com sujeira visível e mal cheiroso" (detalhe específico)  
+  - suggestion: "Melhorar frequência e qualidade da limpeza do banheiro" (sugestão específica)
 
-**ATENÇÃO CRÍTICA:** Se o comentário contém QUALQUER palavra ou expressão que indique sugestão, melhoria ou mudança, SEMPRE defina has_suggestion como true. NÃO ignore sugestões!
+**⚠️ IMPORTANTE: AUTONOMIA DA IA - VOCÊ TEM LIBERDADE TOTAL!**
 
-**DETECÇÃO DE SUGESTÕES (OBRIGATÓRIA E CRÍTICA):**
-- has_suggestion: true se o comentário contém QUALQUER sugestão de melhoria, implementação ou mudança
-- suggestion_type: classifique o tipo de sugestão:
-  * "none": sem sugestões
-  * "only_suggestion": comentário contém APENAS sugestões (sem críticas ou elogios)
-  * "with_criticism": sugestões combinadas com críticas/problemas
-  * "with_praise": sugestões combinadas com elogios
-  * "mixed": sugestões com críticas E elogios
+🧠 **ANÁLISE SEMÂNTICA INTELIGENTE:** Você deve usar sua inteligência para classificar QUALQUER feedback, mesmo que não haja uma palavra exata no dicionário. Use análise semântica para entender o CONTEXTO e a INTENÇÃO do feedback.
 
-**PADRÕES DE SUGESTÃO (ANÁLISE OBRIGATÓRIA):**
-- Palavras diretas: "poderia", "deveria", "seria bom", "sugiro", "recomendo", "melhoraria se", "gostaria que", "seria interessante", "poderiam implementar", "precisam de", "deveriam ter", "seria legal", "seria ótimo"
-- Expressões de falta: "falta", "faltou", "não tem", "não tinha", "senti falta", "faz falta", "deveria ter", "precisava ter", "não há", "ausência de"
-- Frases condicionais: "se tivesse...", "seria melhor com...", "faltou apenas...", "se houvesse...", "com mais...", "tendo..."
-- Comparações construtivas: "poderia ser melhor", "deveria melhorar", "precisa de mais", "seria ideal", "esperava mais"
-- Sugestões implícitas: "tenho uma sugestão", "uma dica", "uma ideia", "minha opinião", "acredito que", "penso que", "acho que deveria"
-- Ideias construtivas: propostas de melhorias, implementações, mudanças, adições, modificações
+🎯 **REGRAS DE AUTONOMIA:**
+1. **SE NÃO ENCONTRAR PALAVRA EXATA:** Use sua inteligência para encontrar a categoria mais próxima
+2. **ANÁLISE CONTEXTUAL:** Entenda sobre o que a pessoa está realmente falando
+3. **SEJA CRIATIVO:** Não se limite apenas às palavras do prompt - use seu conhecimento sobre hotéis
+4. **DEPARTAMENTO POR LÓGICA:** Se fala de comida = A&B, se fala de quebrado = Manutenção, etc.
 
-**REGRA CRÍTICA DE SUGESTÕES:** Se encontrar QUALQUER das palavras acima no comentário, SEMPRE defina has_suggestion=true. Não há exceções!
+**EXEMPLOS DE AUTONOMIA INTELIGENTE:**
+• "A comida estava horrível" → A&B - Alimentos (mesmo sem palavra exata "comida")  
+• "O atendente do restaurante foi mal educado" → A&B - Serviço (análise semântica)
+• "Banheiro fedorento" → Limpeza - Banheiro (contexto de higiene)
+• "Controle da TV não funcionava" → Tecnologia - TV (lógica de equipamento)
+• "Piscina estava gelada" → Piscina (contexto de lazer aquático)
+• "Funcionário da limpeza muito educado" → Limpeza - Quarto (contexto operacional)
+• "Demora para fazer o check-in" → Recepção - Serviço (processo hoteleiro)
+• "Vista do quarto incrível" → Localização (contexto geográfico)
+• "Estacionamento pequeno" → Estacionamento (infraestrutura)
 
-**MAPEAMENTOS INTELIGENTES POR CONTEXTO (seja criativo e específico):**
-• Concierge específico → "Concierge" + "Programa de vendas"  
-• Recreação/Animação → "Lazer - Serviço" + "Lazer"
-• Fogueira/Atividades → "Lazer - Atividades de Lazer" + "Lazer"
-• Café da manhã → "A&B - Café da manhã" + "A&B"
-• Restaurante/Bar → "A&B - Serviço" + "A&B"
-• Wi-Fi/Internet → "Tecnologia - Wi-fi" + "TI"
-• Limpeza de quarto → "Limpeza - Quarto" + "Governança"
-• Piscina → "Piscina" + "Lazer"
-• Localização/Vista → "Localização" + "Operações"
+🔍 **DETECÇÃO INTELIGENTE POR CONTEXTO:**
 
-**REGRAS PARA ELOGIOS (problem="VAZIO") - PRIORIDADE MÁXIMA:**
-- **MÚLTIPLOS ELOGIOS**: Se o comentário menciona várias áreas positivas, crie um issue separado para cada uma
-- Escolha SEMPRE a keyword do principal aspecto/área citada (não "Atendimento"):
-  * café da manhã → "A&B - Café da manhã"
-  * restaurante/bar/garçom → "A&B - Serviço"
-  * piscina → "Piscina"
-  * recreação/monitor/animação → "Lazer - Serviço" ou "Lazer - Atividades de Lazer"
-  * check-in/check-out/recepção → "Recepção - Serviço"
-  * wi-fi/internet → "Tecnologia - Wi-fi"
-  * limpeza de quarto/banheiro → "Limpeza - Quarto"/"Limpeza - Banheiro"
-  * localização/vista → "Localização"
-- Quando houver pessoas + área específica (ex: garçons no restaurante), PRIORIZE a área específica ("A&B - Serviço"), NÃO "Atendimento"
-- SÓ use "Atendimento" quando o elogio é sobre equipe genérica SEM qualquer pista de serviço/área específica
-- Gere até 3 issues, mas mantenha "VAZIO" em problem quando for elogio puro
+**A&B (Alimentos & Bebidas):** SEMPRE que mencionar:
+- Qualquer comida, bebida, refeição, sabor, tempero
+- Garçom, garçonete, restaurante, bar, cardápio  
+- Café da manhã, almoço, janta, lanche, buffet
+- Fome, sede, variedade de comida, preços de comida
+- Chef, cozinha, pratos, gastronomia
 
-**EXEMPLOS DE CRIATIVIDADE PERMITIDA:**
-• "Toalhas sujas" → "Enxoval" + "Governança" (mais específico que "Limpeza")
-• "Elevador quebrado" → "Elevador" + "Manutenção - Instalações" (específico)
-• "Ar-condicionado não gelava" → "Ar-condicionado" + "Manutenção - Quarto" (específico)
-• "Frigobar vazio" → "Frigobar" + "Manutenção - Quarto" (específico)
-• "TV sem sinal" → "Tecnologia - TV" + "TI" (específico)
-• "Estacionamento lotado" → "Estacionamento" + "Operações" (específico)
-• "Banheiro com vazamento" → "Manutenção - Banheiro" + "Manutenção" (específico)
-• "Varanda suja" → "Limpeza - Áreas sociais" + "Governança" (adaptado)
-• "Drinks caros" → "A&B - Preço" + "A&B" (específico)
-• "Poucos canais de TV" → "Tecnologia - TV" + "TI" (específico)
+**Limpeza:** SEMPRE que mencionar:
+- Sujo, limpo, higiene, cheiro, odor
+- Toalhas, lençóis, travesseiros (quando sobre limpeza)
+- Banheiro sujo, quarto desarrumado
+- Produtos de limpeza, saboneteira, papel higiênico
 
-**REGRA DE OURO:** SEMPRE seja o mais específico possível. Se menciona algo concreto, classifique especificamente!
+**Manutenção:** SEMPRE que mencionar:
+- Quebrado, não funciona, defeito, conserto
+- Ar-condicionado, chuveiro, torneira, cofre, luzes
+- Vazamento, goteira, porta, janela, fechadura
+- Equipamentos com problema técnico
 
-**EXEMPLOS DE CLASSIFICAÇÃO CORRETA PARA ELOGIOS:**
-• "Equipe do restaurante foi maravilhosa" → keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
-• "Café da manhã excelente e variado" → keyword="A&B - Café da manhã", dept="A&B", problem="VAZIO"
-• "Piscina incrível para as crianças" → keyword="Piscina", dept="Lazer", problem="VAZIO"
-• "Check-in rápido e cordial" → keyword="Recepção - Serviço", dept="Recepção", problem="VAZIO"
-• "Wi-Fi perfeito em todo hotel" → keyword="Tecnologia - Wi-fi", dept="TI", problem="VAZIO"
-• "Quarto muito limpo e cheiroso" → keyword="Limpeza - Quarto", dept="Governança", problem="VAZIO"
-• "Hotel muito bem localizado" → keyword="Localização", dept="Operações", problem="VAZIO"
-• "Garçons muito atenciosos no bar" → keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
-• "Monitores foram incríveis com as crianças" → keyword="Lazer - Serviço", dept="Lazer", problem="VAZIO"
-• "Mixologia fantástica!" → keyword="Lazer - Atividades de Lazer", dept="Lazer", problem="VAZIO"
-• "Fogueira muito legal à noite" → keyword="Lazer - Atividades de Lazer", dept="Lazer", problem="VAZIO"
-• "Funcionários simpáticos" (SEM contexto específico) → keyword="Atendimento", dept="Operações", problem="VAZIO"
+**Lazer:** SEMPRE que mencionar:  
+- Piscina, academia, spa, atividades, recreação
+- Diversão, entretenimento, bingo, karaoke
+- Monitores, animação, tio/tia da recreação
+- Estrutura de lazer, brinquedos, jogos
 
-**EXEMPLOS ESPECÍFICOS DOS ERROS IDENTIFICADOS:**
-• "tenho uma sugestao de melhorar a piscina, que é aumentar ela" →
-  - keyword="Piscina", dept="Lazer", problem="Espaço Insuficiente", has_suggestion=true
-• "Muito bom a noite de bingo com a tia Claudia" →
-  - keyword="Lazer - Atividades de Lazer", dept="Lazer", problem="VAZIO"
-• "funcionários do restaurante Malta foram incríveis" →
-  - keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
-• "rapazes do bar tornaram momentos na piscina melhores" →
-  - Issue 1: keyword="A&B - Serviço", dept="A&B", problem="VAZIO"
-  - Issue 2: keyword="Piscina", dept="Lazer", problem="VAZIO"
-• "tio Lucas com brincadeiras tornou tudo divertido" →
-  - keyword="Lazer - Atividades de Lazer", dept="Lazer", problem="VAZIO"
+**TI/Tecnologia:** SEMPRE que mencionar:
+- Wi-fi, internet, conexão, sinal
+- TV, televisão, canais, controle remoto
+- Streaming, Netflix, apps, tecnologia
 
-**EXEMPLOS DE MÚLTIPLOS ELOGIOS (CRÍTICO - GERE VÁRIOS ISSUES):**
-• "Café da manhã excelente, piscina limpa e wi-fi rápido" → 
-  - Issue 1: "A&B - Café da manhã", "A&B", "VAZIO"
-  - Issue 2: "Piscina", "Lazer", "VAZIO"  
-  - Issue 3: "Tecnologia - Wi-fi", "TI", "VAZIO"
-• "funcionários do restaurante e rapazes do bar excelentes" →
-  - Issue 1: "A&B - Serviço", "A&B", "VAZIO" (restaurante)
-  - Issue 2: "A&B - Serviço", "A&B", "VAZIO" (bar)
-• "Recreação divertida, restaurante bom e localização perfeita" →
-  - Issue 1: "Lazer - Serviço", "Lazer", "VAZIO" 
-  - Issue 2: "A&B - Serviço", "A&B", "VAZIO"
-  - Issue 3: "Localização", "Operações", "VAZIO"
-• "bingo com tia Claudia e bar na piscina excelentes" →
-  - Issue 1: "Lazer - Atividades de Lazer", "Lazer", "VAZIO"
-  - Issue 2: "A&B - Serviço", "A&B", "VAZIO"
-  - Issue 3: "Piscina", "Lazer", "VAZIO"
+**Recepção:** SEMPRE que mencionar:
+- Check-in, check-out, recepção, recepcionista
+- Chegada, saída, chaves, cadastro
+- Front desk, balcão, atendimento inicial
 
-**EXEMPLOS ESPECÍFICOS PARA ALIMENTAÇÃO (A&B):**
-• "Dinner food was horrible" → "A&B - Serviço" + "A&B" + "Qualidade da Comida"
-• "Food was terrible, pasta was inedible" → "A&B - Serviço" + "A&B" + "Qualidade da Comida"
-• "Café da manhã sem variedade" → "A&B - Café da manhã" + "A&B" + "Falta de Variedade"
-• "Restaurant service was slow" → "A&B - Serviço" + "A&B" + "Demora no Atendimento"
-• "Bar drinks were expensive" → "A&B - Preço" + "A&B" + "Preço Alto"
+**🚀 SEJA ASSERTIVO E INTELIGENTE:**
+- Use sua experiência sobre hotéis e hospitalidade
+- Pense como um auditor experiente de reputação hoteleira
+- Classifique TUDO, mesmo termos incomuns ou gírias
+- Priorize sempre a especificidade sobre a generalização
+- Se tiver dúvida entre duas categorias, escolha a mais específica
 
-**⚠️ ATENÇÃO ESPECIAL - COMENTÁRIOS IRRELEVANTES:**
-APENAS classifique como "Não identificado" se o comentário for COMPLETAMENTE VAZIO ou INVÁLIDO:
-• Comentários vazios: "", "...", "---", "N/A"
-• Referências vazias: "conforme meu relato acima", "ver comentário anterior", "mesmo problema"
-• Testes óbvios: "teste", "test", "testing"
+**REGRAS FUNDAMENTAIS - BASEADAS EM CORREÇÕES DA CLIENTE:**
 
-**IMPORTANTE:** SEMPRE seja específico e preciso na classificação. EVITE categorias genéricas quando puder ser mais específico:
-• Para elogios gerais → "Lazer"
-• Para feedback específico → SEMPRE identifique a categoria mais precisa possível
-• Para problemas técnicos → use categorias específicas como "Ar-condicionado", "Elevador", "Frigobar"
-• Para áreas específicas → use "Limpeza - Quarto", "Manutenção - Banheiro", etc.
-• Para serviços específicos → use "A&B - Café da manhã", "Lazer - Atividades de Lazer", etc.
+**1. MAPEAMENTO A&B (Alimentos & Bebidas) - PRIORIDADE MÁXIMA:**
+- SEMPRE que mencionar GARÇOM/GARÇONETE/WAITER/WAITRESS → "A&B - Serviço"
+- SEMPRE que mencionar BAR/RESTAURANTE/RESTAURANT → "A&B - Serviço"  
+- SEMPRE que mencionar CAFÉ DA MANHÃ/BREAKFAST → "A&B - Café da manhã"
+- SEMPRE que mencionar ALMOÇO/LUNCH/JANTA/JANTAR/DINNER → "A&B - Almoço"
+- SEMPRE que mencionar FALTA DE COMIDA/SEM VARIEDADE → "A&B - Variedade"
+- SEMPRE que mencionar PREÇO ALTO DE COMIDA/BEBIDA → "A&B - Preço"
+- SEMPRE que mencionar QUALIDADE/SABOR DA COMIDA → "A&B - Alimentos"
+- SEMPRE que mencionar CARDÁPIO/MENU/GASTRONOMIA → "A&B - Gastronomia"
 
-**CRITÉRIO DE EXCELÊNCIA:** Prefira sempre a classificação mais específica e precisa possível!
+**2. MANUTENÇÃO vs PRODUTO vs LIMPEZA:**
+- QUEBRADO/NÃO FUNCIONA → Manutenção (ex: "Cofre não funcionava" → Manutenção - Quarto)
+- QUALIDADE DO ITEM FÍSICO → Produto (ex: "Cobertas muito finas" → Enxoval/Produto)
+- FALTA DE LIMPEZA/SUJO → Limpeza (ex: "Saboneteira vazia" → Limpeza - Banheiro)
+- FRIGOBAR → sempre Produto (mesmo se for preço)
 
-**ATENÇÃO - VENDAS/MULTIPROPRIEDADE:** Se houver insistência/pressão/assédio/coação para comprar multipropriedade (timeshare) ou situações de venda agressiva, crie um dos items em "issues" com: keyword="Cotas", department="Programa de vendas" e problem="Comunicação Ruim".
+**3. LOCALIZAÇÃO ESPECÍFICA - MUITO IMPORTANTE:**
+- Se menciona BANHEIRO + problema → palavra-chave com "Banheiro"
+- Se menciona QUARTO + problema → palavra-chave com "Quarto"
+- "Lixeira quebrada" → Manutenção - Banheiro (não Quarto)
+- "Box do chuveiro" → Manutenção - Banheiro
+- "Porta da varanda" → Manutenção - Quarto
 
-**EXEMPLOS DE AUTONOMIA SEMÂNTICA:**
-• "Pessoal da recreação muito legal" → IA deve entender: recreação = "Lazer - Serviço" + "Lazer"
-• "Garçons simpáticos no restaurante" → IA deve entender: garçons = "A&B - Serviço" + "A&B"
-• "Aula de drinks foi incrível" → IA deve entender: atividade específica = "Lazer - Atividades de Lazer" + "Lazer"
-• "Funcionários do bar atenciosos" → IA deve entender: bar = "A&B - Serviço" + "A&B"
-• "Monitores de lazer legais" → IA deve entender: lazer + monitores = "Lazer - Serviço" + "Lazer"
-• "Wi-Fi não funciona" → "Tecnologia - Wi-fi" + "TI" + "Não Funciona"
-• "Quarto sujo" → "Limpeza - Quarto" + "Governança" + "Falta de Limpeza"
-• "Hotel bem localizado" → "Localização" + "Operações" + "VAZIO"
+**4. LAZER E RECREAÇÃO:**
+- PISCINA → sempre "Piscina" (mesmo se aquecida)
+- BINGO/KARAOKE/FOGUEIRA/ATIVIDADES → "Lazer - Atividades de Lazer"
+- TIO/TIA DA RECREAÇÃO/MONITORES → "Lazer - Serviço"
+- ACADEMIA → "Academia" (departamento próprio)
+- HIDROMASSAGEM → "Lazer - Estrutura"
+- SPA/MASSAGEM → "Spa"
 
-**AUTONOMIA DA IA:** Analise o CONTEXTO SEMÂNTICO, não palavras isoladas. Entenda a INTENÇÃO do comentário!
+**5. PESSOAS E FUNCIONÁRIOS - REGRA DA CLIENTE:**
+- Se conseguir identificar o DEPARTAMENTO da pessoa → usar departamento específico
+- Ex: "Yasmin garçonete" → A&B - Serviço
+- Ex: "João da recepção" → Recepção - Serviço  
+- Se NÃO conseguir identificar departamento → "Atendimento"
+- CONCIERGE → se uma pessoa específica, use "Concierge"; se várias pessoas, use "Atendimento"
 
-**REGRA DE INTERPRETAÇÃO:** Se alguém elogia pessoas específicas em contexto de recreação/lazer → sempre "Lazer - Serviço"
-Se alguém elogia pessoas específicas em contexto de restaurante/comida → sempre "A&B - Serviço"
+**6. PROBLEMAS PADRONIZADOS - SEJA ESPECÍFICO:**
+Use problemas específicos da lista oficial:
+- "não funciona" → "Não Funciona"
+- "funciona mal" → "Funciona Mal"
+- "quebrado" → "Quebrado"
+- "demora" → "Demora no Atendimento"  
+- "sujo" → "Falta de Limpeza"
+- "caro" → "Preço Alto"
+- "sem variedade" → "Falta de Variedade"
+- "pequeno" → "Espaço Insuficiente"
+- "barulho" → "Ruído Excessivo"
+- "frio/quente" → "Temperatura Inadequada"
 
-**SAÍDA:** até 3 items com keyword oficial, department compatível, problem padrão, problem_detail (120 chars max).
+**7. MÚLTIPLOS ASPECTOS OBRIGATÓRIO:**
+Se o comentário menciona VÁRIAS áreas, você DEVE criar múltiplos issues:
+- "Café da manhã sem variedade e wi-fi ruim" → 2 issues separados
+- "Garçom atencioso e piscina limpa" → 2 issues separados
+- "Restaurante bom mas quarto sujo" → 2 issues separados
 
-Comentário: "${finalText}"`;
+**8. DETECÇÃO DE SUGESTÕES - CAMPO SEPARADO:**
+has_suggestion: true se contém QUALQUER das palavras:
+- "poderia", "deveria", "seria bom", "sugiro", "recomendo", "melhoraria", "gostaria que"
+- "falta", "faltou", "não tem", "senti falta", "deveria ter", "precisava ter"
+- "se tivesse", "seria melhor com", "tendo mais", "com mais"
+- "uma sugestão", "minha dica", "penso que", "acho que deveria"
+
+**suggestion_summary:** Resuma APENAS a sugestão mencionada (máx 200 chars):
+- ✅ "Aumentar variedade de frutas no café da manhã"
+- ✅ "Colocar mais tomadas próximas à cama"
+- ✅ "Melhorar aquecimento da piscina"
+- ❌ "Cliente reclamou da piscina" (isso não é sugestão)
+
+**9. ELOGIOS (problem="VAZIO"):**
+Para elogios puros, escolha SEMPRE a keyword da área específica mencionada:
+- Não use "Atendimento" genérico se puder ser mais específico
+- "Equipe do restaurante excelente" → A&B - Serviço (não Atendimento)
+- "Piscina incrível" → Piscina (não Atendimento)
+- "Check-in rápido e eficiente" → Check-in - Atendimento Recepção (não Atendimento genérico)
+- "Checkout feito por Fábio foi excelente" → Check-out - Atendimento Recepção (não Atendimento genérico)
+- "Recepcionista muito gentil" → Recepção - Serviço (não Atendimento genérico)
+
+**10. PROBLEM_DETAIL - SEJA DESCRITIVO E ESPECÍFICO:**
+Crie detalhes úteis para gestão hoteleira (máx 120 chars):
+- ✅ "Cofre do quarto não respondia mesmo com senha correta digitada"
+- ✅ "Saboneteira do banheiro permaneceu vazia durante toda estadia" 
+- ✅ "Garçons demoravam mais de 20 minutos para atender mesa"
+- ✅ "Wi-fi caia constantemente impossibilitando trabalho remoto"
+- ✅ "Cobertas muito finas não aqueciam adequadamente durante noite"
+- ❌ "Problema com cofre" (muito genérico)
+- ❌ "Limpeza ruim" (muito genérico)
+
+**EXEMPLOS DE CLASSIFICAÇÃO CORRETA COMPLETA:**
+
+• "Saboneteira da pia ficou vazia todo o tempo"
+  → keyword: "Limpeza - Banheiro", problem: "Falta de Disponibilidade", 
+     problem_detail: "Saboneteira permaneceu vazia durante toda estadia"
+
+• "Yasmin garçonete foi excelente, muito atenciosa" 
+  → keyword: "A&B - Serviço", problem: "VAZIO", 
+     problem_detail: ""
+
+• "Frigobar com preços muito altos, deveria ser mais barato"
+  → keyword: "Frigobar", problem: "Preço Alto", 
+     problem_detail: "Preços do frigobar considerados excessivos pelo hóspede",
+     has_suggestion: true, suggestion_summary: "Reduzir preços dos itens do frigobar"
+
+• "Falta de carne seca no café da manhã, sugiro adicionar"
+  → keyword: "A&B - Variedade", problem: "Falta de Variedade", 
+     problem_detail: "Ausência de carne seca no buffet matinal",
+     has_suggestion: true, suggestion_summary: "Incluir carne seca no café da manhã"
+
+• "Chuveiro difícil de abrir sem se molhar com água fria"
+  → keyword: "Manutenção - Banheiro", problem: "Funciona Mal", 
+     problem_detail: "Chuveiro espirra água fria antes de regular temperatura"
+
+• "Cobertas muito finas e pequenas para o quarto"
+  → keyword: "Enxoval", problem: "Qualidade Baixa", 
+     problem_detail: "Cobertas inadequadas em tamanho e espessura"
+
+• "Almoço sem variedade, sempre as mesmas opções"
+  → keyword: "A&B - Almoço", problem: "Falta de Variedade", 
+     problem_detail: "Cardápio do almoço repetitivo com poucas opções"
+
+• "Jantar excelente, comida muito saborosa"
+  → keyword: "A&B - Almoço", problem: "VAZIO",
+     problem_detail: ""
+
+• "Wi-fi sempre cai durante reuniões, sugiro melhorar a rede"
+  → keyword: "Tecnologia - Wi-fi", problem: "Não Funciona",
+     problem_detail: "Conexão wi-fi instável durante uso profissional",
+     has_suggestion: true, suggestion_type: "improvement_with_criticism",
+     suggestion_summary: "Melhorar estabilidade da rede wi-fi"
+
+• "Seria incrível se tivessem jacuzzi na área da piscina"
+  → keyword: "Lazer - Estrutura", problem: "VAZIO", 
+     problem_detail: "",
+     has_suggestion: true, suggestion_type: "improvement_only",
+     suggestion_summary: "Instalar jacuzzi na área da piscina"
+
+**REGRAS DE OURO:**
+1. **PROBLEMA**: categoria padronizada oficial
+2. **PROBLEM_DETAIL**: descrição específica do que aconteceu  
+3. **SUGESTÃO**: separada, apenas se houver indicação clara de melhoria
+4. **MÚLTIPLOS ISSUES**: sempre que houver várias áreas mencionadas
+5. **ESPECIFICIDADE**: sempre prefira classificação mais específica possível
+
+**AUTONOMIA TOTAL:** Você tem liberdade para interpretar semanticamente e criar classificações precisas. Priorize SEMPRE a especificidade sobre a generalização.
+
+Comentário para analisar: "${finalText}"`;
 
     const response = await Promise.race([
       openai.chat.completions.create({
@@ -1308,7 +1868,7 @@ Comentário: "${finalText}"`;
     if (hasSuggestionKeyword && !hasSuggestion) {
       console.log('🔍 Validação pós-processamento: Forçando detecção de sugestão');
       hasSuggestion = true;
-      suggestionType = 'only_suggestion';
+      suggestionType = 'improvement_only';
       
       if (!suggestionSummary.trim()) {
         const words = finalText.split(' ');
@@ -1355,8 +1915,7 @@ Comentário: "${finalText}"`;
       code: error.code,
       type: error.type,
       environment: process.env.NODE_ENV,
-      hasOpenAIKey: !!process.env.OPENAI_API_KEY,
-      apiKeyPrefix: process.env.OPENAI_API_KEY?.substring(0, 7) + '...' || 'N/A'
+      hasOpenAIKey: !!process.env.OPENAI_API_KEY
     });
     
     // Tratamento específico para diferentes tipos de erro

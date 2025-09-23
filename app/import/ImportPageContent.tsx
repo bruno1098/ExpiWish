@@ -441,79 +441,135 @@ function ImportPageContent() {
     setFileToConfirm(null);
   };
 
-  // Função para normalizar nomes de hotéis para comparação
-  const normalizeHotelName = (name: string): string => {
-    if (!name || typeof name !== 'string') return '';
+  // Função para extrair palavras-chave específicas do hotel - NOVA ABORDAGEM RIGOROSA
+  const extractHotelKeywords = (hotelName: string): string[] => {
+    if (!hotelName || typeof hotelName !== 'string') return [];
     
-    return name
+    // Normalizar para comparação (manter acentos nas palavras originais)
+    const normalized = hotelName
       .toLowerCase()
       .trim()
-      // Remove caracteres especiais mas mantém espaços temporariamente
-      .replace(/[^\w\s]/g, '')
-      // Múltiplos espaços em um só
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos para comparação
+      .replace(/[^\w\s]/g, ' ')
       .replace(/\s+/g, ' ')
-      // Remove palavras comuns de hotéis (mais específico)
-      .replace(/\b(hotel|pousada|resort|wish|foz|iguacu|iguaçu|do|da|de|serrano|natal|bahia|galeao|galeão|confins|aeroporto)\b/g, '')
-      .trim()
-      // Remove todos os espaços restantes
-      .replace(/\s+/g, '');
+      .trim();
+
+    console.log('🔍 Extraindo keywords de:', hotelName, '→', normalized);
+    
+    // Definir palavras-chave específicas por hotel para validação rigorosa
+    const hotelKeywords: { [key: string]: string[] } = {
+      // Hotéis Wish - cada um tem suas palavras-chave únicas
+      'wish foz do iguacu': ['wish', 'foz', 'iguacu', 'iguaçu'],
+      'wish foz iguacu': ['wish', 'foz', 'iguacu', 'iguaçu'],
+      'wish serrano': ['wish', 'serrano'],
+      'wish natal': ['wish', 'natal'],
+      'wish bahia': ['wish', 'bahia'],
+      'wish galeao': ['wish', 'galeao', 'galeão'],
+      'wish confins': ['wish', 'confins'],
+      
+      // Outros padrões que podem aparecer
+      'foz do iguacu': ['foz', 'iguacu', 'iguaçu'],
+      'serrano': ['serrano'],
+      'natal': ['natal'],
+      'bahia': ['bahia'],
+      'galeao': ['galeao', 'galeão'],
+      'confins': ['confins']
+    };
+
+    // Procurar correspondência direta
+    for (const [pattern, keywords] of Object.entries(hotelKeywords)) {
+      if (normalized.includes(pattern.replace('ç', 'c').replace('ã', 'a'))) {
+        console.log('✅ Padrão encontrado:', pattern, '→', keywords);
+        return keywords;
+      }
+    }
+
+    // Se não encontrou padrão específico, extrair palavras significativas
+    const words = normalized.split(/\s+/).filter(word => 
+      word.length >= 3 && 
+      !['hotel', 'pousada', 'resort', 'do', 'da', 'de', 'dos', 'das', 'em', 'no', 'na'].includes(word)
+    );
+
+    console.log('⚠️ Usando extração genérica:', words);
+    return words;
   };
 
-  // Função para validar se o hotel do arquivo corresponde ao hotel do usuário
+  // Função para validar se o hotel do arquivo corresponde EXATAMENTE ao hotel do usuário - VALIDAÇÃO RIGOROSA
   const validateHotelMatch = (fileHotels: string[], userHotelName: string): { isValid: boolean, fileHotel?: string, userHotel?: string } => {
     if (!userHotelName || fileHotels.length === 0) {
+      console.log('❌ Dados insuficientes para validação');
       return { isValid: false };
     }
 
-    const normalizedUserHotel = normalizeHotelName(userHotelName);
+    const userKeywords = extractHotelKeywords(userHotelName);
     
-    console.log('🏨 Validação de Hotel:');
+    console.log('🏨 Validação Rigorosa de Hotel:');
     console.log('Hotel do usuário:', userHotelName);
-    console.log('Hotel normalizado do usuário:', normalizedUserHotel);
+    console.log('Keywords do usuário:', userKeywords);
     console.log('Hotéis no arquivo:', fileHotels);
     
-    // Verificar se algum hotel do arquivo corresponde ao hotel do usuário
+    // Para cada hotel no arquivo, extrair keywords e comparar
     for (const fileHotel of fileHotels) {
-      const normalizedFileHotel = normalizeHotelName(fileHotel);
+      const fileKeywords = extractHotelKeywords(fileHotel);
       
-      console.log('Comparando:', normalizedFileHotel, 'com', normalizedUserHotel);
+      console.log('Comparando arquivo:', fileHotel);
+      console.log('Keywords do arquivo:', fileKeywords);
       
-      // Verificação mais flexível - várias estratégias de comparação
-      if (normalizedFileHotel && normalizedUserHotel) {
-        // 1. Comparação exata
-        if (normalizedFileHotel === normalizedUserHotel) {
-          console.log('✅ Correspondência exata!');
+      if (fileKeywords.length === 0 || userKeywords.length === 0) {
+        console.log('⚠️ Keywords insuficientes');
+        continue;
+      }
+      
+      // Validação rigorosa: TODAS as palavras-chave do usuário devem estar no arquivo
+      const userWordsInFile = userKeywords.filter(keyword => 
+        fileKeywords.some(fKeyword => 
+          fKeyword === keyword || 
+          fKeyword.includes(keyword) || 
+          keyword.includes(fKeyword)
+        )
+      );
+      
+      console.log('Palavras do usuário encontradas no arquivo:', userWordsInFile);
+      
+      // Calcular porcentagem de correspondência
+      const matchPercentage = userWordsInFile.length / userKeywords.length;
+      console.log('Porcentagem de correspondência:', Math.round(matchPercentage * 100) + '%');
+      
+      // Critério rigoroso: pelo menos 80% das palavras-chave devem corresponder
+      // Para hotéis Wish, exigir correspondência ainda mais rigorosa
+      const isWishHotel = userKeywords.includes('wish');
+      const requiredThreshold = isWishHotel ? 0.75 : 0.8; // 75% para Wish (tem mais palavras), 80% para outros
+      
+      if (matchPercentage >= requiredThreshold) {
+        console.log('✅ Hotel validado com', Math.round(matchPercentage * 100) + '% de correspondência!');
+        return { isValid: true, fileHotel, userHotel: userHotelName };
+      }
+      
+      // Verificação especial para hotéis Wish: deve ter 'wish' + localização específica
+      if (isWishHotel) {
+        const hasWish = fileKeywords.includes('wish');
+        const userLocation = userKeywords.find(kw => ['foz', 'iguacu', 'iguaçu', 'serrano', 'natal', 'bahia', 'galeao', 'galeão', 'confins'].includes(kw));
+        const hasUserLocation = userLocation && fileKeywords.some(kw => 
+          kw === userLocation || 
+          (userLocation === 'iguacu' && kw === 'iguaçu') ||
+          (userLocation === 'iguaçu' && kw === 'iguacu') ||
+          (userLocation === 'galeao' && kw === 'galeão') ||
+          (userLocation === 'galeão' && kw === 'galeao')
+        );
+        
+        if (hasWish && hasUserLocation) {
+          console.log('✅ Hotel Wish validado por critério específico (wish + localização)!');
           return { isValid: true, fileHotel, userHotel: userHotelName };
         }
         
-        // 2. Uma string contém a outra
-        if (normalizedFileHotel.includes(normalizedUserHotel) || 
-            normalizedUserHotel.includes(normalizedFileHotel)) {
-          console.log('✅ Correspondência por inclusão!');
-          return { isValid: true, fileHotel, userHotel: userHotelName };
-        }
-        
-        // 3. Verificação adicional - nomes muito curtos após normalização
-        if (normalizedFileHotel.length > 2 && normalizedUserHotel.length > 2) {
-          // Calcular similaridade básica (apenas para nomes maiores)
-          const similarity = Math.max(
-            normalizedFileHotel.length >= normalizedUserHotel.length ? 
-              (normalizedFileHotel.includes(normalizedUserHotel) ? 1 : 0) :
-              (normalizedUserHotel.includes(normalizedFileHotel) ? 1 : 0)
-          );
-          
-          if (similarity > 0) {
-            console.log('✅ Correspondência por similaridade!');
-            return { isValid: true, fileHotel, userHotel: userHotelName };
-          }
-        }
+        console.log('❌ Hotel Wish não passou no critério específico. Wish:', hasWish, 'Localização:', hasUserLocation);
       }
     }
     
-    console.log('❌ Nenhum hotel corresponde');
+    console.log('❌ Nenhum hotel do arquivo corresponde ao hotel do usuário');
     return { 
       isValid: false, 
-      fileHotel: fileHotels[0], // Primeiro hotel encontrado no arquivo
+      fileHotel: fileHotels[0], 
       userHotel: userHotelName 
     };
   };
@@ -953,7 +1009,7 @@ function ImportPageContent() {
             return {
               ...row,
               texto: row.texto.trim(),
-              nomeHotel: row.nomeHotel || row['Nome do Hotel'] || row['Hotel'] || hotelName, // Tentar diferentes nomes de coluna
+              nomeHotel: row.nomeHotel || row['Nome do Hotel'] || row['Hotel'] || null, // NÃO usar hotelName como fallback
               dataFeedback: formatExcelDate(row.data) // Usar data do CSV se disponível
             };
           });
@@ -973,11 +1029,53 @@ function ImportPageContent() {
       setCurrentStep("Validando hotel do arquivo...");
       setProgress(8);
       
-      // Extrair todos os hotéis únicos do arquivo
-      const fileHotelsSet = new Set(data.map(item => item.nomeHotel).filter(Boolean));
+      // Extrair todos os hotéis únicos do arquivo (incluindo valores válidos)
+      const fileHotelsSet = new Set(
+        data
+          .map(item => item.nomeHotel)
+          .filter(hotel => hotel && typeof hotel === 'string' && hotel.trim().length > 0)
+      );
       const fileHotels = Array.from(fileHotelsSet) as string[];
       
-      if (fileHotels.length > 0) {
+      console.log('🔍 DEBUG - Extração de hotéis:');
+      console.log('Dados processados:', data.length, 'itens');
+      console.log('Hotéis encontrados no arquivo:', fileHotels);
+      console.log('Hotel do usuário logado:', hotelName);
+      
+      // Verificação rigorosa: se não encontrou nenhum hotel válido no arquivo, tentar extrair do nome do arquivo
+      if (fileHotels.length === 0) {
+        console.log('⚠️ Nenhum hotel encontrado nos dados, tentando extrair do nome do arquivo...');
+        
+        // Tentar extrair hotel do nome do arquivo
+        const fileNameHotels = extractHotelKeywords(file.name);
+        if (fileNameHotels.length > 0) {
+          // Validar usando as keywords do nome do arquivo
+          const fileNameValidation = validateHotelMatch([file.name], hotelName);
+          if (!fileNameValidation.isValid) {
+            console.log('❌ Hotel do arquivo (nome) não corresponde ao usuário');
+            setHotelErrorData({
+              fileHotel: `Detectado no nome: ${file.name}`,
+              userHotel: hotelName
+            });
+            setShowHotelErrorDialog(true);
+            setImporting(false);
+            setCurrentStep("Importação cancelada - hotel incorreto (nome do arquivo)");
+            return;
+          }
+          console.log('✅ Hotel validado através do nome do arquivo');
+        } else {
+          console.log('❌ Nenhum hotel válido encontrado no arquivo ou nome do arquivo');
+          setHotelErrorData({
+            fileHotel: 'Nenhum hotel identificado no arquivo ou nome do arquivo',
+            userHotel: hotelName
+          });
+          setShowHotelErrorDialog(true);
+          setImporting(false);
+          setCurrentStep("Importação cancelada - hotel não identificado");
+          return;
+        }
+      } else {
+        // Validar se algum hotel do arquivo corresponde ao hotel do usuário
         const validation = validateHotelMatch(fileHotels, hotelName);
         
         if (!validation.isValid) {
@@ -998,6 +1096,7 @@ function ImportPageContent() {
           return;
         } else {
           // Hotel validado com sucesso
+          console.log('✅ Hotel validado com sucesso!');
           toast({
             title: "✅ Hotel Validado",
             description: `Arquivo validado para o hotel "${validation.userHotel}"`,
@@ -2366,8 +2465,16 @@ function ImportPageContent() {
                   </span>
                 </div>
               </div>
+              <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">ℹ️ Como funciona a validação:</p>
+                <p className="text-xs text-blue-600 dark:text-blue-300 leading-relaxed">
+                  O sistema agora faz uma validação rigorosa comparando as palavras-chave específicas do seu hotel com as do arquivo. 
+                  Para hotéis Wish, por exemplo, deve ter <strong>Wish + localização específica</strong> (como "Foz do Iguaçu", "Serrano", "Natal"). 
+                  Isso evita confusões entre hotéis similares e garante que você só importe dados do hotel correto.
+                </p>
+              </div>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Por questões de segurança e organização, você só pode importar arquivos do seu próprio hotel.
+                Por questões de segurança e organização, você só pode importar arquivos do seu próprio hotel com correspondência exata das palavras-chave.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
