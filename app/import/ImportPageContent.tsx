@@ -261,6 +261,10 @@ function ImportPageContent() {
   const [showFileNameConfirmation, setShowFileNameConfirmation] = useState(false);
   const [fileToConfirm, setFileToConfirm] = useState<File | null>(null);
 
+  // Estados para o modal de erro de hotel
+  const [showHotelErrorDialog, setShowHotelErrorDialog] = useState(false);
+  const [hotelErrorData, setHotelErrorData] = useState<{ fileHotel: string, userHotel: string } | null>(null);
+
   useEffect(() => {
     const checkTestEnvironment = async () => {
       try {
@@ -435,6 +439,83 @@ function ImportPageContent() {
   const handleCancelFileNameConfirmation = () => {
     setShowFileNameConfirmation(false);
     setFileToConfirm(null);
+  };
+
+  // Função para normalizar nomes de hotéis para comparação
+  const normalizeHotelName = (name: string): string => {
+    if (!name || typeof name !== 'string') return '';
+    
+    return name
+      .toLowerCase()
+      .trim()
+      // Remove caracteres especiais mas mantém espaços temporariamente
+      .replace(/[^\w\s]/g, '')
+      // Múltiplos espaços em um só
+      .replace(/\s+/g, ' ')
+      // Remove palavras comuns de hotéis (mais específico)
+      .replace(/\b(hotel|pousada|resort|wish|foz|iguacu|iguaçu|do|da|de|serrano|natal|bahia|galeao|galeão|confins|aeroporto)\b/g, '')
+      .trim()
+      // Remove todos os espaços restantes
+      .replace(/\s+/g, '');
+  };
+
+  // Função para validar se o hotel do arquivo corresponde ao hotel do usuário
+  const validateHotelMatch = (fileHotels: string[], userHotelName: string): { isValid: boolean, fileHotel?: string, userHotel?: string } => {
+    if (!userHotelName || fileHotels.length === 0) {
+      return { isValid: false };
+    }
+
+    const normalizedUserHotel = normalizeHotelName(userHotelName);
+    
+    console.log('🏨 Validação de Hotel:');
+    console.log('Hotel do usuário:', userHotelName);
+    console.log('Hotel normalizado do usuário:', normalizedUserHotel);
+    console.log('Hotéis no arquivo:', fileHotels);
+    
+    // Verificar se algum hotel do arquivo corresponde ao hotel do usuário
+    for (const fileHotel of fileHotels) {
+      const normalizedFileHotel = normalizeHotelName(fileHotel);
+      
+      console.log('Comparando:', normalizedFileHotel, 'com', normalizedUserHotel);
+      
+      // Verificação mais flexível - várias estratégias de comparação
+      if (normalizedFileHotel && normalizedUserHotel) {
+        // 1. Comparação exata
+        if (normalizedFileHotel === normalizedUserHotel) {
+          console.log('✅ Correspondência exata!');
+          return { isValid: true, fileHotel, userHotel: userHotelName };
+        }
+        
+        // 2. Uma string contém a outra
+        if (normalizedFileHotel.includes(normalizedUserHotel) || 
+            normalizedUserHotel.includes(normalizedFileHotel)) {
+          console.log('✅ Correspondência por inclusão!');
+          return { isValid: true, fileHotel, userHotel: userHotelName };
+        }
+        
+        // 3. Verificação adicional - nomes muito curtos após normalização
+        if (normalizedFileHotel.length > 2 && normalizedUserHotel.length > 2) {
+          // Calcular similaridade básica (apenas para nomes maiores)
+          const similarity = Math.max(
+            normalizedFileHotel.length >= normalizedUserHotel.length ? 
+              (normalizedFileHotel.includes(normalizedUserHotel) ? 1 : 0) :
+              (normalizedUserHotel.includes(normalizedFileHotel) ? 1 : 0)
+          );
+          
+          if (similarity > 0) {
+            console.log('✅ Correspondência por similaridade!');
+            return { isValid: true, fileHotel, userHotel: userHotelName };
+          }
+        }
+      }
+    }
+    
+    console.log('❌ Nenhum hotel corresponde');
+    return { 
+      isValid: false, 
+      fileHotel: fileHotels[0], // Primeiro hotel encontrado no arquivo
+      userHotel: userHotelName 
+    };
   };
 
   // Função para detectar comentários duplicados
@@ -872,7 +953,7 @@ function ImportPageContent() {
             return {
               ...row,
               texto: row.texto.trim(),
-              nomeHotel: hotelName,
+              nomeHotel: row.nomeHotel || row['Nome do Hotel'] || row['Hotel'] || hotelName, // Tentar diferentes nomes de coluna
               dataFeedback: formatExcelDate(row.data) // Usar data do CSV se disponível
             };
           });
@@ -886,6 +967,42 @@ function ImportPageContent() {
         } as ToastProps);
         setImporting(false);
         return;
+      }
+      
+      // VALIDAÇÃO DE HOTEL - Verificar se o hotel do arquivo corresponde ao hotel do usuário
+      setCurrentStep("Validando hotel do arquivo...");
+      setProgress(8);
+      
+      // Extrair todos os hotéis únicos do arquivo
+      const fileHotelsSet = new Set(data.map(item => item.nomeHotel).filter(Boolean));
+      const fileHotels = Array.from(fileHotelsSet) as string[];
+      
+      if (fileHotels.length > 0) {
+        const validation = validateHotelMatch(fileHotels, hotelName);
+        
+        if (!validation.isValid) {
+          // Logs de debug para verificar o que aconteceu
+          console.log('❌ Validação de hotel falhou:');
+          console.log('Arquivo:', validation.fileHotel);
+          console.log('Usuário:', validation.userHotel);
+          console.log('Todos os hotéis do arquivo:', fileHotels);
+          
+          // Mostrar modal de erro ao invés de toast
+          setHotelErrorData({
+            fileHotel: validation.fileHotel || fileHotels[0],
+            userHotel: validation.userHotel || hotelName
+          });
+          setShowHotelErrorDialog(true);
+          setImporting(false);
+          setCurrentStep("Importação cancelada - hotel incorreto");
+          return;
+        } else {
+          // Hotel validado com sucesso
+          toast({
+            title: "✅ Hotel Validado",
+            description: `Arquivo validado para o hotel "${validation.userHotel}"`,
+          });
+        }
       }
       
       // Verificar duplicatas ANTES de configurar progresso
@@ -2213,6 +2330,58 @@ function ImportPageContent() {
                 </div>
               </Button>
             </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal de Erro de Hotel Incorreto */}
+      <AlertDialog open={showHotelErrorDialog} onOpenChange={setShowHotelErrorDialog}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-xl font-semibold text-red-900 dark:text-red-100">
+                  Hotel Incorreto
+                </AlertDialogTitle>
+              </div>
+            </div>
+            <AlertDialogDescription className="text-gray-600 dark:text-gray-300 space-y-3">
+              <p>
+                <strong>Não é possível importar este arquivo!</strong>
+              </p>
+              <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-red-800 dark:text-red-200">Hotel do arquivo:</span>
+                  <span className="text-sm font-semibold text-red-900 dark:text-red-100 bg-red-100 dark:bg-red-800/30 px-2 py-1 rounded">
+                    {hotelErrorData?.fileHotel || 'N/A'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-green-800 dark:text-green-200">Seu hotel atual:</span>
+                  <span className="text-sm font-semibold text-green-900 dark:text-green-100 bg-green-100 dark:bg-green-800/30 px-2 py-1 rounded">
+                    {hotelErrorData?.userHotel || 'N/A'}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Por questões de segurança e organização, você só pode importar arquivos do seu próprio hotel.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3">
+            <AlertDialogAction 
+              onClick={() => {
+                setShowHotelErrorDialog(false);
+                setHotelErrorData(null);
+                resetImportState();
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
+            >
+              Entendido
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
