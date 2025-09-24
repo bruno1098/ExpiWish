@@ -441,60 +441,109 @@ function ImportPageContent() {
     setFileToConfirm(null);
   };
 
-  // Função para extrair palavras-chave específicas do hotel - NOVA ABORDAGEM RIGOROSA
+  // Função para extrair a LOCALIZAÇÃO PRINCIPAL do hotel
+  const extractMainLocation = (hotelName: string): string | null => {
+    if (!hotelName || typeof hotelName !== 'string') return null;
+    
+    const normalized = hotelName
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .trim();
+
+    console.log('🌍 Extraindo localização principal de:', hotelName, '→', normalized);
+    
+    // Mapeamento de localizações principais - ORDEM IMPORTA (mais específico primeiro)
+    const locationPatterns: { [key: string]: string } = {
+      // Foz do Iguaçu - variações
+      'foz do iguacu': 'foz',
+      'foz iguacu': 'foz', 
+      'iguacu': 'foz', // Iguaçu também identifica Foz
+      'foz': 'foz',
+      
+      // Serrano/Gramado
+      'serrano': 'serrano',
+      'gramado': 'serrano', // Serrano fica em Gramado
+      
+      // Natal
+      'natal': 'natal',
+      
+      // Bahia/Salvador
+      'bahia': 'bahia',
+      'salvador': 'bahia', // Pode aparecer como Salvador
+      
+      // Galeão/Rio
+      'galeao': 'galeao',
+      'rio de janeiro': 'galeao',
+      'rio': 'galeao',
+      
+      // Confins/BH
+      'confins': 'confins',
+      'belo horizonte': 'confins',
+      'bh': 'confins',
+      
+      // João Pessoa
+      'joao pessoa': 'joao-pessoa',
+      'joão pessoa': 'joao-pessoa',
+      'joao': 'joao-pessoa',
+      'joão': 'joao-pessoa',
+      'pessoa': 'joao-pessoa',
+    };
+
+    // Procurar a localização principal
+    for (const [pattern, location] of Object.entries(locationPatterns)) {
+      if (normalized.includes(pattern)) {
+        console.log('✅ Localização encontrada:', pattern, '→', location);
+        return location;
+      }
+    }
+
+    console.log('❌ Nenhuma localização principal identificada');
+    return null;
+  };
+
+  // Função para extrair palavras-chave específicas do hotel - VERSÃO KEY MATCHING
   const extractHotelKeywords = (hotelName: string): string[] => {
     if (!hotelName || typeof hotelName !== 'string') return [];
     
-    // Normalizar para comparação (manter acentos nas palavras originais)
     const normalized = hotelName
       .toLowerCase()
       .trim()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos para comparação
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^\w\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
 
-    console.log('🔍 Extraindo keywords de:', hotelName, '→', normalized);
+    console.log('🔍 Extraindo keywords com KEY MATCHING de:', hotelName);
     
-    // Definir palavras-chave específicas por hotel para validação rigorosa
-    const hotelKeywords: { [key: string]: string[] } = {
-      // Hotéis Wish - cada um tem suas palavras-chave únicas
-      'wish foz do iguacu': ['wish', 'foz', 'iguacu', 'iguaçu'],
-      'wish foz iguacu': ['wish', 'foz', 'iguacu', 'iguaçu'],
-      'wish serrano': ['wish', 'serrano'],
-      'wish natal': ['wish', 'natal'],
-      'wish bahia': ['wish', 'bahia'],
-      'wish galeao': ['wish', 'galeao', 'galeão'],
-      'wish confins': ['wish', 'confins'],
-      
-      // Outros padrões que podem aparecer
-      'foz do iguacu': ['foz', 'iguacu', 'iguaçu'],
-      'serrano': ['serrano'],
-      'natal': ['natal'],
-      'bahia': ['bahia'],
-      'galeao': ['galeao', 'galeão'],
-      'confins': ['confins']
-    };
-
-    // Procurar correspondência direta
-    for (const [pattern, keywords] of Object.entries(hotelKeywords)) {
-      if (normalized.includes(pattern.replace('ç', 'c').replace('ã', 'a'))) {
-        console.log('✅ Padrão encontrado:', pattern, '→', keywords);
-        return keywords;
-      }
+    const keywords: string[] = [];
+    
+    // 1. Verificar se é Wish
+    if (normalized.includes('wish')) {
+      keywords.push('wish');
     }
-
-    // Se não encontrou padrão específico, extrair palavras significativas
-    const words = normalized.split(/\s+/).filter(word => 
+    
+    // 2. Extrair localização principal
+    const location = extractMainLocation(hotelName);
+    if (location) {
+      keywords.push(location);
+    }
+    
+    // 3. Adicionar palavras específicas relevantes (se não capturadas acima)
+    const additionalWords = normalized.split(/\s+/).filter(word => 
       word.length >= 3 && 
-      !['hotel', 'pousada', 'resort', 'do', 'da', 'de', 'dos', 'das', 'em', 'no', 'na'].includes(word)
+      !['hotel', 'pousada', 'resort', 'do', 'da', 'de', 'dos', 'das', 'em', 'no', 'na', 'e', 'o', 'a', 'com', 'para', 'por'].includes(word) &&
+      !keywords.includes(word) &&
+      word !== 'wish'
     );
+    
+    // Adicionar apenas palavras realmente relevantes (máximo 2 extras)
+    keywords.push(...additionalWords.slice(0, 2));
 
-    console.log('⚠️ Usando extração genérica:', words);
-    return words;
+    console.log('🎯 Keywords extraídas:', keywords);
+    return keywords;
   };
 
-  // Função para validar se o hotel do arquivo corresponde EXATAMENTE ao hotel do usuário - VALIDAÇÃO RIGOROSA
+  // Função para validar se o hotel do arquivo corresponde ao hotel do usuário - KEY MATCHING
   const validateHotelMatch = (fileHotels: string[], userHotelName: string): { isValid: boolean, fileHotel?: string, userHotel?: string } => {
     if (!userHotelName || fileHotels.length === 0) {
       console.log('❌ Dados insuficientes para validação');
@@ -502,71 +551,61 @@ function ImportPageContent() {
     }
 
     const userKeywords = extractHotelKeywords(userHotelName);
+    const userLocation = extractMainLocation(userHotelName);
+    const userHasWish = userKeywords.includes('wish');
     
-    console.log('🏨 Validação Rigorosa de Hotel:');
+    console.log('🏨 Validação KEY MATCHING:');
     console.log('Hotel do usuário:', userHotelName);
+    console.log('Localização do usuário:', userLocation);
+    console.log('Usuário é Wish:', userHasWish);
     console.log('Keywords do usuário:', userKeywords);
     console.log('Hotéis no arquivo:', fileHotels);
     
-    // Para cada hotel no arquivo, extrair keywords e comparar
+    // Para cada hotel no arquivo, validar com key matching
     for (const fileHotel of fileHotels) {
       const fileKeywords = extractHotelKeywords(fileHotel);
+      const fileLocation = extractMainLocation(fileHotel);
+      const fileHasWish = fileKeywords.includes('wish');
       
-      console.log('Comparando arquivo:', fileHotel);
+      console.log('\n--- Analisando hotel do arquivo ---');
+      console.log('Hotel do arquivo:', fileHotel);
+      console.log('Localização do arquivo:', fileLocation);
+      console.log('Arquivo é Wish:', fileHasWish);
       console.log('Keywords do arquivo:', fileKeywords);
       
-      if (fileKeywords.length === 0 || userKeywords.length === 0) {
-        console.log('⚠️ Keywords insuficientes');
+      // REGRA 1: LOCALIZAÇÃO PRINCIPAL deve ser a mesma
+      if (!userLocation || !fileLocation) {
+        console.log('❌ Localização não identificada - usuário:', userLocation, 'arquivo:', fileLocation);
         continue;
       }
       
-      // Validação rigorosa: TODAS as palavras-chave do usuário devem estar no arquivo
-      const userWordsInFile = userKeywords.filter(keyword => 
-        fileKeywords.some(fKeyword => 
-          fKeyword === keyword || 
-          fKeyword.includes(keyword) || 
-          keyword.includes(fKeyword)
-        )
-      );
-      
-      console.log('Palavras do usuário encontradas no arquivo:', userWordsInFile);
-      
-      // Calcular porcentagem de correspondência
-      const matchPercentage = userWordsInFile.length / userKeywords.length;
-      console.log('Porcentagem de correspondência:', Math.round(matchPercentage * 100) + '%');
-      
-      // Critério rigoroso: pelo menos 80% das palavras-chave devem corresponder
-      // Para hotéis Wish, exigir correspondência ainda mais rigorosa
-      const isWishHotel = userKeywords.includes('wish');
-      const requiredThreshold = isWishHotel ? 0.75 : 0.8; // 75% para Wish (tem mais palavras), 80% para outros
-      
-      if (matchPercentage >= requiredThreshold) {
-        console.log('✅ Hotel validado com', Math.round(matchPercentage * 100) + '% de correspondência!');
-        return { isValid: true, fileHotel, userHotel: userHotelName };
+      if (userLocation !== fileLocation) {
+        console.log('❌ Localizações diferentes - usuário:', userLocation, 'arquivo:', fileLocation);
+        continue;
       }
       
-      // Verificação especial para hotéis Wish: deve ter 'wish' + localização específica
-      if (isWishHotel) {
-        const hasWish = fileKeywords.includes('wish');
-        const userLocation = userKeywords.find(kw => ['foz', 'iguacu', 'iguaçu', 'serrano', 'natal', 'bahia', 'galeao', 'galeão', 'confins'].includes(kw));
-        const hasUserLocation = userLocation && fileKeywords.some(kw => 
-          kw === userLocation || 
-          (userLocation === 'iguacu' && kw === 'iguaçu') ||
-          (userLocation === 'iguaçu' && kw === 'iguacu') ||
-          (userLocation === 'galeao' && kw === 'galeão') ||
-          (userLocation === 'galeão' && kw === 'galeao')
-        );
-        
-        if (hasWish && hasUserLocation) {
-          console.log('✅ Hotel Wish validado por critério específico (wish + localização)!');
-          return { isValid: true, fileHotel, userHotel: userHotelName };
-        }
-        
-        console.log('❌ Hotel Wish não passou no critério específico. Wish:', hasWish, 'Localização:', hasUserLocation);
+      console.log('✅ Localizações coincidem:', userLocation, '=', fileLocation);
+      
+      // REGRA 2: WISH deve ser consistente
+      if (userHasWish !== fileHasWish) {
+        console.log('❌ Inconsistência Wish - usuário:', userHasWish, 'arquivo:', fileHasWish);
+        continue;
       }
+      
+      // REGRA 3: Se chegou até aqui, PASSOU na validação key matching
+      const matchType = userHasWish ? 'Wish + Localização' : 'Localização';
+      console.log(`✅ VALIDAÇÃO APROVADA por ${matchType}:`, userLocation);
+      console.log('Hotel do usuário:', userHotelName);
+      console.log('Hotel do arquivo:', fileHotel);
+      
+      return { isValid: true, fileHotel, userHotel: userHotelName };
     }
     
-    console.log('❌ Nenhum hotel do arquivo corresponde ao hotel do usuário');
+    console.log('\n❌ VALIDAÇÃO REPROVADA');
+    console.log('Motivo: Nenhum hotel do arquivo tem a mesma localização principal do usuário');
+    console.log('Localização necessária:', userLocation);
+    console.log('Wish necessário:', userHasWish);
+    
     return { 
       isValid: false, 
       fileHotel: fileHotels[0], 
@@ -806,7 +845,7 @@ function ImportPageContent() {
     return result;
   };
 
-  const processFileWithAccountHotel = async (file: File) => {
+  const processFileWithAccountHotel = async (file: File, skipHotelValidation: boolean = false) => {
     setImporting(true);
     setProgress(0);
     setLastProgressToast(0);
@@ -1026,82 +1065,94 @@ function ImportPageContent() {
       }
       
       // VALIDAÇÃO DE HOTEL - Verificar se o hotel do arquivo corresponde ao hotel do usuário
-      setCurrentStep("Validando hotel do arquivo...");
-      setProgress(8);
-      
-      // Extrair todos os hotéis únicos do arquivo (incluindo valores válidos)
-      const fileHotelsSet = new Set(
-        data
-          .map(item => item.nomeHotel)
-          .filter(hotel => hotel && typeof hotel === 'string' && hotel.trim().length > 0)
-      );
-      const fileHotels = Array.from(fileHotelsSet) as string[];
-      
-      console.log('🔍 DEBUG - Extração de hotéis:');
-      console.log('Dados processados:', data.length, 'itens');
-      console.log('Hotéis encontrados no arquivo:', fileHotels);
-      console.log('Hotel do usuário logado:', hotelName);
-      
-      // Verificação rigorosa: se não encontrou nenhum hotel válido no arquivo, tentar extrair do nome do arquivo
-      if (fileHotels.length === 0) {
-        console.log('⚠️ Nenhum hotel encontrado nos dados, tentando extrair do nome do arquivo...');
+      if (!skipHotelValidation) {
+        setCurrentStep("Validando hotel do arquivo...");
+        setProgress(8);
         
-        // Tentar extrair hotel do nome do arquivo
-        const fileNameHotels = extractHotelKeywords(file.name);
-        if (fileNameHotels.length > 0) {
-          // Validar usando as keywords do nome do arquivo
-          const fileNameValidation = validateHotelMatch([file.name], hotelName);
-          if (!fileNameValidation.isValid) {
-            console.log('❌ Hotel do arquivo (nome) não corresponde ao usuário');
+        // Extrair todos os hotéis únicos do arquivo (incluindo valores válidos)
+        const fileHotelsSet = new Set(
+          data
+            .map(item => item.nomeHotel)
+            .filter(hotel => hotel && typeof hotel === 'string' && hotel.trim().length > 0)
+        );
+        const fileHotels = Array.from(fileHotelsSet) as string[];
+        
+        console.log('🔍 DEBUG - Extração de hotéis:');
+        console.log('Dados processados:', data.length, 'itens');
+        console.log('Hotéis encontrados no arquivo:', fileHotels);
+        console.log('Hotel do usuário logado:', hotelName);
+        
+        // Verificação rigorosa: se não encontrou nenhum hotel válido no arquivo, tentar extrair do nome do arquivo
+        if (fileHotels.length === 0) {
+          console.log('⚠️ Nenhum hotel encontrado nos dados, tentando extrair do nome do arquivo...');
+          
+          // Tentar extrair hotel do nome do arquivo
+          const fileNameHotels = extractHotelKeywords(file.name);
+          if (fileNameHotels.length > 0) {
+            // Validar usando as keywords do nome do arquivo
+            const fileNameValidation = validateHotelMatch([file.name], hotelName);
+            if (!fileNameValidation.isValid) {
+              console.log('❌ Hotel do arquivo (nome) não corresponde ao usuário');
+              setHotelErrorData({
+                fileHotel: `Detectado no nome: ${file.name}`,
+                userHotel: hotelName
+              });
+              setShowHotelErrorDialog(true);
+              setImporting(false);
+              setCurrentStep("Importação cancelada - hotel incorreto (nome do arquivo)");
+              return;
+            }
+            console.log('✅ Hotel validado através do nome do arquivo');
+          } else {
+            console.log('❌ Nenhum hotel válido encontrado no arquivo ou nome do arquivo');
             setHotelErrorData({
-              fileHotel: `Detectado no nome: ${file.name}`,
+              fileHotel: 'Nenhum hotel identificado no arquivo ou nome do arquivo',
               userHotel: hotelName
             });
             setShowHotelErrorDialog(true);
             setImporting(false);
-            setCurrentStep("Importação cancelada - hotel incorreto (nome do arquivo)");
+            setCurrentStep("Importação cancelada - hotel não identificado");
             return;
           }
-          console.log('✅ Hotel validado através do nome do arquivo');
         } else {
-          console.log('❌ Nenhum hotel válido encontrado no arquivo ou nome do arquivo');
-          setHotelErrorData({
-            fileHotel: 'Nenhum hotel identificado no arquivo ou nome do arquivo',
-            userHotel: hotelName
-          });
-          setShowHotelErrorDialog(true);
-          setImporting(false);
-          setCurrentStep("Importação cancelada - hotel não identificado");
-          return;
+          // Validar se algum hotel do arquivo corresponde ao hotel do usuário
+          const validation = validateHotelMatch(fileHotels, hotelName);
+          
+          if (!validation.isValid) {
+            // Logs de debug para verificar o que aconteceu
+            console.log('❌ Validação de hotel falhou:');
+            console.log('Arquivo:', validation.fileHotel);
+            console.log('Usuário:', validation.userHotel);
+            console.log('Todos os hotéis do arquivo:', fileHotels);
+            
+            // Mostrar modal de erro ao invés de toast
+            setHotelErrorData({
+              fileHotel: validation.fileHotel || fileHotels[0],
+              userHotel: validation.userHotel || hotelName
+            });
+            setShowHotelErrorDialog(true);
+            setImporting(false);
+            setCurrentStep("Importação cancelada - hotel incorreto");
+            return;
+          } else {
+            // Hotel validado com sucesso
+            console.log('✅ Hotel validado com sucesso!');
+            toast({
+              title: "✅ Hotel Validado",
+              description: `Arquivo validado para o hotel "${validation.userHotel}"`,
+            });
+          }
         }
       } else {
-        // Validar se algum hotel do arquivo corresponde ao hotel do usuário
-        const validation = validateHotelMatch(fileHotels, hotelName);
-        
-        if (!validation.isValid) {
-          // Logs de debug para verificar o que aconteceu
-          console.log('❌ Validação de hotel falhou:');
-          console.log('Arquivo:', validation.fileHotel);
-          console.log('Usuário:', validation.userHotel);
-          console.log('Todos os hotéis do arquivo:', fileHotels);
-          
-          // Mostrar modal de erro ao invés de toast
-          setHotelErrorData({
-            fileHotel: validation.fileHotel || fileHotels[0],
-            userHotel: validation.userHotel || hotelName
-          });
-          setShowHotelErrorDialog(true);
-          setImporting(false);
-          setCurrentStep("Importação cancelada - hotel incorreto");
-          return;
-        } else {
-          // Hotel validado com sucesso
-          console.log('✅ Hotel validado com sucesso!');
-          toast({
-            title: "✅ Hotel Validado",
-            description: `Arquivo validado para o hotel "${validation.userHotel}"`,
-          });
-        }
+        // Validação de hotel pulada
+        setCurrentStep("Validação de hotel ignorada - forçando importação...");
+        setProgress(10);
+        console.log('🚨 VALIDAÇÃO DE HOTEL IGNORADA - importação forçada pelo usuário');
+        toast({
+          title: "⚠️ Validação Ignorada",
+          description: "Importação forçada - validação de hotel foi pulada",
+          variant: "default"
+        });
       }
       
       // Verificar duplicatas ANTES de configurar progresso
@@ -2449,7 +2500,7 @@ function ImportPageContent() {
             </div>
             <AlertDialogDescription className="text-gray-600 dark:text-gray-300 space-y-3">
               <p>
-                <strong>Não é possível importar este arquivo!</strong>
+                <strong>Validação de hotel não passou nos critérios automáticos</strong>
               </p>
               <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2">
@@ -2465,30 +2516,53 @@ function ImportPageContent() {
                   </span>
                 </div>
               </div>
+              <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">⚠️ Tem certeza que é o arquivo correto?</p>
+                <p className="text-xs text-yellow-600 dark:text-yellow-300 leading-relaxed">
+                  Se você tem <strong>certeza absoluta</strong> que este arquivo contém dados do seu hotel, pode forçar a importação. 
+                  Isso pode acontecer quando o nome do hotel no arquivo está em formato diferente do esperado.
+                </p>
+              </div>
               <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">ℹ️ Como funciona a validação:</p>
                 <p className="text-xs text-blue-600 dark:text-blue-300 leading-relaxed">
-                  O sistema agora faz uma validação rigorosa comparando as palavras-chave específicas do seu hotel com as do arquivo. 
-                  Para hotéis Wish, por exemplo, deve ter <strong>Wish + localização específica</strong> (como "Foz do Iguaçu", "Serrano", "Natal"). 
-                  Isso evita confusões entre hotéis similares e garante que você só importe dados do hotel correto.
+                  O sistema compara palavras-chave do seu hotel com as do arquivo usando múltiplas estratégias: 
+                  correspondência de palavras, acentos, localização e até correspondência parcial de strings.
                 </p>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Por questões de segurança e organização, você só pode importar arquivos do seu próprio hotel com correspondência exata das palavras-chave.
-              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-3">
-            <AlertDialogAction 
+          <AlertDialogFooter className="gap-3 flex-col sm:flex-row">
+            <AlertDialogCancel 
               onClick={() => {
                 setShowHotelErrorDialog(false);
                 setHotelErrorData(null);
                 resetImportState();
               }}
-              className="bg-red-600 hover:bg-red-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-6 py-2 rounded-lg transition-colors sm:order-1"
             >
-              Entendido
-            </AlertDialogAction>
+              Cancelar
+            </AlertDialogCancel>
+            
+            <Button
+              onClick={async () => {
+                setShowHotelErrorDialog(false);
+                setHotelErrorData(null);
+                
+                // Forçar importação - pular validação de hotel
+                if (acceptedFiles && acceptedFiles.length > 0) {
+                  const file = acceptedFiles[0];
+                  console.log('🚨 FORÇANDO IMPORTAÇÃO do arquivo:', file.name);
+                  
+                  // Chama processFileWithAccountHotel com skipHotelValidation = true
+                  processFileWithAccountHotel(file, true);
+                }
+              }}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white font-medium px-6 py-2 rounded-lg transition-colors sm:order-2 flex items-center gap-2"
+            >
+              <AlertCircle className="h-4 w-4" />
+              Forçar Importação
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
