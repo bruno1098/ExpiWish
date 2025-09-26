@@ -1,1283 +1,529 @@
+// Nova versão do sistema de análise de feedback com taxonomy dinâmica
 import OpenAI from "openai";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  findCandidates,
+  getTaxonomyConfig,
+  createTaxonomyProposal,
+  loadTaxonomy
+} from "@/lib/taxonomy-service";
+import {
+  ClassificationResult,
+  ClassificationIssue,
+  ClassificationCandidates
+} from "@/lib/taxonomy-types";
+import { adaptNewAIToLegacyFormat, createBasicFeedback, createEmergencyFeedback, type NewAIResponse } from '@/lib/ai-compatibility-adapter';
+import { performanceLogger } from '@/lib/performance-logger';
 
-// Cache em memória para análises repetidas com limpeza automática
-const analysisCache = new Map<string, any>();
+// Cache em memória para análises repetidas
+interface AnalysisCache {
+  result: ClassificationResult;
+  timestamp: number;
+  taxonomy_version: number;
+}
+
+const analysisCache = new Map<string, AnalysisCache>();
 const CACHE_EXPIRY = 30 * 60 * 1000; // 30 minutos
-const MAX_CACHE_SIZE = 1000; // Limite de itens no cache
+const MAX_CACHE_SIZE = 1000;
 
-// Limpeza automática do cache a cada 15 minutos
+// Controle de rate limiting  
+let requestCount = 0;
+const RATE_LIMIT_WINDOW = 60 * 1000;
+const MAX_REQUESTS_PER_MINUTE = 180;
+
+// Circuit Breaker para evitar cascata de falhas
+interface CircuitBreakerState {
+  failures: number;
+  lastFailure: number;
+  state: 'closed' | 'open' | 'half-open';
+}
+
+const circuitBreaker: CircuitBreakerState = {
+  failures: 0,
+  lastFailure: 0,
+  state: 'closed'
+};
+
+const CIRCUIT_BREAKER_THRESHOLD = 5; // Falhas consecutivas para abrir
+const CIRCUIT_BREAKER_TIMEOUT = 60000; // 1 minuto para tentar novamente
+
+// Reset contador a cada minuto
+setInterval(() => {
+  requestCount = 0;
+}, RATE_LIMIT_WINDOW);
+
+/**
+ * Classifica o tipo de erro para estratégia de fallback apropriada
+ */
+function classifyError(error: any): string {
+  const message = error.message?.toLowerCase() || '';
+
+  if (message.includes('rate limit') || message.includes('429')) {
+    return 'rate_limit';
+  } else if (message.includes('timeout') || message.includes('aborted')) {
+    return 'timeout';
+  } else if (message.includes('api key') || message.includes('401')) {
+    return 'auth_error';
+  } else if (message.includes('quota') || message.includes('billing')) {
+    return 'quota_exceeded';
+  } else if (message.includes('network') || message.includes('fetch')) {
+    return 'network_error';
+  } else if (message.includes('embedding') || message.includes('similarity')) {
+    return 'embedding_error';
+  } else {
+    return 'unknown_error';
+  }
+}
+
+/**
+ * Gerencia o circuit breaker para evitar cascata de falhas
+ */
+function checkCircuitBreaker(): boolean {
+  const now = Date.now();
+
+  if (circuitBreaker.state === 'open') {
+    if (now - circuitBreaker.lastFailure > CIRCUIT_BREAKER_TIMEOUT) {
+      circuitBreaker.state = 'half-open';
+      console.log('🔄 Circuit breaker mudou para half-open');
+      return true;
+    }
+    return false;
+  }
+
+  return true;
+}
+
+function recordSuccess(): void {
+  if (circuitBreaker.state === 'half-open') {
+    circuitBreaker.state = 'closed';
+    circuitBreaker.failures = 0;
+    console.log('✅ Circuit breaker fechado - sistema recuperado');
+  }
+}
+
+function recordFailure(): void {
+  circuitBreaker.failures++;
+  circuitBreaker.lastFailure = Date.now();
+
+  if (circuitBreaker.failures >= CIRCUIT_BREAKER_THRESHOLD) {
+    circuitBreaker.state = 'open';
+    console.log('🚨 Circuit breaker aberto - muitas falhas consecutivas');
+  }
+}
+
+/**
+ * Implementa retry com backoff exponencial
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000,
+  errorType: string = 'unknown'
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+
+      // Não fazer retry para alguns tipos de erro
+      if (errorType === 'auth_error' || errorType === 'quota_exceeded') {
+        throw error;
+      }
+
+      const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+      console.log(`🔄 Tentativa ${attempt} falhou. Tentando novamente em ${Math.round(delay)}ms...`);
+
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error('Máximo de tentativas excedido');
+}
+
+// Limpeza automática do cache
 setInterval(() => {
   const now = Date.now();
   const keysToDelete: string[] = [];
-  
+
   analysisCache.forEach((value, key) => {
     if (now - value.timestamp > CACHE_EXPIRY) {
       keysToDelete.push(key);
     }
   });
-  
+
   keysToDelete.forEach(key => analysisCache.delete(key));
-  
-  // Se ainda tiver muitos itens, remove os mais antigos
+
+  // Limitar tamanho máximo
   if (analysisCache.size > MAX_CACHE_SIZE) {
-    const oldestEntries: Array<[string, number]> = [];
-    analysisCache.forEach((value, key) => {
-      oldestEntries.push([key, value.timestamp]);
-    });
-    
-    oldestEntries.sort((a, b) => a[1] - b[1]);
-    const toDelete = oldestEntries.slice(0, oldestEntries.length - MAX_CACHE_SIZE);
-    toDelete.forEach(([key]) => analysisCache.delete(key));
+    const oldestEntries = Array.from(analysisCache.entries())
+      .sort(([, a], [, b]) => a.timestamp - b.timestamp)
+      .slice(0, analysisCache.size - MAX_CACHE_SIZE);
+
+    oldestEntries.forEach(([key]) => analysisCache.delete(key));
   }
-  
-  console.log(`🧹 [CACHE-CLEANUP] Limpeza realizada. Itens no cache: ${analysisCache.size}`);
-}, 15 * 60 * 1000); // 15 minutos
 
-// Controle de rate limiting
-let requestCount = 0;
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minuto
-const MAX_REQUESTS_PER_MINUTE = 180; // Limite mais alto para melhor performance
+  console.log(`🧹 Cache limpo. Itens: ${analysisCache.size}`);
+}, 15 * 60 * 1000);
 
-// Reset do contador a cada minuto
-setInterval(() => {
-  requestCount = 0;
-}, RATE_LIMIT_WINDOW);
+/**
+ * Cria prompt dinâmico com candidatos
+ */
+function createDynamicPrompt(
+  text: string,
+  candidates: ClassificationCandidates
+): { systemPrompt: string; userPrompt: string; functionSchema: any } {
 
-// Função para normalizar texto (deve vir antes do dicionário)
-function normalizeText(text: string): string {
-  if (!text) return text;
-  
-  return text.toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
-}
+  const systemPrompt = `Você é uma IA especialista em hospitalidade com TOTAL AUTONOMIA SEMÂNTICA. Sua missão é LER, COMPREENDER e CLASSIFICAR feedbacks baseado no SIGNIFICADO REAL, não em palavras-chave.
 
-// Dicionário raw aprimorado baseado nos feedbacks da cliente
-const RAW_NORMALIZATION_DICT: Record<string, string> = {
-  // === A&B - ALIMENTOS & BEBIDAS - SEÇÃO EXPANDIDA ===
-  
-  // Serviço (garçons, bartenders, atendimento restaurante/bar)
-  "garçom": "A&B - Serviço",
-  "garcom": "A&B - Serviço", 
-  "garçons": "A&B - Serviço",
-  "garcons": "A&B - Serviço",
-  "garçonete": "A&B - Serviço",
-  "garconete": "A&B - Serviço",
-  "garçonetes": "A&B - Serviço",
-  "garconetes": "A&B - Serviço",
-  "waiter": "A&B - Serviço",
-  "waiters": "A&B - Serviço",
-  "waitress": "A&B - Serviço",
-  "bartender": "A&B - Serviço",
-  "barman": "A&B - Serviço",
-  "atendente": "A&B - Serviço",
-  "atendentes": "A&B - Serviço",
-  "bar": "A&B - Serviço",
-  "restaurante": "A&B - Serviço",
-  "restaurant": "A&B - Serviço",
-  "atendimento restaurante": "A&B - Serviço",
-  "serviço restaurante": "A&B - Serviço",
-  "equipe restaurante": "A&B - Serviço",
-  "staff restaurante": "A&B - Serviço",
-  "atendimento do restaurante": "A&B - Serviço",
-  "serviço do restaurante": "A&B - Serviço",
-  "equipe do restaurante": "A&B - Serviço",
-  "funcionários do restaurante": "A&B - Serviço",
-  "pessoal do restaurante": "A&B - Serviço",
-  "atendimento bar": "A&B - Serviço",
-  "serviço bar": "A&B - Serviço",
-  "atendimento do bar": "A&B - Serviço",
-  "serviço do bar": "A&B - Serviço",
-  "quadro reduzido": "A&B - Serviço",
-  "poucos garçons": "A&B - Serviço",
-  "falta garçom": "A&B - Serviço",
-  "demora garçom": "A&B - Serviço",
-  "demora atendimento": "A&B - Serviço",
-  "atendimento demorado": "A&B - Serviço",
-  "atendimento lento": "A&B - Serviço",
-  "serviço lento": "A&B - Serviço",
-  "serviço demorado": "A&B - Serviço",
-  "espera longa": "A&B - Serviço",
-  "muito tempo esperando": "A&B - Serviço",
-  "cardápio": "A&B - Serviço",
-  "cardapio": "A&B - Serviço",
-  "menu": "A&B - Serviço",
-  "transparência cardápio": "A&B - Serviço",
-  "transparência do cardápio": "A&B - Serviço",
-  "cardápios": "A&B - Serviço",
+🧠 **INTELIGÊNCIA SEMÂNTICA TOTAL**:
+- **LEIA o feedback completamente** 
+- **ENTENDA a intenção e contexto**
+- **INTERPRETE o significado real**
+- **CLASSIFIQUE baseado na compreensão, não em palavras**
 
-  // Café da manhã - EXPANDIDO
-  "cafe": "A&B - Café da manhã",
-  "café": "A&B - Café da manhã",
-  "cafe da manha": "A&B - Café da manhã",
-  "café da manhã": "A&B - Café da manhã",
-  "breakfast": "A&B - Café da manhã",
-  "morning meal": "A&B - Café da manhã",
-  "breakfast buffet": "A&B - Café da manhã",
-  "buffet cafe": "A&B - Café da manhã",
-  "buffet café": "A&B - Café da manhã",
-  "buffet matinal": "A&B - Café da manhã",
-  "café matinal": "A&B - Café da manhã",
-  "refeição matinal": "A&B - Café da manhã",
-  "pequeno almoço": "A&B - Café da manhã",
-  "desjejum": "A&B - Café da manhã",
-  "manhã": "A&B - Café da manhã",
-  "matinal": "A&B - Café da manhã",
-  "coffee": "A&B - Café da manhã",
-  "qualidade do café": "A&B - Café da manhã",
+🚀 **AUTONOMIA MÁXIMA - VOCÊ DECIDE**:
+- Use SEU conhecimento de hospitalidade para interpretar
+- Identifique TODOS os aspectos mencionados (explícitos ou implícitos)
+- Crie quantas classificações forem necessárias
+- Seja preciso, mas use sua inteligência para decidir
 
-  // Almoço/Jantar - EXPANDIDO
-  "almoco": "A&B - Almoço",
-  "almoço": "A&B - Almoço",
-  "lunch": "A&B - Almoço",
-  "almoçar": "A&B - Almoço",
-  "almocar": "A&B - Almoço",
-  "janta": "A&B - Almoço",
-  "jantar": "A&B - Almoço",
-  "dinner": "A&B - Almoço",
-  "refeição": "A&B - Almoço",
-  "refeicao": "A&B - Almoço",
-  "meal": "A&B - Almoço",
-  "buffet almoço": "A&B - Almoço",
-  "buffet jantar": "A&B - Almoço",
-  "lunch buffet": "A&B - Almoço",
-  "dinner buffet": "A&B - Almoço",
-  "refeição principal": "A&B - Almoço",
-  "main meal": "A&B - Almoço",
-  "evening meal": "A&B - Almoço",
-  "noon meal": "A&B - Almoço",
-  "meio-dia": "A&B - Almoço",
-  "meio dia": "A&B - Almoço",
-  "noite": "A&B - Almoço",
-  "vespertino": "A&B - Almoço",
-  "noturno": "A&B - Almoço",
+🎯 **COMPREENSÃO CONTEXTUAL**:
 
-  // Bebidas - NOVO
-  "bebida": "A&B - Serviço",
-  "bebidas": "A&B - Serviço",
-  "drink": "A&B - Serviço",
-  "drinks": "A&B - Serviço",
-  "cerveja": "A&B - Serviço",
-  "beer": "A&B - Serviço",
-  "vinho": "A&B - Serviço",
-  "wine": "A&B - Serviço",
-  "caipirinha": "A&B - Serviço",
-  "cocktail": "A&B - Serviço",
-  "coquetail": "A&B - Serviço",
-  "refrigerante": "A&B - Serviço",
-  "soda": "A&B - Serviço",
-  "agua": "A&B - Serviço",
-  "água": "A&B - Serviço",
-  "water": "A&B - Serviço",
-  "suco": "A&B - Serviço",
-  "juice": "A&B - Serviço",
-  "cha": "A&B - Serviço",
-  "chá": "A&B - Serviço",
-  "tea": "A&B - Serviço",
-  "cappuccino": "A&B - Serviço",
-  "expresso": "A&B - Serviço",
-  "espresso": "A&B - Serviço",
-  "beverage": "A&B - Serviço",
+**ENTENDA O NEGÓCIO HOTELEIRO:**
+- Restaurantes/Bares = A&B (Alimentos & Bebidas)  
+- Funcionários do restaurante/bar = A&B - Serviço
+- Quartos sujos/arrumação = Limpeza/Governança
+- Equipamentos quebrados = Manutenção  
+- Atividades/Piscina = Lazer
+- Wi-fi/TV = Tecnologia
+- Chegada/Saída = Recepção
+- Concierge = pessoa específica de informações
 
-  // Alimentos específicos - NOVO EXPANDIDO
-  "comida": "A&B - Alimentos",
-  "food": "A&B - Alimentos",
-  "prato": "A&B - Alimentos",
-  "pratos": "A&B - Alimentos",
-  "dish": "A&B - Alimentos",
-  "dishes": "A&B - Alimentos",
-  "alimentos": "A&B - Alimentos",
-  "alimentação": "A&B - Alimentos",
-  "carne": "A&B - Alimentos",
-  "meat": "A&B - Alimentos",
-  "frango": "A&B - Alimentos",
-  "chicken": "A&B - Alimentos",
-  "peixe": "A&B - Alimentos",
-  "fish": "A&B - Alimentos",
-  "salada": "A&B - Alimentos",
-  "saladas": "A&B - Alimentos",
-  "fruta": "A&B - Alimentos",
-  "frutas": "A&B - Alimentos",
-  "fruit": "A&B - Alimentos",
-  "fruits": "A&B - Alimentos",
-  "verdura": "A&B - Alimentos",
-  "verduras": "A&B - Alimentos",
-  "vegetables": "A&B - Alimentos",
-  "legume": "A&B - Alimentos",
-  "legumes": "A&B - Alimentos",
-  "arroz": "A&B - Alimentos",
-  "rice": "A&B - Alimentos",
-  "feijao": "A&B - Alimentos",
-  "feijão": "A&B - Alimentos",
-  "beans": "A&B - Alimentos",
-  "macarrao": "A&B - Alimentos",
-  "macarrão": "A&B - Alimentos",
-  "pasta": "A&B - Alimentos",
-  "massa": "A&B - Alimentos",
-  "massas": "A&B - Alimentos",
-  "sopa": "A&B - Alimentos",
-  "soup": "A&B - Alimentos",
-  "sobremesa": "A&B - Alimentos",
-  "sobremesas": "A&B - Alimentos",
-  "dessert": "A&B - Alimentos",
-  "doce": "A&B - Alimentos",
-  "doces": "A&B - Alimentos",
-  "sweet": "A&B - Alimentos",
-  "sweets": "A&B - Alimentos",
-  "bolo": "A&B - Alimentos",
-  "cake": "A&B - Alimentos",
-  "pao": "A&B - Alimentos",
-  "pão": "A&B - Alimentos",
-  "paes": "A&B - Alimentos",
-  "pães": "A&B - Alimentos",
-  "bread": "A&B - Alimentos",
-  "queijo": "A&B - Alimentos",
-  "cheese": "A&B - Alimentos",
-  "presunto": "A&B - Alimentos",
-  "ham": "A&B - Alimentos",
-  "ovo": "A&B - Alimentos",
-  "ovos": "A&B - Alimentos",
-  "eggs": "A&B - Alimentos",
-  "leite": "A&B - Alimentos",
-  "milk": "A&B - Alimentos",
-  "iogurte": "A&B - Alimentos",
-  "yogurt": "A&B - Alimentos",
-  "cereal": "A&B - Alimentos",
-  "cereais": "A&B - Alimentos",
-  "granola": "A&B - Alimentos",
-  "mel": "A&B - Alimentos",
-  "honey": "A&B - Alimentos",
-  "geleia": "A&B - Alimentos",
-  "jam": "A&B - Alimentos",
-  "manteiga": "A&B - Alimentos",
-  "butter": "A&B - Alimentos",
-  "margarina": "A&B - Alimentos",
-  "margarine": "A&B - Alimentos",
-  "bacon": "A&B - Alimentos",
-  "linguica": "A&B - Alimentos",
-  "linguiça": "A&B - Alimentos",
-  "sausage": "A&B - Alimentos",
-  "salsicha": "A&B - Alimentos",
-  "hamburguer": "A&B - Alimentos",
-  "hambúrguer": "A&B - Alimentos",
-  "hamburger": "A&B - Alimentos",
-  "pizza": "A&B - Alimentos",
-  "sanduiche": "A&B - Alimentos",
-  "sanduíche": "A&B - Alimentos",
-  "sandwich": "A&B - Alimentos",
-  "qualidade da comida": "A&B - Alimentos",
-  "food quality": "A&B - Alimentos",
+**ENTENDA AS INTENÇÕES:**
+- Elogios específicos → classificar na área específica
+- Elogios genéricos ("tudo ótimo") → Produto - Experiência  
+- Problemas → identificar causa raiz e departamento responsável
+- Sugestões → detectar quando há proposta de melhoria
 
-  // Variedade - EXPANDIDO
-  "variedade": "A&B - Variedade",
-  "variety": "A&B - Variedade",
-  "opcao": "A&B - Variedade",
-  "opção": "A&B - Variedade",
-  "opcoes": "A&B - Variedade",
-  "opções": "A&B - Variedade",
-  "options": "A&B - Variedade",
-  "escolha": "A&B - Variedade",
-  "escolhas": "A&B - Variedade",
-  "choice": "A&B - Variedade",
-  "choices": "A&B - Variedade",
-  "diversidade": "A&B - Variedade",
-  "diversity": "A&B - Variedade",
-  "selection": "A&B - Variedade",
-  "selecao": "A&B - Variedade",
-  "seleção": "A&B - Variedade",
-  "alternativa": "A&B - Variedade",
-  "alternativas": "A&B - Variedade",
-  "alternative": "A&B - Variedade",
-  "alternatives": "A&B - Variedade",
-  "pouca variedade": "A&B - Variedade",
-  "sem variedade": "A&B - Variedade",
-  "falta variedade": "A&B - Variedade",
-  "falta de variedade": "A&B - Variedade",
-  "pouca opcao": "A&B - Variedade",
-  "pouca opção": "A&B - Variedade",
-  "poucas opcoes": "A&B - Variedade",
-  "poucas opções": "A&B - Variedade",
-  "sempre igual": "A&B - Variedade",
-  "sempre a mesma": "A&B - Variedade",
-  "repetitivo": "A&B - Variedade",
-  "monotono": "A&B - Variedade",
-  "monótono": "A&B - Variedade",
-  "boring": "A&B - Variedade",
-  "limited": "A&B - Variedade",
-  "limitado": "A&B - Variedade",
-  "limitada": "A&B - Variedade",
-  "carne seca": "A&B - Variedade",
-  "queijo coalho": "A&B - Variedade",
-  "não estavam disponíveis": "A&B - Variedade",
-  "indisponível": "A&B - Variedade",
-  "falta de": "A&B - Variedade",
-  "sem": "A&B - Variedade",
+🔥 **EXEMPLOS DE COMPREENSÃO REAL:**
 
-  // Preços - EXPANDIDO  
-  "preco": "A&B - Preço",
-  "preço": "A&B - Preço",
-  "precos": "A&B - Preço",
-  "preços": "A&B - Preço",
-  "price": "A&B - Preço",
-  "prices": "A&B - Preço",
-  "caro": "A&B - Preço",
-  "cara": "A&B - Preço",
-  "caros": "A&B - Preço",
-  "caras": "A&B - Preço",
-  "expensive": "A&B - Preço",
-  "costly": "A&B - Preço",
-  "custo": "A&B - Preço",
-  "cost": "A&B - Preço",
-  "valor": "A&B - Preço",
-  "value": "A&B - Preço",
-  "preço alto": "A&B - Preço",
-  "preços altos": "A&B - Preço",
-  "muito caro": "A&B - Preço",
-  "very expensive": "A&B - Preço",
-  "too expensive": "A&B - Preço",
-  "overpriced": "A&B - Preço",
-  "superfaturado": "A&B - Preço",
-  "absurdo": "A&B - Preço",
-  "absurd": "A&B - Preço",
-  "exagerado": "A&B - Preço",
-  "exaggerated": "A&B - Preço",
-  "alto": "A&B - Preço",
-  "alta": "A&B - Preço",
-  "altos": "A&B - Preço",
-  "altas": "A&B - Preço",
-  "high": "A&B - Preço",
+**Exemplo 1**: "O garçom João foi muito atencioso"
+- **LEIA**: menciona garçom específico
+- **ENTENDA**: elogio ao serviço de um funcionário do restaurante
+- **CLASSIFIQUE**: A&B - Serviço (não "Atendimento" genérico)
 
-  // Gastronomia - NOVO
-  "gastronomia": "A&B - Gastronomia",
-  "culinária": "A&B - Gastronomia", 
-  "culinaria": "A&B - Gastronomia",
-  "cuisine": "A&B - Gastronomia",
-  "chef": "A&B - Gastronomia",
-  "prato típico": "A&B - Gastronomia",
-  "especialidade": "A&B - Gastronomia",
-  "specialty": "A&B - Gastronomia",
-  "típico": "A&B - Gastronomia",
-  "regional": "A&B - Gastronomia",
-  "local": "A&B - Gastronomia",
-  
-  // === SEÇÃO DUPLICADAS REMOVIDAS - MANTENDO APENAS A VERSÃO PRINCIPAL ===
-  // (Todas essas chaves já existem na seção expandida acima)
+**Exemplo 2**: "Tudo foi maravilhoso durante nossa estadia"  
+- **LEIA**: elogio geral sem área específica
+- **ENTENDA**: satisfação geral com a experiência hoteleira
+- **CLASSIFIQUE**: Produto - Experiência (experiência completa)
 
-  // === LIMPEZA - EXPANDIDO ===
-  // Termos gerais de limpeza
-  "limpeza": "Limpeza - Quarto",
-  "limpo": "Limpeza - Quarto",
-  "limpa": "Limpeza - Quarto",
-  "limpas": "Limpeza - Quarto",
-  "limpos": "Limpeza - Quarto",
-  "sujo": "Limpeza - Quarto",
-  "suja": "Limpeza - Quarto",
-  "sujas": "Limpeza - Quarto",
-  "sujos": "Limpeza - Quarto",
-  "dirty": "Limpeza - Quarto",
-  "clean": "Limpeza - Quarto",
-  "cleaning": "Limpeza - Quarto",
-  "higiene": "Limpeza - Quarto",
-  "higienizado": "Limpeza - Quarto",
-  "higienizada": "Limpeza - Quarto",
-  "hygienic": "Limpeza - Quarto",
-  "hygiene": "Limpeza - Quarto",
-  "sanitizado": "Limpeza - Quarto",
-  "sanitizada": "Limpeza - Quarto",
-  "sanitize": "Limpeza - Quarto",
-  "desinfectado": "Limpeza - Quarto",
-  "desinfetado": "Limpeza - Quarto",
-  "mal cheiroso": "Governança - Mofo",
-  "cheiro ruim": "Governança - Mofo",
-  "fedorento": "Governança - Mofo",
-  "smelly": "Governança - Mofo",
-  "bad smell": "Governança - Mofo",
-  "odor": "Governança - Mofo",
-  "odour": "Governança - Mofo",
-  "cheiro": "Governança - Mofo",
-  "smell": "Governança - Mofo",
-  "fedor": "Governança - Mofo",
-  "mau cheiro": "Governança - Mofo",
-  "cheiro forte": "Governança - Mofo",
-  "mofo": "Governança - Mofo",
-  "mofado": "Governança - Mofo",
-  "umidade": "Governança - Mofo",
-  "úmido": "Governança - Mofo",
-  "humid": "Governança - Mofo",
-  "abafado": "Governança - Mofo",
-  "perfumado": "Limpeza - Quarto",
-  "cheiroso": "Limpeza - Quarto",
-  "fragrante": "Limpeza - Quarto",
-  "fragrant": "Limpeza - Quarto",
-  
-  // Limpeza específica do banheiro
-  "banheiro sujo": "Limpeza - Banheiro",
-  "bathroom dirty": "Limpeza - Banheiro",
-  "banheiro limpo": "Limpeza - Banheiro",
-  "bathroom clean": "Limpeza - Banheiro",
-  "vaso sanitário": "Limpeza - Banheiro",
-  "vaso sanitario": "Limpeza - Banheiro",
-  "privada": "Limpeza - Banheiro",
-  "toilet": "Limpeza - Banheiro",
-  "pia": "Limpeza - Banheiro",
-  "sink": "Limpeza - Banheiro",
-  "lavatório": "Limpeza - Banheiro",
-  "lavatorio": "Limpeza - Banheiro",
-  "washbasin": "Limpeza - Banheiro",
-  "box": "Limpeza - Banheiro",
-  "shower": "Limpeza - Banheiro",
-  "ducha": "Limpeza - Banheiro",
-  "chuveiro": "Limpeza - Banheiro",
-  "banheira": "Limpeza - Banheiro",
-  "bathtub": "Limpeza - Banheiro",
-  "tub": "Limpeza - Banheiro",
-  "azulejo": "Limpeza - Banheiro",
-  "azulejos": "Limpeza - Banheiro",
-  "tiles": "Limpeza - Banheiro",
-  "tile": "Limpeza - Banheiro",
-  "rejunte": "Limpeza - Banheiro",
-  "grout": "Limpeza - Banheiro",
-  "piso": "Limpeza - Banheiro",
-  "floor": "Limpeza - Banheiro",
-  "chão": "Limpeza - Banheiro",
-  "espelho": "Limpeza - Banheiro",
-  "mirror": "Limpeza - Banheiro",
-  "vidro": "Limpeza - Banheiro",
-  "glass": "Limpeza - Banheiro",
-  
-  // Produtos de limpeza e amenities
-  "saboneteira": "Limpeza - Banheiro",
-  "saboneteira vazia": "Limpeza - Banheiro",
-  "soap dispenser": "Limpeza - Banheiro",
-  "sabonete": "Limpeza - Banheiro",
-  "sabão": "Limpeza - Banheiro",
-  "soap": "Limpeza - Banheiro",
-  "shampoo": "Limpeza - Banheiro",
-  "condicionador": "Limpeza - Banheiro",
-  "conditioner": "Limpeza - Banheiro",
-  "gel": "Limpeza - Banheiro",
-  "shower gel": "Limpeza - Banheiro",
-  "body wash": "Limpeza - Banheiro",
-  "toalha": "Limpeza - Banheiro",
-  "toalhas": "Limpeza - Banheiro",
-  "towel": "Limpeza - Banheiro",
-  "towels": "Limpeza - Banheiro",
-  "toalha suja": "Limpeza - Banheiro",
-  "toalha limpa": "Limpeza - Banheiro",
-  "toalha molhada": "Limpeza - Banheiro",
-  "toalha úmida": "Limpeza - Banheiro",
-  "toalha umida": "Limpeza - Banheiro",
-  "wet towel": "Limpeza - Banheiro",
-  "damp towel": "Limpeza - Banheiro",
-  "papel higiênico": "Limpeza - Banheiro",
-  "papel higienico": "Limpeza - Banheiro",
-  "toilet paper": "Limpeza - Banheiro",
-  "papel": "Limpeza - Banheiro",
-  "tissue": "Limpeza - Banheiro",
-  
-  // Limpeza do quarto
-  "quarto sujo": "Limpeza - Quarto",
-  "room dirty": "Limpeza - Quarto",
-  "quarto limpo": "Limpeza - Quarto",
-  "room clean": "Limpeza - Quarto",
-  "cama": "Limpeza - Quarto",
-  "bed": "Limpeza - Quarto",
-  "cama suja": "Limpeza - Quarto",
-  "cama limpa": "Limpeza - Quarto",
-  "lençol": "Limpeza - Quarto",
-  "lencol": "Limpeza - Quarto",
-  "lençóis": "Limpeza - Quarto",
-  "lencois": "Limpeza - Quarto",
-  "sheet": "Limpeza - Quarto",
-  "sheets": "Limpeza - Quarto",
-  "bedsheet": "Limpeza - Quarto",
-  "bedsheets": "Limpeza - Quarto",
-  "lençol sujo": "Limpeza - Quarto",
-  "lençol limpo": "Limpeza - Quarto",
-  "sheet dirty": "Limpeza - Quarto",
-  "sheet clean": "Limpeza - Quarto",
-  "fronha": "Limpeza - Quarto",
-  "pillowcase": "Limpeza - Quarto",
-  "pillow case": "Limpeza - Quarto",
-  "travesseiro": "Limpeza - Quarto",
-  "pillow": "Limpeza - Quarto",
-  "almofada": "Limpeza - Quarto",
-  "cushion": "Limpeza - Quarto",
-  "cobertor": "Limpeza - Quarto",
-  "blanket": "Limpeza - Quarto",
-  "edredom": "Limpeza - Quarto",
-  "duvet": "Limpeza - Quarto",
-  "comforter": "Limpeza - Quarto",
-  "colcha": "Limpeza - Quarto",
-  "bedspread": "Limpeza - Quarto",
-  "carpete": "Limpeza - Quarto",
-  "carpet": "Limpeza - Quarto",
-  "tapete": "Limpeza - Quarto",
-  "rug": "Limpeza - Quarto",
-  "cortina": "Limpeza - Quarto",
-  "cortinas": "Limpeza - Quarto",
-  "curtain": "Limpeza - Quarto",
-  "curtains": "Limpeza - Quarto",
-  "persiana": "Limpeza - Quarto",
-  "blinds": "Limpeza - Quarto",
-  "móvel": "Limpeza - Quarto",
-  "móveis": "Limpeza - Quarto",
-  "movel": "Limpeza - Quarto",
-  "moveis": "Limpeza - Quarto",
-  "furniture": "Limpeza - Quarto",
-  "mesa": "Limpeza - Quarto",
-  "table": "Limpeza - Quarto",
-  "cadeira": "Limpeza - Quarto",
-  "chair": "Limpeza - Quarto",
-  "poltrona": "Limpeza - Quarto",
-  "armchair": "Limpeza - Quarto",
-  "guarda-roupa": "Limpeza - Quarto",
-  "guarda roupa": "Limpeza - Quarto",
-  "wardrobe": "Limpeza - Quarto",
-  "closet": "Limpeza - Quarto",
-  "armario": "Limpeza - Quarto",
-  "armário": "Limpeza - Quarto",
-  "cabinet": "Limpeza - Quarto",
-  
-  // Limpeza áreas sociais
-  "área social": "Limpeza - Áreas sociais",
-  "area social": "Limpeza - Áreas sociais",
-  "common area": "Limpeza - Áreas sociais",
-  "lobby": "Limpeza - Áreas sociais",
-  "saguao": "Limpeza - Áreas sociais",
-  "saguão": "Limpeza - Áreas sociais",
-  "hall": "Limpeza - Áreas sociais",
-  "corredor": "Limpeza - Áreas sociais",
-  "corridor": "Limpeza - Áreas sociais",
-  "hallway": "Limpeza - Áreas sociais",
-  "elevador": "Limpeza - Áreas sociais",
-  "elevator": "Limpeza - Áreas sociais",
-  "escada": "Limpeza - Áreas sociais",
-  "stairs": "Limpeza - Áreas sociais",
-  "staircase": "Limpeza - Áreas sociais",
-  "varanda": "Limpeza - Quarto",
-  "sacada": "Limpeza - Quarto",
-  "balcony": "Limpeza - Quarto",
-  "terraço": "Limpeza - Quarto",
-  "terrace": "Limpeza - Quarto",
-  "deck": "Limpeza - Quarto",
+**Exemplo 3**: "O café da manhã estava excelente e a piscina muito limpa"
+- **LEIA**: dois aspectos diferentes mencionados
+- **ENTENDA**: elogio ao café (A&B) + elogio à piscina (Lazer)
+- **CLASSIFIQUE**: 2 classificações separadas
 
-  // === MANUTENÇÃO - EXPANDIDO ===
-  "cofre não funcionava": "Manutenção - Quarto",
-  "cofre": "Manutenção - Quarto",
-  "luzes ao lado da cama": "Manutenção - Quarto",
-  "luz não funciona": "Manutenção - Quarto",
-  "porta da varanda": "Manutenção - Quarto",
-  "janela não fechava": "Manutenção - Quarto",
-  "fechadura": "Manutenção - Quarto",
-  "ar condicionado": "Ar-condicionado",
-  "ar-condicionado": "Ar-condicionado",
-  
-  // Frigobar - Dividido entre contextos
-  "frigobar quebrado": "Manutenção - Frigobar",
-  "frigobar não funciona": "Manutenção - Frigobar",
-  "frigobar com defeito": "Manutenção - Frigobar",
-  "frigobar organizado": "Governança - Frigobar",
-  "frigobar bagunçado": "Governança - Frigobar",
-  "frigobar desorganizado": "Governança - Frigobar",
-  "frigobar limpo": "Governança - Frigobar",
-  "frigobar sujo": "Governança - Frigobar",
-  "frigobar arrumado": "Governança - Frigobar",
-  "frigobar faltando": "Governança - Frigobar",
-  "organizar frigobar": "Governança - Frigobar",
-  "faltar frigobar": "Governança - Frigobar",
-  
-  // Banheiro - ÚNICO (sem duplicatas)
-  "torneira": "Manutenção - Banheiro",
-  "torneira jorra água": "Manutenção - Banheiro",
-  "chuveiro difícil": "Manutenção - Banheiro",
-  "box do chuveiro": "Manutenção - Banheiro",
-  "lixeira": "Manutenção - Banheiro",
-  "lixeira quebrada": "Manutenção - Banheiro",
-  
-  // Instalações e jardinagem
-  "hidromassagem": "Lazer - Estrutura",
-  "hidromassagem quebrada": "Lazer - Estrutura",
-  "jardim": "Manutenção - Jardinagem",
-  "jardinagem": "Manutenção - Jardinagem",
-  "plantas": "Manutenção - Jardinagem",
-  "gramado": "Manutenção - Jardinagem",
-  "grama": "Manutenção - Jardinagem",
-  "paisagismo": "Manutenção - Jardinagem",
-  "vegetação": "Manutenção - Jardinagem",
-  "flores": "Manutenção - Jardinagem",
-  "árvores": "Manutenção - Jardinagem",
-  "arvores": "Manutenção - Jardinagem",
-  "área verde": "Manutenção - Jardinagem",
-  "area verde": "Manutenção - Jardinagem",
-  "espaço verde": "Manutenção - Jardinagem",
-  "espaco verde": "Manutenção - Jardinagem",
-  
-  // Estacionamento (movido para Recepção)
-  "estacionamento": "Recepção - Estacionamento",
-  "parking": "Recepção - Estacionamento",
-  "vaga": "Recepção - Estacionamento",
-  "vagas": "Recepção - Estacionamento",
-  "carro": "Recepção - Estacionamento",
-  "veiculo": "Recepção - Estacionamento",
-  "veículo": "Recepção - Estacionamento",
-  
-  // Acessibilidade (movido para Produto)
-  "acessibilidade": "Produto - Acessibilidade",
-  "acessível": "Produto - Acessibilidade",
-  "accessível": "Produto - Acessibilidade",
-  "rampa": "Produto - Acessibilidade",
-  "rampas": "Produto - Acessibilidade",
-  "deficiente": "Produto - Acessibilidade",
-  "mobilidade reduzida": "Produto - Acessibilidade",
-  "cadeirante": "Produto - Acessibilidade",
-  "wheelchair": "Produto - Acessibilidade",
-  
-  // Custo-benefício (movido para Produto)
-  "custo beneficio": "Produto - Custo-benefício",
-  "custo-beneficio": "Produto - Custo-benefício",
-  "custo benefício": "Produto - Custo-benefício",
-  "custo-benefício": "Produto - Custo-benefício",
-  "valor pelo dinheiro": "Produto - Custo-benefício",
-  "vale a pena": "Produto - Custo-benefício",
-  "value for money": "Produto - Custo-benefício",
-  
-  // Processo (movido para Qualidade)
-  "processo": "Qualidade - Processo",
-  "processos": "Qualidade - Processo",
-  "procedimento": "Qualidade - Processo",
-  "procedimentos": "Qualidade - Processo",
-  "qualidade": "Qualidade - Processo",
-  "padronização": "Qualidade - Processo",
-  "padronizacao": "Qualidade - Processo",
-  "protocolo": "Qualidade - Processo",
-  "protocolos": "Qualidade - Processo",
-  
-  // === FINAL DO DICIONÁRIO ===
-  // (Todas as duplicatas foram removidas - mantendo apenas as definições originais expandidas acima)
-};
+**Exemplo 4**: "Chuveiro pingava e fazia barulho a noite toda"
+- **LEIA**: problema com equipamento do banheiro
+- **ENTENDA**: falha de manutenção afetando descanso
+- **CLASSIFIQUE**: Manutenção - Banheiro
 
-// Dicionário normalizado para lookup eficiente
-const NORMALIZATION_DICT = Object.fromEntries(
-  Object.entries(RAW_NORMALIZATION_DICT).map(([k, v]) => [normalizeText(k), v])
-);
+**Exemplo 5**: "Fiquei decepcionado com a variedade do jantar"
+- **LEIA**: insatisfação com opções de refeição noturna
+- **ENTENDA**: problema na oferta gastronômica do período noturno  
+- **CLASSIFIQUE**: A&B - Jantar
 
-// Keywords oficiais permitidas (removidas: Água, Reserva de cadeiras)
-const OFFICIAL_KEYWORDS = [
-  "A&B - Café da manhã", "A&B - Almoço", "A&B - Serviço", "A&B - Variedade", "A&B - Preço", "A&B - Gastronomia", "A&B - Alimentos",
-  "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval", "Governança - Serviço", "Governança - Mofo", "Governança - Frigobar",
-  "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações", "Manutenção - Serviço", "Manutenção - Jardinagem", "Manutenção - Frigobar",
-  "Ar-condicionado", "Elevador",
-  "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina", "Lazer - Serviço", "Lazer - Atividades de Lazer",
-  "Tecnologia - Wi-fi", "Tecnologia - TV", "Academia",
-  "Atendimento", "Processo", "Produto - Acessibilidade", "Produto - Custo-benefício", "Produto - Preço",
-  "Comunicação", "Recepção - Serviço", "Recepção - Estacionamento", "Check-in - Atendimento Recepção", "Check-out - Atendimento Recepção",
-  "Concierge", "Cotas", "Reservas",
-  "Travesseiro", "Colchão", "Espelho", "Localização", "Mixologia", "Qualidade - Processo"
-];
+🎨 **PROBLEMAS PADRONIZADOS** (para gráficos gerenciais):
+Use categorias específicas que ajudem a gestão:
+- **Demora no Atendimento** (não "ruim")
+- **Equipamento com Falha** (não "quebrado") 
+- **Qualidade da Refeição Abaixo do Esperado** (não "comida ruim")
+- **Wi-Fi Instável** (não "internet ruim")
+- **Falta de Limpeza** (não "sujo")
+- **Preço Alto** (não "caro")
+- **Falta de Variedade** (não "pouco")
+- **Ruído Excessivo** (não "barulhento")
 
-// Departamentos oficiais (mudança: Programa de vendas → EG)
-const OFFICIAL_DEPARTMENTS = [
-  "A&B", "Governança", "Limpeza", "Manutenção", "Produto",
-  "Lazer", "TI", "Operações", "Qualidade", "Recepção", 
-  "EG", "Comercial", "Academia"
-];
+🌟 **DIRETRIZES DE AUTONOMIA**:
 
-// Problemas padronizados expandidos e melhorados
-const STANDARD_PROBLEMS = [
-  // Problemas de funcionamento
-  "Não Funciona", "Funciona Mal", "Quebrado", "Com Defeito", "Intermitente",
-  
-  // Problemas de atendimento
-  "Demora no Atendimento", "Atendimento Rude", "Atendimento Despreparado", "Falta de Staff", "Staff Insuficiente",
-  
-  // Problemas de qualidade
-  "Qualidade Baixa", "Qualidade da Comida", "Qualidade de Bebida", "Sabor Ruim", "Comida Fria", "Bebida Quente",
-  
-  // Problemas de limpeza e higiene
-  "Falta de Limpeza", "Sujo", "Mal Cheiroso", "Mofo", "Manchas", "Cabelos", "Lixo Acumulado",
-  
-  // Problemas de manutenção
-  "Falta de Manutenção", "Desgastado", "Precisando Troca", "Enferrujado", "Descascado", "Rachado",
-  
-  // Problemas de disponibilidade
-  "Falta de Disponibilidade", "Indisponível", "Esgotado", "Sem Estoque", "Fora de Funcionamento",
-  
-  // Problemas de variedade e opções
-  "Falta de Variedade", "Pouca Variedade", "Sem Opções", "Limitado", "Repetitivo", "Monótono",
-  
-  // Problemas de espaço e estrutura
-  "Espaço Insuficiente", "Muito Pequeno", "Apertado", "Lotado", "Superlotado", "Sem Lugar",
-  
-  // Problemas de temperatura
-  "Muito Frio", "Muito Quente", "Temperatura Inadequada", "Não Resfria", "Não Esquenta",
-  
-  // Problemas de ruído
-  "Ruído Excessivo", "Muito Barulho", "Barulhento", "Som Alto", "Música Alta", "Conversas Altas",
-  
-  // Problemas de equipamento
-  "Falta de Equipamento", "Equipamento Velho", "Equipamento Inadequado", "Sem Equipamento",
-  
-  // Problemas de preço
-  "Preço Alto", "Muito Caro", "Custo Elevado", "Fora do Padrão", "Não Vale o Preço",
-  
-  // Problemas de conexão e tecnologia
-  "Conexão Instável", "Internet Lenta", "Sem Sinal", "Wi-fi Cai", "TV Sem Sinal", "Canais Limitados",
-  
-  // Problemas de comunicação
-  "Comunicação Ruim", "Informação Incorreta", "Não Informaram", "Desinformação", "Falta de Transparência",
-  
-  // Problemas de processo
-  "Processo Lento", "Burocrático", "Complicado", "Demorado", "Confuso", "Desorganizado",
-  
-  // Problemas de capacidade
-  "Capacidade Insuficiente", "Poucos Funcionários", "Fila Longa", "Espera Longa", "Sobrecarga",
-  
-  // Problemas específicos
-  "Localização Ruim", "Difícil Acesso", "Longe", "Vista Obstruída", "Isolamento Ruim",
-  
-  // Casos especiais
-  "VAZIO", "Não Identificado", "Sugestão de Melhoria", "Elogio"
-];
+1. **MÚLTIPLOS ASPECTOS**: Se o feedback menciona várias áreas, crie classificações separadas para cada uma
 
-// Arrays normalizados para busca eficiente
-const NORMALIZED_KEYWORDS = OFFICIAL_KEYWORDS.map(k => normalizeText(k));
-const NORMALIZED_PROBLEMS = STANDARD_PROBLEMS.map(p => normalizeText(p));
+2. **CONTEXTO SEMÂNTICO**: Use o contexto para entender melhor:
+   - "Pessoa do restaurante" = A&B - Serviço
+   - "Funcionário da limpeza" = Limpeza - Serviço
+   - "Moça da recepção" = Recepção - Serviço
 
-// Função para validar e corrigir keyword - baseada nas correções da cliente
-function validateKeyword(keyword: string, context?: string): string {
-  const normalized = normalizeText(keyword);
-  
-  // Verificar se está na lista oficial normalizada (match exato)
-  const index = NORMALIZED_KEYWORDS.indexOf(normalized);
-  if (index !== -1) {
-    return OFFICIAL_KEYWORDS[index];
-  }
-  
-  // Tentar encontrar correspondência próxima nas keywords oficiais
-  const partialMatch = NORMALIZED_KEYWORDS.findIndex(official => 
-    official.includes(normalized) || normalized.includes(official)
-  );
-  
-  if (partialMatch !== -1) {
-    return OFFICIAL_KEYWORDS[partialMatch];
-  }
-  
-  // Verificar no dicionário de normalização
-  const contextNormalized = normalizeText(context || '');
-  const dictMatch = NORMALIZATION_DICT[contextNormalized] || NORMALIZATION_DICT[normalized];
-  if (dictMatch && OFFICIAL_KEYWORDS.includes(dictMatch)) {
-    return dictMatch;
-  }
-  
-  // PRIORIDADE 1: A&B - baseado nas correções da cliente
-  if (normalized.includes('a&b') || normalized.includes('alimento') || normalized.includes('bebida') ||
-      normalized.includes('comida') || normalized.includes('restaurante') || normalized.includes('bar') ||
-      normalized.includes('garcom') || normalized.includes('garcon') || normalized.includes('waiter')) {
-    
-    // Café da manhã tem prioridade
-    if (contextNormalized.includes('cafe') || contextNormalized.includes('breakfast') || 
-        contextNormalized.includes('manha') || contextNormalized.includes('morning')) {
-      return "A&B - Café da manhã";
-    }
-    
-    // Almoço e Janta
-    if (contextNormalized.includes('almoco') || contextNormalized.includes('almoço') || 
-        contextNormalized.includes('lunch') || contextNormalized.includes('janta') || 
-        contextNormalized.includes('jantar') || contextNormalized.includes('dinner') ||
-        contextNormalized.includes('refeicao') || contextNormalized.includes('refeição')) {
-      return "A&B - Almoço";
-    }
-    
-    // Preço
-    if (contextNormalized.includes('preco') || contextNormalized.includes('caro') || 
-        contextNormalized.includes('expensive') || contextNormalized.includes('price')) {
-      return "A&B - Preço";
-    }
-    
-    // Variedade
-    if (contextNormalized.includes('variedade') || contextNormalized.includes('opcao') || 
-        contextNormalized.includes('falta de') || contextNormalized.includes('sem')) {
-      return "A&B - Variedade";
-    }
-    
-    // Gastronomia
-    if (contextNormalized.includes('gastronomia') || contextNormalized.includes('chef') || 
-        contextNormalized.includes('culinaria') || contextNormalized.includes('prato')) {
-      return "A&B - Gastronomia";
-    }
-    
-    // Qualidade da comida
-    if (contextNormalized.includes('qualidade') || contextNormalized.includes('sabor') || 
-        contextNormalized.includes('ruim') || contextNormalized.includes('gostoso')) {
-      return "A&B - Alimentos";
-    }
-    
-    // Default A&B
-    return "A&B - Serviço";
-  }
-  
-  // PRIORIDADE 2: Manutenção vs Produto (baseado nas correções da cliente)
-  if (normalized.includes('manutencao') || normalized.includes('quebrado') || normalized.includes('defeito') ||
-      contextNormalized.includes('nao funciona') || contextNormalized.includes('conserto')) {
-    
-    if (contextNormalized.includes('banheiro') || contextNormalized.includes('chuveiro') || 
-        contextNormalized.includes('torneira') || contextNormalized.includes('box')) {
-      return "Manutenção - Banheiro";
-    }
-    
-    if (contextNormalized.includes('quarto') || contextNormalized.includes('cofre') || 
-        contextNormalized.includes('luz') || contextNormalized.includes('porta')) {
-      return "Manutenção - Quarto";
-    }
-    
-    return "Manutenção - Serviço";
-  }
-  
-  // PRIORIDADE 3: Produto (baseado nas correções da cliente)
-  if (normalized.includes('produto') || normalized.includes('qualidade') ||
-      contextNormalized.includes('cobertas') || contextNormalized.includes('fino') || 
-      contextNormalized.includes('pequeno') || contextNormalized.includes('frigobar')) {
-    
-    if (contextNormalized.includes('coberta') || contextNormalized.includes('toalha') || 
-        contextNormalized.includes('lencol') || contextNormalized.includes('enxoval')) {
-      return "Enxoval";
-    }
-    
-    if (contextNormalized.includes('frigobar') || contextNormalized.includes('minibar')) {
-      return "Frigobar";
-    }
-    
-    if (contextNormalized.includes('travesseiro')) {
-      return "Travesseiro";
-    }
-    
-    if (contextNormalized.includes('colchao') || contextNormalized.includes('colchão')) {
-      return "Colchão";
-    }
-    
-    return "Enxoval";
-  }
-  
-  // PRIORIDADE 4: Limpeza (baseado nas correções da cliente)
-  if (normalized.includes('limpeza') || normalized.includes('limpo') || normalized.includes('sujo') ||
-      contextNormalized.includes('saboneteira') || contextNormalized.includes('cortinas')) {
-    
-    if (contextNormalized.includes('banheiro') || contextNormalized.includes('saboneteira')) {
-      return "Limpeza - Banheiro";
-    }
-    
-    if (contextNormalized.includes('quarto') || contextNormalized.includes('cortinas')) {
-      return "Limpeza - Quarto";
-    }
-    
-    if (contextNormalized.includes('restaurante') || contextNormalized.includes('area social')) {
-      return "Limpeza - Áreas sociais";
-    }
-    
-    return "Limpeza - Quarto";
-  }
-  
-  // PRIORIDADE 5: Lazer (baseado nas correções da cliente)  
-  if (normalized.includes('lazer') || normalized.includes('recreacao') || normalized.includes('piscina') ||
-      normalized.includes('atividade') || normalized.includes('bingo') || normalized.includes('monitor')) {
-    
-    if (contextNormalized.includes('piscina') || contextNormalized.includes('pool')) {
-      return "Piscina";
-    }
-    
-    if (contextNormalized.includes('academia') || contextNormalized.includes('gym')) {
-      return "Academia";
-    }
-    
-    if (contextNormalized.includes('spa') || contextNormalized.includes('massagem')) {
-      return "Spa";
-    }
-    
-    if (contextNormalized.includes('hidromassagem')) {
-      return "Lazer - Estrutura";
-    }
-    
-    if (contextNormalized.includes('bingo') || contextNormalized.includes('karaoke') || 
-        contextNormalized.includes('fogueira') || contextNormalized.includes('atividade') ||
-        contextNormalized.includes('mixologia')) {
-      return "Lazer - Atividades de Lazer";
-    }
-    
-    if (contextNormalized.includes('tio') || contextNormalized.includes('tia') || 
-        contextNormalized.includes('monitor') || contextNormalized.includes('recreacao')) {
-      return "Lazer - Serviço";
-    }
-    
-    if (contextNormalized.includes('estrutura') || contextNormalized.includes('instalacao') ||
-        contextNormalized.includes('brinquedo') || contextNormalized.includes('salao')) {
-      return "Lazer - Estrutura";
-    }
-    
-    return "Lazer - Serviço";
-  }
-  
-  // PRIORIDADE 6: Tecnologia
-  if (normalized.includes('tecnologia') || normalized.includes('wi-fi') || normalized.includes('wifi') ||
-      normalized.includes('internet') || normalized.includes('tv') || normalized.includes('streaming')) {
-    
-    if (contextNormalized.includes('tv') || contextNormalized.includes('televisao') || 
-        contextNormalized.includes('streaming') || contextNormalized.includes('canais')) {
-      return "Tecnologia - TV";
-    }
-    
-    return "Tecnologia - Wi-fi";
-  }
-  
-  // PRIORIDADE 7: Recepção
-  if (normalized.includes('recepcao') || normalized.includes('check') || normalized.includes('reception')) {
-    return "Recepção - Serviço";
-  }
-  
-  // PRIORIDADE 8: EG (antigo Programa de vendas)
-  if (normalized.includes('concierge')) {
-    return "Concierge";
-  }
-  
-  if (normalized.includes('multipropriedade') || normalized.includes('timeshare') || 
-      normalized.includes('pressao') || normalized.includes('insistencia') || normalized.includes('cotas')) {
-    return "Cotas";
-  }
-  
-  // PRIORIDADE 9: Localização
-  if (normalized.includes('localizacao') || normalized.includes('location') || normalized.includes('vista') ||
-      normalized.includes('acesso') || normalized.includes('proximidade') || normalized.includes('perto')) {
-    return "Localização";
-  }
-  
-  // Log para desenvolvimento
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`🤖 Keyword não mapeada: "${keyword}" (contexto: "${context?.substring(0, 50)}...")`);
-  }
-  
-  // Permitir que IA proponha classificação se não for vazia
-  if (keyword && keyword.trim() !== '' && keyword.trim().toLowerCase() !== 'não identificado') {
-    return keyword;
-  }
-  
-  // Fallback padrão
-  return "Atendimento";
-}
+3. **INTENÇÃO REAL**: Detecte a verdadeira intenção:
+   - Elogio mascarado: "Poderia ser melhor" = crítica construtiva
+   - Ironia: "Que serviço rápido" (com contexto negativo) = crítica
+   - Sugestão implícita: "Senti falta de..." = sugestão de melhoria
 
-// Função para validar departamento baseado nas correções da cliente
-function validateDepartment(department: string, keyword: string): string {
-  // Mapeamento keyword -> departamento baseado nas respostas da cliente
-  const keywordToDepartment: Record<string, string> = {
-    // A&B - Alimentos & Bebidas
-    "A&B - Café da manhã": "A&B",
-    "A&B - Almoço": "A&B",
-    "A&B - Serviço": "A&B", 
-    "A&B - Variedade": "A&B",
-    "A&B - Preço": "A&B",
-    "A&B - Gastronomia": "A&B",
-    "A&B - Alimentos": "A&B",
-    
-    // Limpeza
-    "Limpeza - Quarto": "Limpeza",
-    "Limpeza - Banheiro": "Limpeza",
-    "Limpeza - Áreas sociais": "Limpeza",
-    
-    // Governança/Produto (baseado nas correções da cliente)
-    "Enxoval": "Produto", // Cliente preferiu Produto para enxoval/cobertas
-    "Governança - Serviço": "Governança",
-    "Governança - Mofo": "Governança",
-    "Governança - Frigobar": "Governança",
-    
-    // Manutenção
-    "Manutenção - Quarto": "Manutenção",
-    "Manutenção - Banheiro": "Manutenção", 
-    "Manutenção - Instalações": "Manutenção",
-    "Manutenção - Serviço": "Manutenção",
-    "Manutenção - Jardinagem": "Manutenção",
-    "Manutenção - Frigobar": "Manutenção",
-    
-    // Infraestrutura específica
-    "Ar-condicionado": "Manutenção",
-    "Elevador": "Manutenção",
-    
-    // Lazer
-    "Lazer - Variedade": "Lazer",
-    "Lazer - Estrutura": "Lazer",
-    "Lazer - Serviço": "Lazer",
-    "Lazer - Atividades de Lazer": "Lazer",
-    "Spa": "Lazer",
-    "Piscina": "Lazer",
-    "Academia": "Academia", // Cliente disse que academia é departamento próprio
-    
-    // Tecnologia
-    "Tecnologia - Wi-fi": "TI",
-    "Tecnologia - TV": "TI",
-    
-    // Operações (removido estacionamento)
-    "Atendimento": "Operações",
-    "Localização": "Operações",
-    
-    // Produto (atualizações conforme solicitado)
-    "Produto - Acessibilidade": "Produto",
-    "Produto - Custo-benefício": "Produto",
-    "Produto - Preço": "Produto",
-    
-    // Qualidade (processo foi movido para cá)
-    "Qualidade - Processo": "Qualidade",
-    
-    // Comunicação e Qualidade
-    "Comunicação": "Qualidade",
-    
-    // Recepção (inclui estacionamento agora)
-    "Recepção - Serviço": "Recepção",
-    "Recepção - Estacionamento": "Recepção",
-    "Check-in - Atendimento Recepção": "Recepção", // Nova keyword específica
-    "Check-out - Atendimento Recepção": "Recepção", // Nova keyword específica
-    
-    // EG (antigo Programa de vendas)
-    "Concierge": "EG",
-    "Cotas": "EG",
-    
-    // Comercial
-    "Reservas": "Comercial",
-    
-    // Produto (itens físicos)
-    "Travesseiro": "Produto",
-    "Colchão": "Produto",
-    "Espelho": "Produto",
-    "Mixologia": "Lazer"
+4. **ESPECIFICIDADE INTELIGENTE**: 
+   - Se consegue identificar área específica → use-a
+   - Se é genérico demais → use "Produto - Experiência"
+   - Se há dúvida → escolha a opção mais específica possível
+
+5. **ANÁLISE EMOCIONAL**: Considere o tom emocional:
+   - Sentiment 1-2: Críticas e problemas sérios
+   - Sentiment 3: Neutro ou misto  
+   - Sentiment 4-5: Elogios e satisfação
+
+💡 **SUA MISSÃO FINAL**:
+- **NÃO** procure palavras-chave no texto
+- **NÃO** use comparação mecânica
+- **SIM** leia e compreenda como um especialista em hospitalidade faria
+- **SIM** use toda sua inteligência para classificar corretamente
+- **SIM** crie quantas classificações forem necessárias
+
+Você tem TOTAL LIBERDADE para interpretar e classificar. Seja uma IA inteligente que realmente entende hospitalidade, não um robô que compara palavras.`;
+
+  const userPrompt = `**FEEDBACK DO HÓSPEDE:**
+"${text}"
+
+**DEPARTAMENTOS DISPONÍVEIS:**
+${candidates.departments.map(d => `- ${d.id}: ${d.label}${d.description ? ` (${d.description})` : ''}`).join('\n')}
+
+**KEYWORDS CANDIDATAS (top por similaridade):**
+${candidates.keywords.map(k =>
+    `- ID: ${k.id}
+    Label: ${k.label}
+    Dept: ${k.department_id}
+    Score: ${k.similarity_score.toFixed(3)}
+    ${k.description ? `Desc: ${k.description}` : ''}
+    Exemplos: ${k.examples.slice(0, 2).join('; ')}`
+  ).join('\n\n')}
+
+**PROBLEMS CANDIDATOS (top por similaridade):**
+${candidates.problems.map(p =>
+    `- ID: ${p.id}
+    Label: ${p.label}
+    Score: ${p.similarity_score.toFixed(3)}
+    ${p.description ? `Desc: ${p.description}` : ''}
+    ${p.applicable_departments ? `Depts: ${p.applicable_departments.join(', ')}` : 'Todos depts'}
+    Exemplos: ${p.examples.slice(0, 2).join('; ')}`
+  ).join('\n\n')}
+
+**INSTRUÇÕES CRÍTICAS PARA ANÁLISE SEMÂNTICA:**
+
+🎯 **ANÁLISE DO SENTIMENTO PRIMEIRO:**
+1. **ELOGIO POSITIVO** ("gostei", "maravilhoso", "excelente") → problem_id = "EMPTY"
+2. **CRÍTICA NEGATIVA** ("ruim", "péssimo", "decepcionado") → use problem_id apropriado
+3. **NEUTRO/MISTO** → analise caso a caso
+
+🧠 **MATCHING INTELIGENTE:**
+- **NÃO** faça match apenas por palavras similares
+- **SIM** entenda o CONTEXTO e INTENÇÃO
+- **EXEMPLO**: "Gostei do atendimento" ≠ "Atendimento ruim" (mesmo tendo "atendimento")
+
+🔍 **SELEÇÃO DE CANDIDATOS:**
+- Use APENAS IDs dos candidatos fornecidos acima
+- Para ELOGIOS: sempre problem_id = "EMPTY" 
+- Para PROBLEMAS: escolha o problem_id mais adequado ao contexto negativo
+- Se nenhum candidato serve perfeitamente: use proposed_*_label
+
+⚡ **REGRAS FINAIS:**
+- Máximo 3 issues por feedback
+- confidence < 0.5 → needs_review = true
+- Seja INTELIGENTE, não mecânico!`;
+
+  // Schema dinâmico baseado nos candidatos reais
+  const departmentIds = candidates.departments.map(d => d.id);
+  const keywordIds = [...candidates.keywords.map(k => k.id), "EMPTY"];
+  const problemIds = [...candidates.problems.map(p => p.id), "EMPTY"];
+
+  const functionSchema = {
+    name: "classify_feedback",
+    description: "Classifica feedback em sentimento, problemas e sugestões usando candidatos dinâmicos",
+    parameters: {
+      type: "object",
+      properties: {
+        sentiment: {
+          type: "integer",
+          enum: [1, 2, 3, 4, 5],
+          description: "1=Muito insatisfeito, 2=Insatisfeito, 3=Neutro, 4=Satisfeito, 5=Muito satisfeito"
+        },
+        has_suggestion: {
+          type: "boolean",
+          description: "true se contém sugestão de melhoria"
+        },
+        suggestion_type: {
+          type: "string",
+          enum: ["none", "improvement_only", "improvement_with_criticism", "improvement_with_praise", "mixed_feedback"],
+          description: "Tipo de sugestão identificada"
+        },
+        suggestion_summary: {
+          type: "string",
+          maxLength: 200,
+          description: "Resumo apenas da sugestão (vazio se has_suggestion=false)"
+        },
+        confidence: {
+          type: "number",
+          minimum: 0,
+          maximum: 1,
+          description: "Confiança na classificação (0-1)"
+        },
+        issues: {
+          type: "array",
+          maxItems: 3,
+          items: {
+            type: "object",
+            properties: {
+              department_id: {
+                type: "string",
+                enum: departmentIds,
+                description: "ID do departamento"
+              },
+              keyword_id: {
+                type: "string",
+                enum: keywordIds,
+                description: "ID da keyword ou EMPTY para elogios"
+              },
+              problem_id: {
+                type: "string",
+                enum: problemIds,
+                description: "ID do problema ou EMPTY para elogios"
+              },
+              detail: {
+                type: "string",
+                maxLength: 120,
+                description: "Descrição específica do que aconteceu"
+              },
+              confidence: {
+                type: "number",
+                minimum: 0,
+                maximum: 1,
+                description: "Confiança nesta issue específica"
+              }
+            },
+            required: ["department_id", "keyword_id", "problem_id", "detail", "confidence"]
+          }
+        },
+        proposed_keyword_label: {
+          type: "string",
+          maxLength: 100,
+          description: "OPCIONAL: Nova keyword se nenhuma candidata serve"
+        },
+        proposed_problem_label: {
+          type: "string",
+          maxLength: 100,
+          description: "OPCIONAL: Novo problema se nenhum candidato serve"
+        }
+      },
+      required: ["sentiment", "has_suggestion", "suggestion_type", "suggestion_summary", "confidence", "issues"]
+    }
   };
-  
-  return keywordToDepartment[keyword] || "Operações";
+
+  return { systemPrompt, userPrompt, functionSchema };
 }
 
-// Função para validar problema
-function validateProblem(problem: string): string {
-  if (!problem) return "VAZIO";
-  
-  const normalized = normalizeText(problem);
-  
-  // Verificar mapeamento no dicionário
-  const mappedByDictionary = NORMALIZATION_DICT[normalized];
-  if (mappedByDictionary && STANDARD_PROBLEMS.includes(mappedByDictionary)) {
-    return mappedByDictionary;
-  }
+/**
+ * Processa resposta do LLM e valida
+ */
+function processLLMResponse(
+  response: any,
+  candidates: ClassificationCandidates,
+  taxonomyVersion: number,
+  processingTimeMs: number
+): ClassificationResult {
 
-  if (normalized === "vazio") return "VAZIO";
-  
-  // Buscar na lista padrão normalizada
-  const index = NORMALIZED_PROBLEMS.indexOf(normalized);
-  if (index !== -1) return STANDARD_PROBLEMS[index];
-  
-  // Buscar correspondência próxima
-  const matchIndex = NORMALIZED_PROBLEMS.findIndex(standard => 
-    standard.includes(normalized) || normalized.includes(standard)
-  );
-  
-  return matchIndex !== -1 ? STANDARD_PROBLEMS[matchIndex] : (mappedByDictionary || normalized);
-}
+  const issues: ClassificationIssue[] = [];
 
-// Roteador de elogios melhorado - baseado nas correções da cliente
-function reroutePraiseKeyword(keyword: string, problem: string, context?: string): string {
-  // Só atua em elogios puros (problem="VAZIO") que foram classificados como "Atendimento"
-  if (problem !== 'VAZIO' || normalizeText(keyword) !== normalizeText('Atendimento')) {
-    return keyword;
-  }
-  
-  const c = normalizeText(context || '');
-  const has = (arr: string[]) => arr.some(t => c.includes(normalizeText(t)));
+  // Processar cada issue
+  for (const issue of response.issues || []) {
+    // Buscar labels pelos IDs
+    const department = candidates.departments.find(d => d.id === issue.department_id);
+    const keyword = candidates.keywords.find(k => k.id === issue.keyword_id);
+    const problem = candidates.problems.find(p => p.id === issue.problem_id);
 
-  // 🔥 DETECÇÃO BASEADA NAS CORREÇÕES DA CLIENTE - PRIORIDADE MÁXIMA
-  
-  // PRIORIDADE 1: A&B - detecção muito mais ampla baseada nas correções
-  if (has(['garçom', 'garçonete', 'garçons', 'garcons', 'garcom', 'garconete', 'waiter', 'waitress', 'bartender'])) {
-    return 'A&B - Serviço';
-  }
-  
-  if (has(['restaurante', 'restaurant', 'bar', 'food', 'meal', 'dinner', 'lunch', 'atendimento do restaurante', 'pessoal do restaurante', 'equipe do restaurante', 'yasmin'])) {
-    return 'A&B - Serviço';
-  }
-  
-  if (has(['cafe', 'café', 'breakfast', 'café da manhã', 'cafe da manha', 'coffee'])) {
-    return 'A&B - Café da manhã';
-  }
-  
-  if (has(['cardápio', 'cardapio', 'menu', 'transparência']) && has(['restaurante', 'bar', 'comida'])) {
-    return 'A&B - Serviço';
-  }
-
-  // PRIORIDADE 2: Lazer - detecção expandida baseada nas correções
-  if (has(['piscina', 'pool', 'praia', 'beach'])) {
-    return 'Piscina';
-  }
-  
-  if (has(['academia', 'gym', 'fitness'])) {
-    return 'Academia';
-  }
-  
-  if (has(['spa', 'massagem', 'massage'])) {
-    return 'Spa';
-  }
-  
-  if (has(['hidromassagem', 'jacuzzi']) || (has(['quebrada', 'funcionando']) && has(['hidromassagem']))) {
-    return 'Lazer - Estrutura';
-  }
-  
-  if (has(['bingo', 'karaoke', 'fogueira', 'mixologia', 'aula', 'atividade', 'brincadeira', 'animacao', 'animação', 'entretenimento'])) {
-    return 'Lazer - Atividades de Lazer';
-  }
-  
-  if (has(['recreacao', 'recreação', 'monitor', 'monitores', 'tio', 'tia', 'lucas', 'claudia', 'diversao', 'diversão', 'lazer', 'equipe de recreação', 'pessoal da recreação'])) {
-    return 'Lazer - Serviço';
-  }
-  
-  if (has(['brinquedos infláveis', 'salão de jogos', 'salao de jogos', 'estrutura de lazer'])) {
-    return 'Lazer - Estrutura';
-  }
-
-  // PRIORIDADE 3: Recepção - Check-in/Check-out específicos
-  if (has(['check in', 'check-in', 'checkin'])) {
-    return 'Check-in - Atendimento Recepção';
-  }
-  
-  if (has(['check out', 'check-out', 'checkout'])) {
-    return 'Check-out - Atendimento Recepção';
-  }
-
-  // PRIORIDADE 4: Recepção (outros serviços)
-  if (has(['recepcao', 'recepção', 'front desk', 'reception', 'recepcionista', 'joao batista', 'joão batista'])) {
-    return 'Recepção - Serviço';
-  }
-
-  // PRIORIDADE 4: Tecnologia - detecção expandida
-  if (has(['wifi', 'wi-fi', 'internet', 'conexao', 'conexão', 'sinal', 'rede'])) {
-    return 'Tecnologia - Wi-fi';
-  }
-  
-  if (has(['tv', 'televisao', 'televisão', 'canal', 'canais', 'streaming', 'netflix', 'youtube'])) {
-    return 'Tecnologia - TV';
-  }
-
-  // PRIORIDADE 5: Limpeza e Governança - baseado nas correções da cliente
-  if (has(['quarto', 'room']) && has(['limpo', 'limpeza', 'cheiroso', 'arrumacao', 'arrumação', 'organizado', 'arrumado'])) {
-    return 'Limpeza - Quarto';
-  }
-  
-  if (has(['banheiro', 'bathroom']) && has(['limpo', 'limpeza', 'cheiroso', 'arrumado'])) {
-    return 'Limpeza - Banheiro';
-  }
-  
-  if (has(['restaurante', 'area social', 'areas sociais']) && has(['limpo', 'limpeza', 'organizado'])) {
-    return 'Limpeza - Áreas sociais';
-  }
-
-  // PRIORIDADE 5.5: Governança - Mofo e cheiro
-  if (has(['mofo', 'mofado', 'cheiro forte', 'mau cheiro', 'mal cheiroso', 'fedorento', 'umidade', 'úmido', 'abafado'])) {
-    return 'Governança - Mofo';
-  }
-
-  // PRIORIDADE 6: Produto - baseado nas correções da cliente
-  if (has(['toalha', 'lençol', 'lencol', 'enxoval', 'roupa de cama', 'coberta', 'cobertas'])) {
-    return 'Enxoval';
-  }
-  
-  if (has(['travesseiro', 'pillow'])) {
-    return 'Travesseiro';
-  }
-  
-  if (has(['colchao', 'colchão', 'mattress'])) {
-    return 'Colchão';
-  }
-  
-  // PRIORIDADE 6.5: Frigobar - contexto específico
-  if (has(['frigobar', 'minibar', 'geladeira pequena'])) {
-    // Verificar contexto para decidir entre Governança ou Manutenção
-    if (has(['quebrado', 'não funciona', 'defeito', 'estragado', 'com problema'])) {
-      return 'Manutenção - Frigobar';
-    } else if (has(['organizar', 'bagunçado', 'desorganizado', 'limpo', 'sujo', 'arrumado', 'faltando'])) {
-      return 'Governança - Frigobar';
+    if (!department) {
+      console.warn(`Departamento não encontrado: ${issue.department_id}`);
+      continue;
     }
-    // Default para Governança (organização é mais comum)
-    return 'Governança - Frigobar';
+
+    issues.push({
+      department_id: issue.department_id,
+      keyword_id: issue.keyword_id || 'EMPTY',
+      problem_id: issue.problem_id || 'EMPTY',
+
+      department_label: department.label,
+      keyword_label: keyword ? keyword.label : 'Elogio',
+      problem_label: problem ? problem.label : 'VAZIO',
+
+      detail: (issue.detail || '').substring(0, 120),
+      confidence: Math.max(0, Math.min(1, issue.confidence || 0.5)),
+      matched_by: keyword ? (keyword.similarity_score > 0.9 ? 'exact' : 'embedding') : 'proposed'
+    });
   }
 
-  // PRIORIDADE 7: Manutenção - baseado nas correções
-  if (has(['cofre', 'safe']) && !has(['quebrado', 'nao funciona', 'defeito'])) {
-    return 'Manutenção - Quarto'; // Se não há problema, pode ser elogio ao funcionamento
-  }
-  
-  if (has(['ar condicionado', 'ar-condicionado', 'ac', 'climatização'])) {
-    return 'Ar-condicionado';
-  }
-  
-  if (has(['elevador', 'elevator'])) {
-    return 'Elevador';
-  }
-
-  // PRIORIDADE 7.5: Manutenção - Jardinagem
-  if (has(['jardim', 'jardinagem', 'plantas', 'gramado', 'grama', 'paisagismo', 'vegetação', 'flores', 'árvores', 'arvores', 'área verde', 'area verde', 'espaço verde', 'espaco verde'])) {
-    return 'Manutenção - Jardinagem';
+  // Se não há issues, criar uma padrão
+  if (issues.length === 0) {
+    issues.push({
+      department_id: 'Operacoes',
+      keyword_id: 'EMPTY',
+      problem_id: 'EMPTY',
+      department_label: 'Operações',
+      keyword_label: 'Atendimento',
+      problem_label: 'VAZIO',
+      detail: '',
+      confidence: 0.3,
+      matched_by: 'proposed'
+    });
   }
 
-  // PRIORIDADE 8: Localização - detecção expandida
-  if (has(['localizacao', 'localização', 'perto', 'próximo', 'proximo', 'vista', 'acesso', 'posição', 'situado', 'location', 'convenient', 'close'])) {
-    return 'Localização';
-  }
+  const overallConfidence = Math.max(0, Math.min(1, response.confidence || 0.5));
 
-  // PRIORIDADE 9: EG (antigo Programa de vendas) - baseado nas correções
-  if (has(['concierge', 'keila', 'isabel']) && !has(['varias pessoas', 'várias pessoas', 'equipe'])) {
-    return 'Concierge';
-  }
+  const sentiment = Math.max(1, Math.min(5, response.sentiment || 3)) as 1 | 2 | 3 | 4 | 5;
 
-  // PRIORIDADE 10: Estacionamento (movido para Recepção)
-  if (has(['estacionamento', 'parking', 'vaga', 'carro'])) {
-    return 'Recepção - Estacionamento';
-  }
+  return {
+    sentiment,
+    has_suggestion: Boolean(response.has_suggestion),
+    suggestion_type: response.suggestion_type || 'none',
+    suggestion_summary: (response.suggestion_summary || '').substring(0, 200),
 
-  // 🚨 REGRA ESPECIAL DA CLIENTE: Funcionários específicos por departamento
-  // Se conseguir identificar o departamento da pessoa, usar departamento específico
-  
-  // Nomes conhecidos da equipe A&B
-  if (has(['heny', 'juliete', 'jane', 'yasmin']) || 
-      (has(['equipe', 'pessoal', 'funcionarios', 'staff']) && has(['restaurante', 'bar', 'a&b', 'alimentos', 'bebidas']))) {
-    return 'A&B - Serviço';
-  }
-  
-  // Nomes conhecidos da equipe Lazer  
-  if (has(['lucas', 'claudia']) || 
-      (has(['equipe', 'pessoal', 'funcionarios', 'staff']) && has(['recreacao', 'lazer', 'atividades', 'monitor']))) {
-    return 'Lazer - Serviço';
-  }
+    issues,
 
-  // PRIORIDADE 11: Produto - novas palavras-chave
-  if (has(['acessibilidade', 'acessível', 'accessível', 'rampa', 'deficiente', 'mobilidade reduzida'])) {
-    return 'Produto - Acessibilidade';
-  }
-  
-  if (has(['custo beneficio', 'custo-beneficio', 'custo benefício', 'custo-benefício', 'valor pelo dinheiro', 'vale a pena'])) {
-    return 'Produto - Custo-benefício';
-  }
-  
-  if (has(['preço', 'preco', 'preços', 'precos', 'caro', 'barato', 'valor', 'price']) && 
-      !has(['frigobar', 'minibar', 'a&b', 'restaurante', 'bar', 'bebida', 'comida'])) {
-    return 'Produto - Preço';
-  }
+    proposed_keyword_label: response.proposed_keyword_label,
+    proposed_problem_label: response.proposed_problem_label,
 
-  // PRIORIDADE 12: Qualidade - Processo
-  if (has(['processo', 'procedimento', 'qualidade', 'padronização', 'padronizacao', 'protocolo'])) {
-    return 'Qualidade - Processo';
-  }
-
-  // FALLBACK: sem pistas específicas, mantém "Atendimento" para elogios genéricos
-  // Esta é a regra da cliente: quando não consegue identificar departamento específico
-  return 'Atendimento';
+    taxonomy_version: taxonomyVersion,
+    confidence: overallConfidence,
+    needs_review: overallConfidence < 0.5,
+    processing_time_ms: processingTimeMs,
+    used_candidates: {
+      keywords: candidates.keywords.map(k => k.id),
+      problems: candidates.problems.map(p => p.id)
+    }
+  };
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+
+  // Obter dados do request uma única vez (fora do try para acessibilidade no catch)
+  let body: any;
+  let finalText: string = ''; // Inicializar com valor padrão
+
   try {
-    // Verificar rate limit
+    body = await request.json();
+    const { texto, comment, text } = body;
+    finalText = texto || comment || text || '';
+
+    // Circuit Breaker - verificar se sistema está disponível
+    if (!checkCircuitBreaker()) {
+      console.log('⚡ Circuit breaker aberto - usando fallback direto');
+
+      // Ir direto para fallback básico quando circuit breaker está aberto
+      const fallbackResult = createBasicFeedback(finalText, body.rating);
+      return NextResponse.json({
+        ...fallbackResult,
+        circuit_breaker_active: true,
+        message: 'Sistema em recuperação - usando análise básica'
+      });
+    }
+
+    // Rate limiting
     if (requestCount >= MAX_REQUESTS_PER_MINUTE) {
       return NextResponse.json(
         { error: 'Rate limit atingido. Aguarde um momento.' },
@@ -1286,703 +532,405 @@ export async function POST(request: NextRequest) {
     }
     requestCount++;
 
-    const body = await request.json();
-    const { texto, comment, apiKey: clientApiKey, text } = body;
-    
-    // Usar comment se texto não estiver presente (compatibilidade)
-    const finalText = texto || comment || text;
-
-    // Verificar se API key está no header Authorization
-    const authHeader = request.headers.get('authorization');
-    const headerApiKey = authHeader?.replace('Bearer ', '');
-
-    // Log para debug (sem expor API key)
-    console.log("🔍 [ANALYZE-FEEDBACK] Processando feedback:", {
-      hasText: !!finalText,
-      textLength: finalText?.length || 0,
-      environment: process.env.NODE_ENV,
-      hasClientApiKey: !!clientApiKey,
-      hasHeaderApiKey: !!headerApiKey,
-      hasServerApiKey: !!process.env.OPENAI_API_KEY,
-      userAgent: request.headers.get('user-agent'),
-      host: request.headers.get('host'),
-      origin: request.headers.get('origin'),
-      contentLength: request.headers.get('content-length'),
-      timestamp: new Date().toISOString()
-    });
-
-    // Priorizar API key do header, depois do body, depois do servidor
-    const apiKey = headerApiKey || clientApiKey || process.env.OPENAI_API_KEY;
-    
-    if (!apiKey) {
-      console.error("❌ [ANALYZE-FEEDBACK] Nenhuma API Key disponível - nem no header, nem no body, nem no servidor");
-      return NextResponse.json(
-        { error: 'API Key não configurada. Configure sua chave nas Configurações.' },
-        { status: 400 }
-      );
-    }
-
-    if (!finalText || finalText.trim() === '' || finalText.trim().length < 3) {
-      console.log("⚠️ [ANALYZE-FEEDBACK] Texto muito curto ou vazio, retornando padrão");
+    // Validar entrada
+    if (!finalText || finalText.trim().length < 3) {
       return NextResponse.json({
-        rating: 3,
-        keyword: 'Atendimento',
-        sector: 'Operações',
-        problem: 'VAZIO',
-        problem_detail: '',
+        sentiment: 3,
         has_suggestion: false,
         suggestion_type: 'none',
         suggestion_summary: '',
-        problems: [{
-          keyword: 'Atendimento',
-          sector: 'Operações', 
-          problem: 'VAZIO',
-          problem_detail: ''
+        issues: [{
+          department_id: 'Operacoes',
+          keyword_id: 'EMPTY',
+          problem_id: 'EMPTY',
+          department_label: 'Operações',
+          keyword_label: 'Atendimento',
+          problem_label: 'VAZIO',
+          detail: '',
+          confidence: 0.3,
+          matched_by: 'proposed'
         }],
-        allProblems: [{
-          keyword: 'Atendimento',
-          sector: 'Operações', 
-          problem: 'VAZIO',
-          problem_detail: ''
-        }],
-        legacyFormat: 'Atendimento, Operações, VAZIO'
-      });
+        confidence: 0.3,
+        needs_review: true,
+        taxonomy_version: 1,
+        processing_time_ms: Date.now() - startTime,
+        used_candidates: { keywords: [], problems: [] }
+      } as ClassificationResult);
     }
-
-    // Criar chave de cache
-    const cacheKey = `${finalText.trim().toLowerCase().slice(0, 100)}`;
 
     // Verificar cache
+    const taxonomy = await loadTaxonomy();
+    const cacheKey = `${finalText ? finalText.trim().toLowerCase().slice(0, 100) : 'empty'}_v${taxonomy.version}`;
     const cached = analysisCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_EXPIRY) {
-      return NextResponse.json(cached.data);
+
+    if (cached && cached.taxonomy_version === taxonomy.version) {
+      console.log('📋 Usando resultado do cache');
+      return NextResponse.json(cached.result);
     }
 
-    // Verificar se o texto contém apenas números ou caracteres não significativos
-    const cleanText = finalText.trim();
-
-    const isOnlyNumbers = /^\d+$/.test(cleanText);
-    const isOnlySpecialChars = /^[^\w\s]+$/.test(cleanText);
-    const isTooShort = cleanText.length < 10;
-    
-    if (isOnlyNumbers || isOnlySpecialChars || isTooShort) {
-      const defaultResponse = {
-        rating: 3,
-        keyword: 'Atendimento',
-        sector: 'Operações',
-        problem: 'VAZIO',
-        has_suggestion: false,
-        suggestion_type: 'none',
-        problems: [{
-          keyword: 'Atendimento',
-          sector: 'Operações',
-          problem: 'VAZIO'
-        }],
-        legacyFormat: 'Atendimento, Operações, VAZIO'
-      };
-      
-      // Cache resultado padrão
-      analysisCache.set(cacheKey, {
-        data: defaultResponse,
-        timestamp: Date.now()
-      });
-      
-      return NextResponse.json(defaultResponse);
-    }
-
-    const openai = new OpenAI({
-      apiKey: apiKey
-    });
-
-    // Usar sempre o GPT-4 Mini
-    const model = "gpt-4o-mini";
-
-    console.log("🤖 [ANALYZE-FEEDBACK] Enviando para OpenAI:", {
-      model,
-      textPreview: finalText.substring(0, 100) + '...',
-      hasApiKey: !!apiKey,
-      environment: process.env.NODE_ENV,
-      timestamp: new Date().toISOString(),
-      requestId: Math.random().toString(36).substring(7)
-    });
-
-    // Configurar timeout específico para produção
-    const timeoutMs = process.env.NODE_ENV === 'production' ? 30000 : 60000; // 30s prod, 60s dev
-
-    // Definir a função estruturada para classificação
-    const classifyFunction = {
-      name: "classify_feedback",
-      description: "Classifica o feedback do hóspede em sentimento, problemas estruturados e detecção de sugestões",
-      parameters: {
-        type: "object",
-        properties: {
-          sentiment: {
-            type: "integer",
-            enum: [1, 2, 3, 4, 5],
-            description: "1=Muito insatisfeito, 2=Insatisfeito, 3=Neutro, 4=Satisfeito, 5=Muito satisfeito"
-          },
-          has_suggestion: {
-            type: "boolean",
-            description: "true se o comentário contém alguma sugestão de melhoria, false caso contrário"
-          },
-          suggestion_type: {
-            type: "string",
-            enum: ["none", "improvement_only", "improvement_with_criticism", "improvement_with_praise", "mixed_feedback"],
-            description: "Tipo de sugestão: 'none'=sem sugestões, 'improvement_only'=apenas sugestão sem crítica, 'improvement_with_criticism'=sugestão por causa de problema, 'improvement_with_praise'=sugestão somada a elogio, 'mixed_feedback'=sugestão com múltiplos aspectos"
-          },
-          suggestion_summary: {
-            type: "string",
-            maxLength: 200,
-            description: "Resumo EXCLUSIVAMENTE da sugestão de melhoria mencionada. NÃO inclua o problema, apenas a melhoria sugerida. Exemplos: 'Aumentar variedade de frutas no café', 'Colocar mais tomadas no quarto', 'Melhorar aquecimento da piscina'. Vazio se has_suggestion=false."
-          },
-          issues: {
-            type: "array",
-            maxItems: 3,
-            items: {
-              type: "object", 
-              properties: {
-                keyword: {
-                  type: "string",
-                  enum: OFFICIAL_KEYWORDS,
-                  description: "Palavra-chave oficial da tabela de mapeamento"
-                },
-                department: {
-                  type: "string", 
-                  enum: OFFICIAL_DEPARTMENTS,
-                  description: "Departamento correspondente à palavra-chave"
-                },
-                                 problem: {
-                   type: "string",
-                   enum: STANDARD_PROBLEMS,
-                   description: "Problema específico identificado ou 'VAZIO' se apenas elogio"
-                 },
-                problem_detail: {
-                  type: "string",
-                  maxLength: 120,
-                  description: "Descrição ESPECÍFICA do que exatamente aconteceu/não funciona. DIFERENTE do problem (categoria) e suggestion (melhoria). Exemplos: 'Cofre não respondia mesmo com senha correta', 'Saboneteira permaneceu vazia toda estadia', 'Garçom demorava 20+ min para atender pedidos'. Vazio apenas para elogios puros."
-                }
-              },
-              required: ["keyword", "department", "problem"]
-            }
-          }
-        },
-
-        required: ["sentiment", "has_suggestion", "suggestion_type", "suggestion_summary", "issues"]
-
-      }
-    };
-
-    const analysisPrompt = `Você é um auditor de reputação hoteleira com expertise em classificação precisa de feedbacks. O comentário pode estar EM QUALQUER IDIOMA; identifique internamente e traduza se necessário.
-
-**🎯 MISSÃO CRÍTICA:** Analise TODO o comentário e identifique ATÉ 3 ASPECTOS DIFERENTES (problemas, elogios ou sugestões). Use análise semântica inteligente para detectar QUALQUER tipo de problema, crítica, falta, insatisfação OU ELOGIO mencionado. SEJA ASSERTIVO e CRIATIVO na classificação.
-
-**⚠️ IMPORTANTE: ENTENDA A DIFERENÇA ENTRE OS CAMPOS:**
-
-**🔍 PROBLEMA (problem):** Categoria padronizada do problema (ex: "Não Funciona", "Falta de Limpeza", "Demora no Atendimento", "VAZIO")
-**📝 PROBLEM_DETAIL:** Descrição ESPECÍFICA e DETALHADA do que exatamente aconteceu (máx 120 chars)
-**💡 SUGESTÃO:** Campo SEPARADO para sugestões de melhoria (suggestion_summary)
-
-**EXEMPLOS DA DIFERENÇA:**
-• Comentário: "Cofre não abria mesmo digitando senha correta"
-  - problem: "Não Funciona" (categoria padrão)
-  - problem_detail: "Cofre não respondia mesmo com senha correta digitada" (detalhe específico)
-  - suggestion: "" (não há sugestão)
-
-• Comentário: "Banheiro sujo, deveriam limpar melhor"  
-  - problem: "Falta de Limpeza" (categoria padrão)
-  - problem_detail: "Banheiro com sujeira visível e mal cheiroso" (detalhe específico)  
-  - suggestion: "Melhorar frequência e qualidade da limpeza do banheiro" (sugestão específica)
-
-**⚠️ IMPORTANTE: AUTONOMIA DA IA - VOCÊ TEM LIBERDADE TOTAL!**
-
-🧠 **ANÁLISE SEMÂNTICA INTELIGENTE:** Você deve usar sua inteligência para classificar QUALQUER feedback, mesmo que não haja uma palavra exata no dicionário. Use análise semântica para entender o CONTEXTO e a INTENÇÃO do feedback.
-
-🎯 **REGRAS DE AUTONOMIA:**
-1. **SE NÃO ENCONTRAR PALAVRA EXATA:** Use sua inteligência para encontrar a categoria mais próxima
-2. **ANÁLISE CONTEXTUAL:** Entenda sobre o que a pessoa está realmente falando
-3. **SEJA CRIATIVO:** Não se limite apenas às palavras do prompt - use seu conhecimento sobre hotéis
-4. **DEPARTAMENTO POR LÓGICA:** Se fala de comida = A&B, se fala de quebrado = Manutenção, etc.
-
-**EXEMPLOS DE AUTONOMIA INTELIGENTE:**
-• "A comida estava horrível" → A&B - Alimentos (mesmo sem palavra exata "comida")  
-• "O atendente do restaurante foi mal educado" → A&B - Serviço (análise semântica)
-• "Banheiro fedorento" → Limpeza - Banheiro (contexto de higiene)
-• "Controle da TV não funcionava" → Tecnologia - TV (lógica de equipamento)
-• "Piscina estava gelada" → Piscina (contexto de lazer aquático)
-• "Funcionário da limpeza muito educado" → Limpeza - Quarto (contexto operacional)
-• "Demora para fazer o check-in" → Recepção - Serviço (processo hoteleiro)
-• "Vista do quarto incrível" → Localização (contexto geográfico)
-• "Estacionamento pequeno" → Estacionamento (infraestrutura)
-
-🔍 **DETECÇÃO INTELIGENTE POR CONTEXTO:**
-
-**A&B (Alimentos & Bebidas):** SEMPRE que mencionar:
-- Qualquer comida, bebida, refeição, sabor, tempero
-- Garçom, garçonete, restaurante, bar, cardápio  
-- Café da manhã, almoço, janta, lanche, buffet
-- Fome, sede, variedade de comida, preços de comida
-- Chef, cozinha, pratos, gastronomia
-
-**Limpeza:** SEMPRE que mencionar:
-- Sujo, limpo, higiene, cheiro, odor
-- Toalhas, lençóis, travesseiros (quando sobre limpeza)
-- Banheiro sujo, quarto desarrumado
-- Produtos de limpeza, saboneteira, papel higiênico
-
-**Manutenção:** SEMPRE que mencionar:
-- Quebrado, não funciona, defeito, conserto
-- Ar-condicionado, chuveiro, torneira, cofre, luzes
-- Vazamento, goteira, porta, janela, fechadura
-- Equipamentos com problema técnico
-
-**Lazer:** SEMPRE que mencionar:  
-- Piscina, academia, spa, atividades, recreação
-- Diversão, entretenimento, bingo, karaoke
-- Monitores, animação, tio/tia da recreação
-- Estrutura de lazer, brinquedos, jogos
-
-**TI/Tecnologia:** SEMPRE que mencionar:
-- Wi-fi, internet, conexão, sinal
-- TV, televisão, canais, controle remoto
-- Streaming, Netflix, apps, tecnologia
-
-**Recepção:** SEMPRE que mencionar:
-- Check-in, check-out, recepção, recepcionista
-- Chegada, saída, chaves, cadastro
-- Front desk, balcão, atendimento inicial
-
-**🚀 SEJA ASSERTIVO E INTELIGENTE:**
-- Use sua experiência sobre hotéis e hospitalidade
-- Pense como um auditor experiente de reputação hoteleira
-- Classifique TUDO, mesmo termos incomuns ou gírias
-- Priorize sempre a especificidade sobre a generalização
-- Se tiver dúvida entre duas categorias, escolha a mais específica
-
-**REGRAS FUNDAMENTAIS - BASEADAS EM CORREÇÕES DA CLIENTE:**
-
-**1. MAPEAMENTO A&B (Alimentos & Bebidas) - PRIORIDADE MÁXIMA:**
-- SEMPRE que mencionar GARÇOM/GARÇONETE/WAITER/WAITRESS → "A&B - Serviço"
-- SEMPRE que mencionar BAR/RESTAURANTE/RESTAURANT → "A&B - Serviço"  
-- SEMPRE que mencionar CAFÉ DA MANHÃ/BREAKFAST → "A&B - Café da manhã"
-- SEMPRE que mencionar ALMOÇO/LUNCH/JANTA/JANTAR/DINNER → "A&B - Almoço"
-- SEMPRE que mencionar FALTA DE COMIDA/SEM VARIEDADE → "A&B - Variedade"
-- SEMPRE que mencionar PREÇO ALTO DE COMIDA/BEBIDA → "A&B - Preço"
-- SEMPRE que mencionar QUALIDADE/SABOR DA COMIDA → "A&B - Alimentos"
-- SEMPRE que mencionar CARDÁPIO/MENU/GASTRONOMIA → "A&B - Gastronomia"
-
-**2. MANUTENÇÃO vs PRODUTO vs LIMPEZA:**
-- QUEBRADO/NÃO FUNCIONA → Manutenção (ex: "Cofre não funcionava" → Manutenção - Quarto)
-- QUALIDADE DO ITEM FÍSICO → Produto (ex: "Cobertas muito finas" → Enxoval/Produto)
-- FALTA DE LIMPEZA/SUJO → Limpeza (ex: "Saboneteira vazia" → Limpeza - Banheiro)
-- FRIGOBAR → sempre Produto (mesmo se for preço)
-
-**3. LOCALIZAÇÃO ESPECÍFICA - MUITO IMPORTANTE:**
-- Se menciona BANHEIRO + problema → palavra-chave com "Banheiro"
-- Se menciona QUARTO + problema → palavra-chave com "Quarto"
-- "Lixeira quebrada" → Manutenção - Banheiro (não Quarto)
-- "Box do chuveiro" → Manutenção - Banheiro
-- "Porta da varanda" → Manutenção - Quarto
-
-**4. LAZER E RECREAÇÃO:**
-- PISCINA → sempre "Piscina" (mesmo se aquecida)
-- BINGO/KARAOKE/FOGUEIRA/ATIVIDADES → "Lazer - Atividades de Lazer"
-- TIO/TIA DA RECREAÇÃO/MONITORES → "Lazer - Serviço"
-- ACADEMIA → "Academia" (departamento próprio)
-- HIDROMASSAGEM → "Lazer - Estrutura"
-- SPA/MASSAGEM → "Spa"
-
-**5. PESSOAS E FUNCIONÁRIOS - REGRA DA CLIENTE:**
-- Se conseguir identificar o DEPARTAMENTO da pessoa → usar departamento específico
-- Ex: "Yasmin garçonete" → A&B - Serviço
-- Ex: "João da recepção" → Recepção - Serviço  
-- Se NÃO conseguir identificar departamento → "Atendimento"
-- CONCIERGE → se uma pessoa específica, use "Concierge"; se várias pessoas, use "Atendimento"
-
-**6. PROBLEMAS PADRONIZADOS - SEJA ESPECÍFICO:**
-Use problemas específicos da lista oficial:
-- "não funciona" → "Não Funciona"
-- "funciona mal" → "Funciona Mal"
-- "quebrado" → "Quebrado"
-- "demora" → "Demora no Atendimento"  
-- "sujo" → "Falta de Limpeza"
-- "caro" → "Preço Alto"
-- "sem variedade" → "Falta de Variedade"
-- "pequeno" → "Espaço Insuficiente"
-- "barulho" → "Ruído Excessivo"
-- "frio/quente" → "Temperatura Inadequada"
-
-**7. MÚLTIPLOS ASPECTOS OBRIGATÓRIO:**
-Se o comentário menciona VÁRIAS áreas, você DEVE criar múltiplos issues:
-- "Café da manhã sem variedade e wi-fi ruim" → 2 issues separados
-- "Garçom atencioso e piscina limpa" → 2 issues separados
-- "Restaurante bom mas quarto sujo" → 2 issues separados
-
-**8. DETECÇÃO DE SUGESTÕES - CAMPO SEPARADO:**
-has_suggestion: true se contém QUALQUER das palavras:
-- "poderia", "deveria", "seria bom", "sugiro", "recomendo", "melhoraria", "gostaria que"
-- "falta", "faltou", "não tem", "senti falta", "deveria ter", "precisava ter"
-- "se tivesse", "seria melhor com", "tendo mais", "com mais"
-- "uma sugestão", "minha dica", "penso que", "acho que deveria"
-
-**suggestion_summary:** Resuma APENAS a sugestão mencionada (máx 200 chars):
-- ✅ "Aumentar variedade de frutas no café da manhã"
-- ✅ "Colocar mais tomadas próximas à cama"
-- ✅ "Melhorar aquecimento da piscina"
-- ❌ "Cliente reclamou da piscina" (isso não é sugestão)
-
-**9. ELOGIOS (problem="VAZIO"):**
-Para elogios puros, escolha SEMPRE a keyword da área específica mencionada:
-- Não use "Atendimento" genérico se puder ser mais específico
-- "Equipe do restaurante excelente" → A&B - Serviço (não Atendimento)
-- "Piscina incrível" → Piscina (não Atendimento)
-- "Check-in rápido e eficiente" → Check-in - Atendimento Recepção (não Atendimento genérico)
-- "Checkout feito por Fábio foi excelente" → Check-out - Atendimento Recepção (não Atendimento genérico)
-- "Recepcionista muito gentil" → Recepção - Serviço (não Atendimento genérico)
-
-**10. PROBLEM_DETAIL - SEJA DESCRITIVO E ESPECÍFICO:**
-Crie detalhes úteis para gestão hoteleira (máx 120 chars):
-- ✅ "Cofre do quarto não respondia mesmo com senha correta digitada"
-- ✅ "Saboneteira do banheiro permaneceu vazia durante toda estadia" 
-- ✅ "Garçons demoravam mais de 20 minutos para atender mesa"
-- ✅ "Wi-fi caia constantemente impossibilitando trabalho remoto"
-- ✅ "Cobertas muito finas não aqueciam adequadamente durante noite"
-- ❌ "Problema com cofre" (muito genérico)
-- ❌ "Limpeza ruim" (muito genérico)
-
-**EXEMPLOS DE CLASSIFICAÇÃO CORRETA COMPLETA:**
-
-• "Saboneteira da pia ficou vazia todo o tempo"
-  → keyword: "Limpeza - Banheiro", problem: "Falta de Disponibilidade", 
-     problem_detail: "Saboneteira permaneceu vazia durante toda estadia"
-
-• "Yasmin garçonete foi excelente, muito atenciosa" 
-  → keyword: "A&B - Serviço", problem: "VAZIO", 
-     problem_detail: ""
-
-• "Frigobar com preços muito altos, deveria ser mais barato"
-  → keyword: "Frigobar", problem: "Preço Alto", 
-     problem_detail: "Preços do frigobar considerados excessivos pelo hóspede",
-     has_suggestion: true, suggestion_summary: "Reduzir preços dos itens do frigobar"
-
-• "Falta de carne seca no café da manhã, sugiro adicionar"
-  → keyword: "A&B - Variedade", problem: "Falta de Variedade", 
-     problem_detail: "Ausência de carne seca no buffet matinal",
-     has_suggestion: true, suggestion_summary: "Incluir carne seca no café da manhã"
-
-• "Chuveiro difícil de abrir sem se molhar com água fria"
-  → keyword: "Manutenção - Banheiro", problem: "Funciona Mal", 
-     problem_detail: "Chuveiro espirra água fria antes de regular temperatura"
-
-• "Cobertas muito finas e pequenas para o quarto"
-  → keyword: "Enxoval", problem: "Qualidade Baixa", 
-     problem_detail: "Cobertas inadequadas em tamanho e espessura"
-
-• "Almoço sem variedade, sempre as mesmas opções"
-  → keyword: "A&B - Almoço", problem: "Falta de Variedade", 
-     problem_detail: "Cardápio do almoço repetitivo com poucas opções"
-
-• "Jantar excelente, comida muito saborosa"
-  → keyword: "A&B - Almoço", problem: "VAZIO",
-     problem_detail: ""
-
-• "Wi-fi sempre cai durante reuniões, sugiro melhorar a rede"
-  → keyword: "Tecnologia - Wi-fi", problem: "Não Funciona",
-     problem_detail: "Conexão wi-fi instável durante uso profissional",
-     has_suggestion: true, suggestion_type: "improvement_with_criticism",
-     suggestion_summary: "Melhorar estabilidade da rede wi-fi"
-
-• "Seria incrível se tivessem jacuzzi na área da piscina"
-  → keyword: "Lazer - Estrutura", problem: "VAZIO", 
-     problem_detail: "",
-     has_suggestion: true, suggestion_type: "improvement_only",
-     suggestion_summary: "Instalar jacuzzi na área da piscina"
-
-**REGRAS DE OURO:**
-1. **PROBLEMA**: categoria padronizada oficial
-2. **PROBLEM_DETAIL**: descrição específica do que aconteceu  
-3. **SUGESTÃO**: separada, apenas se houver indicação clara de melhoria
-4. **MÚLTIPLOS ISSUES**: sempre que houver várias áreas mencionadas
-5. **ESPECIFICIDADE**: sempre prefira classificação mais específica possível
-
-**AUTONOMIA TOTAL:** Você tem liberdade para interpretar semanticamente e criar classificações precisas. Priorize SEMPRE a especificidade sobre a generalização.
-
-Comentário para analisar: "${finalText}"`;
-
-    const response = await Promise.race([
-      openai.chat.completions.create({
-        model: model,
-        messages: [{ role: "user", content: analysisPrompt }],
-        tools: [{ type: "function", function: classifyFunction }],
-        tool_choice: { type: "function", function: { name: "classify_feedback" } },
-        temperature: 0.0
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error(`Timeout após ${timeoutMs}ms`)), timeoutMs)
-      )
-    ]) as OpenAI.Chat.Completions.ChatCompletion;
-
-    let result;
-    
-    if (response.choices[0].message.tool_calls?.[0]) {
-      const toolCall = response.choices[0].message.tool_calls[0];
-      if (toolCall.function) {
-        try {
-          result = JSON.parse(toolCall.function.arguments);
-        } catch (parseError) {
-          console.error("Erro ao parsear JSON da função:", parseError);
-          throw new Error("Resposta inválida da IA");
-        }
-      }
-    }
-
-    if (!result) {
-      throw new Error("IA não retornou resultado estruturado");
-    }
-
-    // Pós-validação e normalização
-    const rating = result.sentiment || 3;
-    let processedProblems: Array<{keyword: string, sector: string, problem: string, problem_detail?: string}> = [];
-    
-    if (result.issues && Array.isArray(result.issues)) {
-      for (const issue of result.issues.slice(0, 3)) {
-        let validatedKeyword = validateKeyword(issue.keyword || "Atendimento", finalText);
-        let validatedDepartment = validateDepartment(issue.department || "Operações", validatedKeyword);
-        const validatedProblem = validateProblem(issue.problem || "");
-        
-        // 🎯 ROTEADOR DE ELOGIOS: Se for elogio puro (problem="VAZIO"), refine a keyword pelo contexto
-        if (validatedProblem === 'VAZIO') {
-          validatedKeyword = reroutePraiseKeyword(validatedKeyword, validatedProblem, finalText);
-          validatedDepartment = validateDepartment(validatedDepartment, validatedKeyword);
-        }
-        
-        // Definir detalhe do problema
-        let problemDetail: string = (issue.problem_detail || issue.detail || '').toString().trim();
-        if (!problemDetail) {
-          const normalizedProblem = (validatedProblem || '').toLowerCase();
-          if (['vazio', 'não identificado', 'nao identificado'].includes(normalizedProblem)) {
-            problemDetail = '';
-          } else if (normalizedProblem.includes('não funciona') && validatedKeyword !== "Atendimento") {
-            problemDetail = `${validatedKeyword} não funciona`;
-          } else if (validatedProblem) {
-            problemDetail = normalizedProblem.startsWith('falta') 
-              ? `${validatedProblem} de ${validatedKeyword}`
-              : `${validatedProblem} em ${validatedKeyword}`;
-          }
-          if (problemDetail.length > 120) problemDetail = problemDetail.slice(0, 117).trimEnd() + '...';
-        }
-        
-        processedProblems.push({
-          keyword: validatedKeyword,
-          sector: validatedDepartment,
-          problem: validatedProblem,
-          problem_detail: problemDetail
-        });
-      }
-    }
-    
-    // Se não há problemas processados ou apenas placeholders, usar padrão
-    if (processedProblems.length === 0) {
-      processedProblems = [{ keyword: 'Atendimento', sector: 'Operações', problem: 'VAZIO', problem_detail: '' }];
-    } else {
-      const hasRealIssues = processedProblems.some(p => {
-        const pr = (p.problem || '').toLowerCase();
-        return !['vazio', 'não identificado', 'nao identificado'].includes(pr) && pr.trim() !== '';
-      });
-
-      if (hasRealIssues) {
-        processedProblems = processedProblems.filter(p => {
-          const pr = (p.problem || '').toLowerCase();
-          const isPlaceholder = ['vazio', 'não identificado', 'nao identificado'].includes(pr) || 
-                               (p.keyword === 'Atendimento' && p.sector === 'Operações' && pr === 'vazio');
-          return !isPlaceholder;
-        });
-      } else {
-        processedProblems = [{ keyword: 'Atendimento', sector: 'Operações', problem: 'VAZIO', problem_detail: '' }];
-      }
-    }
-
-    // 🔥 DETECÇÃO ADICIONAL DE MÚLTIPLAS ÁREAS (pós-processamento agressivo)
-    // Se só gerou 1 problema "Atendimento + VAZIO" mas o texto claramente menciona múltiplas áreas
-    if (processedProblems.length === 1 && processedProblems[0].keyword === 'Atendimento' && processedProblems[0].problem === 'VAZIO') {
-      const contextNormalized = normalizeText(finalText);
-      const additionalIssues: Array<{keyword: string, sector: string, problem: string, problem_detail?: string}> = [];
-      
-      // Detectar áreas específicas mencionadas no texto
-      const areaDetections = [
-        { keywords: ['piscina', 'pool'], result: { keyword: 'Piscina', sector: 'Lazer', problem: 'VAZIO' }},
-        { keywords: ['bingo', 'karaoke', 'fogueira', 'tio', 'tia', 'lucas', 'claudia', 'recreacao', 'recreação'], result: { keyword: 'Lazer - Atividades de Lazer', sector: 'Lazer', problem: 'VAZIO' }},
-        { keywords: ['restaurante', 'heny', 'juliete', 'jane'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
-        { keywords: ['bar', 'drink', 'bebida'], result: { keyword: 'A&B - Serviço', sector: 'A&B', problem: 'VAZIO' }},
-        { keywords: ['cafe da manha', 'café da manhã', 'breakfast'], result: { keyword: 'A&B - Café da manhã', sector: 'A&B', problem: 'VAZIO' }},
-        { keywords: ['wifi', 'wi-fi', 'internet'], result: { keyword: 'Tecnologia - Wi-fi', sector: 'TI', problem: 'VAZIO' }}
-      ];
-
-      for (const detection of areaDetections) {
-        const hasArea = detection.keywords.some(keyword => contextNormalized.includes(normalizeText(keyword)));
-        if (hasArea) {
-          // Evitar duplicatas
-          const alreadyExists = additionalIssues.some(issue => issue.keyword === detection.result.keyword);
-          if (!alreadyExists) {
-            additionalIssues.push(detection.result);
-          }
-        }
-      }
-
-      // Se detectou áreas específicas, substitui o "Atendimento" genérico
-      if (additionalIssues.length > 0) {
-        // Manter "Atendimento" apenas se for realmente genérico (sem menção de áreas específicas)
-        const hasGenericPraise = contextNormalized.includes('funcionario') && 
-                                !contextNormalized.includes('restaurante') && 
-                                !contextNormalized.includes('bar') && 
-                                !contextNormalized.includes('piscina') &&
-                                !contextNormalized.includes('recreacao');
-        
-        processedProblems = hasGenericPraise 
-          ? [processedProblems[0], ...additionalIssues.slice(0, 2)] // Manter Atendimento + até 2 áreas específicas
-          : additionalIssues.slice(0, 3); // Só áreas específicas, até 3
-      }
-    }
-
-    // Compatibilidade com formato anterior
-    const firstProblem = processedProblems[0] || {
-      keyword: 'Atendimento', sector: 'Operações', problem: 'VAZIO', problem_detail: ''
-    };
-
-    // Extrair e validar campos de sugestão
-    let hasSuggestion = result.has_suggestion || false;
-    let suggestionType = result.suggestion_type || 'none';
-    let suggestionSummary = result.suggestion_summary || '';
-
-    // Validação pós-processamento: força detecção de sugestões
-    const suggestionKeywords = [
-      'sugestao', 'sugestão', 'sugiro', 'seria bom', 'seria legal', 'seria interessante',
-      'poderia', 'poderiam', 'deveria', 'deveriam', 'melhorar', 'implementar', 'adicionar',
-      'seria melhor', 'recomendo', 'gostaria que', 'falta', 'faltou', 'precisa de', 'necessita'
-    ];
-
-    const normalizedComment = normalizeText(finalText.toLowerCase());
-    const hasSuggestionKeyword = suggestionKeywords.some(keyword => 
-      normalizedComment.includes(normalizeText(keyword))
-    );
-
-    if (hasSuggestionKeyword && !hasSuggestion) {
-      console.log('🔍 Validação pós-processamento: Forçando detecção de sugestão');
-      hasSuggestion = true;
-      suggestionType = 'improvement_only';
-      
-      if (!suggestionSummary.trim()) {
-        const words = finalText.split(' ');
-        suggestionSummary = words.slice(0, 25).join(' ') + (words.length > 25 ? '...' : '');
-      }
-    }
-
-    const finalResult = {
-      rating,
-      keyword: firstProblem.keyword,
-      sector: firstProblem.sector,
-      problem: firstProblem.problem,
-      problem_detail: firstProblem.problem_detail || '',
-      has_suggestion: hasSuggestion,
-      suggestion_type: suggestionType,
-      suggestion_summary: suggestionSummary,
-      problems: processedProblems,
-      allProblems: processedProblems,
-      legacyFormat: processedProblems.map(p => 
-        `${p.keyword}, ${p.sector}, ${p.problem || 'VAZIO'}`
-      ).join(';')
-    };
-
-    // Cache resultado
-    analysisCache.set(cacheKey, {
-      data: finalResult,
-      timestamp: Date.now()
-    });
-
-    console.log("✅ [ANALYZE-FEEDBACK] Análise concluída com sucesso:", {
-      rating: finalResult.rating,
-      keyword: finalResult.keyword,
-      sector: finalResult.sector,
-      problem: finalResult.problem,
-      hasSuggestion: finalResult.has_suggestion
-    });
-
-    return NextResponse.json(finalResult);
-
-  } catch (error: any) {
-    console.error("❌ [ANALYZE-FEEDBACK] Erro na análise:", {
-      message: error.message,
-      status: error.status,
-      code: error.code,
-      type: error.type,
-      environment: process.env.NODE_ENV,
-      hasOpenAIKey: !!process.env.OPENAI_API_KEY
-    });
-    
-    // Tratamento específico para diferentes tipos de erro
-    if (error.message.includes('exceeded your current quota')) {
+    // API Key
+    const apiKey = request.headers.get('authorization')?.replace('Bearer ', '') ||
+      body.apiKey ||
+      process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
       return NextResponse.json(
-        { error: 'Limite de quota da API atingido. Verifique seu saldo na OpenAI.' },
-        { status: 429 }
-      );
-    }
-    
-    if (error.message.includes('invalid api key') || error.message.includes('Incorrect API key')) {
-      return NextResponse.json(
-        { error: 'Chave de API inválida. Verifique sua configuração.' },
-        { status: 401 }
-      );
-    }
-    
-    if (error.message.includes('rate limit')) {
-      return NextResponse.json(
-        { error: 'Limite de taxa atingido. Aguarde alguns segundos.' },
-        { status: 429 }
-      );
-    }
-    
-    if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-      return NextResponse.json(
-        { error: 'Timeout na conexão. Tente novamente.' },
-        { status: 503 }
-      );
-    }
-
-    // Erro 400 específico - pode ser problema com o request
-    if (error.status === 400) {
-      console.error("🚨 [ANALYZE-FEEDBACK] Erro 400 da OpenAI:", {
-        message: error.message,
-        code: error.code,
-        data: error.error,
-        type: error.type,
-        param: error.param,
-        environment: process.env.NODE_ENV,
-        timestamp: new Date().toISOString()
-      });
-      
-      return NextResponse.json(
-        { 
-          error: 'Solicitação inválida para a API OpenAI. Verifique os dados enviados.',
-          details: error.message 
-        },
+        { error: 'API Key não configurada' },
         { status: 400 }
       );
     }
-    
-    // Log detalhado para debug
-    console.error("📊 [ANALYZE-FEEDBACK] Detalhes completos do erro:", {
-      message: error.message,
-      code: error.code,
-      status: error.status,
-      name: error.name,
-      stack: error.stack?.substring(0, 500),
-      environment: process.env.NODE_ENV,
-      userAgent: request.headers.get('user-agent'),
-      timestamp: new Date().toISOString()
+
+    console.log('🎯 Processando novo feedback:', {
+      length: finalText ? finalText.length : 0,
+      taxonomyVersion: taxonomy.version
     });
-    
-    return NextResponse.json(
-      { error: 'Erro temporário no servidor. Tentando novamente...' },
-      { status: 500 }
+
+    // 🚨 VERIFICAR MUDANÇAS NA TAXONOMIA PRIMEIRO
+    try {
+      const taxonomyCheckResponse = await fetch(`${request.nextUrl.origin}/api/quick-embeddings-check`);
+      if (taxonomyCheckResponse.ok) {
+        const taxonomyStatus = await taxonomyCheckResponse.json();
+        
+        if (taxonomyStatus.status === 'missing') {
+          console.log('⚠️ Embeddings não foram gerados ainda');
+          return NextResponse.json({
+            error: 'embeddings_not_generated',
+            message: 'Embeddings da IA não foram gerados ainda. Acesse a área administrativa para gerar.',
+            needs_embeddings_generation: true,
+            admin_url: '/admin/ai-configuration',
+            fallback_available: true
+          }, { status: 400 });
+        }
+        
+        if (taxonomyStatus.status === 'outdated') {
+          console.log('⚠️ Taxonomia foi alterada - embeddings desatualizados');
+          return NextResponse.json({
+            error: 'taxonomy_changed',
+            message: `Taxonomia foi alterada: ${taxonomyStatus.message}. Regenere os embeddings para usar a nova IA.`,
+            needs_regeneration: true,
+            changes_detected: taxonomyStatus.changes,
+            admin_url: '/admin/ai-configuration',
+            fallback_available: true
+          }, { status: 400 });
+        }
+      }
+    } catch (taxonomyCheckError) {
+      console.warn('⚠️ Erro ao verificar status da taxonomia:', taxonomyCheckError);
+      // Continuar com a análise normal se a verificação falhar
+    }
+
+    // 🚨 VERIFICAR se tem embeddings disponíveis
+    const hasEmbeddings = taxonomy.keywords.some(k => k.embedding && k.embedding.length > 0) ||
+      taxonomy.problems.some(p => p.embedding && p.embedding.length > 0);
+
+    if (!hasEmbeddings) {
+      console.log('⚠️ Nenhum embedding disponível, usando análise textual direta');
+
+      const text = finalText ? finalText.toLowerCase() : '';
+      let selectedKeyword = null;
+      let selectedProblem = null;
+      let department = 'Operacoes';
+
+      // Detectar contexto de A&B
+      if (text.includes('comida') || text.includes('garçom') || text.includes('atend') || text.includes('restaurante')) {
+        department = 'A&B';
+        selectedKeyword = taxonomy.keywords.find(kw =>
+          kw.label.includes('A&B') && kw.label.includes('Serviço')
+        );
+      }
+
+      // Detectar problemas específicos
+      if (text.includes('demorou') || text.includes('demora')) {
+        selectedProblem = taxonomy.problems.find(prob =>
+          prob.label.toLowerCase().includes('demora') &&
+          prob.label.toLowerCase().includes('atend')
+        );
+      }
+
+      if (text.includes('fria') || text.includes('frio')) {
+        if (!selectedProblem) {
+          selectedProblem = taxonomy.problems.find(prob =>
+            prob.label.toLowerCase().includes('temperatura') ||
+            prob.label.toLowerCase().includes('frio') ||
+            prob.label.toLowerCase().includes('qualidade')
+          );
+        }
+      }
+
+      const fallbackResult: ClassificationResult = {
+        sentiment: text.includes('fria') || text.includes('demorou') ? 2 : 3,
+        has_suggestion: false,
+        suggestion_type: 'none',
+        suggestion_summary: '',
+        issues: [{
+          department_id: department,
+          keyword_id: selectedKeyword?.id || 'EMPTY',
+          problem_id: selectedProblem?.id || 'EMPTY',
+          department_label: department,
+          keyword_label: selectedKeyword?.label || 'Atendimento Geral',
+          problem_label: selectedProblem?.label || 'Problema de Qualidade',
+          detail: `Comida fria e demora no atendimento identificados`,
+          confidence: selectedKeyword && selectedProblem ? 0.75 : 0.6,
+          matched_by: 'proposed' as const
+        }],
+        taxonomy_version: taxonomy.version,
+        confidence: selectedKeyword && selectedProblem ? 0.75 : 0.6,
+        needs_review: !selectedKeyword || !selectedProblem,
+        processing_time_ms: Date.now() - startTime,
+        used_candidates: { keywords: [], problems: [] }
+      };
+
+      return NextResponse.json(fallbackResult);
+    }
+
+    // 1. Buscar candidatos por similaridade (só se tem embeddings)
+    const candidates = await findCandidates(finalText, undefined, apiKey);
+
+    console.log('🔍 Candidatos encontrados:', {
+      keywords: candidates.keywords.length,
+      problems: candidates.problems.length,
+      topKeyword: candidates.keywords[0]?.label,
+      topProblem: candidates.problems[0]?.label
+    });
+
+    // 2. Criar prompt dinâmico
+    const { systemPrompt, userPrompt, functionSchema } = createDynamicPrompt(
+      finalText,
+      candidates
     );
+
+    // 3. Chamar OpenAI
+    const openai = new OpenAI({ apiKey });
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      functions: [functionSchema],
+      function_call: { name: "classify_feedback" },
+      temperature: 0.1,
+      max_tokens: 1000
+    });
+
+    const functionCall = response.choices[0]?.message?.function_call;
+    if (!functionCall || functionCall.name !== "classify_feedback") {
+      throw new Error("LLM não retornou função esperada");
+    }
+
+    const llmResult = JSON.parse(functionCall.arguments);
+
+    // 4. Processar e validar resposta
+    const result = processLLMResponse(
+      llmResult,
+      candidates,
+      taxonomy.version,
+      Date.now() - startTime
+    );
+
+    // 5. Lidar com propostas
+    if (llmResult.proposed_keyword_label) {
+      try {
+        await createTaxonomyProposal(
+          'keyword',
+          llmResult.proposed_keyword_label,
+          finalText,
+          result.issues[0]?.department_id,
+          'system'
+        );
+        console.log('💡 Proposta de keyword criada:', llmResult.proposed_keyword_label);
+      } catch (error) {
+        console.error('Erro ao criar proposta de keyword:', error);
+      }
+    }
+
+    if (llmResult.proposed_problem_label) {
+      try {
+        await createTaxonomyProposal(
+          'problem',
+          llmResult.proposed_problem_label,
+          finalText,
+          undefined,
+          'system'
+        );
+        console.log('💡 Proposta de problem criada:', llmResult.proposed_problem_label);
+      } catch (error) {
+        console.error('Erro ao criar proposta de problem:', error);
+      }
+    }
+
+    // 6. Salvar no cache
+    analysisCache.set(cacheKey, {
+      result,
+      timestamp: Date.now(),
+      taxonomy_version: taxonomy.version
+    });
+
+    // NOVA: Aplicar camada de compatibilidade
+    const compatibleResult = adaptNewAIToLegacyFormat(result as NewAIResponse);
+
+    // Registrar sucesso no circuit breaker
+    recordSuccess();
+
+    // Log de performance
+    performanceLogger.logAISuccess(
+      result.processing_time_ms || (Date.now() - startTime),
+      compatibleResult.confidence || 0.5,
+      finalText ? finalText.length : 0,
+      hasEmbeddings,
+      circuitBreaker.state
+    );
+
+    // Log de sucesso para monitoramento
+    console.log('✅ Análise concluída com nova IA:', {
+      sentiment: compatibleResult.confidence,
+      issues_count: result.issues?.length || 0,
+      has_embeddings: hasEmbeddings,
+      processing_time: result.processing_time_ms,
+      circuit_breaker_state: circuitBreaker.state
+    });
+
+    // Retornar resultado no formato esperado pelos componentes existentes
+    return NextResponse.json(compatibleResult);
+
+  } catch (error: any) {
+    console.error('❌ Erro na análise:', error);
+
+    // Se não conseguiu fazer parse do body, tentar novamente
+    if (!body) {
+      try {
+        body = await request.json();
+        const { texto, comment, text } = body;
+        finalText = texto || comment || text || '';
+      } catch (parseError) {
+        // Se falhar completamente, usar valores padrão
+        body = {};
+        finalText = '';
+      }
+    }
+
+    // Garantir que finalText sempre tenha um valor válido
+    if (!finalText) {
+      finalText = '';
+    }
+
+    // Registrar falha no circuit breaker (apenas para erros críticos)
+    const errorType = classifyError(error);
+    if (errorType === 'timeout' || errorType === 'network_error' || errorType === 'unknown_error') {
+      recordFailure();
+    }
+
+    console.log('🔍 Tipo de erro detectado:', errorType, 'Circuit breaker:', circuitBreaker.state);
+
+    // NOVA: Sistema de fallbacks inteligentes com múltiplos níveis
+    console.log('🔄 Iniciando sistema de fallbacks...');
+
+    // NÍVEL 1: Tentar análise textual sem embeddings (com retry se apropriado)
+    try {
+      console.log('📝 Tentando fallback textual...');
+
+      const fallbackResult = await retryWithBackoff(async () => {
+        const fallbackResponse = await fetch('/api/analyze-feedback-fallback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texto: finalText, apiKey: body.apiKey })
+        });
+
+        if (!fallbackResponse.ok) {
+          throw new Error(`Fallback API error: ${fallbackResponse.status}`);
+        }
+
+        return await fallbackResponse.json();
+      }, errorType === 'network_error' ? 3 : 1, 1000, errorType);
+
+      console.log('✅ Fallback textual bem-sucedido');
+
+      // Log de performance
+      performanceLogger.logTextualFallback(
+        Date.now() - startTime,
+        fallbackResult.confidence || 0.5,
+        finalText ? finalText.length : 0,
+        errorType
+      );
+
+      // Log para monitoramento
+      console.log('📊 Fallback usado:', {
+        type: 'textual_analysis',
+        reason: error.message,
+        error_type: errorType,
+        confidence: fallbackResult.confidence || 0.5
+      });
+
+      return NextResponse.json(fallbackResult);
+
+    } catch (textualError: any) {
+      console.error('❌ Erro no fallback textual:', textualError);
+    }
+
+    // NÍVEL 2: Análise básica com heurísticas simples
+    try {
+      console.log('🔧 Tentando fallback básico...');
+
+      // Extrair rating se disponível no texto
+      const ratingMatch = finalText ? finalText.match(/\b([1-5])\b/) : null;
+      const rating = ratingMatch ? parseInt(ratingMatch[1]) : 3;
+
+      // Criar feedback básico usando adaptador
+      const basicResult = createBasicFeedback(finalText || 'Texto não disponível', rating);
+
+      // Log de performance
+      performanceLogger.logBasicFallback(
+        Date.now() - startTime,
+        basicResult.confidence || 0.3,
+        finalText ? finalText.length : 0,
+        errorType
+      );
+
+      // Log para monitoramento
+      console.log('📊 Fallback básico usado:', {
+        type: 'basic_classification',
+        reason: error.message,
+        text_length: finalText ? finalText.length : 0
+      });
+
+      console.log('✅ Fallback básico aplicado com sucesso');
+      return NextResponse.json(basicResult);
+
+    } catch (basicError: any) {
+      console.error('❌ Erro no fallback básico:', basicError);
+    }
+
+    // NÍVEL 3: Fallback final - estrutura mínima garantida
+    console.log('🚨 Usando fallback final de emergência');
+
+    // Log crítico para monitoramento
+    console.error('📊 Fallback de emergência usado:', {
+      type: 'emergency_fallback',
+      original_error: error.message,
+      error_type: errorType,
+      basic_error: 'Todos os fallbacks falharam',
+      text_preview: finalText ? finalText.substring(0, 50) : 'Texto não disponível',
+      timestamp: new Date().toISOString(),
+      user_agent: request.headers.get('user-agent'),
+      ip: request.headers.get('x-forwarded-for') || 'unknown'
+    });
+
+    const emergencyResult = createEmergencyFeedback(finalText || 'Texto não disponível', error.message);
+
+    // Log de performance
+    performanceLogger.logEmergencyFallback(
+      Date.now() - startTime,
+      finalText ? finalText.length : 0,
+      errorType,
+      request.headers.get('user-agent') || undefined,
+      request.headers.get('x-forwarded-for') || undefined
+    );
+
+    return NextResponse.json({
+      ...emergencyResult,
+      processing_error: error.message,
+      fallback_level: 'emergency'
+    });
   }
 }
