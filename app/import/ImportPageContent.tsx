@@ -404,7 +404,6 @@ function ImportPageContent() {
   // Função para regenerar embeddings quando taxonomia mudou
   const handleRegenerateEmbeddingsAfterTaxonomyChange = async () => {
     console.log('🚀 Iniciando regeneração de embeddings...');
-    
     if (!embeddingsApiKey.trim()) {
       console.log('❌ API Key não fornecida');
       toast({
@@ -1579,12 +1578,12 @@ function ImportPageContent() {
                 needs_regeneration: taxonomyStatus.needs_regeneration
               });
               setShowTaxonomyChangedModal(true);
-              throw new Error('TAXONOMY_CHANGED');
+              return []; // Retornar array vazio em vez de lançar erro
             }
           }
         } catch (taxonomyCheckError: any) {
-          if (taxonomyCheckError?.message === 'EMBEDDINGS_NOT_GENERATED' || taxonomyCheckError?.message === 'TAXONOMY_CHANGED') {
-            throw taxonomyCheckError; // Re-lançar erros específicos
+          if (taxonomyCheckError?.message === 'EMBEDDINGS_NOT_GENERATED') {
+            throw taxonomyCheckError; // Re-lançar apenas erro de embeddings não gerados
           }
           console.warn('⚠️ Erro ao verificar status da taxonomia:', taxonomyCheckError);
           // Continuar com o processamento normal se a verificação falhar
