@@ -1,9 +1,0 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Permitir acesso de leitura e escrita a todos os documentos para qualquer usuário
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-} 

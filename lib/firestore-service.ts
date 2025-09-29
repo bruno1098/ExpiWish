@@ -14,6 +14,9 @@ export interface AnalysisData {
   deletedAt?: string; // Data de exclusão
   deletedBy?: string; // Usuário que excluiu
   deletedReason?: string; // Motivo da exclusão
+  hidden?: boolean; // Flag para análises ocultas
+  hiddenAt?: Date | null; // Data de ocultação
+  hiddenReason?: string | null; // Motivo da ocultação
 }
 
 // Nova estrutura hierárquica: analyse/{hotelId}/feedbacks/{feedbackId}
@@ -149,7 +152,7 @@ export const detectAndFixDuplicateIds = async () => {
 };
 
 // Função para normalizar nome do hotel para usar como ID do documento
-const normalizeHotelName = (hotelName: string): string => {
+export const normalizeHotelName = (hotelName: string): string => {
   return hotelName
     .toLowerCase()
     .normalize('NFD')
@@ -235,7 +238,7 @@ export const clearAnalysesCache = () => {
 };
 
 // Função para obter todas as análises da nova estrutura hierárquica
-export const getAllAnalyses = async (hotelId?: string) => {
+export const getAllAnalyses = async (hotelId?: string, includeHidden: boolean = false) => {
   try {
     const userData = await getCurrentUserData();
     const isAdmin = userData?.role === 'admin';
@@ -343,10 +346,19 @@ export const getAllAnalyses = async (hotelId?: string) => {
       }
     }
     
-    // Filtrar resultados por ambiente de teste e análises não excluídas
-    const filteredResults = results.filter((doc: AnalysisDoc) => 
-      (isTestEnv || doc.isTestEnvironment !== true) && !doc.deleted
-    );
+    // Filtrar resultados por ambiente de teste, análises não excluídas e visibilidade
+    const filteredResults = results.filter((doc: AnalysisDoc) => {
+      // Filtrar por ambiente de teste
+      const testFilter = isTestEnv || doc.isTestEnvironment !== true;
+      
+      // Filtrar análises não excluídas
+      const deletedFilter = !doc.deleted;
+      
+      // Filtrar análises ocultas (apenas se includeHidden for false)
+      const hiddenFilter = includeHidden || !doc.hidden;
+      
+      return testFilter && deletedFilter && hiddenFilter;
+    });
 
     // Ordenar por data de importação - MAIS RECENTE PRIMEIRO
     const sortedResults = filteredResults.sort((a, b) => {
@@ -1098,3 +1110,288 @@ if (typeof window !== 'undefined') {
     detectAndFixDuplicateIds
   };
 }
+
+// Função para alternar visibilidade de análise (ocultar/mostrar)
+export const toggleAnalysisVisibility = async (
+  analysisId: string,
+  hidden: boolean,
+  reason?: string,
+  userData?: UserData
+): Promise<{ success: boolean; message: string; foundInHotel?: string }> => {
+  try {
+    // Obter dados do usuário se não fornecidos
+    let currentUserData = userData;
+    if (!currentUserData) {
+      const fetchedUserData = await getCurrentUserData();
+      if (!fetchedUserData) {
+        throw new Error('Usuário não autenticado');
+      }
+      currentUserData = fetchedUserData;
+    }
+
+    let analysisRef = null;
+    let analysisSnap = null;
+    let foundInHotel: string | undefined = undefined;
+
+    // Buscar a análise na nova estrutura hierárquica
+    if (currentUserData.role === 'admin') {
+      // Admin pode buscar em todos os hotéis
+      const hotels = await listAllHotels();
+      
+      for (const hotel of hotels) {
+        const testAnalysisRef = doc(db, COLLECTION_ANALYSE, hotel.docId, SUBCOLLECTION_FEEDBACKS, analysisId);
+        const testAnalysisSnap = await getDoc(testAnalysisRef);
+        
+        if (testAnalysisSnap.exists()) {
+          analysisRef = testAnalysisRef;
+          analysisSnap = testAnalysisSnap;
+          foundInHotel = hotel.docId;
+          break;
+        }
+      }
+    } else {
+      // Staff só pode buscar no próprio hotel
+      if (!currentUserData.hotelId) {
+        throw new Error('Hotel do usuário não identificado');
+      }
+      
+      // Buscar o nome do hotel para normalizar
+      const hotelDoc = await getDoc(doc(db, 'hotels', currentUserData.hotelId));
+      if (!hotelDoc.exists()) {
+        throw new Error('Hotel não encontrado');
+      }
+      
+      const hotelData = hotelDoc.data();
+      const hotelDocId = normalizeHotelName(hotelData.name);
+      
+      analysisRef = doc(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS, analysisId);
+      analysisSnap = await getDoc(analysisRef);
+      foundInHotel = hotelDocId;
+    }
+
+    // Se não encontrou na busca inicial e é admin, buscar em todos os hotéis da estrutura
+    if ((!analysisSnap || !analysisSnap.exists()) && currentUserData.role === 'admin') {
+      console.log(`🔍 Buscando análise ${analysisId} em todos os hotéis da estrutura hierárquica`);
+      
+      const analyseCollectionRef = collection(db, COLLECTION_ANALYSE);
+      const hotelsSnapshot = await getDocs(analyseCollectionRef);
+      
+      for (const hotelDoc of hotelsSnapshot.docs) {
+        const hotelId = hotelDoc.id;
+        const feedbackRef = doc(db, COLLECTION_ANALYSE, hotelId, SUBCOLLECTION_FEEDBACKS, analysisId);
+        const feedbackSnap = await getDoc(feedbackRef);
+        
+        if (feedbackSnap.exists()) {
+          analysisRef = feedbackRef;
+          analysisSnap = feedbackSnap;
+          foundInHotel = hotelId;
+          break;
+        }
+      }
+    }
+
+    if (!analysisSnap || !analysisSnap.exists()) {
+      throw new Error('Análise não encontrada');
+    }
+
+    const analysisData = analysisSnap.data();
+
+    // Verificar se já está no estado desejado
+    if (analysisData.hidden === hidden) {
+      return {
+        success: false,
+        message: `Análise já está ${hidden ? 'oculta' : 'visível'}`,
+        foundInHotel
+      };
+    }
+
+    // Preparar dados de atualização
+    const updateData: any = {
+      hidden: hidden,
+      hiddenAt: hidden ? new Date() : undefined,
+      hiddenReason: hidden ? (reason || 'Ocultado pelo usuário') : undefined,
+      lastModified: new Date()
+    };
+
+    // Se está sendo mostrado novamente, limpar campos de ocultação
+    if (!hidden) {
+      updateData.hiddenAt = undefined;
+      updateData.hiddenReason = undefined;
+    }
+
+    // Garantir que analysisRef não é null antes de usar
+    if (!analysisRef) {
+      throw new Error('Referência da análise não encontrada');
+    }
+
+    await updateDoc(analysisRef, updateData);
+
+    // Limpar cache após alteração
+    clearAnalysesCache();
+
+    console.log(`✅ Análise ${analysisId} ${hidden ? 'ocultada' : 'mostrada'} com sucesso`);
+
+    return {
+      success: true,
+      message: `Análise ${hidden ? 'ocultada' : 'mostrada'} com sucesso`,
+      foundInHotel
+    };
+
+  } catch (error: any) {
+    console.error('❌ Erro ao alterar visibilidade da análise:', error);
+    throw error;
+  }
+};
+
+// Função para atualizar uma análise específica no Firebase
+// Baseada na lógica de updateFeedbackInFirestoreWithUserData
+export const updateAnalysisInFirestoreWithUserData = async (
+  analysisId: string, 
+  updatedAnalysis: any,
+  userData: UserData
+): Promise<boolean> => {
+  try {
+    console.log(`🔍 updateAnalysisInFirestoreWithUserData: Iniciando busca para análise ${analysisId}`);
+    console.log(`👤 Usuário: ${userData.name} (${userData.role}) - Hotel: ${userData.hotelId}`);
+
+    let foundAnalysisRef = null;
+    let foundAnalysisData = null;
+    let foundInHotel = null;
+    
+    // Se o usuário é admin, buscar diretamente em todos os hotéis
+    if (userData.role === 'admin') {
+      console.log(`🔑 Admin: Buscando análise ${analysisId} em todos os hotéis...`);
+    } else {
+      // Para usuários não-admin, buscar primeiro no próprio hotel
+      if (!userData.hotelId) {
+        throw new Error('Hotel do usuário não encontrado');
+      }
+      
+      const hotelDocRef = doc(db, 'hotels', userData.hotelId);
+      const hotelDoc = await getDoc(hotelDocRef);
+      
+      if (!hotelDoc.exists()) {
+        throw new Error('Hotel não encontrado');
+      }
+      
+      const hotelData = hotelDoc.data();
+      const hotelName = hotelData.name;
+      const hotelDocId = normalizeHotelName(hotelName);
+      
+      console.log(`🔍 Buscando análise ${analysisId} no hotel: ${hotelName} (${hotelDocId})`);
+      
+      // Primeiro tentar buscar pelo ID do documento
+      const analysisDocRef = doc(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS, analysisId);
+      const analysisDoc = await getDoc(analysisDocRef);
+      
+      if (analysisDoc.exists()) {
+        foundAnalysisRef = analysisDocRef;
+        foundAnalysisData = analysisDoc.data();
+        foundInHotel = hotelDocId;
+        console.log(`✅ Análise encontrada pelo ID do documento no hotel: ${hotelName}`);
+      } else {
+        console.log(`❌ Análise não encontrada pelo ID do documento. Buscando pelo campo interno 'id'...`);
+        
+        // Se não encontrou pelo ID do documento, buscar pelo campo interno 'id'
+        const feedbacksRef = collection(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS);
+        const querySnapshot = await getDocs(feedbacksRef);
+        
+        for (const docSnap of querySnapshot.docs) {
+          const data = docSnap.data();
+          if (data.id === analysisId) {
+            foundAnalysisRef = docSnap.ref;
+            foundAnalysisData = data;
+            foundInHotel = hotelDocId;
+            console.log(`✅ Análise encontrada pelo campo interno 'id' no hotel: ${hotelName}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    // Se não encontrou no hotel do usuário OU se o usuário é admin, buscar em todos os hotéis
+    if (!foundAnalysisRef) {
+      console.log(`🔍 Buscando análise em todos os hotéis...`);
+      
+      // Buscar na estrutura hierárquica (analyse/hotel/feedbacks)
+      const analyseCollectionRef = collection(db, COLLECTION_ANALYSE);
+      const analyseSnapshot = await getDocs(analyseCollectionRef);
+      
+      for (const hotelDoc of analyseSnapshot.docs) {
+        const hotelDocId = hotelDoc.id;
+        console.log(`🔍 Verificando hotel: ${hotelDocId}`);
+        
+        // Primeiro tentar buscar pelo ID do documento
+        const analysisDocRef = doc(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS, analysisId);
+        const analysisDoc = await getDoc(analysisDocRef);
+        
+        if (analysisDoc.exists()) {
+          foundAnalysisRef = analysisDocRef;
+          foundAnalysisData = analysisDoc.data();
+          foundInHotel = hotelDocId;
+          console.log(`✅ Análise encontrada pelo ID do documento no hotel: ${hotelDocId}`);
+          break;
+        }
+        
+        // Se não encontrou pelo ID do documento, buscar pelo campo interno 'id'
+        const feedbacksRef = collection(db, COLLECTION_ANALYSE, hotelDocId, SUBCOLLECTION_FEEDBACKS);
+        const querySnapshot = await getDocs(feedbacksRef);
+        
+        for (const docSnap of querySnapshot.docs) {
+          const data = docSnap.data();
+          if (data.id === analysisId) {
+            foundAnalysisRef = docSnap.ref;
+            foundAnalysisData = data;
+            foundInHotel = hotelDocId;
+            console.log(`✅ Análise encontrada pelo campo interno 'id' no hotel: ${hotelDocId}`);
+            break;
+          }
+        }
+        
+        if (foundAnalysisRef) break;
+      }
+      
+      // Se ainda não encontrou, buscar na coleção antiga 'analyses'
+      if (!foundAnalysisRef) {
+        console.log(`🔍 Buscando na coleção antiga 'analyses'...`);
+        const oldAnalysisDocRef = doc(db, 'analyses', analysisId);
+        const oldAnalysisDoc = await getDoc(oldAnalysisDocRef);
+        
+        if (oldAnalysisDoc.exists()) {
+          foundAnalysisRef = oldAnalysisDocRef;
+          foundAnalysisData = oldAnalysisDoc.data();
+          foundInHotel = 'analyses';
+          console.log(`✅ Análise encontrada na coleção antiga 'analyses'`);
+        }
+      }
+    }
+    
+    if (!foundAnalysisRef) {
+      throw new Error('Análise não encontrada no Firebase');
+    }
+    
+    console.log(`📍 Análise encontrada em: ${foundInHotel}`);
+    
+    // Verificar permissões para staff
+    if (userData.role === 'staff' && foundInHotel !== normalizeHotelName(userData.hotelName || '')) {
+      throw new Error('Acesso negado. Staff só pode acessar análises do próprio hotel.');
+    }
+    
+    // Atualizar a análise específica - suporta qualquer campo
+    const updateData = {
+      ...foundAnalysisData,
+      ...updatedAnalysis, // Aplicar todas as mudanças passadas
+      lastModified: Timestamp.now()
+    };
+    
+    // Salvar de volta no Firebase
+    await updateDoc(foundAnalysisRef, updateData);
+
+    console.log(`✅ Análise ${analysisId} atualizada com sucesso no hotel: ${foundInHotel}`);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Erro ao atualizar análise no Firebase:', error);
+    throw error;
+  }
+};

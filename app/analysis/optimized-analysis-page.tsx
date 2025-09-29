@@ -321,7 +321,7 @@ export default function OptimizedAnalysisPage() {
       let allFeedbacks: Feedback[] = []
       
       if (userData.role === 'admin') {
-        const allAnalyses = await getAllAnalyses()
+        const allAnalyses = await getAllAnalyses(undefined, false)
         setAnalyses(allAnalyses)
         
         allFeedbacks = allAnalyses.flatMap(analysis => 
@@ -333,7 +333,7 @@ export default function OptimizedAnalysisPage() {
         )
       } else {
         // Para staff, buscar apenas análises do próprio hotel
-        const allAnalyses = await getAllAnalyses()
+        const allAnalyses = await getAllAnalyses(undefined, false)
         const hotelAnalyses = allAnalyses.filter(analysis => analysis.hotelId === userData.hotelId)
         if (hotelAnalyses.length > 0) {
           setAnalyses(hotelAnalyses)
