@@ -1264,7 +1264,7 @@ export default function UnidentifiedFeedbacks() {
           return
         }
         
-        const allAnalyses = await getAllAnalyses(userData.hotelId)
+        const allAnalyses = await getAllAnalyses(userData.hotelId, false)
         allAnalyses.forEach((analysis: any) => {
           if (analysis.data && Array.isArray(analysis.data)) {
             feedbacksToAnalyze.push(...analysis.data)

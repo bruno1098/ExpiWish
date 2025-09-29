@@ -11,7 +11,7 @@ import { formatDateBR } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { RequireAuth } from '@/lib/auth-context';
 import SharedDashboardLayout from "../shared-layout";
-import { History, Calendar, Star, Eye, Trash2, AlertTriangle, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { History, Calendar, Star, Eye, Trash2, AlertTriangle, X, ArrowUpDown, ArrowUp, ArrowDown, EyeOff } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -25,6 +25,10 @@ function HistoryPageContent() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [analysisToDelete, setAnalysisToDelete] = useState<{id: string, date: string} | null>(null);
   const [deletingInProgress, setDeletingInProgress] = useState(false);
+  
+  // Estados para ocultar/mostrar análises
+  const [hidingId, setHidingId] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState(true); // Por padrão, mostrar análises ocultas no histórico
   
   // Estados para ordenação
   const [sortBy, setSortBy] = useState<'date' | 'feedbacks' | 'rating'>('date');
@@ -46,7 +50,7 @@ function HistoryPageContent() {
         localStorage.removeItem('analyses-cache');
       }
       
-      const data = await getAllAnalyses(userData?.hotelId);
+      const data = await getAllAnalyses(userData?.hotelId, true);
       setAnalyses(data);
     } catch (error) {
       console.error('Erro ao recarregar análises:', error);
@@ -61,8 +65,8 @@ function HistoryPageContent() {
     const fetchAnalyses = async () => {
       setLoading(true);
       try {
-        // Buscar apenas análises do hotel do usuário autenticado
-        const data = await getAllAnalyses(userData?.hotelId);
+        // Buscar análises do hotel do usuário autenticado (incluindo ocultas para o histórico)
+        const data = await getAllAnalyses(userData?.hotelId, true);
         setAnalyses(data);
       } catch (error) {
         console.error('Erro ao carregar histórico:', error);
@@ -127,10 +131,17 @@ function HistoryPageContent() {
     }
   };
 
-  // Aplicar ordenação sempre que os dados ou critérios mudarem
-  const sortedAnalyses = React.useMemo(() => {
-    return sortAnalyses(analyses);
-  }, [analyses, sortBy, sortOrder]);
+  // Aplicar filtro e ordenação sempre que os dados ou critérios mudarem
+  const filteredAndSortedAnalyses = React.useMemo(() => {
+    let filtered = analyses;
+    
+    // Aplicar filtro de visibilidade se necessário
+    if (!showHidden) {
+      filtered = analyses.filter(analysis => !analysis.hidden);
+    }
+    
+    return sortAnalyses(filtered);
+  }, [analyses, sortBy, sortOrder, showHidden]);
 
   // Função para mudar ordenação
   const handleSortChange = (newSortBy: 'date' | 'feedbacks' | 'rating') => {
@@ -248,6 +259,53 @@ function HistoryPageContent() {
   const cancelDelete = () => {
     setDeleteModalOpen(false);
     setAnalysisToDelete(null);
+  };
+
+  // Função para ocultar/mostrar análise
+  const handleToggleVisibility = async (analysisId: string, currentlyHidden: boolean, analysisDate: string) => {
+    setHidingId(analysisId);
+    
+    try {
+      const response = await fetch('/api/hide-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          analysisId: analysisId,
+          hidden: !currentlyHidden, // Inverter o estado atual
+          reason: currentlyHidden ? 'Mostrado novamente pelo usuário' : 'Ocultado dos dashboards pelo usuário'
+        }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Falha ao alterar visibilidade da análise');
+      }
+
+      // Recarregar a lista para refletir as mudanças
+      setTimeout(async () => {
+        await reloadAnalyses();
+      }, 300);
+      
+      toast({
+        title: currentlyHidden ? "Análise Mostrada" : "Análise Ocultada",
+        description: currentlyHidden 
+          ? "A análise voltará a aparecer nos dashboards e gráficos."
+          : "A análise foi ocultada dos dashboards e gráficos, mas permanece no histórico.",
+      });
+      
+    } catch (error: any) {
+      console.error('Erro ao alterar visibilidade:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível alterar a visibilidade da análise.",
+        variant: "destructive"
+      });
+    } finally {
+      setHidingId(null);
+    }
   };
 
   if (loading) {
@@ -373,15 +431,29 @@ function HistoryPageContent() {
       </div>
       
       <Tabs defaultValue="all">
-        <TabsList className="mb-4">
-          <TabsTrigger value="all">Todas as Análises</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between mb-4">
+          <TabsList>
+            <TabsTrigger value="all">Todas as Análises</TabsTrigger>
+          </TabsList>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showHidden ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowHidden(!showHidden)}
+              className="flex items-center gap-2"
+            >
+              {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              {showHidden ? 'Mostrar Todas' : 'Ocultar Análises Ocultas'}
+            </Button>
+          </div>
+        </div>
         
         <TabsContent value="all">
           <Card className="overflow-hidden">
 
             
-            {sortedAnalyses.length === 0 ? (
+            {filteredAndSortedAnalyses.length === 0 ? (
               <div className="p-8 text-center">
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
@@ -418,6 +490,7 @@ function HistoryPageContent() {
                         Média
                       </div>
                     </TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>
                       <div className="flex items-center gap-1">
                         <Eye className="h-4 w-4" />
@@ -427,7 +500,7 @@ function HistoryPageContent() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedAnalyses.map((analysis) => (
+                  {filteredAndSortedAnalyses.map((analysis) => (
                     <TableRow 
                       key={analysis.id}
                       className={`transition-all duration-500 ${
@@ -463,6 +536,21 @@ function HistoryPageContent() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
+                          {analysis.hidden ? (
+                            <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-full">
+                              <EyeOff className="h-3 w-3 text-gray-500" />
+                              <span className="text-xs text-gray-600 dark:text-gray-400">Oculta</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 rounded-full">
+                              <Eye className="h-3 w-3 text-green-600" />
+                              <span className="text-xs text-green-700 dark:text-green-400">Visível</span>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
                             size="sm"
@@ -471,6 +559,26 @@ function HistoryPageContent() {
                           >
                             <Eye className="h-3 w-3 mr-1" />
                             Ver
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleToggleVisibility(analysis.id, analysis.hidden, formatDate(analysis.importDate))}
+                            disabled={hidingId === analysis.id}
+                            className={`h-8 px-3 text-xs ${
+                              analysis.hidden 
+                                ? 'text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30' 
+                                : 'text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30'
+                            }`}
+                            title={analysis.hidden ? 'Mostrar nos dashboards' : 'Ocultar dos dashboards'}
+                          >
+                            {hidingId === analysis.id ? (
+                              <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-current" />
+                            ) : analysis.hidden ? (
+                              <Eye className="h-3 w-3" />
+                            ) : (
+                              <EyeOff className="h-3 w-3" />
+                            )}
                           </Button>
                           <Button
                             variant="outline"

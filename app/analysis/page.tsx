@@ -3668,7 +3668,7 @@ function AnalysisPageContent() {
     const loadFirebaseData = async () => {
       try {
         setLoading(true)
-        const allAnalyses = await getAllAnalyses()
+        const allAnalyses = await getAllAnalyses(undefined, false)
         setAnalyses(allAnalyses)
         
         // Combinar todos os feedbacks de todas as análises
@@ -4041,7 +4041,7 @@ function AnalysisPageContent() {
   const reloadData = async () => {
     try {
       setLoading(true)
-      const allAnalyses = await getAllAnalyses()
+      const allAnalyses = await getAllAnalyses(undefined, false)
       setAnalyses(allAnalyses)
       
       // Combinar todos os feedbacks de todas as análises

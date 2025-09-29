@@ -364,8 +364,8 @@ function DashboardContent() {
       setIsLoading(true);
       try {
         if (userData?.hotelId) {
-          // Buscar análises específicas para o hotel do usuário
-          const analyses = await getAllAnalyses(userData.hotelId);
+          // Buscar análises específicas para o hotel do usuário (excluindo ocultas)
+          const analyses = await getAllAnalyses(userData.hotelId, false);
           processAnalysesData(analyses);
 
         } else {
