@@ -51,6 +51,9 @@ export type Feedback = {
   suggestion_type?: 'only' | 'mixed' | 'none' | 'only_suggestion' | 'with_criticism' | 'with_praise'
 
   suggestion_summary?: string
+  // NOVO: Campos para elogios/detalhes positivos
+  compliments?: string
+  positive_details?: string
 }
 
 import { User as FirebaseUser } from "firebase/auth";

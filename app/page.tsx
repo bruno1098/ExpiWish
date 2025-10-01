@@ -629,6 +629,15 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
                           {feedback.keyword}
                         </Badge>
                       )}
+                      {(feedback as any).compliments && (
+                        <Badge
+                          variant="outline"
+                          className="bg-green-100 dark:bg-green-900/30"
+                          title={(feedback as any).positive_details || (feedback as any).compliments}
+                        >
+                          ✨ {(feedback as any).compliments}
+                        </Badge>
+                      )}
                     </div>
                     {feedback.problem_detail && (
                       <p className="text-xs text-muted-foreground -mt-1">{feedback.problem_detail}</p>

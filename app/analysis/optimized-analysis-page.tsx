@@ -218,6 +218,30 @@ const FeedbackItem = memo(({
             </div>
           )}
 
+          {(feedback.compliments || feedback.positive_details) && (
+            <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5" />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-green-800">Elogios e Aspectos Positivos</p>
+                  {feedback.compliments && (
+                    <div className="flex flex-wrap gap-1">
+                      {feedback.compliments.split(";").filter(c => c.trim()).map((compliment, index) => (
+                        <Badge key={index} variant="secondary" className="bg-green-100 text-green-800 border-green-300">
+                          <Star className="h-3 w-3 mr-1" />
+                          {compliment.trim()}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {feedback.positive_details && (
+                    <p className="text-sm text-green-700">{feedback.positive_details}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />

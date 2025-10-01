@@ -1719,7 +1719,10 @@ function ImportPageContent() {
                   // Campos de sugestão
                   has_suggestion: analysisResult.has_suggestion || false,
                   suggestion_type: analysisResult.suggestion_type || undefined,
-                  suggestion_summary: analysisResult.suggestion_summary || undefined
+                  suggestion_summary: analysisResult.suggestion_summary || undefined,
+                  // NOVO: Campos para elogios (separados de problems)
+                  compliments: analysisResult.compliments || undefined,
+                  positive_details: analysisResult.positive_details || undefined
                 } as Feedback;
 
               } catch (error: any) {
