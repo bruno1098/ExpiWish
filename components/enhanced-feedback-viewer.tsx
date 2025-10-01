@@ -48,6 +48,10 @@ interface Feedback {
   suggestion_type?: 'only' | 'mixed' | 'none' | 'only_suggestion' | 'with_criticism' | 'with_praise';
 
   suggestion_summary?: string;
+  
+  // NOVO: Campos para elogios/detalhes positivos
+  compliments?: string;
+  positive_details?: string;
 }
 
 interface EnhancedFeedbackViewerProps {
@@ -427,6 +431,18 @@ export const EnhancedFeedbackViewer: React.FC<EnhancedFeedbackViewerProps> = ({
                       </div>
                     )}
                     
+                    {/* NOVO: Elogios detectados */}
+                    {(feedback.compliments || feedback.positive_details) && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {(feedback.compliments || feedback.positive_details || "").split(";").map((compliment: string, idx: number) => (
+                          <Badge key={idx} variant="outline" className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-800">
+                            <TrendingUp className="h-3 w-3 mr-1" />
+                            {compliment.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    
                     {/* Botão para adicionar sugestão quando não há sugestão detectada */}
                     {!feedback.has_suggestion && (
                       <div className="mt-2">
@@ -494,6 +510,17 @@ export const EnhancedFeedbackViewer: React.FC<EnhancedFeedbackViewerProps> = ({
                         </Badge>
                       )}
                       {getSuggestionBadge(feedback)}
+                    </div>
+                  )}
+                  
+                  {/* NOVO: Elogios detectados */}
+                  {(feedback.compliments || feedback.positive_details) && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {(feedback.compliments || feedback.positive_details || "").split(";").map((compliment: string, idx: number) => (
+                        <Badge key={idx} variant="outline" className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-800">
+                          {compliment.trim()}
+                        </Badge>
+                      ))}
                     </div>
                   )}
                   

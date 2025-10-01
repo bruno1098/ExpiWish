@@ -215,6 +215,24 @@ export const CommentsDialog: React.FC<CommentsDialogProps> = ({
                       )}
                     </div>
                   )}
+                  {/* NOVO: Seção para elogios/detalhes positivos */}
+                  {(feedback.compliments || feedback.positive_details) && (
+                    <div className="mt-2">
+                      <p className="text-sm font-medium">Elogios detectados:</p>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {(feedback.compliments || feedback.positive_details).split(";").map((compliment: string, idx: number) => (
+                          <Badge
+                            key={idx}
+                            variant="outline"
+                            className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border-green-300 dark:border-green-800"
+                            title={compliment.trim()}
+                          >
+                            {compliment.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {feedback.apartamento && (
                     <div className="flex items-center gap-2 mt-2">
                       <span className="font-medium">Apartamento/Quarto:</span>

@@ -41,12 +41,19 @@ export interface LegacyFeedback {
   sector: string;
   problem: string;
   
+  // CRÍTICO: Campo 'rating' para estrelas (baseado em sentiment 1-5)
+  rating?: number;
+  
   // Novos campos opcionais (compatibilidade)
   has_suggestion?: boolean;
   suggestion_type?: string;
   suggestion_summary?: string;
   confidence?: number;
   needs_review?: boolean;
+  
+  // NOVO: Campo separado para elogios/detalhes positivos
+  compliments?: string;
+  positive_details?: string;
   
   // Estrutura detalhada para futuras melhorias
   allProblems?: Array<{
@@ -73,6 +80,7 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
       keyword: 'Não identificado',
       sector: 'Não identificado', 
       problem: '',
+      rating: newResponse.sentiment || 3, // Usar sentiment ou default neutro
       has_suggestion: newResponse.has_suggestion || false,
       suggestion_type: newResponse.suggestion_type,
       suggestion_summary: newResponse.suggestion_summary,
@@ -87,6 +95,7 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
   const consolidatedKeywords: string[] = [];
   const consolidatedSectors: string[] = [];
   const consolidatedProblems: string[] = [];
+  const consolidatedCompliments: string[] = []; // NOVO: Array para elogios
   const allProblemsDetailed: Array<{
     keyword: string;
     sector: string;
@@ -97,51 +106,92 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
   }> = [];
 
   for (const issue of newResponse.issues) {
-    // Adicionar keyword se não vazia (filtrar valores vazios e elogios)
-    if (issue.keyword_label && 
-        issue.keyword_label !== 'EMPTY' && 
-        issue.keyword_label !== 'Elogio' &&
-        issue.keyword_label.trim() !== '' &&
-        issue.keyword_label !== 'Não identificado') {
-      consolidatedKeywords.push(issue.keyword_label.trim());
-    }
+    // Verificar se é elogio (problem_id = "EMPTY" ou "VAZIO", ou department_id = "EMPTY")
+    const isCompliment = issue.problem_id === 'EMPTY' || 
+                        issue.problem_id === 'VAZIO' || 
+                        issue.problem_label === 'VAZIO' || 
+                        issue.problem_label === 'EMPTY' ||
+                        issue.department_id === 'EMPTY';
     
-    // Adicionar departamento se não vazio
-    if (issue.department_label && 
-        issue.department_label.trim() !== '' &&
-        issue.department_label !== 'Não identificado') {
-      consolidatedSectors.push(issue.department_label.trim());
+    if (isCompliment) {
+      // É um elogio - adicionar aos elogios
+      if (issue.detail && issue.detail.trim() !== '') {
+        consolidatedCompliments.push(issue.detail.trim());
+      }
+      
+      // Para elogios, ainda adicionar keyword e setor para contexto
+      if (issue.keyword_label && 
+          issue.keyword_label !== 'EMPTY' && 
+          issue.keyword_label !== 'Elogio' &&
+          issue.keyword_label.trim() !== '' &&
+          issue.keyword_label !== 'Não identificado') {
+        consolidatedKeywords.push(issue.keyword_label.trim());
+      }
+      
+      if (issue.department_label && 
+          issue.department_label.trim() !== '' &&
+          issue.department_label !== 'Não identificado') {
+        consolidatedSectors.push(issue.department_label.trim());
+      }
+      
+      // IMPORTANTE: Para elogios, adicionar a allProblemsDetailed mas SEM problem_detail
+      // para que não apareça em gráficos de problemas
+      allProblemsDetailed.push({
+        keyword: issue.keyword_label || 'Não identificado',
+        sector: issue.department_label || 'Não identificado',
+        problem: '', // Vazio para elogios
+        problem_detail: '', // Vazio para elogios - elogio vai em compliments
+        confidence: Math.max(0, Math.min(1, issue.confidence || 0.5)),
+        matched_by: issue.matched_by || 'proposed'
+      });
+    } else {
+      // É um problema - processar normalmente
+      if (issue.keyword_label && 
+          issue.keyword_label !== 'EMPTY' && 
+          issue.keyword_label !== 'Elogio' &&
+          issue.keyword_label.trim() !== '' &&
+          issue.keyword_label !== 'Não identificado') {
+        consolidatedKeywords.push(issue.keyword_label.trim());
+      }
+      
+      if (issue.department_label && 
+          issue.department_label.trim() !== '' &&
+          issue.department_label !== 'Não identificado') {
+        consolidatedSectors.push(issue.department_label.trim());
+      }
+      
+      // Adicionar problema se não vazio
+      if (issue.problem_label && 
+          issue.problem_label !== 'VAZIO' && 
+          issue.problem_label !== 'EMPTY' &&
+          issue.problem_label.trim() !== '' &&
+          issue.problem_label !== 'Não identificado') {
+        consolidatedProblems.push(issue.problem_label.trim());
+      }
+      
+      // IMPORTANTE: Para problemas, adicionar com problem_detail completo
+      allProblemsDetailed.push({
+        keyword: issue.keyword_label || 'Não identificado',
+        sector: issue.department_label || 'Não identificado',
+        problem: issue.problem_label || '',
+        problem_detail: issue.detail || '', // Detail completo apenas para problemas
+        confidence: Math.max(0, Math.min(1, issue.confidence || 0.5)),
+        matched_by: issue.matched_by || 'proposed'
+      });
     }
-    
-    // Adicionar problema se não vazio (filtrar valores vazios)
-    if (issue.problem_label && 
-        issue.problem_label !== 'VAZIO' && 
-        issue.problem_label !== 'EMPTY' &&
-        issue.problem_label.trim() !== '' &&
-        issue.problem_label !== 'Não identificado') {
-      consolidatedProblems.push(issue.problem_label.trim());
-    }
-    
-    // Adicionar à estrutura detalhada (sempre adicionar para manter histórico completo)
-    allProblemsDetailed.push({
-      keyword: issue.keyword_label || 'Não identificado',
-      sector: issue.department_label || 'Não identificado',
-      problem: issue.problem_label || '',
-      problem_detail: issue.detail || '',
-      confidence: Math.max(0, Math.min(1, issue.confidence || 0.5)), // Garantir range 0-1
-      matched_by: issue.matched_by || 'proposed'
-    });
   }
 
   // Remover duplicatas e consolidar com separador ";" (ordenar para consistência)
   const uniqueKeywords = Array.from(new Set(consolidatedKeywords)).sort();
   const uniqueSectors = Array.from(new Set(consolidatedSectors)).sort();
   const uniqueProblems = Array.from(new Set(consolidatedProblems)).sort();
+  const uniqueCompliments = Array.from(new Set(consolidatedCompliments)).sort();
 
   // Lógica inteligente de consolidação
   let consolidatedKeyword = 'Não identificado';
   let consolidatedSector = 'Não identificado';
   let consolidatedProblem = '';
+  let consolidatedCompliment = '';
 
   // Para keywords: se há múltiplas, usar separador ";" mas limitar a 3 para legibilidade
   if (uniqueKeywords.length > 0) {
@@ -173,6 +223,16 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
     }
   }
 
+  // Para elogios: consolidar de forma inteligente
+  if (uniqueCompliments.length > 0) {
+    if (uniqueCompliments.length <= 2) {
+      consolidatedCompliment = uniqueCompliments.join('; ');
+    } else {
+      // Se há muitos elogios, usar os 2 primeiros + indicador
+      consolidatedCompliment = `${uniqueCompliments.slice(0, 2).join('; ')}; +${uniqueCompliments.length - 2} outros elogios`;
+    }
+  }
+
   // Calcular confidence média ponderada
   const avgConfidence = allProblemsDetailed.length > 0 
     ? allProblemsDetailed.reduce((sum, item) => sum + item.confidence, 0) / allProblemsDetailed.length
@@ -184,12 +244,19 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
     sector: consolidatedSector,
     problem: consolidatedProblem,
     
+    // CRÍTICO: Adicionar 'rating' baseado em 'sentiment' (1-5)
+    rating: newResponse.sentiment || 3,
+    
     // Novos campos opcionais
     has_suggestion: newResponse.has_suggestion || false,
     suggestion_type: newResponse.suggestion_type,
     suggestion_summary: newResponse.suggestion_summary,
     confidence: Math.max(0, Math.min(1, avgConfidence)), // Garantir range 0-1
     needs_review: newResponse.needs_review || avgConfidence < 0.6, // Auto-review se confidence baixa
+    
+    // NOVO: Campos para elogios/detalhes positivos (separados de problems)
+    compliments: consolidatedCompliment || undefined,
+    positive_details: consolidatedCompliment || undefined,
     
     // Estrutura detalhada para futuras melhorias
     allProblems: allProblemsDetailed,
@@ -221,6 +288,11 @@ export function enhanceLegacyFeedback(legacyFeedback: any): LegacyFeedback {
     has_suggestion: legacyFeedback.has_suggestion || false,
     confidence: legacyFeedback.confidence || 0.7, // Assumir confiança média para dados antigos
     needs_review: legacyFeedback.needs_review || false,
+    
+    // NOVO: Campos para elogios (preservar se existir)
+    compliments: legacyFeedback.compliments || undefined,
+    positive_details: legacyFeedback.positive_details || undefined,
+    
     allProblems: legacyFeedback.allProblems || [{
       keyword: legacyFeedback.keyword || 'Não identificado',
       sector: legacyFeedback.sector || 'Não identificado', 
@@ -251,6 +323,7 @@ export function processAIResponse(response: any): LegacyFeedback {
     keyword: response.keyword || 'Não identificado',
     sector: response.sector || 'Não identificado',
     problem: response.problem || '',
+    rating: response.rating || response.sentiment || 3, // Tentar obter rating ou usar neutro
     has_suggestion: false,
     confidence: 0.3,
     needs_review: true
@@ -265,9 +338,15 @@ export function createEmergencyFeedback(text: string, errorMessage?: string): Le
     keyword: 'Erro de Processamento',
     sector: 'Sistema',
     problem: 'Falha na Análise - Requer Revisão Manual',
+    rating: 3, // Neutro em caso de erro
     has_suggestion: false,
     confidence: 0.0,
     needs_review: true,
+    
+    // NOVO: Campos para elogios (vazios em caso de erro)
+    compliments: undefined,
+    positive_details: undefined,
+    
     allProblems: [{
       keyword: 'Erro de Processamento',
       sector: 'Sistema',
@@ -355,16 +434,38 @@ export function createBasicFeedback(text: string, rating?: number): LegacyFeedba
                        normalizedText.includes('poderia') || 
                        normalizedText.includes('sugiro') ||
                        normalizedText.includes('recomendo');
+
+  // Detectar elogios para o novo campo
+  let compliments = '';
+  if (sentiment >= 4) {
+    const complimentPhrases = [];
+    if (normalizedText.includes('excelente')) complimentPhrases.push('Serviço excelente');
+    if (normalizedText.includes('ótimo') || normalizedText.includes('otimo')) complimentPhrases.push('Experiência ótima');
+    if (normalizedText.includes('maravilhoso')) complimentPhrases.push('Experiência maravilhosa');
+    if (normalizedText.includes('adorei')) complimentPhrases.push('Cliente adorou a experiência');
+    if (normalizedText.includes('recomendo')) complimentPhrases.push('Cliente recomenda');
+    
+    if (complimentPhrases.length > 0) {
+      compliments = complimentPhrases.join('; ');
+    } else if (sentiment >= 4) {
+      compliments = 'Feedback positivo detectado';
+    }
+  }
   
   return {
     keyword: keyword,
     sector: sector,
     problem: problem,
+    rating: sentiment, // Usar o sentiment calculado como rating
     has_suggestion: hasSuggestion,
     suggestion_type: hasSuggestion ? 'improvement_only' : 'none',
     suggestion_summary: hasSuggestion ? 'Sugestão detectada no texto' : '',
     confidence: confidence,
     needs_review: confidence < 0.5,
+    
+    // NOVO: Campos para elogios (separados de problems)
+    compliments: compliments || undefined,
+    positive_details: compliments || undefined,
     allProblems: [{
       keyword: keyword,
       sector: sector,

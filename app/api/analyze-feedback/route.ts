@@ -308,9 +308,32 @@ ${candidates.problems.map(p =>
 **INSTRUÇÕES CRÍTICAS PARA ANÁLISE SEMÂNTICA:**
 
 🎯 **ANÁLISE DO SENTIMENTO PRIMEIRO:**
-1. **ELOGIO POSITIVO** ("gostei", "maravilhoso", "excelente") → problem_id = "EMPTY"
-2. **CRÍTICA NEGATIVA** ("ruim", "péssimo", "decepcionado") → use problem_id apropriado
-3. **NEUTRO/MISTO** → analise caso a caso
+
+**SENTIMENTO 5 (Muito Satisfeito)**: Elogios entusiasmados, experiência excepcional
+- Palavras: "excelente", "perfeito", "maravilhoso", "fantástico", "adorei"
+- ⭐ **AÇÃO OBRIGATÓRIA**: problem_id = "EMPTY" + detail com o elogio específico
+- ⭐ **IMPORTANTE**: SEMPRE use "EMPTY" para elogios - NUNCA use problem_id real
+
+**SENTIMENTO 4 (Satisfeito)**: Elogios moderados, experiência positiva
+- Palavras: "bom", "gostei", "agradável", "satisfeito", "recomendo"
+- ⭐ **AÇÃO OBRIGATÓRIA**: problem_id = "EMPTY" + detail com o elogio específico
+- ⭐ **IMPORTANTE**: SEMPRE use "EMPTY" para elogios - NUNCA use problem_id real
+
+**SENTIMENTO 3 (Neutro)**: Comentários neutros, sem elogios nem críticas claras
+- Palavras: "ok", "normal", "razoável", comentários factuais
+- Ação: analise se há problemas sutis ou apenas observações
+- Se for elogio sutil: problem_id = "EMPTY"
+- Se for problema sutil: use problem_id apropriado
+
+**SENTIMENTO 2 (Insatisfeito)**: Críticas moderadas, problemas identificados
+- Palavras: "ruim", "não gostei", "decepcionado", "poderia melhorar"
+- ⚠️ **AÇÃO OBRIGATÓRIA**: use problem_id apropriado + detail específico
+- ⚠️ **IMPORTANTE**: NUNCA use "EMPTY" para problemas
+
+**SENTIMENTO 1 (Muito Insatisfeito)**: Críticas severas, problemas graves
+- Palavras: "péssimo", "horrível", "inaceitável", "nunca mais"
+- ⚠️ **AÇÃO OBRIGATÓRIA**: use problem_id apropriado + detail específico
+- ⚠️ **IMPORTANTE**: NUNCA use "EMPTY" para problemas
 
 🧠 **MATCHING INTELIGENTE:**
 - **NÃO** faça match apenas por palavras similares
@@ -323,7 +346,22 @@ ${candidates.problems.map(p =>
 - Para PROBLEMAS: escolha o problem_id mais adequado ao contexto negativo
 - Se nenhum candidato serve perfeitamente: use proposed_*_label
 
-⚡ **REGRAS FINAIS:**
+⚡ **REGRAS FINAIS CRÍTICAS:**
+
+🎯 **SEPARAÇÃO OBRIGATÓRIA DE ELOGIOS E PROBLEMAS:**
+- **ELOGIOS**: SEMPRE problem_id = "EMPTY" (sentimentos 4-5)
+- **PROBLEMAS**: SEMPRE problem_id válido da lista (sentimentos 1-2)
+- **NEUTRO**: Analise o contexto - se positivo use "EMPTY", se negativo use problem_id
+
+🔥 **EXEMPLOS PRÁTICOS:**
+- "Adorei o café da manhã" → problem_id = "EMPTY", detail = "Café da manhã excelente"
+- "Quarto estava sujo" → problem_id = "LIMPEZA_001", detail = "Quarto com falta de limpeza"
+- "Staff muito atencioso" → problem_id = "EMPTY", detail = "Equipe muito atenciosa"
+- "Wi-fi não funcionava" → problem_id = "WIFI_001", detail = "Wi-fi instável"
+
+⚠️ **VALIDAÇÃO OBRIGATÓRIA:**
+- Se sentiment >= 4 E problem_id != "EMPTY" → ERRO!
+- Se sentiment <= 2 E problem_id == "EMPTY" → ERRO!
 - Máximo 3 issues por feedback
 - confidence < 0.5 → needs_review = true
 - Seja INTELIGENTE, não mecânico!`;
@@ -437,7 +475,8 @@ function processLLMResponse(
     const keyword = candidates.keywords.find(k => k.id === issue.keyword_id);
     const problem = candidates.problems.find(p => p.id === issue.problem_id);
 
-    if (!department) {
+    // Tratar caso especial para elogios (department_id = "EMPTY")
+    if (!department && issue.department_id !== 'EMPTY') {
       console.warn(`Departamento não encontrado: ${issue.department_id}`);
       continue;
     }
@@ -447,7 +486,7 @@ function processLLMResponse(
       keyword_id: issue.keyword_id || 'EMPTY',
       problem_id: issue.problem_id || 'EMPTY',
 
-      department_label: department.label,
+      department_label: department ? department.label : 'Elogio',
       keyword_label: keyword ? keyword.label : 'Elogio',
       problem_label: problem ? problem.label : 'VAZIO',
 
@@ -459,11 +498,14 @@ function processLLMResponse(
 
   // Se não há issues, criar uma padrão
   if (issues.length === 0) {
+    // Usar um departamento que sempre existe nos candidatos
+    const defaultDepartment = candidates.departments.find(d => d.id === 'Recepcao') || candidates.departments[0];
+    
     issues.push({
-      department_id: 'Operacoes',
+      department_id: defaultDepartment?.id || 'EMPTY',
       keyword_id: 'EMPTY',
       problem_id: 'EMPTY',
-      department_label: 'Operações',
+      department_label: defaultDepartment?.label || 'Geral',
       keyword_label: 'Atendimento',
       problem_label: 'VAZIO',
       detail: '',
@@ -474,7 +516,53 @@ function processLLMResponse(
 
   const overallConfidence = Math.max(0, Math.min(1, response.confidence || 0.5));
 
-  const sentiment = Math.max(1, Math.min(5, response.sentiment || 3)) as 1 | 2 | 3 | 4 | 5;
+  // Debug: Log da resposta da IA para investigar problema de sentimento
+  console.log('🔍 DEBUG - Resposta completa da IA:', JSON.stringify(response, null, 2));
+  console.log('🔍 DEBUG - Sentiment recebido:', response.sentiment, 'tipo:', typeof response.sentiment);
+
+  // Não forçar sentimento neutro - usar o que a IA retornou ou inferir do contexto
+  let sentiment: 1 | 2 | 3 | 4 | 5;
+  
+  // Verificar se a IA retornou um sentimento válido
+  if (response.sentiment && typeof response.sentiment === 'number') {
+    // Se está na escala 1-5, usar diretamente
+    if (response.sentiment >= 1 && response.sentiment <= 5 && Number.isInteger(response.sentiment)) {
+      sentiment = response.sentiment as 1 | 2 | 3 | 4 | 5;
+      console.log('✅ DEBUG - Sentiment válido (1-5) usado:', sentiment);
+    }
+    // Se está na escala 0-1 (decimal), converter para 1-5
+    else if (response.sentiment >= 0 && response.sentiment <= 1) {
+      // Converter escala 0-1 para 1-5
+      if (response.sentiment <= 0.2) sentiment = 1;
+      else if (response.sentiment <= 0.4) sentiment = 2;
+      else if (response.sentiment <= 0.6) sentiment = 3;
+      else if (response.sentiment <= 0.8) sentiment = 4;
+      else sentiment = 5;
+      console.log('🔄 DEBUG - Sentiment convertido de', response.sentiment, 'para', sentiment);
+    }
+    // Valor fora dos ranges esperados
+    else {
+      console.log('⚠️ DEBUG - Sentiment fora do range, inferindo do contexto. Valor:', response.sentiment);
+      sentiment = inferSentimentFromContext();
+    }
+  } else {
+    console.log('⚠️ DEBUG - Sentiment ausente ou inválido, inferindo do contexto. Valor:', response.sentiment);
+    sentiment = inferSentimentFromContext();
+  }
+
+  function inferSentimentFromContext(): 1 | 2 | 3 | 4 | 5 {
+    // Se não há sentimento da IA, inferir baseado nos problemas detectados
+    const hasProblems = issues.some(issue => issue.problem_id !== 'EMPTY' && issue.problem_label !== 'VAZIO');
+    const hasOnlyCompliments = issues.every(issue => issue.problem_id === 'EMPTY' || issue.problem_label === 'VAZIO');
+    
+    if (hasOnlyCompliments) {
+      return 4; // Positivo se só há elogios
+    } else if (hasProblems) {
+      return 2; // Negativo se há problemas
+    } else {
+      return 3; // Neutro como último recurso
+    }
+  }
 
   return {
     sentiment,
@@ -708,18 +796,21 @@ export async function POST(request: NextRequest) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
       ],
-      functions: [functionSchema],
-      function_call: { name: "classify_feedback" },
+      tools: [{
+        type: "function",
+        function: functionSchema
+      }],
+      tool_choice: { type: "function", function: { name: "classify_feedback" } },
       temperature: 0.1,
       max_tokens: 1000
     });
 
-    const functionCall = response.choices[0]?.message?.function_call;
-    if (!functionCall || functionCall.name !== "classify_feedback") {
+    const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+    if (!toolCall || toolCall.function.name !== "classify_feedback") {
       throw new Error("LLM não retornou função esperada");
     }
 
-    const llmResult = JSON.parse(functionCall.arguments);
+    const llmResult = JSON.parse(toolCall.function.arguments);
 
     // 4. Processar e validar resposta
     const result = processLLMResponse(

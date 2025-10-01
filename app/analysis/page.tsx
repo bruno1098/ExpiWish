@@ -2483,6 +2483,44 @@ const CommentModal = ({
                 </div>
               )}
             </div>
+
+            {/* Seção de Elogios e Aspectos Positivos - Aparece SEMPRE quando existir */}
+            {(currentFeedback.compliments || currentFeedback.positive_details) && (
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <h4 className="font-medium text-green-800 dark:text-green-300 mb-3 flex items-center gap-2">
+                  <Star className="h-4 w-4" />
+                  Elogios e Aspectos Positivos Detectados pela IA
+                </h4>
+                <div className="space-y-3">
+                  {currentFeedback.compliments && (
+                    <div>
+                      <h5 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Elogios Identificados:</h5>
+                      <div className="flex flex-wrap gap-2">
+                        {splitByDelimiter(currentFeedback.compliments).map((compliment, index) => (
+                          <Badge 
+                            key={index} 
+                            variant="outline"
+                            className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700"
+                          >
+                            <Star className="h-3 w-3 mr-1" />
+                            {compliment.trim()}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {currentFeedback.positive_details && (
+                    <div>
+                      <h5 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Detalhes Positivos:</h5>
+                      <p className="text-sm text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 p-3 rounded-md border border-green-200 dark:border-green-700">
+                        {currentFeedback.positive_details}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             
             {feedback.allProblems && feedback.allProblems.length > 0 ? (
               isEditing ? (
@@ -2519,6 +2557,44 @@ const CommentModal = ({
                     <Plus className="h-4 w-4 mr-2" />
                     Adicionar Problema ({editedProblems.length})
                   </Button>
+
+                  {/* Seção de Elogios no Modo Edição */}
+                  {(currentFeedback.compliments || currentFeedback.positive_details) && (
+                    <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <h4 className="font-medium text-green-800 dark:text-green-300 mb-3 flex items-center gap-2">
+                        <Star className="h-4 w-4" />
+                        Elogios e Aspectos Positivos
+                      </h4>
+                      <div className="space-y-3">
+                        {currentFeedback.compliments && (
+                          <div>
+                            <h5 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Elogios Identificados:</h5>
+                            <div className="flex flex-wrap gap-2">
+                              {splitByDelimiter(currentFeedback.compliments).map((compliment, index) => (
+                                <Badge 
+                                  key={index} 
+                                  variant="outline"
+                                  className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700"
+                                >
+                                  <Star className="h-3 w-3 mr-1" />
+                                  {compliment.trim()}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {currentFeedback.positive_details && (
+                          <div>
+                            <h5 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Detalhes Positivos:</h5>
+                            <p className="text-sm text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 p-3 rounded-md border border-green-200 dark:border-green-700">
+                              {currentFeedback.positive_details}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 // Modo visualização para múltiplos problemas
@@ -2614,6 +2690,44 @@ const CommentModal = ({
                   </div>
 
                 </div>
+
+                {/* Seção de Elogios e Aspectos Positivos */}
+                {(feedback.compliments || feedback.positive_details) && (
+                  <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <h4 className="font-medium text-green-800 dark:text-green-300 mb-3 flex items-center gap-2">
+                      <Star className="h-4 w-4" />
+                      Elogios e Aspectos Positivos
+                    </h4>
+                    <div className="space-y-3">
+                      {feedback.compliments && (
+                        <div>
+                          <h5 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Elogios Identificados:</h5>
+                          <div className="flex flex-wrap gap-2">
+                            {splitByDelimiter(feedback.compliments).map((compliment, index) => (
+                              <Badge 
+                                key={index} 
+                                variant="outline"
+                                className="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700"
+                              >
+                                <Star className="h-3 w-3 mr-1" />
+                                {compliment.trim()}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {feedback.positive_details && (
+                        <div>
+                          <h5 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Detalhes Positivos:</h5>
+                          <p className="text-sm text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 p-3 rounded-md border border-green-200 dark:border-green-700">
+                            {feedback.positive_details}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
