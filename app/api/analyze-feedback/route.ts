@@ -759,23 +759,27 @@ function processLLMResponse(
 
   // Processar cada issue
   for (const issue of response.issues || []) {
-    // Debug: Log do que a IA retornou
-    console.log('🔍 Processing issue:', {
-      department_id: issue.department_id,
-      keyword_id: issue.keyword_id,
-      problem_id: issue.problem_id,
-      detail: issue.detail?.substring(0, 50)
-    });
-    
     // Buscar labels pelos IDs
     const department = candidates.departments.find(d => d.id === issue.department_id);
     const keyword = candidates.keywords.find(k => k.id === issue.keyword_id);
     const problem = candidates.problems.find(p => p.id === issue.problem_id);
     
+    // Debug: Log separado para evitar erro no build
+    const detailPreview = issue.detail?.substring(0, 50);
+    console.log('🔍 Processing issue:', {
+      department_id: issue.department_id,
+      keyword_id: issue.keyword_id,
+      problem_id: issue.problem_id,
+      detail: detailPreview
+    });
+    
+    const deptLabel = department?.label || 'NOT FOUND';
+    const kwLabel = keyword?.label || 'NOT FOUND';
+    const probLabel = problem?.label || 'NOT FOUND';
     console.log('🔍 Found in candidates:', {
-      department: department?.label || 'NOT FOUND',
-      keyword: keyword?.label || 'NOT FOUND',
-      problem: problem?.label || 'NOT FOUND'
+      department: deptLabel,
+      keyword: kwLabel,
+      problem: probLabel
     });
     
     // ✅ VALIDAÇÃO CONTEXTUAL: Só validar se keyword FOI ENCONTRADA nos candidatos
@@ -803,7 +807,8 @@ function processLLMResponse(
       // 2ª opção: Usar keyword proposta ESPECIFICAMENTE para esta issue
       keywordLabel = issue.proposed_keyword;
       matchedBy = 'proposed';
-      console.log(`💡 Issue propôs keyword específica: "${keywordLabel}" para contexto "${issue.detail?.substring(0, 40)}..."`);
+      const contextPreview = issue.detail?.substring(0, 40);
+      console.log(`💡 Issue propôs keyword específica: "${keywordLabel}" para contexto "${contextPreview}..."`);
     } else if (globalProposedKeyword) {
       // 3ª opção: Usar keyword proposta GLOBALMENTE pela IA
       keywordLabel = globalProposedKeyword;
@@ -1192,7 +1197,8 @@ export async function POST(request: NextRequest) {
             issue.department_id,
             'system'
           );
-          console.log(`💡 Proposta de keyword ESPECÍFICA criada: "${issue.proposed_keyword}" (contexto: "${issue.detail?.substring(0, 40)}...")`);
+          const issueContext = issue.detail?.substring(0, 40);
+          console.log(`💡 Proposta de keyword ESPECÍFICA criada: "${issue.proposed_keyword}" (contexto: "${issueContext}...")`);
         } catch (error) {
           console.error('Erro ao criar proposta de keyword específica:', error);
         }
