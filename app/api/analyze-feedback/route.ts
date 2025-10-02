@@ -403,7 +403,7 @@ Use categorias específicas que ajudem a gestão:
    - Exemplos: "Hotel incrível", "Adorei tudo", "Experiência maravilhosa", "Gostei muito", "Tudo perfeito"
    - ✅ SEMPRE: keyword="Experiência", department="Produto"
    - ⭐ Importante: keyword é apenas "Experiência" (não "Produto - Experiência")
-   - ⭐ Razão: Elogio geral à experiência hoteleira completa
+   - ⭐ Razão: Elogio geral à experiência hoteleira completas
 
 3. **Elogios ESPECÍFICOS (com área clara):**
    - Exemplo: "Café da manhã excelente" → keyword="A&B - Café da manhã", department="A&B"
@@ -1123,10 +1123,9 @@ export async function POST(request: NextRequest) {
     );
     
     // Log se alerta de candidatos ruins foi adicionado
-    if (candidates.keywords.length > 0 && candidates.keywords[0].similarity_score < 0.45) {
-      console.log('🚨 ALERTA ADICIONADO AO PROMPT: Candidatos com baixa similaridade (<0.45)');
-      console.log('   → IA instruída a PREFERIR candidatos > 0.40 ao invés de propor');
-      console.log('   → Só propor se nenhum candidato faz sentido contextual');
+    if (candidates.keywords.length > 0 && candidates.keywords[0].similarity_score < 0.5) {
+      console.log('🚨 ALERTA ADICIONADO AO PROMPT: Candidatos com baixa similaridade (<0.5)');
+      console.log('   → IA será instruída a PROPOR keywords customizadas');
     }
     
     // Log de modelo usado
