@@ -25,6 +25,8 @@ interface DynamicLists {
 
 // Listas padrão que sempre estarão disponíveis
 const DEFAULT_KEYWORDS = [
+  'Experiência',
+  'Localização',
   'A&B - Café da manhã',
   'A&B - Serviço',
   'A&B - Variedade',
@@ -46,7 +48,6 @@ const DEFAULT_KEYWORDS = [
   'Piscina',
   'Tecnologia - Wi-fi',
   'Tecnologia - TV',
-  'Comodidade',
   'Estacionamento',
   'Atendimento',
   'Acessibilidade',

@@ -31,12 +31,12 @@ import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings-service';
 // Cache global
 let taxonomyCache: TaxonomyCache | null = null;
 
-// Configuração padrão
+// Configuração padrão - OTIMIZADA PARA PRECISÃO
 const DEFAULT_CONFIG: TaxonomyConfig = {
   embedding_model: 'text-embedding-3-small',
   similarity_threshold: 0.85,
-  recall_top_n: 10,
-  min_confidence_threshold: 0.5,
+  recall_top_n: 6,  // ✅ REDUZIDO: Menos candidatos = mais precisão
+  min_confidence_threshold: 0.6,  // ✅ AUMENTADO: Só aceitar matches mais confiantes
   auto_approve_threshold: 0.95,
   max_aliases_per_item: 10,
   max_examples_per_item: 5,
@@ -399,7 +399,8 @@ export async function findCandidates(
       }
       
       const similarity = cosineSimilarity(textEmbedding, keyword.embedding);
-      if (similarity > 0.2) { // Threshold razoável
+      // ✅ THRESHOLD AJUSTADO: 0.40 para keywords (balanceado)
+      if (similarity > 0.40) { 
         keywordCandidates.push({
           id: keyword.id,
           label: keyword.label,
@@ -425,7 +426,8 @@ export async function findCandidates(
       }
       
       const similarity = cosineSimilarity(textEmbedding, problem.embedding);
-      if (similarity > 0.2) { // Threshold razoável
+      // ✅ THRESHOLD AUMENTADO: 0.2 → 0.55 para problems (ainda mais rigoroso)
+      if (similarity > 0.55) { 
         problemCandidates.push({
           id: problem.id,
           label: problem.label,
@@ -444,11 +446,82 @@ export async function findCandidates(
   keywordCandidates.sort((a, b) => b.similarity_score - a.similarity_score);
   problemCandidates.sort((a, b) => b.similarity_score - a.similarity_score);
   
+  // 📊 Log de estatísticas de candidatos
+  console.log('📊 Candidatos encontrados:', {
+    keywords_total: keywordCandidates.length,
+    keywords_top: keywordCandidates.slice(0, 3).map(k => ({ label: k.label, score: k.similarity_score.toFixed(3) })),
+    problems_total: problemCandidates.length,
+    problems_top: problemCandidates.slice(0, 3).map(p => ({ label: p.label, score: p.similarity_score.toFixed(3) })),
+    threshold_used: { keywords: 0.40, problems: 0.55 },
+    top_n: fullConfig.recall_top_n
+  });
+  
+  // 🔄 FALLBACK AUTOMÁTICO: Se threshold muito alto bloqueou tudo, reduzir temporariamente
+  let finalKeywords = keywordCandidates.slice(0, fullConfig.recall_top_n);
+  let finalProblems = problemCandidates.slice(0, fullConfig.recall_top_n);
+  let usedMethod: 'embedding' | 'keyword_match' | 'hybrid' = 'embedding';
+  
+  // Se não encontrou keywords suficientes, fazer segunda passada com threshold mais baixo
+  if (finalKeywords.length < 3) {
+    console.warn(`⚠️ Apenas ${finalKeywords.length} keywords passaram no threshold 0.40. Aplicando fallback com threshold 0.30...`);
+    
+    const fallbackKeywords: KeywordCandidate[] = [];
+    for (const keyword of taxonomy.keywords) {
+      if (!keyword.embedding || keyword.embedding.length === 0) continue;
+      
+      const similarity = cosineSimilarity(textEmbedding, keyword.embedding);
+      if (similarity > 0.30 && similarity <= 0.40) { // Pegar o que ficou entre 0.30 e 0.40
+        fallbackKeywords.push({
+          id: keyword.id,
+          label: keyword.label,
+          department_id: keyword.department_id,
+          description: keyword.description,
+          examples: keyword.examples,
+          similarity_score: similarity
+        });
+      }
+    }
+    
+    fallbackKeywords.sort((a, b) => b.similarity_score - a.similarity_score);
+    finalKeywords = [...finalKeywords, ...fallbackKeywords.slice(0, fullConfig.recall_top_n - finalKeywords.length)];
+    usedMethod = 'hybrid';
+    
+    console.log(`✅ Fallback encontrou +${fallbackKeywords.length} keywords adicionais`);
+  }
+  
+  // Mesmo processo para problems
+  if (finalProblems.length < 3) {
+    console.warn(`⚠️ Apenas ${finalProblems.length} problems passaram no threshold 0.55. Aplicando fallback com threshold 0.40...`);
+    
+    const fallbackProblems: ProblemCandidate[] = [];
+    for (const problem of taxonomy.problems) {
+      if (!problem.embedding || problem.embedding.length === 0) continue;
+      
+      const similarity = cosineSimilarity(textEmbedding, problem.embedding);
+      if (similarity > 0.40 && similarity <= 0.55) { // Pegar o que ficou entre 0.40 e 0.55
+        fallbackProblems.push({
+          id: problem.id,
+          label: problem.label,
+          description: problem.description,
+          examples: problem.examples,
+          applicable_departments: problem.applicable_departments,
+          similarity_score: similarity
+        });
+      }
+    }
+    
+    fallbackProblems.sort((a, b) => b.similarity_score - a.similarity_score);
+    finalProblems = [...finalProblems, ...fallbackProblems.slice(0, fullConfig.recall_top_n - finalProblems.length)];
+    usedMethod = 'hybrid';
+    
+    console.log(`✅ Fallback encontrou +${fallbackProblems.length} problems adicionais`);
+  }
+  
   return {
     departments: taxonomy.departments,
-    keywords: keywordCandidates.slice(0, fullConfig.recall_top_n),
-    problems: problemCandidates.slice(0, fullConfig.recall_top_n),
-    recall_method: 'embedding',
+    keywords: finalKeywords,
+    problems: finalProblems,
+    recall_method: usedMethod,
     recall_score_threshold: fullConfig.similarity_threshold
   };
 }
@@ -520,8 +593,16 @@ export async function createKeyword(
     throw new Error(`Possível duplicata detectada: ${duplicates[0].label} (${duplicates[0].similarity.toFixed(2)})`);
   }
   
-  // Gerar embedding
-  const embedding = await generateEmbedding(`${data.label} ${data.aliases.join(' ')} ${data.examples.join(' ')}`, apiKey);
+  // Gerar embedding com contexto rico
+  // ✅ MELHORIA: incluir descrição e departamento para contexto semântico
+  const contextParts = [
+    data.label,
+    data.description || '',
+    data.department_id, // Contexto do departamento
+    data.aliases.join(' '),
+    data.examples.join('. ')
+  ].filter(Boolean);
+  const embedding = await generateEmbedding(contextParts.join(' | '), apiKey);
   
   const keyword: Keyword = {
     ...data,
@@ -564,8 +645,16 @@ export async function createProblem(
     throw new Error(`Possível duplicata detectada: ${duplicates[0].label} (${duplicates[0].similarity.toFixed(2)})`);
   }
   
-  // Gerar embedding
-  const embedding = await generateEmbedding(`${data.label} ${data.aliases.join(' ')} ${data.examples.join(' ')}`, apiKey);
+  // Gerar embedding com contexto rico
+  // ✅ MELHORIA: incluir descrição e departamentos aplicáveis para contexto semântico
+  const contextParts = [
+    data.label,
+    data.description || '',
+    (data.applicable_departments || []).join(' '), // Contexto dos departamentos
+    data.aliases.join(' '),
+    data.examples.join('. ')
+  ].filter(Boolean);
+  const embedding = await generateEmbedding(contextParts.join(' | '), apiKey);
   
   const problem: Problem = {
     ...data,

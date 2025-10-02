@@ -2630,7 +2630,7 @@ const CommentModal = ({
                                 problemAnalysis.problem || 'Não especificado'
                               )}
                             </Badge>
-                            {problemAnalysis.problem_detail && (
+                            {problemAnalysis.problem_detail && problemAnalysis.problem !== 'VAZIO' && problemAnalysis.problem !== 'Sem problemas' && problemAnalysis.problem !== '' && (
                               <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2" title={problemAnalysis.problem_detail}>
                                 {problemAnalysis.problem_detail}
                               </p>
@@ -2681,7 +2681,7 @@ const CommentModal = ({
                         feedback.problem || 'Não especificado'
                       )}
                     </Badge>
-                    {feedback.problem_detail && (
+                    {feedback.problem_detail && feedback.problem !== 'VAZIO' && feedback.problem !== 'Sem problemas' && feedback.problem !== '' && (
                       <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2" title={feedback.problem_detail}>
                         {feedback.problem_detail}
                       </p>
