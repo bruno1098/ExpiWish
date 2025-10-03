@@ -27,17 +27,18 @@ import {
   TaxonomyProposal 
 } from './taxonomy-types';
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings-service';
+import { generateEnrichedKeywordText, generateEnrichedProblemText, expandUserQuery } from '@/lib/semantic-enrichment';
 
 // Cache global
 let taxonomyCache: TaxonomyCache | null = null;
 
-// Configuração padrão - OTIMIZADA PARA PRECISÃO
+// Configuração padrão - OTIMIZADA PARA RECALL COM EMBEDDINGS RICOS
 const DEFAULT_CONFIG: TaxonomyConfig = {
   embedding_model: 'text-embedding-3-small',
-  similarity_threshold: 0.85,
-  recall_top_n: 6,  // ✅ REDUZIDO: Menos candidatos = mais precisão
-  min_confidence_threshold: 0.6,  // ✅ AUMENTADO: Só aceitar matches mais confiantes
-  auto_approve_threshold: 0.95,
+  similarity_threshold: 0.75,  // ✅ REDUZIDO: Com embeddings ricos, scores ficam menores mas mais precisos
+  recall_top_n: 10,  // ✅ AUMENTADO: Mais candidatos para GPT-4 escolher
+  min_confidence_threshold: 0.50,  // ✅ REDUZIDO: GPT-4 faz validação contextual
+  auto_approve_threshold: 0.92,  // ✅ AJUSTADO: Mais realista com embeddings ricos
   max_aliases_per_item: 10,
   max_examples_per_item: 5,
   cache_expiry_minutes: 30
@@ -385,8 +386,15 @@ export async function findCandidates(
     problems: taxonomy.problems.length
   });
   
-  // Gerar embedding do texto
-  const textEmbedding = await generateEmbedding(text, apiKey);
+  // ✅ MELHORIA CRÍTICA: Expandir query com sinônimos
+  const expandedText = expandUserQuery(text);
+  console.log('🔍 Query expandida:', {
+    original: text.substring(0, 50),
+    expanded: expandedText.substring(0, 100)
+  });
+  
+  // Gerar embedding do texto expandido
+  const textEmbedding = await generateEmbedding(expandedText, apiKey);
   
   // Buscar keywords similares
   const keywordCandidates: KeywordCandidate[] = [];
@@ -399,8 +407,8 @@ export async function findCandidates(
       }
       
       const similarity = cosineSimilarity(textEmbedding, keyword.embedding);
-      // ✅ THRESHOLD AJUSTADO: 0.40 para keywords (balanceado)
-      if (similarity > 0.40) { 
+      // ✅ THRESHOLD REDUZIDO: 0.30 para keywords (embeddings ricos = scores menores)
+      if (similarity > 0.30) { 
         keywordCandidates.push({
           id: keyword.id,
           label: keyword.label,
@@ -426,8 +434,8 @@ export async function findCandidates(
       }
       
       const similarity = cosineSimilarity(textEmbedding, problem.embedding);
-      // ✅ THRESHOLD AUMENTADO: 0.2 → 0.55 para problems (ainda mais rigoroso)
-      if (similarity > 0.55) { 
+      // ✅ THRESHOLD REDUZIDO: 0.40 para problems (embeddings ricos = maior recall)
+      if (similarity > 0.40) { 
         problemCandidates.push({
           id: problem.id,
           label: problem.label,
@@ -452,8 +460,9 @@ export async function findCandidates(
     keywords_top: keywordCandidates.slice(0, 3).map(k => ({ label: k.label, score: k.similarity_score.toFixed(3) })),
     problems_total: problemCandidates.length,
     problems_top: problemCandidates.slice(0, 3).map(p => ({ label: p.label, score: p.similarity_score.toFixed(3) })),
-    threshold_used: { keywords: 0.40, problems: 0.55 },
-    top_n: fullConfig.recall_top_n
+    threshold_used: { keywords: 0.30, problems: 0.40 },
+    top_n: fullConfig.recall_top_n,
+    query_expansion: 'enabled'
   });
   
   // 🔄 FALLBACK AUTOMÁTICO: Se threshold muito alto bloqueou tudo, reduzir temporariamente
@@ -463,14 +472,14 @@ export async function findCandidates(
   
   // Se não encontrou keywords suficientes, fazer segunda passada com threshold mais baixo
   if (finalKeywords.length < 3) {
-    console.warn(`⚠️ Apenas ${finalKeywords.length} keywords passaram no threshold 0.40. Aplicando fallback com threshold 0.30...`);
+    console.warn(`⚠️ Apenas ${finalKeywords.length} keywords passaram no threshold 0.30. Aplicando fallback com threshold 0.20...`);
     
     const fallbackKeywords: KeywordCandidate[] = [];
     for (const keyword of taxonomy.keywords) {
       if (!keyword.embedding || keyword.embedding.length === 0) continue;
       
       const similarity = cosineSimilarity(textEmbedding, keyword.embedding);
-      if (similarity > 0.30 && similarity <= 0.40) { // Pegar o que ficou entre 0.30 e 0.40
+      if (similarity > 0.20 && similarity <= 0.30) { // Pegar o que ficou entre 0.20 e 0.30
         fallbackKeywords.push({
           id: keyword.id,
           label: keyword.label,
@@ -491,7 +500,7 @@ export async function findCandidates(
   
   // Mesmo processo para problems
   if (finalProblems.length < 3) {
-    console.warn(`⚠️ Apenas ${finalProblems.length} problems passaram no threshold 0.55. Aplicando fallback com threshold 0.40...`);
+    console.warn(`⚠️ Apenas ${finalProblems.length} problems passaram no threshold 0.40. Aplicando fallback com threshold 0.25...`);
     
     const fallbackProblems: ProblemCandidate[] = [];
     for (const problem of taxonomy.problems) {
@@ -593,10 +602,11 @@ export async function createKeyword(
     throw new Error(`Possível duplicata detectada: ${duplicates[0].label} (${duplicates[0].similarity.toFixed(2)})`);
   }
   
-  // Gerar embedding com contexto rico
-  // ✅ MELHORIA: incluir descrição e departamento para contexto semântico
+  // Gerar embedding com contexto rico usando enriquecimento semântico
+  // ✅ MELHORIA CRÍTICA: usar dicionário de contexto semântico
+  const enrichedText = generateEnrichedKeywordText(data.label);
   const contextParts = [
-    data.label,
+    enrichedText, // Texto já enriquecido com sinônimos e variações
     data.description || '',
     data.department_id, // Contexto do departamento
     data.aliases.join(' '),
@@ -645,10 +655,11 @@ export async function createProblem(
     throw new Error(`Possível duplicata detectada: ${duplicates[0].label} (${duplicates[0].similarity.toFixed(2)})`);
   }
   
-  // Gerar embedding com contexto rico
-  // ✅ MELHORIA: incluir descrição e departamentos aplicáveis para contexto semântico
+  // Gerar embedding com contexto rico usando enriquecimento semântico
+  // ✅ MELHORIA CRÍTICA: usar dicionário de contexto semântico para problems
+  const enrichedText = generateEnrichedProblemText(data.label);
   const contextParts = [
-    data.label,
+    enrichedText, // Texto já enriquecido com indicadores negativos
     data.description || '',
     (data.applicable_departments || []).join(' '), // Contexto dos departamentos
     data.aliases.join(' '),

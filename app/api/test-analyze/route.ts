@@ -9,9 +9,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { toBrasiliaTimestamp } from '@/lib/timezone-utils';
 
 // API Key fixa para testes
-const TEST_API_KEY = process.env.TEST
+const TEST_API_KEY = process.env.NEXT_PUBLIC_TEST_API_KEY;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
       },
       resultado_completo: result,
       metadata: {
-        timestamp: new Date().toISOString(),
+        timestamp: toBrasiliaTimestamp(),
         versao_taxonomia: result.taxonomy_version,
         tempo_processamento_ms: result.processing_time_ms
       }

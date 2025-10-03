@@ -14,6 +14,11 @@ import {
 } from "@/lib/taxonomy-types";
 import { adaptNewAIToLegacyFormat, createBasicFeedback, createEmergencyFeedback, type NewAIResponse } from '@/lib/ai-compatibility-adapter';
 import { performanceLogger } from '@/lib/performance-logger';
+import { 
+  validateKeywordDepartment, 
+  autoCorrectDepartment, 
+  KEYWORD_DEPARTMENT_MAP 
+} from '@/lib/taxonomy-validation';
 
 // Cache em memória para análises repetidas
 interface AnalysisCache {
@@ -797,23 +802,49 @@ function processLLMResponse(
 
     // 🎯 CORREÇÃO: Usar estratégia em cascata para keywords
     let keywordLabel = 'Não identificado';
+    let departmentId = issue.department_id;
     let matchedBy: 'embedding' | 'proposed' | 'exact' = 'proposed';
     
     if (keyword) {
       // 1ª opção: Usar keyword encontrada nos candidatos
       keywordLabel = keyword.label;
       matchedBy = keyword.similarity_score > 0.9 ? 'exact' : 'embedding';
+      
+      // ✅ VALIDAÇÃO ESTRUTURAL: Verificar se keyword está no departamento correto
+      const validation = validateKeywordDepartment(keywordLabel, departmentId);
+      if (!validation.valid && validation.correctDepartment) {
+        console.warn(`⚠️ CORREÇÃO AUTOMÁTICA: "${keywordLabel}" de "${departmentId}" → "${validation.correctDepartment}"`);
+        departmentId = validation.correctDepartment;
+      }
+      
     } else if (issue.proposed_keyword) {
       // 2ª opção: Usar keyword proposta ESPECIFICAMENTE para esta issue
       keywordLabel = issue.proposed_keyword;
       matchedBy = 'proposed';
       const contextPreview = issue.detail?.substring(0, 40);
       console.log(`💡 Issue propôs keyword específica: "${keywordLabel}" para contexto "${contextPreview}..."`);
+      
+      // ✅ VALIDAÇÃO ESTRUTURAL: Corrigir departamento automaticamente
+      const correction = autoCorrectDepartment(keywordLabel, departmentId);
+      if (correction.corrected) {
+        console.warn(`⚠️ CORREÇÃO AUTOMÁTICA: "${keywordLabel}" de "${departmentId}" → "${correction.newDepartmentId}"`);
+        console.warn(`   Razão: ${correction.reason}`);
+        departmentId = correction.newDepartmentId;
+      }
+      
     } else if (globalProposedKeyword) {
       // 3ª opção: Usar keyword proposta GLOBALMENTE pela IA
       keywordLabel = globalProposedKeyword;
       matchedBy = 'proposed';
       console.log(`💡 Usando keyword proposta globalmente: ${keywordLabel}`);
+      
+      // ✅ VALIDAÇÃO ESTRUTURAL
+      const correction = autoCorrectDepartment(keywordLabel, departmentId);
+      if (correction.corrected) {
+        console.warn(`⚠️ CORREÇÃO AUTOMÁTICA: "${keywordLabel}" de "${departmentId}" → "${correction.newDepartmentId}"`);
+        departmentId = correction.newDepartmentId;
+      }
+      
     } else if (department) {
       // 4ª opção: Fallback baseado no departamento
       keywordLabel = `${department.label} - Geral`;
@@ -821,24 +852,30 @@ function processLLMResponse(
       console.log(`🔄 Fallback: usando keyword genérica do departamento: ${keywordLabel}`);
     }
     
+    // ✅ ATUALIZAR DEPARTMENT_ID SE FOI CORRIGIDO
+    issue.department_id = departmentId;
+    
+    // ✅ Buscar department atualizado após correção
+    const finalDepartment = candidates.departments.find(d => d.id === departmentId) || department;
+    
     issues.push({
-      department_id: issue.department_id,
+      department_id: departmentId, 
       keyword_id: issue.keyword_id || 'EMPTY',
       problem_id: issue.problem_id || 'EMPTY',
 
-      department_label: department ? department.label : 'Não identificado',
+      department_label: finalDepartment ? finalDepartment.label : 'Não identificado',
       keyword_label: keywordLabel,
       problem_label: problem ? problem.label : 'VAZIO',
 
       detail: (issue.detail || '').substring(0, 120),
       confidence: Math.max(0, Math.min(1, issue.confidence || 0.5)),
-      matched_by: matchedBy  // ✅ Usar variável calculada na cascata
+      matched_by: matchedBy  
     });
   }
 
-  // Se não há issues, criar uma padrão
+
   if (issues.length === 0) {
-    // Usar um departamento que sempre existe nos candidatos
+ 
     const defaultDepartment = candidates.departments.find(d => d.id === 'Recepcao') || candidates.departments[0];
     
     issues.push({
