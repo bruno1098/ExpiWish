@@ -14,6 +14,11 @@ import {
 } from "@/lib/taxonomy-types";
 import { adaptNewAIToLegacyFormat, createBasicFeedback, createEmergencyFeedback, type NewAIResponse } from '@/lib/ai-compatibility-adapter';
 import { performanceLogger } from '@/lib/performance-logger';
+import { 
+  validateKeywordDepartment, 
+  autoCorrectDepartment, 
+  KEYWORD_DEPARTMENT_MAP 
+} from '@/lib/taxonomy-validation';
 
 // Cache em memória para análises repetidas
 interface AnalysisCache {
@@ -193,6 +198,7 @@ function createDynamicPrompt(
 🎯 **COMPREENSÃO CONTEXTUAL**:
 
 **ENTENDA O NEGÓCIO HOTELEIRO:**
+
 - Restaurantes/Bares = A&B (Alimentos & Bebidas)  
 - Funcionários do restaurante/bar = A&B - Serviço
 - Quartos sujos/arrumação = Limpeza/Governança
@@ -202,23 +208,122 @@ function createDynamicPrompt(
 - Chegada/Saída = Recepção
 - Concierge = pessoa específica de informações
 
+**🍽️ A&B (Alimentos & Bebidas) - APENAS comida e bebida:**
+
+**Keywords do A&B - ESCOLHA CORRETA:**
+
+📋 **A&B - Serviço** (atendimento de pessoas do restaurante/bar):
+- USAR quando fala de: garçom, atendente, serviço do restaurante, atendimento do bar
+- ✅ "garçom atencioso" → A&B - Serviço
+- ✅ "atendimento do restaurante" → A&B - Serviço
+- ✅ "serviço do bar rápido" → A&B - Serviço
+- ✅ "funcionários do café da manhã educados" → A&B - Serviço
+
+🍽️ **A&B - Gastronomia / Café da manhã / Variedade** (sobre a COMIDA/BEBIDA em si):
+- USAR quando fala da: qualidade da comida, sabor, variedade de pratos, temperatura da comida
+- ✅ "comida deliciosa" → A&B - Gastronomia
+- ✅ "café da manhã variado" → A&B - Café da manhã
+- ✅ "pratos bem temperados" → A&B - Gastronomia
+- ✅ "faltou opções vegetarianas" → A&B - Variedade
+
+⚠️ **DIFERENÇA FUNDAMENTAL:**
+- Fala de PESSOAS (garçom, atendente) = A&B - Serviço
+- Fala de COMIDA/BEBIDA (sabor, qualidade) = A&B - Gastronomia/Café da manhã
+
+**🏨 OPERAÇÕES - Atendimento geral do hotel (SEM especificar área):**
+- USAR quando menciona: atendimento genérico, staff, equipe, funcionários (SEM mencionar restaurante/bar/recepção)
+- ❌ NÃO usar se menciona "restaurante", "bar", "recepção" junto com atendimento
+- ✅ Exemplo: "atendimento excelente" (sozinho) → Operações - Atendimento
+- ✅ Exemplo: "equipe muito prestativa" → Operações - Atendimento
+- ✅ Exemplo: "funcionários educados" → Operações - Atendimento
+
+**📍 RECEPÇÃO - Chegada/Saída:**
+- USAR quando menciona: recepção, check-in, check-out, recepcionista
+- Exemplo: "recepcionista muito educada" → Recepção - Atendimento
+- Exemplo: "check-in rápido" → Recepção - Processo
+
+**🧹 GOVERNANÇA/LIMPEZA:**
+- Quartos sujos/arrumação, camareira, roupa de cama
+
+**🔧 MANUTENÇÃO:**
+- Equipamentos quebrados, chuveiro, ar-condicionado
+
+**🏊 LAZER:**
+- Piscina, academia, spa, atividades
+
+**💻 TI/TECNOLOGIA:**
+- Wi-fi, TV, sistemas
+
+**📍 LOCALIZAÇÃO (Produto):**
+- USAR quando menciona: localização, localizado, perto de, próximo, acesso, vista, região
+- keyword="Localização", department="Produto"
+- Exemplo: "hotel bem localizado" → Produto - Localização
+- Exemplo: "perto da praia" → Produto - Localização
+- Exemplo: "localização perfeita" → Produto - Localização
+
 **ENTENDA AS INTENÇÕES:**
-- Elogios específicos → classificar na área específica
-- Elogios genéricos ("tudo ótimo") → Produto - Experiência  
+- Elogios específicos → classificar na área específica (ex: A&B, Limpeza)
+- Elogios genéricos ("tudo ótimo", "hotel incrível") → keyword: "Experiência", department: "Produto"
 - Problemas → identificar causa raiz e departamento responsável
 - Sugestões → detectar quando há proposta de melhoria
+
+**⚡ ATENÇÃO ESPECIAL - CONTEXTO DE ATENDIMENTO:**
+- "atendimento DO restaurante" → A&B - Serviço ✅
+- "atendimento DO bar" → A&B - Serviço ✅
+- "atendimento DA recepção" → Recepção - Atendimento ✅
+- "atendimento" (sozinho) → Operações - Atendimento ✅
 
 🔥 **EXEMPLOS DE COMPREENSÃO REAL:**
 
 **Exemplo 1**: "O garçom João foi muito atencioso"
-- **LEIA**: menciona garçom específico
-- **ENTENDA**: elogio ao serviço de um funcionário do restaurante
-- **CLASSIFIQUE**: A&B - Serviço (não "Atendimento" genérico)
+- **LEIA**: menciona garçom específico atendendo
+- **ENTENDA**: elogio ao ATENDIMENTO de uma pessoa do restaurante
+- **CLASSIFIQUE**: keyword="A&B - Serviço", department="A&B"
+- **Razão**: garçom = PESSOA atendendo = Serviço (NÃO é sobre comida)
+
+**Exemplo 1-A**: "A comida estava deliciosa"
+- **LEIA**: menciona qualidade da comida
+- **ENTENDA**: elogio à COMIDA, não ao atendimento
+- **CLASSIFIQUE**: keyword="A&B - Gastronomia", department="A&B"
+- **Razão**: fala da comida em si = Gastronomia (NÃO é sobre atendimento)
+
+**Exemplo 1b**: "Atendimento excelente"
+- **LEIA**: atendimento genérico, sem mencionar área específica
+- **ENTENDA**: elogio ao atendimento geral do hotel
+- **CLASSIFIQUE**: keyword="Atendimento", department="Operações"
+- **Razão**: atendimento sem contexto específico = Operações
+
+**Exemplo 1d**: "Hotel muito bem localizado e com ótimo atendimento"
+- **LEIA**: dois aspectos diferentes - localização + atendimento genérico
+- **ENTENDA**: elogio à localização E ao atendimento geral
+- **CLASSIFIQUE**: 2 issues separadas:
+  * Issue 1: keyword="Localização", department="Produto" (localização)
+  * Issue 2: keyword="Atendimento", department="Operações" (atendimento SEM especificar área)
+- **Razão**: múltiplos aspectos = múltiplas classificações
+
+**Exemplo 1e**: "Hotel muito bem localizado e com ótimo atendimento do restaurante"
+- **LEIA**: dois aspectos - localização + atendimento DO RESTAURANTE
+- **ENTENDA**: elogio à localização E ao ATENDIMENTO/SERVIÇO das pessoas do restaurante
+- **CLASSIFIQUE**: 2 issues separadas:
+  * Issue 1: keyword="Localização", department="Produto"
+  * Issue 2: keyword="A&B - Serviço", department="A&B" 
+- **RAZÃO IMPORTANTE**: 
+  * "atendimento" = PESSOAS atendendo = A&B - Serviço ✅
+  * "comida boa" = ALIMENTO = A&B - Gastronomia ❌ (diferente!)
+
+**Exemplo 1c**: "Recepcionista muito educada"
+- **LEIA**: menciona especificamente recepcionista
+- **ENTENDA**: elogio ao atendimento da recepção
+- **CLASSIFIQUE**: keyword="Recepção - Atendimento", department="Recepção"
+- **Razão**: recepcionista = departamento específico
 
 **Exemplo 2**: "Tudo foi maravilhoso durante nossa estadia"  
 - **LEIA**: elogio geral sem área específica
 - **ENTENDA**: satisfação geral com a experiência hoteleira
-- **CLASSIFIQUE**: Produto - Experiência (experiência completa)
+- **CLASSIFIQUE**: 
+  * keyword: "Experiência" (apenas Experiência, não Produto)
+  * department: "Produto"
+  * Razão: elogio genérico à experiência completa
 
 **Exemplo 3**: "O café da manhã estava excelente e a piscina muito limpa"
 - **LEIA**: dois aspectos diferentes mencionados
@@ -249,11 +354,34 @@ Use categorias específicas que ajudem a gestão:
 🌟 **DIRETRIZES DE AUTONOMIA**:
 
 1. **MÚLTIPLOS ASPECTOS**: Se o feedback menciona várias áreas, crie classificações separadas para cada uma
+   - Exemplo: "Hotel bem localizado e atendimento ótimo" = 2 issues (Localização + Atendimento)
+   - Exemplo: "Café da manhã bom mas Wi-fi ruim" = 2 issues (A&B positivo + TI negativo)
 
-2. **CONTEXTO SEMÂNTICO**: Use o contexto para entender melhor:
-   - "Pessoa do restaurante" = A&B - Serviço
-   - "Funcionário da limpeza" = Limpeza - Serviço
-   - "Moça da recepção" = Recepção - Serviço
+2. **CONTEXTO SEMÂNTICO - ATENÇÃO AO DEPARTAMENTO CORRETO**:
+   
+   **🔍 REGRA FUNDAMENTAL: Leia a frase COMPLETA para identificar o contexto!**
+   
+   **A&B (quando menciona restaurante/bar/comida junto com atendimento):**
+   - "Garçom atencioso" = A&B - Serviço ✅
+   - "Atendimento do restaurante" = A&B - Serviço ✅ (palavra-chave: RESTAURANTE)
+   - "Atendimento no bar" = A&B - Serviço ✅ (palavra-chave: BAR)
+   - "Serviço do café da manhã" = A&B - Serviço ✅ (palavra-chave: CAFÉ DA MANHÃ)
+   - "Funcionário do restaurante atencioso" = A&B - Serviço ✅
+   
+   **OPERAÇÕES (atendimento SEM especificar área):**
+   - "Atendimento excelente" (sozinho, sem contexto) = Operações - Atendimento ✅
+   - "Equipe prestativa" = Operações - Atendimento ✅
+   - "Staff educado" = Operações - Atendimento ✅
+   - "Funcionários" (sem especificar área) = Operações - Atendimento ✅
+   
+   **RECEPÇÃO (área específica):**
+   - "Recepcionista atenciosa" = Recepção - Atendimento ✅
+   - "Atendimento na recepção" = Recepção - Atendimento ✅
+   - "Moça da recepção" = Recepção - Atendimento ✅
+   
+   **GOVERNANÇA:**
+   - "Camareira simpática" = Governança - Atendimento ✅
+   - "Funcionário da limpeza" = Governança - Serviço ✅
 
 3. **INTENÇÃO REAL**: Detecte a verdadeira intenção:
    - Elogio mascarado: "Poderia ser melhor" = crítica construtiva
@@ -270,40 +398,108 @@ Use categorias específicas que ajudem a gestão:
    - Sentiment 3: Neutro ou misto  
    - Sentiment 4-5: Elogios e satisfação
 
-💡 **SUA MISSÃO FINAL**:
-- **NÃO** procure palavras-chave no texto
-- **NÃO** use comparação mecânica
-- **SIM** leia e compreenda como um especialista em hospitalidade faria
-- **SIM** use toda sua inteligência para classificar corretamente
-- **SIM** crie quantas classificações forem necessárias
+� **REGRAS ABSOLUTAS - NUNCA VIOLE:**
 
-Você tem TOTAL LIBERDADE para interpretar e classificar. Seja uma IA inteligente que realmente entende hospitalidade, não um robô que compara palavras.`;
+1. **NUNCA use "Elogio" como keyword ou department**
+   - ❌ ERRADO: keyword="Elogio", department="Elogio"
+   - ✅ CORRETO: Use a área específica elogiada OU "Experiência"/"Produto"
 
-  const userPrompt = `**FEEDBACK DO HÓSPEDE:**
+2. **Elogios GENÉRICOS (sem área específica):**
+   - Exemplos: "Hotel incrível", "Adorei tudo", "Experiência maravilhosa", "Gostei muito", "Tudo perfeito"
+   - ✅ SEMPRE: keyword="Experiência", department="Produto"
+   - ⭐ Importante: keyword é apenas "Experiência" (não "Produto - Experiência")
+   - ⭐ Razão: Elogio geral à experiência hoteleira completas
+
+3. **Elogios ESPECÍFICOS (com área clara):**
+   - Exemplo: "Café da manhã excelente" → keyword="A&B - Café da manhã", department="A&B"
+   - Exemplo: "Quarto limpo" → keyword="Limpeza - Quarto", department="Governança"
+   - ✅ Use o departamento/keyword correto da área elogiada
+
+4. **NUNCA misture "Elogio" com outros termos:**
+   - ❌ "Elogio - Café da manhã"
+   - ✅ "A&B - Café da manhã" (se específico) ou "Experiência" (se genérico)
+
+�💡 **SUA MISSÃO**:
+- Entenda o CONTEXTO SEMÂNTICO, não apenas palavras
+- Se candidatos não fazem sentido → USE proposed_keyword_label
+- NUNCA use "Elogio" como keyword
+- Para elogios genéricos: keyword="Experiência", department="Produto"
+
+🎯 **PRIORIDADE MÁXIMA**: Se nenhum candidato faz sentido contextual, PROPONHA keyword apropriada.`;
+
+  // 🚨 ALERTA VISUAL se candidatos são ruins
+  const hasPoorCandidates = candidates.keywords.length > 0 && 
+                            candidates.keywords[0].similarity_score < 0.45;
+  
+  const poorCandidatesAlert = hasPoorCandidates ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨 CANDIDATOS TÊM BAIXA SIMILARIDADE (< 0.45) 🚨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ REGRA: PREFIRA candidatos com score > 0.40
+⚠️ SÓ PROPONHA se NENHUM candidato faz sentido contextual
+
+📊 Avaliando candidatos:
+
+• Score > 0.50: ÓTIMO - Use keyword_id do candidato ✅
+• Score 0.40-0.50: RAZOÁVEL - Use SE faz sentido contextual ✅
+• Score < 0.40: RUIM - Só use se for exato match, senão PROPONHA ⚠️
+
+📝 EXEMPLO:
+Feedback: "Hotel bem localizado e ótimo atendimento"
+
+Candidatos disponíveis:
+- "Atendimento" (score 0.48) ← RAZOÁVEL, usa!
+- "Recepção - Serviço" (score 0.42) ← RAZOÁVEL mas não é contexto certo
+
+Issue 1 (localização):
+  ✅ Nenhum candidato de localização
+  → keyword_id: "EMPTY", proposed_keyword: "Localização"
+  
+Issue 2 (atendimento):  
+  ✅ TEM candidato "Atendimento" (0.48)
+  → keyword_id: "kw_atendimento" ← USA O CANDIDATO!
+  ❌ NÃO propor "Experiência" se já tem "Atendimento"
+
+📋 QUANDO PROPOR:
+• "localização" SEM candidato relacionado → PROPOR "Localização"
+• "atendimento restaurante" com "Atendimento" genérico disponível → USA "Atendimento"
+• "garçom" SEM candidato A&B → PROPOR "A&B - Serviço"
+• "comida/sabor" SEM candidato → PROPOR "A&B - Gastronomia"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+` : '';
+  
+  const userPrompt = `${poorCandidatesAlert}**FEEDBACK DO HÓSPEDE:**
 "${text}"
 
 **DEPARTAMENTOS DISPONÍVEIS:**
 ${candidates.departments.map(d => `- ${d.id}: ${d.label}${d.description ? ` (${d.description})` : ''}`).join('\n')}
 
 **KEYWORDS CANDIDATAS (top por similaridade):**
-${candidates.keywords.map(k =>
+${candidates.keywords.length > 0 ? candidates.keywords.map(k =>
     `- ID: ${k.id}
     Label: ${k.label}
     Dept: ${k.department_id}
     Score: ${k.similarity_score.toFixed(3)}
     ${k.description ? `Desc: ${k.description}` : ''}
     Exemplos: ${k.examples.slice(0, 2).join('; ')}`
-  ).join('\n\n')}
+  ).join('\n\n') : '⚠️ NENHUMA keyword candidata encontrada com boa similaridade'}
+
+${candidates.keywords.length > 0 && candidates.keywords[0].similarity_score < 0.5 ? 
+  `⚠️ ATENÇÃO: Scores de similaridade BAIXOS (< 0.5). Se nenhum candidato acima fizer sentido semântico, 
+  use proposed_keyword_label para criar uma keyword apropriada ao contexto.` : ''}
 
 **PROBLEMS CANDIDATOS (top por similaridade):**
-${candidates.problems.map(p =>
+${candidates.problems.length > 0 ? candidates.problems.map(p =>
     `- ID: ${p.id}
     Label: ${p.label}
     Score: ${p.similarity_score.toFixed(3)}
     ${p.description ? `Desc: ${p.description}` : ''}
     ${p.applicable_departments ? `Depts: ${p.applicable_departments.join(', ')}` : 'Todos depts'}
     Exemplos: ${p.examples.slice(0, 2).join('; ')}`
-  ).join('\n\n')}
+  ).join('\n\n') : '⚠️ NENHUM problem candidato encontrado'}
 
 **INSTRUÇÕES CRÍTICAS PARA ANÁLISE SEMÂNTICA:**
 
@@ -346,6 +542,30 @@ ${candidates.problems.map(p =>
 - Para PROBLEMAS: escolha o problem_id mais adequado ao contexto negativo
 - Se nenhum candidato serve perfeitamente: use proposed_*_label
 
+💡 **QUANDO PROPOR NOVAS KEYWORDS (proposed_keyword_label):**
+
+**SEMPRE PROPONHA** quando:
+1. ✅ Feedback menciona **"atendimento do restaurante"** mas candidatos só tem "Check-in - Atendimento"
+   → PROPOR: "A&B - Serviço" ou "A&B - Atendimento"
+   
+2. ✅ Feedback menciona **"qualidade da comida"** mas candidatos não tem nada de gastronomia
+   → PROPOR: "A&B - Gastronomia" ou "A&B - Qualidade"
+   
+3. ✅ Feedback menciona **"localização"** mas candidatos não tem keyword relacionada
+   → PROPOR: "Localização" ou "Produto - Localização"
+   
+4. ✅ Todos candidatos tem score < 0.5 (baixa similaridade)
+   → PROPOR: Keyword que faz sentido semântico para o contexto
+
+**NUNCA PROPONHA** quando:
+- ❌ Já existe candidato perfeito (score > 0.7)
+- ❌ Candidato razoável (score > 0.5) e faz sentido contextual
+
+**FORMATO DA PROPOSTA:**
+- Para áreas específicas: "{Departamento} - {Aspecto}"
+- Exemplos: "A&B - Serviço", "Governança - Limpeza", "Recepção - Atendimento"
+- Para genéricos: "Experiência", "Localização", "Custo-benefício"
+
 ⚡ **REGRAS FINAIS CRÍTICAS:**
 
 🎯 **SEPARAÇÃO OBRIGATÓRIA DE ELOGIOS E PROBLEMAS:**
@@ -353,18 +573,11 @@ ${candidates.problems.map(p =>
 - **PROBLEMAS**: SEMPRE problem_id válido da lista (sentimentos 1-2)
 - **NEUTRO**: Analise o contexto - se positivo use "EMPTY", se negativo use problem_id
 
-🔥 **EXEMPLOS PRÁTICOS:**
-- "Adorei o café da manhã" → problem_id = "EMPTY", detail = "Café da manhã excelente"
-- "Quarto estava sujo" → problem_id = "LIMPEZA_001", detail = "Quarto com falta de limpeza"
-- "Staff muito atencioso" → problem_id = "EMPTY", detail = "Equipe muito atenciosa"
-- "Wi-fi não funcionava" → problem_id = "WIFI_001", detail = "Wi-fi instável"
-
-⚠️ **VALIDAÇÃO OBRIGATÓRIA:**
-- Se sentiment >= 4 E problem_id != "EMPTY" → ERRO!
-- Se sentiment <= 2 E problem_id == "EMPTY" → ERRO!
-- Máximo 3 issues por feedback
-- confidence < 0.5 → needs_review = true
-- Seja INTELIGENTE, não mecânico!`;
+⚠️ **VALIDAÇÃO:**
+- Elogios (sentiment 4-5) → problem_id = "EMPTY"
+- Críticas (sentiment 1-2) → problem_id válido
+- Máximo 3 issues
+- Se candidatos ruins → PROPONHA nova keyword`;
 
   // Schema dinâmico baseado nos candidatos reais
   const departmentIds = candidates.departments.map(d => d.id);
@@ -416,7 +629,7 @@ ${candidates.problems.map(p =>
               keyword_id: {
                 type: "string",
                 enum: keywordIds,
-                description: "ID da keyword ou EMPTY para elogios"
+                description: "ID da keyword ou EMPTY para elogios/propor nova"
               },
               problem_id: {
                 type: "string",
@@ -433,6 +646,11 @@ ${candidates.problems.map(p =>
                 minimum: 0,
                 maximum: 1,
                 description: "Confiança nesta issue específica"
+              },
+              proposed_keyword: {
+                type: "string",
+                maxLength: 100,
+                description: "OPCIONAL: Propor keyword específica para esta issue se candidatos não servem"
               }
             },
             required: ["department_id", "keyword_id", "problem_id", "detail", "confidence"]
@@ -457,16 +675,92 @@ ${candidates.problems.map(p =>
 }
 
 /**
+ * Valida se uma keyword faz sentido semântico para o contexto
+ * Remove matches nonsense como "Check-out - Atendimento" para "atendimento do restaurante"
+ */
+function validateKeywordContext(keywordLabel: string, departmentId: string, textContext: string): boolean {
+  const textLower = textContext.toLowerCase();
+  
+  // 🚨 REGRA 1: Check-in/Check-out só se menciona explicitamente
+  if (keywordLabel.includes('Check-in') || keywordLabel.includes('Check-out')) {
+    const hasCheckInMention = textLower.includes('check') || 
+                              textLower.includes('entrada') || 
+                              textLower.includes('saída') ||
+                              textLower.includes('chegada') ||
+                              textLower.includes('partida');
+    if (!hasCheckInMention) {
+      console.log(`❌ Removendo keyword nonsense: "${keywordLabel}" - não menciona check-in/out`);
+      return false;
+    }
+  }
+  
+  // 🚨 REGRA 2: Keywords de áreas específicas precisam do contexto da área
+  const areaKeywords: Record<string, string[]> = {
+    'Piscina': ['piscina'],
+    'Academia': ['academia', 'gym', 'exercício', 'treino'],
+    'Spa': ['spa', 'massagem', 'tratamento'],
+    'Estacionamento': ['estacionamento', 'garagem', 'vaga', 'carro'],
+    'Transfer': ['transfer', 'transporte', 'traslado'],
+    'Lavanderia': ['lavanderia', 'roupa'],
+    'Bar': ['bar', 'bebida', 'drinks'],
+    'Café da manhã': ['café da manhã', 'breakfast', 'café', 'manhã'],
+  };
+  
+  for (const [area, keywords] of Object.entries(areaKeywords)) {
+    if (keywordLabel.includes(area)) {
+      const hasAreaMention = keywords.some(kw => textLower.includes(kw));
+      if (!hasAreaMention) {
+        console.log(`❌ Removendo keyword nonsense: "${keywordLabel}" - não menciona ${area}`);
+        return false;
+      }
+    }
+  }
+  
+  // 🚨 REGRA 3: Se é A&B, texto deve mencionar alimento/bebida/restaurante/bar
+  if (departmentId === 'A&B' || departmentId === 'ab') {
+    const hasABContext = textLower.includes('comida') || 
+                        textLower.includes('restaurante') ||
+                        textLower.includes('café') ||
+                        textLower.includes('jantar') ||
+                        textLower.includes('almoço') ||
+                        textLower.includes('bar') ||
+                        textLower.includes('bebida') ||
+                        textLower.includes('garçom') ||
+                        textLower.includes('gastronomia') ||
+                        textLower.includes('refeição');
+    
+    if (!hasABContext) {
+      console.log(`❌ Removendo keyword nonsense: "${keywordLabel}" (dept: A&B) - não menciona contexto de A&B`);
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+/**
  * Processa resposta do LLM e valida
  */
 function processLLMResponse(
   response: any,
   candidates: ClassificationCandidates,
   taxonomyVersion: number,
-  processingTimeMs: number
+  processingTimeMs: number,
+  originalText: string = ''
 ): ClassificationResult {
 
   const issues: ClassificationIssue[] = [];
+  
+  // 🎯 Pegar keyword/problem propostos GLOBAIS (fora do array de issues)
+  const globalProposedKeyword = response.proposed_keyword_label;
+  const globalProposedProblem = response.proposed_problem_label;
+  
+  if (globalProposedKeyword) {
+    console.log(`💡 IA propôs keyword global: "${globalProposedKeyword}"`);
+  }
+  if (globalProposedProblem) {
+    console.log(`💡 IA propôs problem global: "${globalProposedProblem}"`);
+  }
 
   // Processar cada issue
   for (const issue of response.issues || []) {
@@ -474,6 +768,31 @@ function processLLMResponse(
     const department = candidates.departments.find(d => d.id === issue.department_id);
     const keyword = candidates.keywords.find(k => k.id === issue.keyword_id);
     const problem = candidates.problems.find(p => p.id === issue.problem_id);
+    
+    // Debug: Log separado para evitar erro no build
+    const detailPreview = issue.detail?.substring(0, 50);
+    console.log('🔍 Processing issue:', {
+      department_id: issue.department_id,
+      keyword_id: issue.keyword_id,
+      problem_id: issue.problem_id,
+      detail: detailPreview
+    });
+    
+    const deptLabel = department?.label || 'NOT FOUND';
+    const kwLabel = keyword?.label || 'NOT FOUND';
+    const probLabel = problem?.label || 'NOT FOUND';
+    console.log('🔍 Found in candidates:', {
+      department: deptLabel,
+      keyword: kwLabel,
+      problem: probLabel
+    });
+    
+    // ✅ VALIDAÇÃO CONTEXTUAL: Só validar se keyword FOI ENCONTRADA nos candidatos
+    // Se não foi encontrada, deixa a IA propor uma nova (matched_by = 'proposed')
+    if (keyword && !validateKeywordContext(keyword.label, issue.department_id, originalText)) {
+      console.log(`⚠️ Pulando issue com keyword inválida: ${keyword.label}`);
+      continue; // Pular esta issue
+    }
 
     // Tratar caso especial para elogios (department_id = "EMPTY")
     if (!department && issue.department_id !== 'EMPTY') {
@@ -481,24 +800,82 @@ function processLLMResponse(
       continue;
     }
 
+    // 🎯 CORREÇÃO: Usar estratégia em cascata para keywords
+    let keywordLabel = 'Não identificado';
+    let departmentId = issue.department_id;
+    let matchedBy: 'embedding' | 'proposed' | 'exact' = 'proposed';
+    
+    if (keyword) {
+      // 1ª opção: Usar keyword encontrada nos candidatos
+      keywordLabel = keyword.label;
+      matchedBy = keyword.similarity_score > 0.9 ? 'exact' : 'embedding';
+      
+      // ✅ VALIDAÇÃO ESTRUTURAL: Verificar se keyword está no departamento correto
+      const validation = validateKeywordDepartment(keywordLabel, departmentId);
+      if (!validation.valid && validation.correctDepartment) {
+        console.warn(`⚠️ CORREÇÃO AUTOMÁTICA: "${keywordLabel}" de "${departmentId}" → "${validation.correctDepartment}"`);
+        departmentId = validation.correctDepartment;
+      }
+      
+    } else if (issue.proposed_keyword) {
+      // 2ª opção: Usar keyword proposta ESPECIFICAMENTE para esta issue
+      keywordLabel = issue.proposed_keyword;
+      matchedBy = 'proposed';
+      const contextPreview = issue.detail?.substring(0, 40);
+      console.log(`💡 Issue propôs keyword específica: "${keywordLabel}" para contexto "${contextPreview}..."`);
+      
+      // ✅ VALIDAÇÃO ESTRUTURAL: Corrigir departamento automaticamente
+      const correction = autoCorrectDepartment(keywordLabel, departmentId);
+      if (correction.corrected) {
+        console.warn(`⚠️ CORREÇÃO AUTOMÁTICA: "${keywordLabel}" de "${departmentId}" → "${correction.newDepartmentId}"`);
+        console.warn(`   Razão: ${correction.reason}`);
+        departmentId = correction.newDepartmentId;
+      }
+      
+    } else if (globalProposedKeyword) {
+      // 3ª opção: Usar keyword proposta GLOBALMENTE pela IA
+      keywordLabel = globalProposedKeyword;
+      matchedBy = 'proposed';
+      console.log(`💡 Usando keyword proposta globalmente: ${keywordLabel}`);
+      
+      // ✅ VALIDAÇÃO ESTRUTURAL
+      const correction = autoCorrectDepartment(keywordLabel, departmentId);
+      if (correction.corrected) {
+        console.warn(`⚠️ CORREÇÃO AUTOMÁTICA: "${keywordLabel}" de "${departmentId}" → "${correction.newDepartmentId}"`);
+        departmentId = correction.newDepartmentId;
+      }
+      
+    } else if (department) {
+      // 4ª opção: Fallback baseado no departamento
+      keywordLabel = `${department.label} - Geral`;
+      matchedBy = 'proposed';
+      console.log(`🔄 Fallback: usando keyword genérica do departamento: ${keywordLabel}`);
+    }
+    
+    // ✅ ATUALIZAR DEPARTMENT_ID SE FOI CORRIGIDO
+    issue.department_id = departmentId;
+    
+    // ✅ Buscar department atualizado após correção
+    const finalDepartment = candidates.departments.find(d => d.id === departmentId) || department;
+    
     issues.push({
-      department_id: issue.department_id,
+      department_id: departmentId, 
       keyword_id: issue.keyword_id || 'EMPTY',
       problem_id: issue.problem_id || 'EMPTY',
 
-      department_label: department ? department.label : 'Elogio',
-      keyword_label: keyword ? keyword.label : 'Elogio',
+      department_label: finalDepartment ? finalDepartment.label : 'Não identificado',
+      keyword_label: keywordLabel,
       problem_label: problem ? problem.label : 'VAZIO',
 
       detail: (issue.detail || '').substring(0, 120),
       confidence: Math.max(0, Math.min(1, issue.confidence || 0.5)),
-      matched_by: keyword ? (keyword.similarity_score > 0.9 ? 'exact' : 'embedding') : 'proposed'
+      matched_by: matchedBy  
     });
   }
 
-  // Se não há issues, criar uma padrão
+
   if (issues.length === 0) {
-    // Usar um departamento que sempre existe nos candidatos
+ 
     const defaultDepartment = candidates.departments.find(d => d.id === 'Recepcao') || candidates.departments[0];
     
     issues.push({
@@ -786,12 +1163,21 @@ export async function POST(request: NextRequest) {
       finalText,
       candidates
     );
+    
+    // Log se alerta de candidatos ruins foi adicionado
+    if (candidates.keywords.length > 0 && candidates.keywords[0].similarity_score < 0.5) {
+      console.log('🚨 ALERTA ADICIONADO AO PROMPT: Candidatos com baixa similaridade (<0.5)');
+      console.log('   → IA será instruída a PROPOR keywords customizadas');
+    }
+    
+    // Log de modelo usado
+    console.log('🤖 Modelo: gpt-4o (mais inteligente, ~10x mais caro que gpt-4o-mini)');
 
     // 3. Chamar OpenAI
     const openai = new OpenAI({ apiKey });
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",  // ✅ TROCADO: GPT-4 é mais inteligente para seguir instruções complexas
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -801,8 +1187,8 @@ export async function POST(request: NextRequest) {
         function: functionSchema
       }],
       tool_choice: { type: "function", function: { name: "classify_feedback" } },
-      temperature: 0.1,
-      max_tokens: 1000
+      temperature: 0.3,  // ✅ AUMENTADO: Mais criatividade para propor keywords
+      max_tokens: 1500  // ✅ AUMENTADO: Mais espaço para respostas complexas
     });
 
     const toolCall = response.choices[0]?.message?.tool_calls?.[0];
@@ -812,15 +1198,16 @@ export async function POST(request: NextRequest) {
 
     const llmResult = JSON.parse(toolCall.function.arguments);
 
-    // 4. Processar e validar resposta
+    // 4. Processar e validar resposta (com validação contextual)
     const result = processLLMResponse(
       llmResult,
       candidates,
       taxonomy.version,
-      Date.now() - startTime
+      Date.now() - startTime,
+      finalText // ✅ Passar texto original para validação contextual
     );
 
-    // 5. Lidar com propostas
+    // 5. Lidar com propostas (global e específicas por issue)
     if (llmResult.proposed_keyword_label) {
       try {
         await createTaxonomyProposal(
@@ -830,9 +1217,28 @@ export async function POST(request: NextRequest) {
           result.issues[0]?.department_id,
           'system'
         );
-        console.log('💡 Proposta de keyword criada:', llmResult.proposed_keyword_label);
+        console.log('💡 Proposta de keyword GLOBAL criada:', llmResult.proposed_keyword_label);
       } catch (error) {
-        console.error('Erro ao criar proposta de keyword:', error);
+        console.error('Erro ao criar proposta de keyword global:', error);
+      }
+    }
+    
+    // Criar propostas para keywords específicas de cada issue
+    for (const issue of llmResult.issues || []) {
+      if (issue.proposed_keyword) {
+        try {
+          await createTaxonomyProposal(
+            'keyword',
+            issue.proposed_keyword,
+            issue.detail || finalText,
+            issue.department_id,
+            'system'
+          );
+          const issueContext = issue.detail?.substring(0, 40);
+          console.log(`💡 Proposta de keyword ESPECÍFICA criada: "${issue.proposed_keyword}" (contexto: "${issueContext}...")`);
+        } catch (error) {
+          console.error('Erro ao criar proposta de keyword específica:', error);
+        }
       }
     }
 
