@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback, memo, useRef } from "react"
+import { createPortal } from "react-dom"
 import { useSearchParams } from 'next/navigation'
 import { useSlideUpCounter, useSlideUpDecimal } from "@/hooks/use-slide-up-counter"
 import { Card } from "@/components/ui/card"
@@ -54,7 +55,9 @@ import {
   CalendarDays,
   Lightbulb,
   History,
-  Clock
+  Clock,
+  Brain,
+  CheckCircle2
 
 } from "lucide-react"
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
@@ -1186,6 +1189,23 @@ const CommentModal = ({
     newData?: any;
   }>>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [showReasoningModal, setShowReasoningModal] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  
+  // Portal mounting
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Bloquear scroll do body quando modais estão abertos
+  useEffect(() => {
+    if (showReasoningModal || showEditHistory) {
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = 'unset'
+      }
+    }
+  }, [showReasoningModal, showEditHistory])
   
   // 🚀 OTIMIZAÇÃO: Refs para timeout cleanup
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -2076,6 +2096,7 @@ const CommentModal = ({
   }
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button 
@@ -2131,34 +2152,65 @@ const CommentModal = ({
                       Análise de Feedback
                     </h2>
                     
-                    {/* Botões de navegação */}
-                    {allFeedbacks && allFeedbacks.length > 1 && onNavigate && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleNavigate('prev')}
-                          disabled={currentIndex === 0}
-                          className="h-8 px-3 text-xs bg-white/80 hover:bg-white dark:bg-white/10 dark:hover:bg-white/20 border-gray-300 dark:border-white/20"
-                        >
-                          ← Anterior
-                        </Button>
-                        
-                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300 px-2">
-                          {currentIndex + 1} de {allFeedbacks.length}
-                        </span>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleNavigate('next')}
-                          disabled={currentIndex === allFeedbacks.length - 1}
-                          className="h-8 px-3 text-xs bg-white/80 hover:bg-white dark:bg-white/10 dark:hover:bg-white/20 border-gray-300 dark:border-white/20"
-                        >
-                          Próximo →
-                        </Button>
-                      </div>
-                    )}
+                    {/* Botões de navegação e ações */}
+                    <div className="flex items-center gap-3">
+                      {/* Botão Raciocínio da IA - DEBUG */}
+                      {(() => {
+                        console.log('🔍 DEBUG REASONING:', {
+                          hasReasoning: !!currentFeedback.reasoning,
+                          reasoningLength: currentFeedback.reasoning?.length,
+                          reasoningPreview: currentFeedback.reasoning?.substring(0, 50),
+                          feedbackId: currentFeedback.id
+                        });
+                        return null;
+                      })()}
+                      
+                      {/* TEMPORÁRIO: Botão sempre visível para debug */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (currentFeedback.reasoning) {
+                            setShowReasoningModal(true);
+                          } else {
+                            alert('⚠️ Reasoning não está disponível para este feedback!\n\nEste feedback foi importado ANTES da correção.\n\nImporte novos feedbacks para ver o raciocínio da IA.');
+                          }
+                        }}
+                        className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border-purple-200 hover:border-pink-300 text-purple-700 hover:text-pink-800 dark:bg-gradient-to-r dark:from-purple-500/10 dark:to-pink-500/10 dark:hover:from-purple-500/20 dark:hover:to-pink-500/20 dark:border-purple-400/30 dark:hover:border-pink-400/50 dark:text-purple-100 dark:hover:text-pink-100 transition-all duration-300 shadow-sm"
+                      >
+                        <Brain className="h-3.5 w-3.5" />
+                        Raciocínio IA {!currentFeedback.reasoning && '⚠️'}
+                      </Button>
+                      
+                      {/* Navegação entre feedbacks */}
+                      {allFeedbacks && allFeedbacks.length > 1 && onNavigate && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleNavigate('prev')}
+                            disabled={currentIndex === 0}
+                            className="h-8 px-3 text-xs bg-white/80 hover:bg-white dark:bg-white/10 dark:hover:bg-white/20 border-gray-300 dark:border-white/20"
+                          >
+                            ← Anterior
+                          </Button>
+                          
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-300 px-2">
+                            {currentIndex + 1} de {allFeedbacks.length}
+                          </span>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleNavigate('next')}
+                            disabled={currentIndex === allFeedbacks.length - 1}
+                            className="h-8 px-3 text-xs bg-white/80 hover:bg-white dark:bg-white/10 dark:hover:bg-white/20 border-gray-300 dark:border-white/20"
+                          >
+                            Próximo →
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   <p className="text-gray-600 dark:text-blue-100/80 text-sm">
@@ -2951,6 +3003,177 @@ const CommentModal = ({
      
       </DialogContent>
       
+      {/* Modal de Raciocínio da IA */}
+      {showReasoningModal && currentFeedback.reasoning && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300" style={{zIndex: 1000000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0}}>
+          <div className="bg-gradient-to-br from-purple-50 via-white to-pink-50 dark:from-gray-900 dark:via-purple-950 dark:to-gray-900 rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] transform animate-in zoom-in-95 duration-300 border border-purple-200 dark:border-purple-700 flex flex-col">
+            
+            {/* Header com gradiente */}
+            <div className="flex-shrink-0 p-6 border-b border-purple-200 dark:border-purple-700 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <Brain className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Raciocínio da IA
+                    </h3>
+                    <p className="text-sm text-purple-600 dark:text-purple-300">
+                      Como a IA analisou este feedback
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowReasoningModal(false)}
+                  className="h-10 w-10 p-0 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+                >
+                  <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Conteúdo com scroll */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+              {/* Informações do feedback */}
+              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Feedback Original</h4>
+                </div>
+                <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                  "{currentFeedback.comment?.substring(0, 200)}{currentFeedback.comment && currentFeedback.comment.length > 200 ? '...' : ''}"
+                </p>
+              </div>
+
+              {/* Decisões da IA */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white">Decisões Tomadas</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-700">
+                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2">Departamento(s)</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {currentFeedback.sector?.split(/[;,]/).map((dept, idx) => (
+                        <Badge 
+                          key={idx}
+                          variant="outline" 
+                          className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300"
+                        >
+                          {dept.trim()}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-700">
+                    <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2">Palavra(s)-chave</p>
+                    <div className="flex flex-col gap-1.5">
+                      {currentFeedback.keyword?.split(/[;,]/).map((keyword, idx) => (
+                        <Badge 
+                          key={idx}
+                          variant="outline" 
+                          className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 justify-start"
+                        >
+                          {keyword.trim()}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
+                    <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Problema</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.problem || 'Nenhum'}</p>
+                  </div>
+                  <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
+                    <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-1">Sentimento</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{currentFeedback.sentiment}</p>
+                  </div>
+                </div>
+              </div>
+
+            {/* Raciocínio detalhado em tópicos */}
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-lg p-5 border border-purple-200 dark:border-purple-700 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                  <Lightbulb className="h-4 w-4 text-white" />
+                </div>
+                <h4 className="font-semibold text-gray-900 dark:text-white">Análise Detalhada</h4>
+              </div>
+              <div className="space-y-3">
+                {currentFeedback.reasoning?.split(/\n+/).filter(line => line.trim()).map((paragraph, idx) => {
+                  // Detectar se é um tópico numerado ou com marcador
+                  const isNumberedTopic = /^\d+\./.test(paragraph.trim())
+                  const isBulletTopic = /^[•\-\*]/.test(paragraph.trim())
+                  const isImportantKeyword = /(departamento|palavra-chave|problema|sentimento|razão|justificativa|análise)/i.test(paragraph)
+                  
+                  return (
+                    <div key={idx} className="flex gap-2">
+                      {(isNumberedTopic || isBulletTopic) && (
+                        <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-500 mt-2" />
+                      )}
+                      <p className={cn(
+                        "text-sm leading-relaxed",
+                        isImportantKeyword 
+                          ? "text-gray-900 dark:text-white font-medium" 
+                          : "text-gray-700 dark:text-gray-300"
+                      )}>
+                        {paragraph.trim()}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>              {/* Info adicional */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h5 className="font-medium text-gray-900 dark:text-white mb-1 text-sm">Sobre este raciocínio</h5>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                      Este é o processo de pensamento da IA ao analisar o feedback. Ela identifica aspectos mencionados, 
+                      escolhe as palavras-chave mais apropriadas e justifica suas decisões baseando-se no contexto do texto.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer com ações */}
+            <div className="flex-shrink-0 p-4 border-t border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(currentFeedback.reasoning || '')
+                  toast({
+                    title: "Copiado!",
+                    description: "Raciocínio copiado para a área de transferência",
+                  })
+                }}
+                className="flex items-center gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                Copiar
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowReasoningModal(false)}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+              >
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Modal de Histórico dentro do CommentModal */}
       {showEditHistory && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300" style={{zIndex: 1000000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0}}>
@@ -3237,6 +3460,341 @@ const CommentModal = ({
         </div>
       )}
     </Dialog>
+    
+    {/* Modais renderizados via Portal para aparecerem acima de tudo */}
+    {mounted && showReasoningModal && currentFeedback.reasoning && createPortal(
+      <div 
+        className="fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-300" 
+        style={{
+          zIndex: 9999999,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(4px)',
+          pointerEvents: 'auto'  // Overlay captura eventos
+        }}
+        onClick={(e) => {
+          // Fechar ao clicar no overlay (fora do modal)
+          if (e.target === e.currentTarget) {
+            setShowReasoningModal(false)
+          }
+        }}
+      >
+        <div 
+          className="bg-gradient-to-br from-purple-50 via-white to-pink-50 dark:from-gray-900 dark:via-purple-950 dark:to-gray-900 rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] transform animate-in zoom-in-95 duration-300 border border-purple-200 dark:border-purple-700 flex flex-col"
+          style={{ overscrollBehavior: 'contain' }}
+          onClick={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}  // Permitir scroll no modal, bloquear propagação
+        >
+          
+          {/* Header com gradiente */}
+          <div className="flex-shrink-0 p-6 border-b border-purple-200 dark:border-purple-700 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
+                  <Brain className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    Raciocínio da IA
+                  </h3>
+                  <p className="text-sm text-purple-600 dark:text-purple-300">
+                    Como a IA analisou este feedback
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowReasoningModal(false)}
+                className="h-10 w-10 p-0 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Conteúdo com scroll */}
+          <div 
+            className="flex-1 overflow-y-auto p-6 space-y-4" 
+            style={{
+              overflowY: 'auto',
+              maxHeight: 'calc(85vh - 100px)',  // Altura máxima menos header e footer
+              WebkitOverflowScrolling: 'touch'  // Scroll suave em iOS
+            }}
+          >
+            {/* Informações do feedback */}
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+              <div className="flex items-center gap-2 mb-2">
+                <MessageSquare className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Feedback Original</h4>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                "{currentFeedback.comment?.substring(0, 200)}{currentFeedback.comment && currentFeedback.comment.length > 200 ? '...' : ''}"
+              </p>
+            </div>
+
+            {/* Decisões da IA */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                </div>
+                <h4 className="font-semibold text-gray-900 dark:text-white">Decisões Tomadas</h4>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-700">
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2">Departamento(s)</p>
+                  <div className="flex flex-col gap-1.5">
+                    {currentFeedback.sector?.split(/[;,]/).map((dept, idx) => (
+                      <Badge 
+                        key={idx}
+                        variant="outline" 
+                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 justify-start w-fit"
+                      >
+                        {dept.trim()}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-700">
+                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2">Palavra(s)-chave</p>
+                  <div className="flex flex-col gap-1.5">
+                    {currentFeedback.keyword?.split(/[;,]/).map((keyword, idx) => (
+                      <Badge 
+                        key={idx}
+                        variant="outline" 
+                        className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 justify-start w-fit"
+                      >
+                        {keyword.trim()}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
+                  <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Problema</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.problem || 'Nenhum'}</p>
+                </div>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
+                  <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-1">Sentimento</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.rating}/5</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Raciocínio detalhado em tópicos */}
+            <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-lg p-5 border border-purple-200 dark:border-purple-700 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                  <Lightbulb className="h-4 w-4 text-white" />
+                </div>
+                <h4 className="font-semibold text-gray-900 dark:text-white">Análise Detalhada</h4>
+              </div>
+              <div className="space-y-2.5">
+                {(() => {
+                  const text = currentFeedback.reasoning || ''
+                  
+                  // Quebrar o texto de forma mais inteligente
+                  let lines: string[] = []
+                  
+                  // Primeiro, quebra por pipes que são separadores claros
+                  const pipeSegments = text.split(/\s*\|\s*/)
+                  
+                  pipeSegments.forEach(segment => {
+                    // Para cada segmento, quebra por quebras de linha
+                    const lineBreaks = segment.split(/\n+/)
+                    
+                    lineBreaks.forEach(line => {
+                      // Se a linha tem múltiplas frases (ponto + maiúscula), quebra elas também
+                      const sentences = line.split(/(?<=\.\s)(?=[A-Z1-9])/)
+                      lines.push(...sentences)
+                    })
+                  })
+                  
+                  // Filtrar linhas vazias e limpar
+                  lines = lines
+                    .map(l => l.trim())
+                    .filter(l => l.length > 0)
+                  
+                  return lines.map((line, idx) => {
+                    // Detectar tipos de conteúdo para estilização
+                    const hasArrow = /→/.test(line)
+                    const isNumbered = /^\d+\./.test(line)
+                    const hasKeyword = /(departamento|palavra-chave|problema|sentimento|razão|justificativa|análise|escolha|classificação)/i.test(line)
+                    const isImportant = hasArrow || hasKeyword || isNumbered
+                    
+                    return (
+                      <div key={idx} className="flex gap-2.5 items-start">
+                        {/* Bullet point para cada linha */}
+                        <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-500 mt-2" />
+                        <p className={cn(
+                          "text-sm leading-relaxed flex-1",
+                          isImportant
+                            ? "text-gray-900 dark:text-white font-medium" 
+                            : "text-gray-700 dark:text-gray-300"
+                        )}>
+                          {line}
+                        </p>
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
+            </div>
+
+            {/* Info adicional */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="flex-1">
+                  <h5 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">Sobre este raciocínio</h5>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Este é o processo de pensamento da IA ao analisar o feedback. Ela identifica aspectos mencionados, escolhe as palavras-chave mais apropriadas e justifica suas decisões baseando-se no contexto do texto.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer com ações */}
+          <div className="flex-shrink-0 p-4 border-t border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(currentFeedback.reasoning || '')
+                alert('Raciocínio copiado!')
+              }}
+              className="flex items-center gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              Copiar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setShowReasoningModal(false)}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+            >
+              Fechar
+            </Button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+    
+    {/* Modal de Histórico via Portal */}
+    {mounted && showEditHistory && createPortal(
+      <div 
+        className="fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-300" 
+        style={{
+          zIndex: 9999999,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(4px)',
+          pointerEvents: 'auto'
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            handleBackToDetails()
+          }
+        }}
+      >
+        <div 
+          className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-5xl w-full mx-4 max-h-[85vh] transform animate-in zoom-in-95 duration-300 border border-gray-200 dark:border-gray-700 flex flex-col"
+          style={{ overscrollBehavior: 'contain' }}
+          onClick={(e) => e.stopPropagation()}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          
+          {/* Header compacto */}
+          <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                  <History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Histórico de Edições
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Alterações realizadas neste feedback
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleBackToDetails}
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/30"
+                title="Voltar para detalhes"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Voltar
+              </Button>
+            </div>
+          </div>
+          
+          {/* Conteúdo com scroll */}
+          <div 
+            className="flex-1 overflow-y-auto p-4"
+            style={{
+              overflowY: 'auto',
+              maxHeight: 'calc(85vh - 120px)',
+              WebkitOverflowScrolling: 'touch'
+            }}
+          >
+            {editHistory.length === 0 ? (
+              <div className="text-center py-12">
+                <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 dark:text-gray-400">Nenhuma edição registrada ainda</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {editHistory.map((entry, index) => (
+                  <div key={index} className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <span className="font-medium text-gray-900 dark:text-white">{entry.action}</span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {entry.timestamp.toLocaleString('pt-BR')} • {entry.user}
+                        </p>
+                      </div>
+                    </div>
+                    {entry.changes && (
+                      <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        {JSON.stringify(entry.changes, null, 2)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* Footer */}
+          <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <History className="w-4 h-4" />
+                <span>
+                  {editHistory.length === 1 ? '1 edição' : `${editHistory.length} edições`}
+                </span>
+              </div>
+              <Button 
+                onClick={handleBackToDetails}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Voltar para Detalhes
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   )
 }
 

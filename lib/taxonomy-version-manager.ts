@@ -55,11 +55,21 @@ function generateHash(items: any[]): string {
  * Calcula versão da taxonomia baseada no conteúdo
  */
 export function calculateTaxonomyVersion(taxonomy: any): TaxonomyVersion {
-  const keywords = taxonomy.keywords || [];
+  // Processar keywords - pode ser MAP ou ARRAY
+  let keywordsArray: string[] = [];
+  
+  if (typeof taxonomy.keywords === 'object' && !Array.isArray(taxonomy.keywords)) {
+    // MAP por departamento - converter para array flat
+    keywordsArray = Object.values(taxonomy.keywords).flat() as string[];
+  } else if (Array.isArray(taxonomy.keywords)) {
+    // ARRAY flat
+    keywordsArray = taxonomy.keywords;
+  }
+  
   const problems = taxonomy.problems || [];
   const departments = taxonomy.departments || [];
 
-  const keywordsHash = generateHash(keywords);
+  const keywordsHash = generateHash(keywordsArray);
   const problemsHash = generateHash(problems);
   const departmentsHash = generateHash(departments);
 
@@ -74,7 +84,7 @@ export function calculateTaxonomyVersion(taxonomy: any): TaxonomyVersion {
   return {
     version: Math.abs(version),
     last_updated: new Date(),
-    keywords_count: keywords.length,
+    keywords_count: keywordsArray.length,
     problems_count: problems.length,
     departments_count: departments.length,
     keywords_hash: keywordsHash,

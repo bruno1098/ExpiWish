@@ -127,8 +127,19 @@ export const getDynamicLists = async (): Promise<DynamicLists> => {
     if (docSnap.exists()) {
       const data = docSnap.data() as DynamicLists;
       
+      // Processar keywords - agora pode ser MAP (por departamento) ou ARRAY (flat)
+      let keywordsArray: string[] = [];
+      
+      if (typeof data.keywords === 'object' && !Array.isArray(data.keywords)) {
+        // Nova estrutura: MAP por departamento
+        keywordsArray = Object.values(data.keywords).flat() as string[];
+      } else if (Array.isArray(data.keywords)) {
+        // Estrutura antiga: ARRAY flat
+        keywordsArray = data.keywords;
+      }
+      
       // Garantir que as listas padrão estejam sempre incluídas
-      const keywordSet = new Set([...DEFAULT_KEYWORDS, ...(data.keywords || [])]);
+      const keywordSet = new Set([...DEFAULT_KEYWORDS, ...keywordsArray]);
       const problemSet = new Set([...DEFAULT_PROBLEMS, ...(data.problems || [])]);
       const departmentSet = new Set([...DEFAULT_DEPARTMENTS, ...(data.departments || [])]);
       

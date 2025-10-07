@@ -54,6 +54,8 @@ export type Feedback = {
   // NOVO: Campos para elogios/detalhes positivos
   compliments?: string
   positive_details?: string
+  // NOVO: Raciocínio da IA (Chain of Thought)
+  reasoning?: string
 }
 
 import { User as FirebaseUser } from "firebase/auth";

@@ -90,6 +90,9 @@ export interface ClassificationResult {
   proposed_keyword_label?: string;
   proposed_problem_label?: string;
   
+  // NOVO: Raciocínio da IA (Chain of Thought)
+  reasoning?: string;
+  
   // Metadados da classificação
   taxonomy_version: number;
   confidence: number;           // 0-1
@@ -117,7 +120,7 @@ export interface ClassificationIssue {
   
   // Metadados
   confidence: number;          // 0-1
-  matched_by: 'embedding' | 'alias' | 'exact' | 'proposed';
+  matched_by: 'embedding' | 'alias' | 'exact' | 'proposed' | 'direct';
 }
 
 // Candidatos para o LLM
@@ -136,6 +139,7 @@ export interface KeywordCandidate {
   description?: string;
   examples: string[];
   similarity_score: number;    // 0-1 (cosine similarity)
+  matched_by?: 'embedding' | 'alias' | 'exact' | 'proposed' | 'direct';  // 'direct' = análise direta sem embeddings
 }
 
 export interface ProblemCandidate {
@@ -145,6 +149,7 @@ export interface ProblemCandidate {
   examples: string[];
   applicable_departments?: string[];
   similarity_score: number;
+  matched_by?: 'embedding' | 'alias' | 'exact' | 'proposed' | 'direct';  // 'direct' = análise direta sem embeddings
 }
 
 // Proposta de nova taxonomy
@@ -186,8 +191,12 @@ export interface TaxonomyCache {
 // Configurações do sistema
 export interface TaxonomyConfig {
   embedding_model: string;              // "text-embedding-3-small"
-  similarity_threshold: number;         // 0.85 (para detectar duplicatas)
-  recall_top_n: number;                 // 10 (candidatos por embedding)
+  similarity_threshold: number;         // 0.35 (threshold geral, usado como fallback)
+  similarity_threshold_keywords?: number;   // 0.35 (threshold específico para keywords)
+  similarity_threshold_problems?: number;   // 0.45 (threshold específico para problems)
+  fallback_threshold_keywords?: number;     // 0.25 (fallback permissivo para keywords)
+  fallback_threshold_problems?: number;     // 0.35 (fallback moderado para problems)
+  recall_top_n: number;                 // 15 (candidatos por embedding)
   min_confidence_threshold: number;     // 0.5 (abaixo = needs_review)
   auto_approve_threshold: number;       // 0.95 (aprovação automática de propostas)
   max_aliases_per_item: number;         // 10

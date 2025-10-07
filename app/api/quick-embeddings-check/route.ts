@@ -16,9 +16,18 @@ export async function GET(request: NextRequest) {
     
     const data = docSnap.data();
     
-    // Contadores atuais
+    // Contadores atuais (com suporte para estrutura MAP e ARRAY)
+    let keywordsCount = 0;
+    if (typeof data.keywords === 'object' && !Array.isArray(data.keywords)) {
+      // MAP por departamento - contar total flat
+      keywordsCount = Object.values(data.keywords).flat().length;
+    } else if (Array.isArray(data.keywords)) {
+      // ARRAY flat
+      keywordsCount = data.keywords.length;
+    }
+    
     const currentCounts = {
-      keywords: data.keywords?.length || 0,
+      keywords: keywordsCount,
       problems: data.problems?.length || 0,
       departments: data.departments?.length || 0
     };
