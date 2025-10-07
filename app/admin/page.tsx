@@ -2311,7 +2311,7 @@ function AdminDashboardContent() {
             
             <Select
               value={selectedHotel}
-              onValueChange={setSelectedHotel}
+              onValueChange={applyHotelFilter}
             >
               <SelectTrigger className="w-[250px]">
                 <SelectValue placeholder="Selecionar Hotel" />
