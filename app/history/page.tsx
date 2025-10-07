@@ -29,6 +29,8 @@ function HistoryPageContent() {
   // Estados para ocultar/mostrar análises
   const [hidingId, setHidingId] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(true); // Por padrão, mostrar análises ocultas no histórico
+  const [hidingAll, setHidingAll] = useState(false);
+  const [hideAllModalOpen, setHideAllModalOpen] = useState(false);
   
   // Estados para ordenação
   const [sortBy, setSortBy] = useState<'date' | 'feedbacks' | 'rating'>('date');
@@ -308,6 +310,84 @@ function HistoryPageContent() {
     }
   };
 
+  // Função para ocultar todas as análises visíveis de uma vez
+  const handleHideAll = async () => {
+    setHideAllModalOpen(false);
+    setHidingAll(true);
+    
+    try {
+      // Filtrar apenas as análises que estão visíveis (não ocultas)
+      const visibleAnalyses = analyses.filter(analysis => !analysis.hidden);
+      
+      if (visibleAnalyses.length === 0) {
+        toast({
+          title: "Nenhuma análise para ocultar",
+          description: "Todas as análises já estão ocultas.",
+          variant: "default",
+        });
+        return;
+      }
+      
+      // Ocultar cada análise sequencialmente
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const analysis of visibleAnalyses) {
+        try {
+          const response = await fetch('/api/hide-analysis', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              analysisId: analysis.id,
+              hidden: true,
+              reason: 'Ocultado em lote pelo usuário'
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`Erro ao ocultar análise ${analysis.id}:`, error);
+          errorCount++;
+        }
+      }
+      
+      // Recarregar a lista após ocultar todas
+      setTimeout(async () => {
+        await reloadAnalyses();
+      }, 500);
+      
+      // Mostrar resultado
+      if (errorCount === 0) {
+        toast({
+          title: "Todas as Análises Ocultadas",
+          description: `${successCount} análise(s) foram ocultadas com sucesso dos dashboards.`,
+        });
+      } else {
+        toast({
+          title: "Ocultação Parcial",
+          description: `${successCount} análise(s) ocultadas, ${errorCount} falharam.`,
+          variant: "destructive",
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('Erro ao ocultar todas as análises:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível ocultar todas as análises.",
+        variant: "destructive"
+      });
+    } finally {
+      setHidingAll(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[60vh]">
@@ -372,6 +452,60 @@ function HistoryPageContent() {
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
                   Excluir Análise
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação para Ocultar Todas */}
+      <Dialog open={hideAllModalOpen} onOpenChange={setHideAllModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="text-center pb-4">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30">
+              <EyeOff className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+            </div>
+            <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              Ocultar Todas as Análises
+            </DialogTitle>
+            <DialogDescription className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              Tem certeza que deseja ocultar todas as análises visíveis?
+              <br />
+              <span className="text-orange-600 dark:text-orange-400 font-medium mt-2 block">
+                Elas não aparecerão mais nos dashboards, mas permanecerão no histórico.
+              </span>
+              <br />
+              <span className="text-sm text-muted-foreground">
+                Total de análises que serão ocultadas: <strong>{analyses.filter(a => !a.hidden).length}</strong>
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setHideAllModalOpen(false)}
+              disabled={hidingAll}
+              className="w-full sm:w-auto"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="default"
+              onClick={handleHideAll}
+              disabled={hidingAll}
+              className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 focus:ring-orange-500"
+            >
+              {hidingAll ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2" />
+                  Ocultando...
+                </>
+              ) : (
+                <>
+                  <EyeOff className="h-4 w-4 mr-2" />
+                  Ocultar Todas
                 </>
               )}
             </Button>
@@ -445,6 +579,27 @@ function HistoryPageContent() {
             >
               {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               {showHidden ? 'Mostrar Todas' : 'Ocultar Análises Ocultas'}
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHideAllModalOpen(true)}
+              disabled={hidingAll || analyses.filter(a => !a.hidden).length === 0}
+              className="flex items-center gap-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+              title="Ocultar todas as análises visíveis dos dashboards"
+            >
+              {hidingAll ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-orange-600" />
+                  Ocultando...
+                </>
+              ) : (
+                <>
+                  <EyeOff className="h-4 w-4" />
+                  Ocultar Todas
+                </>
+              )}
             </Button>
           </div>
         </div>
