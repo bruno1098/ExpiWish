@@ -1178,15 +1178,7 @@ export async function POST(request: NextRequest) {
     // NOVA: Aplicar camada de compatibilidade
     const compatibleResult = adaptNewAIToLegacyFormat(result as NewAIResponse);
 
-    // 🔍 DEBUG: Verificar se reasoning está presente
-    console.log('🔍 DEBUG REASONING no resultado final:', {
-      has_reasoning_in_result: !!result.reasoning,
-      reasoning_length: result.reasoning?.length,
-      has_reasoning_in_compatible: !!compatibleResult.reasoning,
-      compatible_reasoning_length: compatibleResult.reasoning?.length,
-      reasoning_preview: compatibleResult.reasoning?.substring(0, 100)
-    });
-
+ 
     // Registrar sucesso no circuit breaker
     recordSuccess();
 
