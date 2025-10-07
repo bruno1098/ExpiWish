@@ -251,6 +251,20 @@ GLOSSARIO (casos criticos):
 • EMPRESTIMO (ferro, tabua) -> "Recepcao - Servico" (NAO amenities!)
 • ESTACIONAMENTO -> "Recepcao - Estacionamento" (NAO generico!)
 
+🚨 REGRA CRÍTICA - MONITORES DE RECREAÇÃO:
+→ Se menciona "Tio/Tia" + nome (ex: Tio Baiano, Tia Dentinho, Tio Espaguete, Tio Chocolate)
+→ SEMPRE classifique como "Lazer - Serviço" (NÃO use EG - Abordagem!)
+→ Contexto: Monitores/recreadores trabalham em atividades de lazer (bingo, piscina, recreação infantil)
+→ Exemplos de NOMES comuns: Espaguete, Chocolate, Parafuso, Dentinho, Chiclete, Alegria, Baiano, Chan, Lucas, Raí
+→ ❌ NUNCA confunda nomes com comida (Espaguete ≠ comida, Chocolate ≠ sobremesa)
+
+🚨 REGRA CRÍTICA - O QUE É "EG - Abordagem":
+→ EG = Exclusive Guest (Programa de vendas do hotel)
+→ USE APENAS quando:
+  • Menciona explicitamente "EG", "Vendas", "Programa de vendas"
+→ ❌ NÃO use EG para elogios genéricos a funcionários
+→ ❌ NÃO use EG para monitores de recreação
+
 ---
 
 REGRAS TECNICAS:
@@ -386,8 +400,8 @@ EXEMPLO COMPLETO:
         issues: {
           type: "array",
           minItems: 1,
-          maxItems: 3,
-          description: "1-3 issues ESPECÍFICAS. ⚠️ CRÍTICO: Se você identificou 3 aspectos no reasoning mas criou apenas 1 issue, isso é um ERRO GRAVE! Cada aspecto mencionado no feedback DEVE virar uma issue separada. NÃO seja conservador! Exemplo: 'recepção ruim, banheiro sujo, localização boa' = 3 issues, não 1!",
+          maxItems: 8,
+          description: "1-8 issues ESPECÍFICAS (crie TODAS as issues identificadas no reasoning). ⚠️ CRÍTICO: Se você identificou 5 aspectos no reasoning, crie 5 issues! Cada aspecto mencionado no feedback DEVE virar uma issue separada. NÃO seja conservador! Exemplo: 'recepção ruim, banheiro sujo, localização boa, café frio, wifi lento' = 5 issues distintas!",
           items: {
             type: "object",
             properties: {

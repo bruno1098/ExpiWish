@@ -423,7 +423,7 @@ function AdminDashboardContent() {
 
   // Função para verificar se há filtros aplicados
   const hasFiltersApplied = () => {
-    return (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0);
+    return (dateRange.start || dateRange.end || sentimentFilter !== 'all' || sourceFilter !== 'all' || languageFilter !== 'all' || apartmentFilter !== 'all' || hiddenRatings.length > 0 || selectedHotel !== 'todos');
   };
 
   // Função helper para identificar feedbacks "não identificados"
@@ -493,9 +493,14 @@ function AdminDashboardContent() {
 
   // Função centralizada para obter dados consistentes
   const getCurrentData = () => {
-    const data = hasFiltersApplied() 
-      ? globalFilteredData 
-      : (isFilterApplied && filteredData ? filteredData.data : analysisData?.data);
+    // Se há filtro de hotel aplicado, usar filteredData
+    if (isFilterApplied && filteredData) {
+      const cleanedData = filteredData.data ? filteredData.data.filter((feedback: any) => !isNotIdentifiedFeedback(feedback)) : [];
+      return cleanedData;
+    }
+    
+    // Caso contrário, usar globalFilteredData ou analysisData
+    const data = globalFilteredData.length > 0 ? globalFilteredData : analysisData?.data;
     
     // Filtrar feedbacks "não identificados" do dashboard principal
     const cleanedData = data ? data.filter((feedback: any) => !isNotIdentifiedFeedback(feedback)) : [];
@@ -1498,6 +1503,12 @@ function AdminDashboardContent() {
       setIsFilterApplied(false);
       setSelectedHotel("todos");
       
+      // Restaurar globalFilteredData com todos os hotéis
+      if (analysisData?.data) {
+        const filtered = applyGlobalFilters(analysisData.data);
+        setGlobalFilteredData(filtered);
+      }
+      
       toast({
         title: "Filtro removido",
         description: "Mostrando dados de todos os hotéis",
@@ -1627,6 +1638,10 @@ function AdminDashboardContent() {
     
     setFilteredData(filteredAnalysis);
     setIsFilterApplied(true);
+    
+    // Também aplicar filtros globais nos dados do hotel selecionado
+    const globallyFilteredHotelData = applyGlobalFilters(filteredFeedbacks);
+    setGlobalFilteredData(globallyFilteredHotelData);
     
     toast({
       title: "Filtro aplicado",
