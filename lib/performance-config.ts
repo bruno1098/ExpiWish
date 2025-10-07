@@ -1,5 +1,10 @@
 // Configurações de Performance do Sistema de Análise
 export const PERFORMANCE_CONFIG = {
+  // 🎯 NOVA ABORDAGEM: Análise Direta sem Embeddings
+  // Quando true, GPT recebe TODAS as keywords e decide diretamente
+  // Quando false, usa embeddings para pre-filtrar candidatos
+  USE_DIRECT_ANALYSIS: true,          // ✅ ATIVADO: Mais preciso, funciona com qualquer linguagem
+  
   // Configurações de Chunk/Batch
   CHUNK_SIZE: 100,                    // Tamanho do chunk para processamento
   CONCURRENT_REQUESTS: 5,             // Número máximo de requisições simultâneas

@@ -28,17 +28,22 @@ import {
 } from './taxonomy-types';
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings-service';
 import { generateEnrichedKeywordText, generateEnrichedProblemText, expandUserQuery } from '@/lib/semantic-enrichment';
+import { validateKeywordDepartment } from '@/lib/taxonomy-validation';
 
 // Cache global
 let taxonomyCache: TaxonomyCache | null = null;
 
-// Configuração padrão - OTIMIZADA PARA RECALL COM EMBEDDINGS RICOS
+// Configuração padrão - OTIMIZADA PARA 44 KEYWORDS COM EMBEDDINGS RICOS
 const DEFAULT_CONFIG: TaxonomyConfig = {
   embedding_model: 'text-embedding-3-small',
-  similarity_threshold: 0.75,  // ✅ REDUZIDO: Com embeddings ricos, scores ficam menores mas mais precisos
-  recall_top_n: 10,  // ✅ AUMENTADO: Mais candidatos para GPT-4 escolher
-  min_confidence_threshold: 0.50,  // ✅ REDUZIDO: GPT-4 faz validação contextual
-  auto_approve_threshold: 0.92,  // ✅ AJUSTADO: Mais realista com embeddings ricos
+  similarity_threshold: 0.35,  // ✅ OTIMIZADO: Keywords específicas (transfer, café da manhã, etc)
+  similarity_threshold_keywords: 0.35,  // ✅ NOVO: Threshold específico para keywords
+  similarity_threshold_problems: 0.45,  // ✅ NOVO: Problems mais rigorosos
+  fallback_threshold_keywords: 0.25,    // ✅ NOVO: Fallback permissivo para keywords
+  fallback_threshold_problems: 0.35,    // ✅ NOVO: Fallback moderado para problems
+  recall_top_n: 15,  // ✅ REDUZIDO: 15 melhores candidatos (44 keywords total, ~33% cobertura)
+  min_confidence_threshold: 0.50,
+  auto_approve_threshold: 0.92,
   max_aliases_per_item: 10,
   max_examples_per_item: 5,
   cache_expiry_minutes: 30
@@ -126,7 +131,9 @@ export async function incrementTaxonomyVersion(updatedBy: string): Promise<numbe
       updated_at: Timestamp.now(),
       updated_by: updatedBy,
       departments_count: (data.departments || []).length,
-      keywords_count: (data.keywords || []).filter((k: any) => k.status === 'active').length,
+      keywords_count: typeof data.keywords === 'object' && !Array.isArray(data.keywords)
+        ? Object.values(data.keywords).flat().length
+        : (data.keywords || []).filter((k: any) => k.status === 'active').length,
       problems_count: (data.problems || []).filter((p: any) => p.status === 'active').length,
       last_embedding_update: Timestamp.now(),
       embedding_model: (await getTaxonomyConfig()).embedding_model
@@ -216,32 +223,74 @@ export async function loadKeywords(): Promise<Keyword[]> {
         return keywordsWithEmbeddings.filter((kw: any) => kw.status === 'active');
       }
       
-      // FALLBACK: Keywords antigas (strings simples)
-      const keywords = data.keywords || [];
-      console.log(`⚠️ Fallback: convertendo ${keywords.length} keywords strings para objetos`);
+      // NOVA ESTRUTURA: Keywords organizadas por departamento (MAP)
+      const keywordsByDept = data.keywords || {};
       
-      return keywords
-        .filter((kw: any) => typeof kw === 'string' && kw.trim().length > 0)
-        .map((kw: string, index: number) => {
-          const parts = kw.split(' - ');
-          const department = parts.length > 1 ? parts[0].trim() : 'Operacoes';
-          
-          return {
-            id: `kw_${Date.now()}_${index}`,
-            label: kw,
-            department_id: department,
-            slug: generateSlug(kw),
-            aliases: [kw.toLowerCase()],
-            description: `Keyword: ${kw}`,
-            examples: [kw],
-            embedding: [], // VAZIO - será gerado sob demanda
-            status: 'active' as const,
-            created_by: 'migration',
-            created_at: Timestamp.now(),
-            updated_at: Timestamp.now(),
-            version: 1
-          };
+      // Se for um map/objeto, converter para array flat
+      if (typeof keywordsByDept === 'object' && !Array.isArray(keywordsByDept)) {
+        console.log(`🎯 Carregando keywords da estrutura MAP por departamento`);
+        
+        const allKeywords: Keyword[] = [];
+        let index = 0;
+        
+        // Iterar sobre cada departamento
+        Object.entries(keywordsByDept).forEach(([department, keywords]) => {
+          if (Array.isArray(keywords)) {
+            keywords.forEach((kw: string) => {
+              allKeywords.push({
+                id: `kw_${generateSlug(kw)}`,
+                label: kw,
+                department_id: department,
+                slug: generateSlug(kw),
+                aliases: [kw.toLowerCase()],
+                description: `${department} - ${kw}`,
+                examples: [kw],
+                embedding: [], // VAZIO - será gerado sob demanda
+                status: 'active' as const,
+                created_by: 'system',
+                created_at: Timestamp.now(),
+                updated_at: Timestamp.now(),
+                version: 1
+              });
+              index++;
+            });
+          }
         });
+        
+        console.log(`✅ Carregadas ${allKeywords.length} keywords de ${Object.keys(keywordsByDept).length} departamentos`);
+        return allKeywords;
+      }
+      
+      // FALLBACK: Array flat (compatibilidade retroativa)
+      if (Array.isArray(keywordsByDept)) {
+        console.log(`⚠️ Fallback: convertendo array flat de ${keywordsByDept.length} keywords`);
+        
+        return keywordsByDept
+          .filter((kw: any) => typeof kw === 'string' && kw.trim().length > 0)
+          .map((kw: string, index: number) => {
+            const parts = kw.split(' - ');
+            const department = parts.length > 1 ? parts[0].trim() : 'Operações';
+            
+            return {
+              id: `kw_${Date.now()}_${index}`,
+              label: kw,
+              department_id: department,
+              slug: generateSlug(kw),
+              aliases: [kw.toLowerCase()],
+              description: `Keyword: ${kw}`,
+              examples: [kw],
+              embedding: [],
+              status: 'active' as const,
+              created_by: 'migration',
+              created_at: Timestamp.now(),
+              updated_at: Timestamp.now(),
+              version: 1
+            };
+          });
+      }
+      
+      console.log('⚠️ Estrutura de keywords não reconhecida');
+      return [];
     }
     
     return [];
@@ -407,12 +456,17 @@ export async function findCandidates(
       }
       
       const similarity = cosineSimilarity(textEmbedding, keyword.embedding);
-      // ✅ THRESHOLD REDUZIDO: 0.30 para keywords (embeddings ricos = scores menores)
-      if (similarity > 0.30) { 
+      // ✅ THRESHOLD OTIMIZADO: Usar threshold específico para keywords
+      const keywordThreshold = fullConfig.similarity_threshold_keywords || fullConfig.similarity_threshold;
+      if (similarity > keywordThreshold) {
+        // ✅ CORREÇÃO CRÍTICA: Validar e corrigir department_id (ex: Limpeza → Governança)
+        const validation = validateKeywordDepartment(keyword.label, keyword.department_id);
+        const correctDepartmentId = validation.correctDepartment || keyword.department_id;
+        
         keywordCandidates.push({
           id: keyword.id,
           label: keyword.label,
-          department_id: keyword.department_id,
+          department_id: correctDepartmentId,  // ✅ Usar department corrigido!
           description: keyword.description,
           examples: keyword.examples,
           similarity_score: similarity
@@ -434,8 +488,9 @@ export async function findCandidates(
       }
       
       const similarity = cosineSimilarity(textEmbedding, problem.embedding);
-      // ✅ THRESHOLD REDUZIDO: 0.40 para problems (embeddings ricos = maior recall)
-      if (similarity > 0.40) { 
+      // ✅ THRESHOLD OTIMIZADO: Usar threshold específico para problems
+      const problemThreshold = fullConfig.similarity_threshold_problems || 0.45;
+      if (similarity > problemThreshold) { 
         problemCandidates.push({
           id: problem.id,
           label: problem.label,
@@ -455,12 +510,20 @@ export async function findCandidates(
   problemCandidates.sort((a, b) => b.similarity_score - a.similarity_score);
   
   // 📊 Log de estatísticas de candidatos
+  const keywordThreshold = fullConfig.similarity_threshold_keywords || fullConfig.similarity_threshold;
+  const problemThreshold = fullConfig.similarity_threshold_problems || 0.45;
+  
   console.log('📊 Candidatos encontrados:', {
     keywords_total: keywordCandidates.length,
     keywords_top: keywordCandidates.slice(0, 3).map(k => ({ label: k.label, score: k.similarity_score.toFixed(3) })),
     problems_total: problemCandidates.length,
     problems_top: problemCandidates.slice(0, 3).map(p => ({ label: p.label, score: p.similarity_score.toFixed(3) })),
-    threshold_used: { keywords: 0.30, problems: 0.40 },
+    threshold_used: { 
+      keywords: keywordThreshold.toFixed(2), 
+      problems: problemThreshold.toFixed(2),
+      fallback_keywords: (fullConfig.fallback_threshold_keywords || 0.25).toFixed(2),
+      fallback_problems: (fullConfig.fallback_threshold_problems || 0.35).toFixed(2)
+    },
     top_n: fullConfig.recall_top_n,
     query_expansion: 'enabled'
   });
@@ -470,20 +533,26 @@ export async function findCandidates(
   let finalProblems = problemCandidates.slice(0, fullConfig.recall_top_n);
   let usedMethod: 'embedding' | 'keyword_match' | 'hybrid' = 'embedding';
   
-  // Se não encontrou keywords suficientes, fazer segunda passada com threshold mais baixo
-  if (finalKeywords.length < 3) {
-    console.warn(`⚠️ Apenas ${finalKeywords.length} keywords passaram no threshold 0.30. Aplicando fallback com threshold 0.20...`);
+  // ✅ OTIMIZADO: Fallback APENAS se 0 candidatos (era < 3, muito agressivo!)
+  if (finalKeywords.length === 0) {
+    const fallbackThreshold = fullConfig.fallback_threshold_keywords || 0.25;
+    console.warn(`⚠️ Apenas ${finalKeywords.length} keywords passaram no threshold ${keywordThreshold.toFixed(2)}. Aplicando fallback com threshold ${fallbackThreshold.toFixed(2)}...`);
     
     const fallbackKeywords: KeywordCandidate[] = [];
     for (const keyword of taxonomy.keywords) {
       if (!keyword.embedding || keyword.embedding.length === 0) continue;
       
       const similarity = cosineSimilarity(textEmbedding, keyword.embedding);
-      if (similarity > 0.20 && similarity <= 0.30) { // Pegar o que ficou entre 0.20 e 0.30
+      // Pegar candidatos entre fallback threshold e threshold principal
+      if (similarity > fallbackThreshold && similarity <= keywordThreshold) {
+        // ✅ CORREÇÃO CRÍTICA: Validar e corrigir department_id no fallback também
+        const validation = validateKeywordDepartment(keyword.label, keyword.department_id);
+        const correctDepartmentId = validation.correctDepartment || keyword.department_id;
+        
         fallbackKeywords.push({
           id: keyword.id,
           label: keyword.label,
-          department_id: keyword.department_id,
+          department_id: correctDepartmentId,  // ✅ Usar department corrigido!
           description: keyword.description,
           examples: keyword.examples,
           similarity_score: similarity
@@ -498,16 +567,18 @@ export async function findCandidates(
     console.log(`✅ Fallback encontrou +${fallbackKeywords.length} keywords adicionais`);
   }
   
-  // Mesmo processo para problems
-  if (finalProblems.length < 3) {
-    console.warn(`⚠️ Apenas ${finalProblems.length} problems passaram no threshold 0.40. Aplicando fallback com threshold 0.25...`);
+  // ✅ OTIMIZADO: Fallback APENAS se 0 candidatos (era < 3, muito agressivo!)
+  if (finalProblems.length === 0) {
+    const fallbackThreshold = fullConfig.fallback_threshold_problems || 0.35;
+    console.warn(`⚠️ Apenas ${finalProblems.length} problems passaram no threshold ${problemThreshold.toFixed(2)}. Aplicando fallback com threshold ${fallbackThreshold.toFixed(2)}...`);
     
     const fallbackProblems: ProblemCandidate[] = [];
     for (const problem of taxonomy.problems) {
       if (!problem.embedding || problem.embedding.length === 0) continue;
       
       const similarity = cosineSimilarity(textEmbedding, problem.embedding);
-      if (similarity > 0.40 && similarity <= 0.55) { // Pegar o que ficou entre 0.40 e 0.55
+      // Pegar candidatos entre fallback threshold e threshold principal
+      if (similarity > fallbackThreshold && similarity <= problemThreshold) {
         fallbackProblems.push({
           id: problem.id,
           label: problem.label,

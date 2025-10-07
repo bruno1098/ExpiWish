@@ -13,6 +13,7 @@ export interface NewAIResponse {
   has_suggestion: boolean;
   suggestion_type?: string;
   suggestion_summary?: string;
+  reasoning?: string; // Chain of Thought: explicação das decisões da IA
   issues: Array<{
     department_id: string;
     keyword_id: string;
@@ -54,6 +55,9 @@ export interface LegacyFeedback {
   // NOVO: Campo separado para elogios/detalhes positivos
   compliments?: string;
   positive_details?: string;
+  
+  // Chain of Thought: raciocínio da IA
+  reasoning?: string;
   
   // Estrutura detalhada para futuras melhorias
   allProblems?: Array<{
@@ -106,15 +110,25 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
   }> = [];
 
   for (const issue of newResponse.issues) {
-    // Verificar se é elogio (problem_id = "EMPTY" ou "VAZIO", ou department_id = "EMPTY")
-    const isCompliment = issue.problem_id === 'EMPTY' || 
-                        issue.problem_id === 'VAZIO' || 
-                        issue.problem_label === 'VAZIO' || 
-                        issue.problem_label === 'EMPTY' ||
-                        issue.department_id === 'EMPTY';
+    // 🎯 CORREÇÃO CRÍTICA: Verificar se é elogio baseado em SENTIMENT (1-5) E problem_id
+    // Sentiment 4-5 = POSITIVO → elogio
+    // Sentiment 1-2 = NEGATIVO → problema
+    // Sentiment 3 = NEUTRO → analisar problem_id
     
-    if (isCompliment) {
-      // É um elogio - adicionar aos elogios
+    const isProblemEmpty = issue.problem_id === 'EMPTY' || 
+                          issue.problem_id === 'VAZIO' || 
+                          issue.problem_label === 'VAZIO' || 
+                          issue.problem_label === 'EMPTY';
+    
+    // ✅ NOVO: Classificar baseado em SENTIMENT PRIMEIRO, depois em problem_id
+    const isCompliment = (newResponse.sentiment >= 4 && isProblemEmpty) || // Positivo + sem problema = ELOGIO
+                        (newResponse.sentiment === 3 && isProblemEmpty && issue.department_id === 'EMPTY'); // Neutro sem nada = elogio genérico
+    
+    const isProblem = (newResponse.sentiment <= 2) || // Negativo = SEMPRE problema
+                     (!isProblemEmpty); // Tem problem_id válido = problema
+    
+    if (isCompliment && !isProblem) {
+      // ✅ É um ELOGIO VERDADEIRO - adicionar aos elogios
       if (issue.detail && issue.detail.trim() !== '') {
         consolidatedCompliments.push(issue.detail.trim());
       }
@@ -145,7 +159,7 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
         matched_by: issue.matched_by || 'proposed'
       });
     } else {
-      // É um problema - processar normalmente
+      // ✅ É um PROBLEMA ou CRÍTICA - processar normalmente
       if (issue.keyword_label && 
           issue.keyword_label !== 'EMPTY' && 
           issue.keyword_label !== 'Elogio' &&
@@ -258,6 +272,9 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
     compliments: consolidatedCompliment || undefined,
     positive_details: consolidatedCompliment || undefined,
     
+    // Chain of Thought: raciocínio da IA
+    reasoning: newResponse.reasoning,
+    
     // Estrutura detalhada para futuras melhorias
     allProblems: allProblemsDetailed,
     
@@ -346,6 +363,9 @@ export function createEmergencyFeedback(text: string, errorMessage?: string): Le
     // NOVO: Campos para elogios (vazios em caso de erro)
     compliments: undefined,
     positive_details: undefined,
+    
+    // CRÍTICO: Reasoning para fallback de emergência
+    reasoning: `Fallback de emergência ativado devido a erro no sistema: ${errorMessage || 'Erro desconhecido'}. Análise automática não foi possível.`,
     
     allProblems: [{
       keyword: 'Erro de Processamento',
@@ -466,6 +486,10 @@ export function createBasicFeedback(text: string, rating?: number): LegacyFeedba
     // NOVO: Campos para elogios (separados de problems)
     compliments: compliments || undefined,
     positive_details: compliments || undefined,
+    
+    // CRÍTICO: Reasoning para fallback básico
+    reasoning: 'Análise básica por heurística - Sistema de IA principal indisponível. Classificação baseada em palavras-chave e contexto simples.',
+    
     allProblems: [{
       keyword: keyword,
       sector: sector,

@@ -11,45 +11,39 @@
  * Esta é a "fonte da verdade" - se uma keyword está aqui, ELA SÓ PODE
  * estar associada ao departamento especificado.
  * 
- * Baseado na taxonomia oficial do Firebase (57 keywords, 12 departamentos)
- * Última atualização: 03/10/2025
+ * Baseado na taxonomia oficial do Firebase (44 keywords, 10 departamentos)
+ * Última atualização: 04/10/2025
  */
 export const KEYWORD_DEPARTMENT_MAP: Record<string, string> = {
   // ========== A&B (Alimentos & Bebidas) ==========
   "A&B - Café da manhã": "A&B",
-  "A&B - Preço": "A&B",
-  "A&B - Serviço": "A&B",
-  "A&B - Variedade": "A&B",
-  "A&B - Gastronomia": "A&B",
   "A&B - Jantar": "A&B",
-  "A&B - Room Service": "A&B",
   "A&B - Almoço": "A&B",
+  "A&B - Serviço": "A&B",
+  "A&B - Gastronomia": "A&B",
+  "A&B - Room Service": "A&B",
   
   // ========== GOVERNANÇA (Limpeza/Arrumação) ==========
   "Limpeza - Banheiro": "Governança",
   "Limpeza - Quarto": "Governança",
   "Limpeza - Áreas sociais": "Governança",
-  "Enxoval": "Governança",
-  "Amenities": "Governança",
+  "Limpeza - Enxoval": "Governança",
+  "Limpeza - Amenities": "Governança",
+  "Limpeza - Frigobar": "Governança",
   
   // ========== MANUTENÇÃO ==========
-  "Ar-condicionado": "Manutenção",
+  "Manutenção - Ar-condicionado": "Manutenção",
   "Manutenção - Banheiro": "Manutenção",
   "Manutenção - Instalações": "Manutenção",
   "Manutenção - Quarto": "Manutenção",
-  "Elevador": "Manutenção",
-  "Elevadores": "Manutenção",
-  "Infraestrutura": "Manutenção",
-  "Jardinagem": "Manutenção",
-  "Isolamento acústico": "Manutenção",
+  "Manutenção - Elevador": "Manutenção",
+  "Manutenção - Jardinagem": "Manutenção",
   
   // ========== RECEPÇÃO ==========
-  "Check-in - Atendimento": "Recepção",
-  "Check-out - Atendimento": "Recepção",
+  "Recepção - Estacionamento": "Recepção",
+  "Recepção - Check-in": "Recepção",
+  "Recepção - Check-out": "Recepção",
   "Recepção - Serviço": "Recepção",
-  "Concierge": "Recepção",
-  "Cartão de acesso": "Recepção",
-  "Transfer": "Recepção",
   
   // ========== TI (Tecnologia da Informação) ==========
   "Tecnologia - TV": "TI",
@@ -58,45 +52,36 @@ export const KEYWORD_DEPARTMENT_MAP: Record<string, string> = {
   // ========== LAZER ==========
   "Lazer - Estrutura": "Lazer",
   "Lazer - Variedade": "Lazer",
-  "Piscina": "Lazer",
-  "Spa": "Lazer",
   "Lazer - Serviço": "Lazer",
-  "Academia": "Lazer",
   "Lazer - Atividades de Lazer": "Lazer",
-  "Reserva de cadeiras (pool)": "Lazer",
+  "Lazer - Piscina": "Lazer",
+  "Lazer - Spa": "Lazer",
+  "Lazer - Academia": "Lazer",
   
   // ========== PRODUTO (Características do Hotel) ==========
-  "Acessibilidade": "Produto",
-  "Custo-benefício": "Produto",
-  "Estacionamento": "Produto",
-  "Frigobar": "Produto",
-  "Localização": "Produto",
-  "Vista": "Produto",
-  "Experiência": "Produto",
-  "Tamanho": "Produto",
-  "Pet": "Produto",
-  "Modernização": "Produto",
-  "All Inclusive": "Produto",
+  "Produto - Transfer": "Produto",
+  "Produto - Acessibilidade": "Produto",
+  "Produto - Custo-benefício": "Produto",
+  "Produto - Localização": "Produto",
+  "Produto - Vista": "Produto",
+  "Produto - Experiência": "Produto",
+  "Produto - Modernização": "Produto",
+  "Produto - All Inclusive": "Produto",
+  "Produto - Isolamento Acustico": "Produto",
   
   // ========== OPERAÇÕES ==========
-  "Atendimento": "Operações",
-  "Comunicação": "Operações",
-  "Processo": "Operações",
-  "Abordagem": "Operações",
-  "Ferro de passar": "Operações",
+  "Operações - Atendimento": "Operações",
+  "Operações - Cartão de acesso": "Operações",
+  "Operações - Acesso ao quarto": "Operações",
+  "Operações - Consumo Extra": "Operações",
   
-  // ========== COMERCIAL ==========
-  "Reservas": "Comercial",
-  "Consumo Extra": "Comercial",
+  // ========== CORPORATIVO ==========
+  "Corporativo - Marketing": "Corporativo",
+  "Corporativo - Reservas": "Corporativo",
+  "Corporativo - Financeiro": "Corporativo",
   
-  // ========== PROGRAMA DE VENDAS ==========
-  "Cotas": "Programa de vendas",
-  
-  // ========== MARKETING ==========
-  // (Nenhuma keyword específica mapeada ainda)
-  
-  // ========== QUALIDADE ==========
-  // (Nenhuma keyword específica mapeada ainda)
+  // ========== EG (Experiência do Hóspede) ==========
+  "EG - Abordagem": "EG",
 };
 
 /**
@@ -171,7 +156,7 @@ export function inferDepartmentFromKeyword(keywordLabel: string): string | null 
   if (label.includes("limpo") || label.includes("sujo") || 
       label.includes("arrumação") || label.includes("enxoval") ||
       label.includes("toalha") || label.includes("lençol") ||
-      label.includes("amenities")) {
+      label.includes("amenities") || label.includes("frigobar")) {
     return "Governança";
   }
   
@@ -184,15 +169,13 @@ export function inferDepartmentFromKeyword(keywordLabel: string): string | null 
   if (label.includes("ar condicionado") || label.includes("ar-condicionado") ||
       label.includes("chuveiro") || label.includes("manutenção") || 
       label.includes("quebrado") || label.includes("elevador") ||
-      label.includes("infraestrutura") || label.includes("jardinagem") ||
-      label.includes("isolamento")) {
+      label.includes("jardinagem")) {
     return "Manutenção";
   }
   
   if (label.includes("check-in") || label.includes("check-out") || 
       label.includes("recepção") || label.includes("recepcionista") ||
-      label.includes("concierge") || label.includes("cartão") ||
-      label.includes("transfer")) {
+      label.includes("estacionamento")) {
     return "Recepção";
   }
   
@@ -204,24 +187,24 @@ export function inferDepartmentFromKeyword(keywordLabel: string): string | null 
   
   if (label.includes("localização") || label.includes("experiência") || 
       label.includes("custo-benefício") || label.includes("vista") ||
-      label.includes("estacionamento") || label.includes("frigobar") ||
-      label.includes("acessibilidade") || label.includes("pet") ||
-      label.includes("all inclusive")) {
+      label.includes("transfer") || label.includes("acessibilidade") ||
+      label.includes("all inclusive") || label.includes("modernização") ||
+      label.includes("isolamento")) {
     return "Produto";
   }
   
-  if (label.includes("atendimento") || label.includes("comunicação") ||
-      label.includes("processo") || label.includes("abordagem")) {
+  if (label.includes("atendimento") || label.includes("cartão") ||
+      label.includes("acesso ao quarto") || label.includes("consumo extra")) {
     return "Operações";
   }
   
-  if (label.includes("reserva") || label.includes("consumo extra") ||
-      label.includes("tarifa")) {
-    return "Comercial";
+  if (label.includes("reserva") || label.includes("marketing") ||
+      label.includes("financeiro")) {
+    return "Corporativo";
   }
   
-  if (label.includes("cota")) {
-    return "Programa de vendas";
+  if (label.includes("abordagem")) {
+    return "EG";
   }
   
   return null;

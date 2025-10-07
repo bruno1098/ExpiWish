@@ -1722,7 +1722,9 @@ function ImportPageContent() {
                   suggestion_summary: analysisResult.suggestion_summary || undefined,
                   // NOVO: Campos para elogios (separados de problems)
                   compliments: analysisResult.compliments || undefined,
-                  positive_details: analysisResult.positive_details || undefined
+                  positive_details: analysisResult.positive_details || undefined,
+                  // NOVO: Raciocínio da IA (Chain of Thought)
+                  reasoning: analysisResult.reasoning || undefined
                 } as Feedback;
 
               } catch (error: any) {
@@ -1748,6 +1750,7 @@ function ImportPageContent() {
                   language: row.idioma || '',
                   score: row.pontuacao || undefined,
                   url: row.url || undefined,
+                  reasoning: undefined, // Não há reasoning em caso de erro
                   author: row.autor || undefined,
                   title: row.titulo || undefined,
                   apartamento: row.apartamento || undefined,
