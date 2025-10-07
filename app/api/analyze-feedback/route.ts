@@ -1118,13 +1118,6 @@ export async function POST(request: NextRequest) {
       finalText // ✅ Passar texto original para validação contextual
     );
 
-    // 🔍 DEBUG: Verificar se reasoning está presente ANTES do adapter
-    console.log('🔍 DEBUG REASONING após processLLMResponse:', {
-      has_reasoning: !!result.reasoning,
-      reasoning_length: result.reasoning?.length,
-      reasoning_preview: result.reasoning?.substring(0, 100)
-    });
-
     // 5. Lidar com propostas (global e específicas por issue)
     if (llmResult.proposed_keyword_label) {
       try {
