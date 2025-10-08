@@ -1110,6 +1110,12 @@ function ImportPageContent() {
           throw error;
         }
 
+        // 🔥 DELAY ADICIONAL: Aguardar entre grupos para respeitar rate limit do GPT-4
+        // Com 2 requisições paralelas + 1000ms de delay = ~120 requisições/minuto (dentro do limite de 500 RPM)
+        if (groups.indexOf(group) < groups.length - 1) {
+          await delay(delayBetweenBatches);
+        }
+
         // Atualizar progresso
         const currentProcessed = result.length + batchResults.length;
         setProcessedItems(currentProcessed);
@@ -1820,6 +1826,11 @@ function ImportPageContent() {
               }
               // Para outros erros, continuar com resultados parciais
               console.error('❌ Erro no processamento do grupo:', error);
+            }
+
+            // 🔥 DELAY ADICIONAL: Aguardar entre grupos para respeitar rate limit do GPT-4
+            if (groups.indexOf(group) < groups.length - 1) {
+              await delay(delayBetweenBatches);
             }
 
             // Atualizar progresso
