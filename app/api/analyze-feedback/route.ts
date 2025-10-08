@@ -1075,23 +1075,49 @@ export async function POST(request: NextRequest) {
     // 3. Chamar OpenAI com modelo adaptativo
     const openai = new OpenAI({ apiKey });
 
-    let response = await openai.chat.completions.create({
-      model: modelToUse,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      tools: [{
-        type: "function",
-        function: functionSchema
-      }],
-      tool_choice: { type: "function", function: { name: "classify_feedback" } },
-      temperature: 0.4,
-      max_tokens: 1000
+    console.log(`🚀 Enviando para OpenAI: modelo=${modelToUse}, candidatos=${filteredCandidates.keywords.length} keywords, ${filteredCandidates.problems.length} problems`);
+
+    let response;
+    try {
+      response = await openai.chat.completions.create({
+        model: modelToUse,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        tools: [{
+          type: "function",
+          function: functionSchema
+        }],
+        tool_choice: { type: "function", function: { name: "classify_feedback" } },
+        temperature: 0.4,
+        max_tokens: 2900  // AUMENTADO: GPT-4 precisa de mais tokens para 8 issues + reasoning
+      });
+    } catch (apiError: any) {
+      console.error('❌ ERRO NA CHAMADA OPENAI:', {
+        error: apiError.message,
+        code: apiError.code,
+        status: apiError.status,
+        type: apiError.type,
+        model: modelToUse
+      });
+      throw apiError;
+    }
+
+    console.log('✅ Resposta OpenAI recebida:', {
+      model: response.model,
+      usage: response.usage,
+      finish_reason: response.choices[0]?.finish_reason
     });
 
     let toolCall = response.choices[0]?.message?.tool_calls?.[0];
     if (!toolCall || toolCall.function.name !== "classify_feedback") {
+      console.error('❌ ERRO: OpenAI não retornou função esperada', {
+        has_tool_call: !!toolCall,
+        function_name: toolCall?.function?.name,
+        message_content: response.choices[0]?.message?.content,
+        finish_reason: response.choices[0]?.finish_reason
+      });
       throw new Error("LLM não retornou função esperada");
     }
 
@@ -1113,7 +1139,7 @@ export async function POST(request: NextRequest) {
         }],
         tool_choice: { type: "function", function: { name: "classify_feedback" } },
         temperature: 0.4,
-        max_tokens: 1000
+        max_tokens: 2500  // AUMENTADO: GPT-4 precisa de mais tokens
       });
       
       toolCall = response.choices[0]?.message?.tool_calls?.[0];
@@ -1223,7 +1249,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(compatibleResult);
 
   } catch (error: any) {
-    console.error('❌ Erro na análise:', error);
+    console.error('❌❌❌ FALLBACK ATIVADO - ERRO CRÍTICO:', {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+      type: error.type,
+      name: error.name,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n')
+    });
 
     // Se não conseguiu fazer parse do body, tentar novamente
     if (!body) {
@@ -1250,6 +1283,11 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('🔍 Tipo de erro detectado:', errorType, 'Circuit breaker:', circuitBreaker.state);
+    console.log('📊 Estatísticas do circuito:', {
+      failures: circuitBreaker.failures,
+      lastFailure: circuitBreaker.lastFailure ? new Date(circuitBreaker.lastFailure).toISOString() : 'nunca',
+      state: circuitBreaker.state
+    });
 
     // Sistema de fallback básico com heurísticas simples
     console.log('🔄 Iniciando fallback básico...');
