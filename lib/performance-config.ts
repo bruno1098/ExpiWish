@@ -5,15 +5,15 @@ export const PERFORMANCE_CONFIG = {
   // Quando false, usa embeddings para pre-filtrar candidatos
   USE_DIRECT_ANALYSIS: true,          // ✅ ATIVADO: Mais preciso, funciona com qualquer linguagem
   
-  // Configurações de Chunk/Batch
+  // Configurações de Chunk/Batch - OTIMIZADO PARA GPT-4o-mini
   CHUNK_SIZE: 100,                    // Tamanho do chunk para processamento
-  CONCURRENT_REQUESTS: 2,             // 🔥 REDUZIDO: GPT-4 tem rate limit de 500 RPM (era 5)
-  REQUEST_DELAY: 500,                 // 🔥 AUMENTADO: Delay entre requisições (era 50ms)
+  CONCURRENT_REQUESTS: 4,             // 🔥 AUMENTADO: Mini aguenta bem (era 2)
+  REQUEST_DELAY: 100,                 // 🔥 REDUZIDO: Mini é mais rápido (era 500ms)
   
   // Configurações de Delay
-  DELAY_BETWEEN_BATCHES: 1000,        // 🔥 AUMENTADO: Delay entre lotes (era 200ms)
-  DELAY_BETWEEN_CHUNKS: 1000,         // 🔥 AUMENTADO: Delay entre chunks (era 200ms)
-  RETRY_BASE_DELAY: 2000,             // 🔥 AUMENTADO: Delay base para retry (era 1000ms)
+  DELAY_BETWEEN_BATCHES: 300,         // 🔥 REDUZIDO: Mini tem 10k RPM (era 1000ms)
+  DELAY_BETWEEN_CHUNKS: 300,          // 🔥 REDUZIDO: Mini é rápido (era 1000ms)
+  RETRY_BASE_DELAY: 1000,             // Delay base para retry
   
   // Configurações de Retry
   MAX_RETRIES: 3,                     // Número máximo de tentativas
@@ -21,7 +21,7 @@ export const PERFORMANCE_CONFIG = {
   
   // Configurações de Rate Limiting
   RATE_LIMIT_WINDOW: 60 * 1000,       // Janela de rate limit (1 minuto)
-  MAX_REQUESTS_PER_MINUTE: 60,        // 🔥 REDUZIDO: GPT-4 limite seguro (era 180)
+  MAX_REQUESTS_PER_MINUTE: 500,       // 🔥 AUMENTADO: Mini tem 10k RPM (era 60)
   
   // Configurações de Cache
   CACHE_EXPIRY: 30 * 60 * 1000,       // Expiração do cache (30 minutos)
@@ -34,31 +34,31 @@ export const PERFORMANCE_CONFIG = {
 
 // Configurações para diferentes tipos de carga
 export const PERFORMANCE_PROFILES = {
-  // Perfil para cargas pequenas (< 100 itens) - CONSERVADOR PARA GPT-4
+  // Perfil para cargas pequenas (< 100 itens) - OTIMIZADO PARA MINI
   LIGHT: {
     ...PERFORMANCE_CONFIG,
     CHUNK_SIZE: 50,
-    CONCURRENT_REQUESTS: 2,           // 🔥 REDUZIDO: era 3
-    DELAY_BETWEEN_BATCHES: 1000,      // 🔥 AUMENTADO: era 100ms
-    REQUEST_DELAY: 500,               // 🔥 AUMENTADO
+    CONCURRENT_REQUESTS: 4,           // 🔥 AUMENTADO: mini aguenta (era 2)
+    DELAY_BETWEEN_BATCHES: 250,       // 🔥 REDUZIDO: mini é rápido (era 1000ms)
+    REQUEST_DELAY: 100,               // 🔥 REDUZIDO
   },
   
-  // Perfil para cargas médias (100-500 itens) - CONSERVADOR PARA GPT-4
+  // Perfil para cargas médias (100-500 itens) - OTIMIZADO PARA MINI
   MEDIUM: {
     ...PERFORMANCE_CONFIG,
     CHUNK_SIZE: 100,
-    CONCURRENT_REQUESTS: 2,           // 🔥 REDUZIDO: era 5
-    DELAY_BETWEEN_BATCHES: 1500,      // 🔥 AUMENTADO: era 200ms
-    REQUEST_DELAY: 750,               // 🔥 AUMENTADO
+    CONCURRENT_REQUESTS: 5,           // 🔥 AUMENTADO: mini aguenta bem (era 2)
+    DELAY_BETWEEN_BATCHES: 300,       // 🔥 REDUZIDO: mini tem 10k RPM (era 1500ms)
+    REQUEST_DELAY: 150,               // 🔥 REDUZIDO
   },
   
-  // Perfil para cargas grandes (> 500 itens) - CONSERVADOR PARA GPT-4
+  // Perfil para cargas grandes (> 500 itens) - OTIMIZADO PARA MINI
   HEAVY: {
     ...PERFORMANCE_CONFIG,
     CHUNK_SIZE: 150,
-    CONCURRENT_REQUESTS: 3,           // 🔥 REDUZIDO: era 8
-    DELAY_BETWEEN_BATCHES: 2000,      // 🔥 AUMENTADO: era 300ms
-    REQUEST_DELAY: 1000,              // 🔥 AUMENTADO: era 100ms
+    CONCURRENT_REQUESTS: 6,           // 🔥 AUMENTADO: mini aguenta muito (era 3)
+    DELAY_BETWEEN_BATCHES: 400,       // 🔥 REDUZIDO: mini é robusto (era 2000ms)
+    REQUEST_DELAY: 200,               // 🔥 REDUZIDO: era 1000ms
   },
 };
 
