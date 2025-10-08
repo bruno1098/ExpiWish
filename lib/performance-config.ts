@@ -7,13 +7,13 @@ export const PERFORMANCE_CONFIG = {
   
   // Configurações de Chunk/Batch
   CHUNK_SIZE: 100,                    // Tamanho do chunk para processamento
-  CONCURRENT_REQUESTS: 5,             // Número máximo de requisições simultâneas
-  REQUEST_DELAY: 50,                  // Delay entre requisições (ms)
+  CONCURRENT_REQUESTS: 2,             // 🔥 REDUZIDO: GPT-4 tem rate limit de 500 RPM (era 5)
+  REQUEST_DELAY: 500,                 // 🔥 AUMENTADO: Delay entre requisições (era 50ms)
   
   // Configurações de Delay
-  DELAY_BETWEEN_BATCHES: 200,         // Delay entre lotes (ms)
-  DELAY_BETWEEN_CHUNKS: 200,          // Delay entre chunks (ms)
-  RETRY_BASE_DELAY: 1000,             // Delay base para retry (ms)
+  DELAY_BETWEEN_BATCHES: 1000,        // 🔥 AUMENTADO: Delay entre lotes (era 200ms)
+  DELAY_BETWEEN_CHUNKS: 1000,         // 🔥 AUMENTADO: Delay entre chunks (era 200ms)
+  RETRY_BASE_DELAY: 2000,             // 🔥 AUMENTADO: Delay base para retry (era 1000ms)
   
   // Configurações de Retry
   MAX_RETRIES: 3,                     // Número máximo de tentativas
@@ -21,7 +21,7 @@ export const PERFORMANCE_CONFIG = {
   
   // Configurações de Rate Limiting
   RATE_LIMIT_WINDOW: 60 * 1000,       // Janela de rate limit (1 minuto)
-  MAX_REQUESTS_PER_MINUTE: 180,       // Máximo de requests por minuto
+  MAX_REQUESTS_PER_MINUTE: 60,        // 🔥 REDUZIDO: GPT-4 limite seguro (era 180)
   
   // Configurações de Cache
   CACHE_EXPIRY: 30 * 60 * 1000,       // Expiração do cache (30 minutos)
@@ -34,29 +34,31 @@ export const PERFORMANCE_CONFIG = {
 
 // Configurações para diferentes tipos de carga
 export const PERFORMANCE_PROFILES = {
-  // Perfil para cargas pequenas (< 100 itens)
+  // Perfil para cargas pequenas (< 100 itens) - CONSERVADOR PARA GPT-4
   LIGHT: {
     ...PERFORMANCE_CONFIG,
     CHUNK_SIZE: 50,
-    CONCURRENT_REQUESTS: 3,
-    DELAY_BETWEEN_BATCHES: 100,
+    CONCURRENT_REQUESTS: 2,           // 🔥 REDUZIDO: era 3
+    DELAY_BETWEEN_BATCHES: 1000,      // 🔥 AUMENTADO: era 100ms
+    REQUEST_DELAY: 500,               // 🔥 AUMENTADO
   },
   
-  // Perfil para cargas médias (100-500 itens)
+  // Perfil para cargas médias (100-500 itens) - CONSERVADOR PARA GPT-4
   MEDIUM: {
     ...PERFORMANCE_CONFIG,
     CHUNK_SIZE: 100,
-    CONCURRENT_REQUESTS: 5,
-    DELAY_BETWEEN_BATCHES: 200,
+    CONCURRENT_REQUESTS: 2,           // 🔥 REDUZIDO: era 5
+    DELAY_BETWEEN_BATCHES: 1500,      // 🔥 AUMENTADO: era 200ms
+    REQUEST_DELAY: 750,               // 🔥 AUMENTADO
   },
   
-  // Perfil para cargas grandes (> 500 itens)
+  // Perfil para cargas grandes (> 500 itens) - CONSERVADOR PARA GPT-4
   HEAVY: {
     ...PERFORMANCE_CONFIG,
     CHUNK_SIZE: 150,
-    CONCURRENT_REQUESTS: 8,
-    DELAY_BETWEEN_BATCHES: 300,
-    REQUEST_DELAY: 100,
+    CONCURRENT_REQUESTS: 3,           // 🔥 REDUZIDO: era 8
+    DELAY_BETWEEN_BATCHES: 2000,      // 🔥 AUMENTADO: era 300ms
+    REQUEST_DELAY: 1000,              // 🔥 AUMENTADO: era 100ms
   },
 };
 
