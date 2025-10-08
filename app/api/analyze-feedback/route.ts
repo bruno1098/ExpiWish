@@ -1064,11 +1064,11 @@ export async function POST(request: NextRequest) {
     const hasAmbiguity = candidates.keywords.length > 0 && 
                          candidates.keywords.filter(k => k.similarity_score > 0.6).length > 5;
     
-    // 🔥 FORÇAR GPT-4 NORMAL: Desabilitar mini temporariamente
-    const shouldUseGPT4 = true; // TRUE = sempre GPT-4
+    // 🔥 VOLTAR PARA MINI: GPT-4 tem rate limit muito baixo para processamento em massa
+    const shouldUseGPT4 = false; // FALSE = sempre mini
     
     const modelToUse = shouldUseGPT4 ? "gpt-4o" : "gpt-4o-mini";
-    const modelReason = shouldUseGPT4 ? 'GPT-4o (FORÇADO para máxima precisão)' : 'GPT-4o-mini (economia)';
+    const modelReason = shouldUseGPT4 ? 'GPT-4o (máxima precisão)' : 'GPT-4o-mini (FORÇADO - melhor para massa)';
     
     console.log(`🤖 Modelo escolhido: ${modelReason}`);
 
