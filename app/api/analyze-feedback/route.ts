@@ -675,6 +675,30 @@ function processLLMResponse(
     });
   }
 
+  // 🔧 DEDUPLICAÇÃO: Remover issues com mesmo department + keyword
+  console.log(`📊 Issues ANTES da deduplicação: ${issues.length}`);
+  
+  const uniqueIssues: typeof issues = [];
+  const seenCombinations = new Set<string>();
+  
+  for (const issue of issues) {
+    // Chave única: departamento + keyword
+    const key = `${issue.department_id}__${issue.keyword_label}`;
+    
+    if (!seenCombinations.has(key)) {
+      seenCombinations.add(key);
+      uniqueIssues.push(issue);
+    } else {
+      console.log(`🔄 DUPLICATA REMOVIDA: ${issue.keyword_label} (department: ${issue.department_label})`);
+      console.log(`   Detail removido: "${issue.detail}"`);
+    }
+  }
+  
+  // Substituir issues originais pelos únicos
+  issues.length = 0;
+  issues.push(...uniqueIssues);
+  
+  console.log(`✅ Issues APÓS deduplicação: ${issues.length}`);
 
   if (issues.length === 0) {
  

@@ -18,6 +18,7 @@ import { RequireAuth } from "@/lib/auth-context"
 import SharedDashboardLayout from "../shared-layout"
 import { cn } from "@/lib/utils"
 import dynamic from "next/dynamic"
+import { getNowBrasilia } from "@/lib/data-utils"
 
 // Configurações de processamento
 const BATCH_SIZE = 40;
@@ -30,7 +31,7 @@ let idCounter = 0;
 
 // Função para gerar ID único no formato hotelId_ddmmaa_hhmmss_mmm_counter
 const generateUniqueId = (hotelId: string) => {
-  const now = new Date();
+  const now = getNowBrasilia(); // ✅ USAR: Horário de Brasília
   const day = now.getDate().toString().padStart(2, '0');
   const month = (now.getMonth() + 1).toString().padStart(2, '0');
   const year = now.getFullYear().toString().slice(-2); // Últimos 2 dígitos do ano

@@ -263,8 +263,23 @@ export async function POST(request: NextRequest) {
     console.log('🔄 Gerando embeddings para problems com enriquecimento semântico...');
     reportProgress('Gerando embeddings para problems', 50);
 
+    // 🔧 CORREÇÃO: Problems podem vir como objetos ou strings
+    const problemsArray: string[] = problems.map((prob: any) => {
+      // Se for objeto, extrair o campo 'label'
+      if (typeof prob === 'object' && prob !== null && 'label' in prob) {
+        return prob.label;
+      }
+      // Se for string, usar diretamente
+      if (typeof prob === 'string') {
+        return prob;
+      }
+      // Fallback: converter para string
+      console.warn('⚠️ Problem em formato inesperado:', prob);
+      return String(prob);
+    });
+
     // Enriquecer problems com contexto semântico para embeddings mais precisos
-    const problemTexts = problems.map((prob: string) => {
+    const problemTexts = problemsArray.map((prob: string) => {
       const enriched = enrichProblemWithContext(prob);
       if (enriched !== prob) {
         console.log(`   ✨ Enriquecido: "${prob}" → "${enriched.substring(0, 100)}..."`);
@@ -275,7 +290,7 @@ export async function POST(request: NextRequest) {
 
     reportProgress('Problems processados', 70, { processed: problemEmbeddings.length });
 
-    const problemsWithEmbeddings = problems.map((prob: string, index: number) => ({
+    const problemsWithEmbeddings = problemsArray.map((prob: string, index: number) => ({
       id: `pb_${Date.now()}_${index}`,
       label: prob,
       slug: generateSlug(prob),

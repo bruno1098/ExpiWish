@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
-import { Eye, Trash2, Save, X, Plus, Check, Edit3 } from 'lucide-react';
+import { Eye, Trash2, Save, X, Plus, Check, Edit3, Search } from 'lucide-react';
 import { 
   getDynamicLists, 
   addKeyword, 
@@ -23,6 +23,85 @@ import {
 } from '@/lib/dynamic-lists-service';
 import { Textarea } from '@/components/ui/textarea';
 import QuickListManager from '@/components/quick-list-manager';
+
+// 🎨 Função para destacar termos de busca
+const highlightSearchTerm = (text: string, searchTerm: string) => {
+  if (!searchTerm.trim()) return text;
+  
+  const searchLower = searchTerm.toLowerCase().trim();
+  const textLower = text.toLowerCase();
+  
+  // Buscar todas as palavras do termo de busca
+  const searchWords = searchLower.split(/\s+/).filter(w => w.length > 0);
+  
+  let highlightedText = text;
+  const highlights: Array<{start: number, end: number}> = [];
+  
+  // Primeiro, tentar match do termo completo
+  const completeMatchIndex = textLower.indexOf(searchLower);
+  if (completeMatchIndex !== -1) {
+    highlights.push({
+      start: completeMatchIndex,
+      end: completeMatchIndex + searchLower.length
+    });
+  } else {
+    // Se não encontrar termo completo, buscar palavras individuais
+    searchWords.forEach(word => {
+      let startIndex = 0;
+      while ((startIndex = textLower.indexOf(word, startIndex)) !== -1) {
+        highlights.push({
+          start: startIndex,
+          end: startIndex + word.length
+        });
+        startIndex += word.length;
+      }
+    });
+  }
+  
+  // Ordenar e mesclar highlights sobrepostos
+  highlights.sort((a, b) => a.start - b.start);
+  const mergedHighlights: Array<{start: number, end: number}> = [];
+  
+  highlights.forEach(highlight => {
+    if (mergedHighlights.length === 0) {
+      mergedHighlights.push(highlight);
+    } else {
+      const last = mergedHighlights[mergedHighlights.length - 1];
+      if (highlight.start <= last.end) {
+        last.end = Math.max(last.end, highlight.end);
+      } else {
+        mergedHighlights.push(highlight);
+      }
+    }
+  });
+  
+  // Construir JSX com highlights
+  if (mergedHighlights.length === 0) return text;
+  
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  
+  mergedHighlights.forEach((highlight, index) => {
+    // Texto antes do highlight
+    if (highlight.start > lastIndex) {
+      parts.push(text.substring(lastIndex, highlight.start));
+    }
+    // Texto destacado
+    parts.push(
+      <span key={index} className="bg-yellow-200 dark:bg-yellow-600 font-semibold px-0.5 rounded">
+        {text.substring(highlight.start, highlight.end)}
+      </span>
+    );
+    lastIndex = highlight.end;
+  });
+  
+  // Texto restante
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  return <>{parts}</>;
+};
 
 // Cores para departamentos
 const getSectorColor = (sector: string) => {
@@ -117,6 +196,16 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
   const [savingKeyword, setSavingKeyword] = useState(false);
   const [savingProblem, setSavingProblem] = useState(false);
   const [savingDepartment, setSavingDepartment] = useState(false);
+  
+  // 🔍 Estados para busca nos selects
+  const [keywordSearch, setKeywordSearch] = useState('');
+  const [departmentSearch, setDepartmentSearch] = useState('');
+  const [problemSearch, setProblemSearch] = useState('');
+  
+  // Refs para os campos de busca
+  const keywordSearchRef = useRef<HTMLInputElement>(null);
+  const departmentSearchRef = useRef<HTMLInputElement>(null);
+  const problemSearchRef = useRef<HTMLInputElement>(null);
 
   // Carregar listas dinâmicas
   useEffect(() => {
@@ -169,6 +258,152 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
 
   // Definir commonProblems baseado nas listas dinâmicas
   const commonProblems = dynamicLists?.problems || [];
+  
+  // 🔍 Remover useEffect problemático - deixar o input gerenciar seu próprio foco
+  
+  // 🔍 BUSCA AVANÇADA: Sistema de score e relevância
+  const calculateSearchScore = useCallback((text: string, searchTerm: string): number => {
+    if (!searchTerm) return 0;
+    
+    const textLower = text.toLowerCase();
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    // Match exato = score máximo
+    if (textLower === searchLower) return 1000;
+    
+    // Começa com o termo = score alto
+    if (textLower.startsWith(searchLower)) return 500;
+    
+    // Contém o termo completo = score médio
+    if (textLower.includes(searchLower)) return 100;
+    
+    // Busca por palavras individuais
+    const searchWords = searchLower.split(/\s+/).filter(w => w.length > 0);
+    let wordScore = 0;
+    
+    searchWords.forEach(word => {
+      if (textLower.includes(word)) {
+        wordScore += 50 / searchWords.length;
+      }
+      // Palavra no início
+      if (textLower.startsWith(word)) {
+        wordScore += 30 / searchWords.length;
+      }
+    });
+    
+    // Fuzzy match simples - tolera 1-2 caracteres de diferença
+    const distance = calculateLevenshteinDistance(textLower, searchLower);
+    if (distance <= 2 && searchLower.length > 3) {
+      wordScore += 20;
+    }
+    
+    return wordScore;
+  }, []);
+  
+  // Levenshtein distance para fuzzy search
+  const calculateLevenshteinDistance = useCallback((str1: string, str2: string): number => {
+    const matrix: number[][] = [];
+    
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    
+    return matrix[str2.length][str1.length];
+  }, []);
+  
+  // 🔍 Valores filtrados memoizados com ordenação por relevância
+  const filteredKeywords = useMemo(() => {
+    if (!organizedKeywords) {
+      const keywords = dynamicLists?.keywords || [];
+      if (!keywordSearch.trim()) return keywords;
+      
+      // Calcular scores e ordenar por relevância
+      const keywordsWithScores = keywords
+        .map(kw => ({
+          keyword: kw,
+          score: calculateSearchScore(kw, keywordSearch)
+        }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(item => item.keyword);
+      
+      return keywordsWithScores;
+    }
+    
+    // Filtrar keywords organizados
+    if (!keywordSearch.trim()) return organizedKeywords;
+    
+    const filtered: Record<string, string[]> = {};
+    
+    Object.entries(organizedKeywords).forEach(([topic, keywords]) => {
+      // Calcular scores apenas para keywords, NÃO para o nome do departamento
+      const keywordsWithScores = keywords
+        .map(kw => ({
+          keyword: kw,
+          score: calculateSearchScore(kw, keywordSearch)
+        }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(item => item.keyword);
+      
+      if (keywordsWithScores.length > 0) {
+        filtered[topic] = keywordsWithScores;
+      }
+    });
+    
+    return filtered;
+  }, [keywordSearch, organizedKeywords, dynamicLists?.keywords, calculateSearchScore]);
+  
+  const filteredDepartments = useMemo(() => {
+    const departments = dynamicLists?.departments || [];
+    if (!departmentSearch.trim()) return departments;
+    
+    // Ordenar departamentos por relevância
+    const departmentsWithScores = departments
+      .map(dept => ({
+        department: dept,
+        score: calculateSearchScore(dept, departmentSearch)
+      }))
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.department);
+    
+    return departmentsWithScores;
+  }, [departmentSearch, dynamicLists?.departments, calculateSearchScore]);
+  
+  const filteredProblems = useMemo(() => {
+    if (!problemSearch.trim()) return commonProblems;
+    
+    // Ordenar problemas por relevância
+    const problemsWithScores = commonProblems
+      .map(prob => ({
+        problem: prob,
+        score: calculateSearchScore(prob, problemSearch)
+      }))
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.problem);
+    
+    return problemsWithScores;
+  }, [problemSearch, commonProblems, calculateSearchScore]);
 
   // 🚀 OTIMIZAÇÃO: Debounce para evitar calls excessivos durante digitação
   useEffect(() => {
@@ -592,32 +827,120 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  {organizedKeywords ? (
-                    // Renderizar keywords organizados por tópicos
-                    Object.entries(organizedKeywords).map(([topic, keywords]) => (
-                      <div key={topic}>
-                        <div className="px-2 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b">
-                          📁 {topic}
-                        </div>
-                        {keywords.map((kw: string) => (
-                          <SelectItem key={kw} value={kw} className="pl-6">
-                            <div className="flex items-center gap-2">
-                              <div className={cn(
-                                "w-2 h-2 rounded-full", 
-                                getSectorColor(topic).split(' ').find(c => c.startsWith('from-'))?.replace('from-', 'bg-') || 'bg-gray-300'
-                              )} />
-                              {kw}
-                            </div>
-                          </SelectItem>
-                        ))}
+                  {/* 🔍 Campo de busca dentro do dropdown */}
+                  <div 
+                    className="sticky top-0 bg-white dark:bg-gray-800 p-2 border-b z-10"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                      <Input
+                        ref={keywordSearchRef}
+                        placeholder="🔍 Buscar... (Ctrl+F)"
+                        value={keywordSearch}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setKeywordSearch(e.target.value);
+                          
+                          // 📌 Scroll automático para o topo após filtrar
+                          setTimeout(() => {
+                            const selectContent = e.target.closest('[data-radix-select-content]');
+                            if (selectContent) {
+                              selectContent.scrollTop = 0;
+                            }
+                          }, 50);
+                        }}
+                        className="pl-8 pr-8 h-8 text-sm"
+                        autoFocus
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        onFocus={(e) => {
+                          e.stopPropagation();
+                          // Garantir que o input mantenha o foco
+                          e.target.focus();
+                        }}
+                        onBlur={(e) => {
+                          // Prevenir perda de foco durante digitação
+                          if (keywordSearch) {
+                            setTimeout(() => {
+                              if (keywordSearchRef.current && document.activeElement !== keywordSearchRef.current) {
+                                keywordSearchRef.current.focus();
+                              }
+                            }, 0);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Escape') {
+                            setKeywordSearch('');
+                            keywordSearchRef.current?.focus();
+                          }
+                        }}
+                      />
+                      {keywordSearch && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setKeywordSearch('');
+                            keywordSearchRef.current?.focus();
+                          }}
+                          onMouseDown={(e) => e.preventDefault()}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                    {keywordSearch && (
+                      <div className="text-xs mt-1 flex items-center justify-between">
+                        <span className="text-gray-500">
+                          {(() => {
+                            const count = typeof filteredKeywords === 'object' && !Array.isArray(filteredKeywords)
+                              ? Object.values(filteredKeywords).flat().length
+                              : filteredKeywords.length;
+                            return `${count} resultado${count !== 1 ? 's' : ''}`;
+                          })()}
+                        </span>
+                        <span className="text-blue-600 dark:text-blue-400 font-medium">
+                          Ordenado por relevância
+                        </span>
                       </div>
-                    ))
-                  ) : (
-                    // Renderização tradicional quando organizedKeywords não está disponível
-                    dynamicLists?.keywords.map((kw) => (
-                      <SelectItem key={kw} value={kw}>{kw}</SelectItem>
-                    ))
-                  )}
+                    )}
+                  </div>
+                  
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {typeof filteredKeywords === 'object' && !Array.isArray(filteredKeywords) ? (
+                      // Keywords organizados
+                      Object.entries(filteredKeywords).map(([topic, keywords]) => (
+                        <div key={topic}>
+                          <div className="px-2 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b">
+                            📁 {topic}
+                          </div>
+                          {(keywords as string[]).map((kw: string) => (
+                            <SelectItem key={kw} value={kw} className="pl-6">
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "w-2 h-2 rounded-full flex-shrink-0", 
+                                  getSectorColor(topic).split(' ').find(c => c.startsWith('from-'))?.replace('from-', 'bg-') || 'bg-gray-300'
+                                )} />
+                                <span className="flex-1">{highlightSearchTerm(kw, keywordSearch)}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))
+                    ) : (
+                      // Lista simples
+                      (filteredKeywords as string[]).map((kw: string) => (
+                        <SelectItem key={kw} value={kw}>{kw}</SelectItem>
+                      ))
+                    )}
+                  </div>
                 </SelectContent>
               </Select>
               <Button 
@@ -731,14 +1054,101 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  {dynamicLists?.departments.map((dept) => (
-                    <SelectItem key={dept} value={dept}>
-                      <div className="flex items-center gap-2">
-                        <div className={cn("w-3 h-3 rounded-full", getSectorColor(dept).replace(/text-\w+-\d+/g, '').replace(/border-\w+-\d+/g, ''))} />
-                        {dept}
+                  {/* 🔍 Campo de busca dentro do dropdown */}
+                  <div 
+                    className="sticky top-0 bg-white dark:bg-gray-800 p-2 border-b z-10"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                      <Input
+                        ref={departmentSearchRef}
+                        placeholder="🔍 Buscar departamento... (Ctrl+F)"
+                        value={departmentSearch}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setDepartmentSearch(e.target.value);
+                          
+                          // 📌 Scroll automático para o topo após filtrar
+                          setTimeout(() => {
+                            const selectContent = e.target.closest('[data-radix-select-content]');
+                            if (selectContent) {
+                              selectContent.scrollTop = 0;
+                            }
+                          }, 50);
+                        }}
+                        className="pl-8 pr-8 h-8 text-sm"
+                        autoFocus
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        onFocus={(e) => {
+                          e.stopPropagation();
+                          e.target.focus();
+                        }}
+                        onBlur={(e) => {
+                          if (departmentSearch) {
+                            setTimeout(() => {
+                              if (departmentSearchRef.current && document.activeElement !== departmentSearchRef.current) {
+                                departmentSearchRef.current.focus();
+                              }
+                            }, 0);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Escape') {
+                            setDepartmentSearch('');
+                            departmentSearchRef.current?.focus();
+                          }
+                        }}
+                      />
+                      {departmentSearch && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDepartmentSearch('');
+                            departmentSearchRef.current?.focus();
+                          }}
+                          onMouseDown={(e) => e.preventDefault()}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded p-1"
+                        >
+                          <X className="h-3 w-3 text-gray-500" />
+                        </button>
+                      )}
+                    </div>
+                    {departmentSearch && (
+                      <div className="text-xs mt-1 flex items-center justify-between">
+                        <span className="text-gray-500">
+                          {filteredDepartments.length} resultado{filteredDepartments.length !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-purple-600 dark:text-purple-400 font-medium">
+                          Ordenado por relevância
+                        </span>
                       </div>
-                    </SelectItem>
-                  ))}
+                    )}
+                  </div>
+                  
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {filteredDepartments.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-gray-500">
+                        Nenhum departamento encontrado
+                      </div>
+                    ) : (
+                      filteredDepartments.map((dept: string) => (
+                        <SelectItem key={dept} value={dept}>
+                          <div className="flex items-center gap-2">
+                            <div className={cn("w-3 h-3 rounded-full flex-shrink-0", getSectorColor(dept).replace(/text-\w+-\d+/g, '').replace(/border-\w+-\d+/g, ''))} />
+                            <span className="flex-1">{highlightSearchTerm(dept, departmentSearch)}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
+                  </div>
                 </SelectContent>
               </Select>
               <Button 
@@ -833,15 +1243,102 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                   <SelectValue placeholder="Selecione problema" />
                 </SelectTrigger>
                 <SelectContent>
-                  {commonProblems.map((prob) => (
-                    <SelectItem key={prob} value={prob}>
-                      {prob === 'VAZIO' ? (
-                        <span className="italic text-gray-500">Sem problemas</span>
-                      ) : (
-                        prob
+                  {/* 🔍 Campo de busca dentro do dropdown */}
+                  <div 
+                    className="sticky top-0 bg-white dark:bg-gray-800 p-2 border-b z-10"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                      <Input
+                        ref={problemSearchRef}
+                        placeholder="🔍 Buscar problema... (Ctrl+F)"
+                        value={problemSearch}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setProblemSearch(e.target.value);
+                          
+                          // 📌 Scroll automático para o topo após filtrar
+                          setTimeout(() => {
+                            const selectContent = e.target.closest('[data-radix-select-content]');
+                            if (selectContent) {
+                              selectContent.scrollTop = 0;
+                            }
+                          }, 50);
+                        }}
+                        className="pl-8 pr-8 h-8 text-sm"
+                        autoFocus
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        onFocus={(e) => {
+                          e.stopPropagation();
+                          e.target.focus();
+                        }}
+                        onBlur={(e) => {
+                          if (problemSearch) {
+                            setTimeout(() => {
+                              if (problemSearchRef.current && document.activeElement !== problemSearchRef.current) {
+                                problemSearchRef.current.focus();
+                              }
+                            }, 0);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Escape') {
+                            setProblemSearch('');
+                            problemSearchRef.current?.focus();
+                          }
+                        }}
+                      />
+                      {problemSearch && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProblemSearch('');
+                            problemSearchRef.current?.focus();
+                          }}
+                          onMouseDown={(e) => e.preventDefault()}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded p-1"
+                        >
+                          <X className="h-3 w-3 text-gray-500" />
+                        </button>
                       )}
-                    </SelectItem>
-                  ))}
+                    </div>
+                    {problemSearch && (
+                      <div className="text-xs mt-1 flex items-center justify-between">
+                        <span className="text-gray-500">
+                          {filteredProblems.length} resultado{filteredProblems.length !== 1 ? 's' : ''}
+                        </span>
+                        <span className="text-green-600 dark:text-green-400 font-medium">
+                          Ordenado por relevância
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {filteredProblems.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-gray-500">
+                        Nenhum problema encontrado
+                      </div>
+                    ) : (
+                      filteredProblems.map((prob: string) => (
+                        <SelectItem key={prob} value={prob}>
+                          {prob === 'VAZIO' ? (
+                            <span className="italic text-gray-500">Sem problemas</span>
+                          ) : (
+                            <span className="flex-1">{highlightSearchTerm(prob, problemSearch)}</span>
+                          )}
+                        </SelectItem>
+                      ))
+                    )}
+                  </div>
                 </SelectContent>
               </Select>
               <Button 
