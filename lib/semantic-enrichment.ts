@@ -689,7 +689,24 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
-  // ========== OPERAÇÕES - 4 keywords ==========
+  // ⭐ NOVA KEYWORD DA CLIENTE:
+  "Produto - Tamanho": {
+    synonyms: ["dimensões", "espaço", "área", "amplitude"],
+    related_terms: [
+      "tamanho", "espaço", "dimensão", "área", "grande", "pequeno",
+      "apertado", "amplo", "reduzido", "limitado", "compacto", "quarto"
+    ],
+    colloquial_variations: [
+      "tamanho", "espaço", "pequeno", "apertado"
+    ],
+    examples: [
+      "espaços reduzidos",
+      "quarto pequeno",
+      "tamanho limitado"
+    ]
+  },
+
+  // ========== OPERAÇÕES - 6 keywords ⭐ ATUALIZADO: +2 keywords da cliente ==========
   
   "Operações - Atendimento": {
     synonyms: ["serviço", "service", "staff", "equipe"],
@@ -755,7 +772,40 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
-  // ========== CORPORATIVO - 3 keywords ==========
+  // ⭐ NOVAS KEYWORDS DA CLIENTE:
+  "Operações - Empréstimo de itens": {
+    synonyms: ["empréstimo de ferro", "emprestar objetos", "solicitar itens"],
+    related_terms: [
+      "empréstimo", "ferro de passar", "item", "objeto", "emprestar",
+      "solicitar", "pedir", "disponível", "indisponível", "falta"
+    ],
+    colloquial_variations: [
+      "empréstimo", "ferro", "pedir ferro", "emprestar"
+    ],
+    examples: [
+      "empréstimo de ferro rápido",
+      "ferro não disponível",
+      "pedimos ferro e atenderam"
+    ]
+  },
+
+  "Operações - Quarto": {
+    synonyms: ["liberação do quarto", "acesso ao quarto", "entrega do quarto"],
+    related_terms: [
+      "liberação", "acesso", "quarto pronto", "disponível", "espera",
+      "demora", "atraso", "check-in", "entrada", "acomodação"
+    ],
+    colloquial_variations: [
+      "quarto pronto", "liberação", "acesso ao quarto"
+    ],
+    examples: [
+      "demora na liberação do quarto",
+      "quarto não estava pronto",
+      "esperamos muito pelo quarto"
+    ]
+  },
+
+  // ========== CORPORATIVO - 4 keywords ⭐ ATUALIZADO: +1 keyword da cliente ==========
   
   "Corporativo - Marketing": {
     synonyms: ["divulgação", "comunicação", "propaganda"],
@@ -805,7 +855,24 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
-  // ========== EG (EXPERIÊNCIA DO HÓSPEDE) - 1 keyword ==========
+  // ⭐ NOVA KEYWORD DA CLIENTE:
+  "Corporativo - Nota Fiscal": {
+    synonyms: ["NF", "nota", "documento fiscal", "recibo"],
+    related_terms: [
+      "nota fiscal", "NF", "documento", "fiscal", "recibo",
+      "falta", "não entregue", "não enviou", "emissão", "comprovante"
+    ],
+    colloquial_variations: [
+      "nota fiscal", "NF", "nota", "recibo"
+    ],
+    examples: [
+      "NF não entregue",
+      "falta nota fiscal",
+      "nota fiscal não enviada"
+    ]
+  },
+
+  // ========== EG (EXPERIÊNCIA DO HÓSPEDE) - 2 keywords ⭐ ATUALIZADO: +1 keyword da cliente ==========
   
   "EG - Abordagem": {
     synonyms: ["atendimento personalizado", "relacionamento"],
@@ -820,6 +887,23 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
       "abordagem personalizada",
       "tratamento especial",
       "atenção aos detalhes"
+    ]
+  },
+
+  // ⭐ NOVA KEYWORD DA CLIENTE:
+  "EG - Exclusive Guest": {
+    synonyms: ["programa EG", "exclusive guest", "VIP"],
+    related_terms: [
+      "exclusive guest", "EG", "programa", "VIP", "vendedor",
+      "abordagem", "insistente", "promessa", "recusa", "venda"
+    ],
+    colloquial_variations: [
+      "exclusive guest", "EG", "programa EG"
+    ],
+    examples: [
+      "abordagem do exclusive guest",
+      "vendedor do EG insistente",
+      "programa exclusive guest"
     ]
   }
 };

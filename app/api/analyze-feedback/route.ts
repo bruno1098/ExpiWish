@@ -213,6 +213,26 @@ Identifique TODOS os aspectos mencionados e crie 1 issue para CADA aspecto (máx
    • Localização/aeroporto/centro → Produto-Localização
    • Qualquer dúvida → escolha a keyword MAIS ÓBVIA, não fique paralizado!
 
+5️⃣ ESTRATÉGIA PARA FEEDBACKS COMPLEXOS (conectores adversativos):
+   
+   🔍 IDENTIFIQUE CONECTORES que separam aspectos:
+      "mas", "porém", "entretanto", "no entanto", "todavia", "contudo",
+      "embora", "apesar de", "mesmo assim", "só que", "contudo"
+   
+   🧠 QUEBRE MENTALMENTE o feedback em pedaços:
+      Exemplo: "Localização boa mas atendimento ruim, porém restaurante compensou"
+      → Pedaço 1: "Localização boa"
+      → Pedaço 2: "atendimento ruim" 
+      → Pedaço 3: "restaurante compensou"
+   
+   ✅ CRIE 1 ISSUE PARA CADA PEDAÇO:
+      Issue 1: Produto - Localização (positivo, problem="EMPTY")
+      Issue 2: Operações - Atendimento (negativo, problem="Operações - Demora no atendimento")
+      Issue 3: A&B - Gastronomia (positivo, problem="EMPTY")
+   
+   💡 DICA: Feedbacks longos (>15 palavras) normalmente têm múltiplos aspectos!
+            Procure por conectores e crie issues separadas.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🧠 REGRAS CRÍTICAS DE ANÁLISE CONTEXTUAL:
@@ -269,9 +289,41 @@ GLOSSARIO (casos criticos):
 
 REGRAS TECNICAS:
 
-• Sentiment 1-2 (negativo) → use problem_label válido
-• Sentiment 4-5 (positivo) → use problem_label="EMPTY"
+🚨 REGRA CRÍTICA - QUANDO USAR PROBLEMS:
+• problem_label = "EMPTY" → Para ELOGIOS, NEUTROS e qualquer feedback SEM PROBLEMA REAL
+• problem_label = Problem específico → APENAS quando há CRÍTICA/RECLAMAÇÃO real
+
+� FORMATO OBRIGATÓRIO DOS PROBLEMS:
+• TODOS os problems seguem o formato: "Departamento - Nome do Problema"
+• Exemplo: "A&B - Variedade limitada", "TI - Wi-fi não conecta", "Governança - Falta de limpeza"
+• O departamento ANTES DO HÍFEN garante o mapeamento correto
+• SEMPRE use o problem EXATAMENTE como está na lista com seu departamento
+• NUNCA invente problems ou mude o formato "Departamento - Problema"
+
+�📊 EXEMPLOS DE USO CORRETO:
+✅ "Café da manhã delicioso" 
+   → keyword="A&B - Café da manhã", problem="EMPTY" (elogio, sem problema)
+
+✅ "Localização perfeita perto da praia"
+   → keyword="Produto - Localização", problem="EMPTY" (elogio, sem problema)
+
+✅ "Comida sem variedade"
+   → keyword="A&B - Gastronomia", problem="A&B - Variedade limitada" (crítica real)
+
+✅ "Wi-fi não conectava"
+   → keyword="Tecnologia - Wi-fi", problem="TI - Wi-fi não conecta" (problema real)
+
+❌ ERRADO: "Restaurante excelente" → problem="A&B - Atendimento insistente"
+   (Não há problema! Use problem="EMPTY")
+
+❌ ERRADO: "Comida boa" → problem="A&B - Qualidade da comida"
+   (É elogio! Use problem="EMPTY")
+
+• Sentiment 1-2 (negativo) → use problem_label válido DA LISTA
+• Sentiment 3 (neutro) → use problem_label="EMPTY" (exceto se mencion problema específico)
+• Sentiment 4-5 (positivo) → use problem_label="EMPTY" SEMPRE
 • Keywords "Limpeza-X" pertencem ao dept "Governança" (veja campo "Dept:")
+
 ⚠️ TRADUÇÃO OBRIGATÓRIA:
 • Traduza TUDO para português brasileiro (detail, reasoning, suggestion_summary, propostas)
 • Elogios: "Great breakfast" → "Café da manhã excelente"
@@ -287,16 +339,29 @@ REGRA DE ESPECIFICIDADE (CRITICA!):
 
   const userPrompt = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚨 REGRA CRÍTICA: USE OS LABELS DOS CANDIDATOS! 🚨
+🚨 REGRA CRÍTICA: ENTENDA A DIFERENÇA! 🚨
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚠️ IMPORTANTE: Você deve retornar LABELS (ex: "Produto - Transfer")
-              NÃO retorne IDs (ex: "kw_123456")!
+🔑 KEYWORD = ASPECTO/ÁREA do hotel mencionado
+   Formato: "Departamento - Aspecto"
+   Exemplo: "A&B - Gastronomia", "Limpeza - Quarto", "Tecnologia - Wi-fi"
+   → Responde: "ONDE/O QUE foi mencionado?"
 
-Abaixo você receberá uma lista de KEYWORDS CANDIDATAS.
+🔧 PROBLEM = TIPO DE PROBLEMA específico (só quando há CRÍTICA)
+   Formato: "Departamento - Problema" ou texto curto
+   Exemplo: "A&B - Variedade limitada", "TI - Wi-fi não conecta", "Governança - Banheiro sujo"
+   → Responde: "QUAL FOI o problema?" (ou "EMPTY" se é elogio)
 
-⚠️ OBRIGATÓRIO: Para CADA issue, você DEVE:
-1. Procurar na lista de KEYWORDS CANDIDATAS abaixo
+⚠️ NUNCA MISTURE! 
+   • KEYWORD sempre no formato "Departamento - Aspecto"
+   • PROBLEM só quando há CRÍTICA REAL (elogios = "EMPTY")
+   
+   ❌ ERRADO: keyword="A&B - Variedade limitada" (isso é problem!)
+   ✅ CERTO: keyword="A&B - Gastronomia" + problem="A&B - Variedade limitada"
+   
+   ❌ ERRADO: "Comida boa" → problem="A&B - Qualidade da comida"
+   ✅ CERTO: "Comida boa" → problem="EMPTY" (é elogio!)
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 **📋 FEEDBACK DO HÓSPEDE:**
@@ -373,21 +438,23 @@ Formato: "1. [aspecto], 2. [aspecto], 3. [aspecto]"
 
 ✅ ISSUES CRIADAS:
 Para cada issue que você CRIOU, explique:
-• Aspecto detectado
-• Keyword escolhida
-• Por que escolheu essa classificação
-Formato: "1. [aspecto] → [Keyword] ([justificativa])"
+• Aspecto detectado → Keyword escolhida (justificativa)
+• Problem escolhido (ou "EMPTY" se for elogio/neutro)
+• Raciocínio completo
+Formato: "1. [aspecto] → [Keyword] + Problem: [Problem ou EMPTY] ([justificativa completa incluindo keyword E problem])"
 
-⚠️ ASPECTOS NÃO CLASSIFICADOS (SE HOUVER):
-Para qualquer aspecto mencionado no feedback que você NÃO criou issue, explique:
-• O que você detectou
-• Por que não criou issue (ex: muito vago, não há keyword adequada, contexto insuficiente)
-Formato: "❌ [aspecto]: [razão para não classificar]"
+EXEMPLO COMPLETO COM PROBLEMS:
+"📋 ASPECTOS: 1.garçons lentos, 2.localização boa
 
-EXEMPLO COMPLETO:
-"📋 ASPECTOS: 1.tampa vaso sanitário, 2.experiência geral
-✅ ISSUES: 1. Tampa vaso → Manutenção-Banheiro (problema específico de manutenção) | 2. Experiência boa → Produto-Experiência (elogio geral)
+✅ ISSUES: 1. Garçons lentos → A&B - Serviço + Problem: A&B - Atendimento demora (crítica sobre lentidão dos garçons no restaurante, então keyword A&B-Serviço e problem A&B-Atendimento demora) | 2. Localização boa → Produto - Localização + Problem: EMPTY (elogio, não tem problema)
+
 ⚠️ NÃO CLASSIFICADOS: Nenhum - todos os aspectos foram classificados"
+
+⚠️ CRÍTICO SOBRE PROBLEMS:
+• Se é ELOGIO ou NEUTRO → problem="EMPTY" SEMPRE
+• Se é CRÍTICA → escolha o problem MAIS ESPECÍFICO da lista
+• Exemplo: "garçons lentos" → problem="A&B - Atendimento demora" (não deixe vazio!)
+• Exemplo: "quarto limpo" → problem="EMPTY" (é elogio!)
 
 ⚠️ CRÍTICO: Sempre escreva em PORTUGUÊS, mesmo que feedback esteja em outro idioma!`
         },
@@ -413,12 +480,12 @@ EXEMPLO COMPLETO:
               keyword_label: {
                 type: "string",
                 enum: keywordLabels,
-                description: "Label COMPLETO da keyword (ex: 'A&B - Serviço'). CONTEXTO É CRÍTICO: 'atendimento no restaurante' = A&B-Serviço (NÃO Operações-Atendimento). Use EMPTY apenas se não há candidato adequado."
+                description: "🏷️ KEYWORD = ASPECTO DO HOTEL mencionado (ex: 'A&B - Serviço', 'Produto - Localização'). CONTEXTO É CRÍTICO: 'garçons no restaurante' = A&B-Serviço (NÃO Operações-Atendimento). Use EMPTY apenas se não há candidato adequado."
               },
               problem_label: {
                 type: "string",
                 enum: problemLabels,
-                description: "Label do problema. Sentiment 1-2 (negativo) → escolha problem válido. Sentiment 4-5 (elogio) → use EMPTY."
+                description: "⚠️ PROBLEM = TIPO DE PROBLEMA detectado no aspecto (ex: 'A&B - Atendimento demora', 'Manutenção - TV com falha'). ✅ ELOGIOS/NEUTROS → EMPTY SEMPRE! ❌ CRÍTICAS → escolha problem específico da lista! Exemplo: 'garçons lentos' → problem='A&B - Atendimento demora' (não deixe EMPTY se for crítica!)"
               },
               detail: {
                 type: "string",
