@@ -163,7 +163,8 @@ export const normalizeHotelName = (hotelName: string): string => {
 };
 
 // Função para salvar uma nova análise na estrutura hierárquica
-export const saveAnalysis = async (analysisData: Omit<AnalysisData, 'importDate'>) => {
+// ✅ CORREÇÃO: Aceitar importDate como parâmetro em vez de gerar nova data
+export const saveAnalysis = async (analysisData: AnalysisData | Omit<AnalysisData, 'importDate'>) => {
   try {
     
     // Verificar se estamos em ambiente de teste
@@ -213,9 +214,32 @@ export const saveAnalysis = async (analysisData: Omit<AnalysisData, 'importDate'
       feedbackId
     );
     
+    // ✅ SOLUÇÃO DEFINITIVA: Usar importDate passado ou criar novo se não houver
+    let importTimestamp: any;
+    
+    if ('importDate' in analysisData && analysisData.importDate) {
+      // Usar a data que foi passada (já capturada no momento correto da importação)
+      const importDate = analysisData.importDate instanceof Date 
+        ? analysisData.importDate 
+        : analysisData.importDate;
+      importTimestamp = Timestamp.fromDate(importDate as Date);
+      
+      console.log('📅 Usando data de importação passada:');
+      console.log('   Data:', (importDate as Date).toLocaleDateString('pt-BR'));
+      console.log('   Hora:', (importDate as Date).toLocaleTimeString('pt-BR'));
+    } else {
+      // Fallback: criar nova data se não foi passada
+      const now = new Date();
+      importTimestamp = Timestamp.fromDate(now);
+      
+      console.log('📅 Criando nova data de importação (fallback):');
+      console.log('   Data:', now.toLocaleDateString('pt-BR'));
+      console.log('   Hora:', now.toLocaleTimeString('pt-BR'));
+    }
+    
     await setDoc(feedbackDocRef, {
       ...cleanData,
-      importDate: Timestamp.now()
+      importDate: importTimestamp
     });
 
     return feedbackId;

@@ -1,16 +1,35 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { parseISODateLocal } from "./data-utils";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDateBR(dateString: string): string {
+export function formatDateBR(dateInput: string | Date): string {
   try {
-    const date = new Date(dateString);
+    let date: Date;
+    
+    // Se já é um Date object, usar diretamente
+    if (dateInput instanceof Date) {
+      date = dateInput;
+    }
+    // Se é string ISO, parsear manualmente
+    else if (typeof dateInput === 'string' && dateInput.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      date = parseISODateLocal(dateInput);
+    }
+    // Outros formatos de string
+    else if (typeof dateInput === 'string') {
+      date = new Date(dateInput);
+    }
+    else {
+      return 'Data inválida';
+    }
+    
     if (isNaN(date.getTime())) {
       return 'Data inválida';
     }
+    
     return date.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -21,12 +40,30 @@ export function formatDateBR(dateString: string): string {
   }
 }
 
-export function formatDateTime(dateString: string): string {
+export function formatDateTime(dateInput: string | Date): string {
   try {
-    const date = new Date(dateString);
+    let date: Date;
+    
+    // Se já é um Date object, usar diretamente
+    if (dateInput instanceof Date) {
+      date = dateInput;
+    }
+    // Se é string ISO, parsear manualmente
+    else if (typeof dateInput === 'string' && dateInput.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      date = parseISODateLocal(dateInput);
+    }
+    // Outros formatos de string
+    else if (typeof dateInput === 'string') {
+      date = new Date(dateInput);
+    }
+    else {
+      return 'Data inválida';
+    }
+    
     if (isNaN(date.getTime())) {
       return 'Data inválida';
     }
+    
     return date.toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',

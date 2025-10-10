@@ -23,7 +23,8 @@ import {
   X,
   GripVertical,
   Folder,
-  List
+  List,
+  Search
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -41,77 +42,94 @@ import {
   type DynamicLists
 } from '@/lib/dynamic-lists-service';
 
-// Função para organizar keywords por tópicos/departamentos
-const organizeKeywordsByTopics = (allKeywords: string[]) => {
+/**
+ * Organiza keywords por departamentos do Firebase
+ * ⚠️ ATUALIZADO: Usa departamentos reais do Firebase + "Outros" para keywords sem match
+ */
+const organizeKeywordsByTopics = (allKeywords: string[], departments: string[]) => {
   const topics: Record<string, string[]> = {}
   
-  // Definir a ordem dos tópicos
-  const topicOrder = ['A&B', 'Governança', 'Limpeza', 'Manutenção', 'Lazer', 'TI', 'Operações', 'Recepção', 'Qualidade', 'Comercial', 'Programa de vendas', 'Outros']
+  // Inicializar todos os departamentos do Firebase
+  departments.forEach(dept => {
+    topics[dept] = []
+  })
   
-  // Agrupar keywords por tópicos
+  // Adicionar categoria "Outros" para keywords que não fazem match
+  topics['Outros'] = []
+  
+  // Agrupar keywords por departamento
   allKeywords.forEach(keyword => {
-    let topic = 'Outros' // Fallback padrão
+    const department = getKeywordTopic(keyword, departments)
     
-    // Identificar tópico baseado no prefixo da keyword
-    if (keyword.startsWith('A&B')) {
-      topic = 'A&B'
-    } else if (keyword.startsWith('Governança') || keyword === 'Enxoval' || keyword === 'Travesseiro' || keyword === 'Colchão' || keyword === 'Espelho') {
-      topic = 'Governança'  
-    } else if (keyword.startsWith('Limpeza')) {
-      topic = 'Limpeza'
-    } else if (keyword.startsWith('Manutenção') || keyword === 'Ar-condicionado' || keyword === 'Elevador' || keyword === 'Frigobar' || keyword === 'Infraestrutura') {
-      topic = 'Manutenção'
-    } else if (keyword.startsWith('Lazer') || keyword === 'Spa' || keyword === 'Piscina' || keyword === 'Recreação' || keyword === 'Mixologia') {
-      topic = 'Lazer'
-    } else if (keyword.startsWith('Tecnologia')) {
-      topic = 'TI'
-    } else if (keyword.startsWith('Recepção') || keyword.startsWith('Check-in') || keyword.startsWith('Check-out')) {
-      topic = 'Recepção'
-    } else if (keyword === 'Comunicação') {
-      topic = 'Qualidade'
-    } else if (keyword === 'Reservas') {
-      topic = 'Comercial'
-    } else if (keyword === 'Concierge' || keyword === 'Cotas') {
-      topic = 'Programa de vendas'
-    } else if (keyword === 'Atendimento' || keyword === 'Acessibilidade' || keyword === 'Reserva de cadeiras (pool)' || keyword === 'Processo' || keyword === 'Custo-benefício' || keyword === 'Estacionamento' || keyword === 'Água' || keyword === 'Localização') {
-      topic = 'Operações'
+    if (!topics[department]) {
+      topics[department] = []
     }
-    
-    if (!topics[topic]) {
-      topics[topic] = []
-    }
-    topics[topic].push(keyword)
+    topics[department].push(keyword)
   })
   
-  // Ordenar keywords dentro de cada tópico
+  // Ordenar keywords dentro de cada departamento
   Object.keys(topics).forEach(topic => {
-    topics[topic].sort()
+    topics[topic].sort((a, b) => a.localeCompare(b, 'pt-BR'))
   })
   
-  // Retornar apenas tópicos que têm keywords, na ordem definida
-  const result: Record<string, string[]> = {}
-  topicOrder.forEach(topic => {
-    if (topics[topic] && topics[topic].length > 0) {
-      result[topic] = topics[topic]
+  // Remover departamentos vazios (exceto "Outros")
+  const filteredTopics: Record<string, string[]> = {}
+  Object.entries(topics).forEach(([dept, keywords]) => {
+    if (keywords.length > 0) {
+      filteredTopics[dept] = keywords
     }
   })
   
-  return result
+  // Ordenar departamentos: A&B e Manutenção primeiro, depois alfabético, "Outros" por último
+  const sortedTopics: Record<string, string[]> = {}
+  const departmentOrder = Object.keys(filteredTopics).sort((a, b) => {
+    if (a === 'A&B') return -1
+    if (b === 'A&B') return 1
+    if (a === 'Manutenção') return -1
+    if (b === 'Manutenção') return 1
+    if (a === 'Outros') return 1
+    if (b === 'Outros') return -1
+    return a.localeCompare(b, 'pt-BR')
+  })
+  
+  departmentOrder.forEach(dept => {
+    sortedTopics[dept] = filteredTopics[dept]
+  })
+  
+  return sortedTopics
 }
 
-// Função para detectar de qual tópico uma keyword pertence
-const getKeywordTopic = (keyword: string): string => {
-  if (keyword.startsWith('A&B')) return 'A&B'
-  if (keyword.startsWith('Governança') || ['Enxoval', 'Travesseiro', 'Colchão', 'Espelho'].includes(keyword)) return 'Governança'
-  if (keyword.startsWith('Limpeza')) return 'Limpeza'
-  if (keyword.startsWith('Manutenção') || ['Ar-condicionado', 'Elevador', 'Frigobar', 'Infraestrutura'].includes(keyword)) return 'Manutenção'
-  if (keyword.startsWith('Lazer') || ['Spa', 'Piscina', 'Recreação', 'Mixologia'].includes(keyword)) return 'Lazer'
-  if (keyword.startsWith('Tecnologia')) return 'TI'
-  if (keyword.startsWith('Recepção') || keyword.startsWith('Check-in') || keyword.startsWith('Check-out')) return 'Recepção'
-  if (keyword === 'Comunicação') return 'Qualidade'
-  if (keyword === 'Reservas') return 'Comercial'
-  if (['Concierge', 'Cotas'].includes(keyword)) return 'Programa de vendas'
-  if (['Atendimento', 'Acessibilidade', 'Reserva de cadeiras (pool)', 'Processo', 'Custo-benefício', 'Estacionamento', 'Água', 'Localização'].includes(keyword)) return 'Operações'
+/**
+ * Detecta de qual departamento uma keyword pertence usando departamentos do Firebase
+ * ⚠️ ATUALIZADO: Usa lista real de departamentos do Firebase para fazer o match
+ */
+const getKeywordTopic = (keyword: string, departments: string[]): string => {
+  // Extrair prefixo da keyword (antes do " - ")
+  const parts = keyword.split(' - ')
+  if (parts.length > 1) {
+    const keywordPrefix = parts[0].trim()
+    
+    // Buscar match exato com departamentos do Firebase
+    const exactMatch = departments.find(dept => 
+      dept.toLowerCase() === keywordPrefix.toLowerCase()
+    )
+    if (exactMatch) return exactMatch
+    
+    // Buscar match parcial para variações comuns
+    const partialMatch = departments.find(dept => {
+      const deptLower = dept.toLowerCase()
+      const prefixLower = keywordPrefix.toLowerCase()
+      
+      // Verificar se o prefixo está contido no departamento ou vice-versa
+      return deptLower.includes(prefixLower) || prefixLower.includes(deptLower)
+    })
+    if (partialMatch) return partialMatch
+    
+    // Se não encontrou match, mas tem prefixo válido, retornar o prefixo
+    return keywordPrefix
+  }
+  
+  // Keywords sem prefixo vão para "Outros"
   return 'Outros'
 }
 
@@ -134,8 +152,35 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
   const [dragOverTopic, setDragOverTopic] = useState<string | null>(null); // Para drop zones dos tópicos
   const [organizedView, setOrganizedView] = useState(true); // Estado para view organizada
+  const [searchTerm, setSearchTerm] = useState(''); // 🔍 Campo de busca
+  const searchInputRef = React.useRef<HTMLInputElement>(null); // Ref para focar no campo
   
   const { toast } = useToast();
+
+  // 🔍 Handler para Ctrl+F / Cmd+F e ESC
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Detectar Ctrl+F (Windows/Linux) ou Cmd+F (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f' && isOpen) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      
+      // ESC para limpar busca (se o input de busca estiver focado)
+      if (e.key === 'Escape' && searchTerm && document.activeElement === searchInputRef.current) {
+        e.preventDefault();
+        setSearchTerm('');
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, searchTerm]);
 
   const getTypeLabel = () => {
     switch (type) {
@@ -153,6 +198,61 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
       case 'department': return lists.departments;
       default: return [];
     }
+  };
+
+  // 🔍 Filtrar itens pela busca
+  const getFilteredItems = () => {
+    const items = getItems();
+    if (!searchTerm.trim()) return items;
+    
+    const search = searchTerm.toLowerCase().trim();
+    return items.filter(item => 
+      item.toLowerCase().includes(search)
+    );
+  };
+
+  // 🔍 Filtrar tópicos organizados pela busca
+  const getFilteredOrganizedKeywords = () => {
+    const items = getFilteredItems();
+    if (!searchTerm.trim()) {
+      return organizeKeywordsByTopics(getItems(), lists.departments);
+    }
+    
+    // Organizar apenas os itens filtrados
+    const organized = organizeKeywordsByTopics(items, lists.departments);
+    
+    // Remover tópicos vazios após filtro
+    const filtered: Record<string, string[]> = {};
+    Object.entries(organized).forEach(([topic, keywords]) => {
+      if (keywords.length > 0) {
+        filtered[topic] = keywords;
+      }
+    });
+    
+    return filtered;
+  };
+
+  // 🔍 Destacar texto encontrado na busca
+  const highlightSearchTerm = (text: string) => {
+    if (!searchTerm.trim()) return text;
+    
+    const search = searchTerm.trim();
+    const regex = new RegExp(`(${search})`, 'gi');
+    const parts = text.split(regex);
+    
+    return (
+      <>
+        {parts.map((part, i) => 
+          regex.test(part) ? (
+            <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">
+              {part}
+            </mark>
+          ) : (
+            <span key={i}>{part}</span>
+          )
+        )}
+      </>
+    );
   };
 
   const handleAdd = async () => {
@@ -387,7 +487,7 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
       return;
     }
     
-    const sourceTopic = getKeywordTopic(draggedKeyword);
+    const sourceTopic = getKeywordTopic(draggedKeyword, lists.departments);
     console.log('📍 Tópicos:', { sourceTopic, targetTopic });
     
     if (sourceTopic === targetTopic) {
@@ -467,6 +567,30 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
           </DialogHeader>
           
           <div className="flex-1 overflow-hidden flex flex-col">
+            {/* 🔍 Campo de busca customizado */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                ref={searchInputRef}
+                placeholder={`🔍 Pesquisar ${getTypeLabel()}... (Ctrl+F ou Cmd+F)`}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-9"
+                autoFocus={false}
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
+                  title="Limpar busca (Esc)"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+
             {/* Adicionar novo item */}
             <div className="flex gap-2 mb-4">
               <Input
@@ -487,9 +611,16 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
 
             {/* Lista de itens */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+              {/* 🔍 Contador de resultados */}
+              {searchTerm && (
+                <div className="text-xs text-gray-500 mb-2 px-2">
+                  {getFilteredItems().length} {getFilteredItems().length === 1 ? 'resultado' : 'resultados'} encontrado{getFilteredItems().length === 1 ? '' : 's'}
+                </div>
+              )}
+              
               {type === 'keyword' && organizedView ? (
                 // Visualização organizada por tópicos
-                Object.entries(organizeKeywordsByTopics(getItems())).map(([topic, keywords]) => (
+                Object.entries(getFilteredOrganizedKeywords()).map(([topic, keywords]) => (
                   <div 
                     key={topic} 
                     className={`mb-4 p-2 rounded-lg transition-all duration-200 ${
@@ -575,7 +706,7 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
                                       !isDefault && !isEditing ? 'text-gray-600' : 'text-gray-300'
                                     }`} />
                                   </div>
-                                  <span className="text-sm">{item}</span>
+                                  <span className="text-sm">{highlightSearchTerm(item)}</span>
                                   {isDefault && (
                                     <Badge variant="secondary" className="gap-1 text-xs">
                                       <Shield className="h-3 w-3" />
@@ -619,8 +750,8 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
                   </div>
                 ))
               ) : (
-                // Visualização em lista simples (padrão para outros tipos)
-                getItems().map((item) => {
+                // Visualização em lista simples (padrão para outros tipos ou busca ativa)
+                getFilteredItems().map((item) => {
                   const isDefault = isDefaultItem(item, type);
                   const isEditing = editingItem === item;
 
@@ -679,7 +810,7 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
                                 !isDefault && !isEditing ? 'text-gray-600' : 'text-gray-300'
                               }`} />
                             </div>
-                            <span className="text-sm">{item}</span>
+                            <span className="text-sm">{highlightSearchTerm(item)}</span>
                             {isDefault && (
                               <Badge variant="secondary" className="gap-1 text-xs">
                                 <Shield className="h-3 w-3" />

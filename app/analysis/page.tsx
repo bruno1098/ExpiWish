@@ -57,7 +57,8 @@ import {
   History,
   Clock,
   Brain,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle
 
 } from "lucide-react"
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
@@ -918,62 +919,116 @@ const commonKeywords = [
   'Reservas'
 ];
 
-// Função para organizar keywords por tópicos/departamentos
-const organizeKeywordsByTopics = (allKeywords: string[]) => {
+/**
+ * Detecta de qual departamento uma keyword pertence usando departamentos do Firebase
+ */
+const getKeywordTopic = (keyword: string, departments: string[]): string => {
+  // Extrair prefixo da keyword (antes do " - ")
+  const parts = keyword.split(' - ')
+  if (parts.length > 1) {
+    const keywordPrefix = parts[0].trim()
+    
+    // Buscar match exato com departamentos do Firebase
+    const exactMatch = departments.find(dept => 
+      dept.toLowerCase() === keywordPrefix.toLowerCase()
+    )
+    if (exactMatch) return exactMatch
+    
+    // Buscar match parcial para variações comuns
+    const partialMatch = departments.find(dept => {
+      const deptLower = dept.toLowerCase()
+      const keywordLower = keywordPrefix.toLowerCase()
+      
+      // Match para variações de Manutenção
+      if (keywordLower.includes('manutenção') && deptLower.includes('manutenção')) {
+        return true
+      }
+      
+      // Match para "Tecnologia" → "TI"
+      if ((keywordLower === 'tecnologia' || keywordLower === 'ti') && 
+          (deptLower === 'tecnologia' || deptLower === 'ti')) {
+        return true
+      }
+      
+      return keywordLower.includes(deptLower) || deptLower.includes(keywordLower)
+    })
+    
+    if (partialMatch) return partialMatch
+  }
+  
+  // Keywords sem prefixo: verificar se pertencem à Governança
+  const keywordLower = keyword.toLowerCase()
+  
+  // Keywords que pertencem à Governança (relacionadas a limpeza, enxoval, etc.)
+  const governancaKeywords = [
+    'limpeza', 'enxoval', 'travesseiro', 'colchão', 'espelho', 
+    'toalha', 'lençol', 'fronha', 'cobertor', 'amenities'
+  ]
+  
+  const isGovernanca = governancaKeywords.some(kw => keywordLower.includes(kw))
+  if (isGovernanca && departments.includes('Governança')) {
+    return 'Governança'
+  }
+  
+  // Keywords sem prefixo ou sem match vão para "Outros"
+  return 'Outros'
+}
+
+/**
+ * Organiza keywords por departamentos do Firebase
+ * ⚠️ ATUALIZADO: Usa departamentos reais do Firebase + "Outros" para keywords sem match
+ */
+const organizeKeywordsByTopics = (allKeywords: string[], departments: string[] = []) => {
   const topics: Record<string, string[]> = {}
   
-  // Definir a ordem dos tópicos
-  const topicOrder = ['A&B', 'Governança', 'Limpeza', 'Manutenção', 'Lazer', 'TI', 'Operações', 'Recepção', 'Qualidade', 'Comercial', 'Programa de vendas', 'Outros']
+  // Inicializar todos os departamentos do Firebase
+  departments.forEach(dept => {
+    topics[dept] = []
+  })
   
-  // Agrupar keywords por tópicos
+  // Adicionar categoria "Outros" para keywords que não fazem match
+  topics['Outros'] = []
+  
+  // Agrupar keywords por departamento
   allKeywords.forEach(keyword => {
-    let topic = 'Outros' // Fallback padrão
+    const department = getKeywordTopic(keyword, departments)
     
-    // Identificar tópico baseado no prefixo da keyword
-    if (keyword.startsWith('A&B')) {
-      topic = 'A&B'
-    } else if (keyword.startsWith('Governança') || keyword === 'Enxoval' || keyword === 'Travesseiro' || keyword === 'Colchão' || keyword === 'Espelho') {
-      topic = 'Governança'  
-    } else if (keyword.startsWith('Limpeza')) {
-      topic = 'Limpeza'
-    } else if (keyword.startsWith('Manutenção') || keyword === 'Ar-condicionado' || keyword === 'Elevador' || keyword === 'Frigobar' || keyword === 'Infraestrutura') {
-      topic = 'Manutenção'
-    } else if (keyword.startsWith('Lazer') || keyword === 'Spa' || keyword === 'Piscina' || keyword === 'Recreação' || keyword === 'Mixologia') {
-      topic = 'Lazer'
-    } else if (keyword.startsWith('Tecnologia')) {
-      topic = 'TI'
-    } else if (keyword.startsWith('Recepção') || keyword.startsWith('Check-in') || keyword.startsWith('Check-out')) {
-      topic = 'Recepção'
-    } else if (keyword === 'Comunicação') {
-      topic = 'Qualidade'
-    } else if (keyword === 'Reservas') {
-      topic = 'Comercial'
-    } else if (keyword === 'Concierge' || keyword === 'Cotas') {
-      topic = 'Programa de vendas'
-    } else if (keyword === 'Atendimento' || keyword === 'Acessibilidade' || keyword === 'Reserva de cadeiras (pool)' || keyword === 'Processo' || keyword === 'Custo-benefício' || keyword === 'Estacionamento' || keyword === 'Água' || keyword === 'Localização') {
-      topic = 'Operações'
+    if (!topics[department]) {
+      topics[department] = []
     }
-    
-    if (!topics[topic]) {
-      topics[topic] = []
-    }
-    topics[topic].push(keyword)
+    topics[department].push(keyword)
   })
   
-  // Ordenar keywords dentro de cada tópico
+  // Ordenar keywords dentro de cada departamento
   Object.keys(topics).forEach(topic => {
-    topics[topic].sort()
+    topics[topic].sort((a, b) => a.localeCompare(b, 'pt-BR'))
   })
   
-  // Retornar apenas tópicos que têm keywords, na ordem definida
-  const organizedTopics: Record<string, string[]> = {}
-  topicOrder.forEach(topic => {
-    if (topics[topic] && topics[topic].length > 0) {
-      organizedTopics[topic] = topics[topic]
+  // Remover departamentos vazios (exceto "Outros")
+  const filteredTopics: Record<string, string[]> = {}
+  Object.entries(topics).forEach(([dept, keywords]) => {
+    if (keywords.length > 0) {
+      filteredTopics[dept] = keywords
     }
   })
   
-  return organizedTopics
+  // Ordenar departamentos: A&B e Manutenção primeiro, depois alfabético, "Outros" por último
+  const sortedTopics: Record<string, string[]> = {}
+  const departmentOrder = Object.keys(filteredTopics).sort((a, b) => {
+    if (a === 'A&B') return -1
+    if (b === 'A&B') return 1
+    if (a === 'Manutenção') return -1
+    if (b === 'Manutenção') return 1
+    if (a === 'Outros') return 1
+    if (b === 'Outros') return -1
+    return a.localeCompare(b, 'pt-BR')
+  })
+  
+  departmentOrder.forEach(dept => {
+    sortedTopics[dept] = filteredTopics[dept]
+  })
+  
+  return sortedTopics
 }
 
 // Função para obter a cor com base no departamento
@@ -1113,33 +1168,38 @@ const CommentModal = ({
   const [isDeleting, setIsDeleting] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [dynamicKeywords, setDynamicKeywords] = useState<string[]>([])
+  const [dynamicDepartments, setDynamicDepartments] = useState<string[]>([])
   const [localOrganizedKeywords, setLocalOrganizedKeywords] = useState<Record<string, string[]>>({})
 
-  // Carregar keywords dinâmicas quando o modal abre
+  // Carregar keywords e departamentos dinâmicos quando o modal abre
   useEffect(() => {
-    const loadDynamicKeywords = async () => {
+    const loadDynamicLists = async () => {
       try {
         const lists = await getDynamicLists()
         setDynamicKeywords(lists.keywords)
-        console.log('🔍 CommentModal carregou dynamicKeywords:', lists.keywords.length)
+        setDynamicDepartments(lists.departments)
+        console.log('🔍 CommentModal carregou listas dinâmicas:', {
+          keywords: lists.keywords.length,
+          departments: lists.departments.length
+        })
       } catch (error) {
-        console.error('Erro ao carregar keywords dinâmicas:', error)
+        console.error('Erro ao carregar listas dinâmicas:', error)
       }
     }
     
     if (isOpen) {
-      loadDynamicKeywords()
+      loadDynamicLists()
     }
   }, [isOpen])
 
   // Atualizar organizedKeywords quando dynamicKeywords mudarem
   useEffect(() => {
-    if (dynamicKeywords.length > 0) {
-      const organized = organizeKeywordsByTopics(dynamicKeywords)
+    if (dynamicKeywords.length > 0 && dynamicDepartments.length > 0) {
+      const organized = organizeKeywordsByTopics(dynamicKeywords, dynamicDepartments)
       setLocalOrganizedKeywords(organized)
       console.log('🔍 CommentModal organizou keywords:', Object.keys(organized).length, 'tópicos')
     }
-  }, [dynamicKeywords])
+  }, [dynamicKeywords, dynamicDepartments])
 
   // Recarregar keywords quando houver atualização
   const handleKeywordsUpdate = () => {
@@ -3822,20 +3882,25 @@ const ProblemEditor = ({
   const [keywordJustEdited, setKeywordJustEdited] = useState(false);
   const [problemJustEdited, setProblemJustEdited] = useState(false);
   const [dynamicKeywords, setDynamicKeywords] = useState<string[]>([]);
+  const [dynamicDepartments, setDynamicDepartments] = useState<string[]>([]);
 
-  // Carregar keywords dinâmicas quando o componente monta
+  // Carregar keywords e departamentos dinâmicos quando o componente monta
   useEffect(() => {
-    const loadDynamicKeywords = async () => {
+    const loadDynamicLists = async () => {
       try {
         const lists = await getDynamicLists()
         setDynamicKeywords(lists.keywords)
-        console.log('🔍 ProblemEditor carregou dynamicKeywords:', lists.keywords.length)
+        setDynamicDepartments(lists.departments)
+        console.log('🔍 ProblemEditor carregou listas dinâmicas:', {
+          keywords: lists.keywords.length,
+          departments: lists.departments.length
+        })
       } catch (error) {
-        console.error('Erro ao carregar keywords dinâmicas no ProblemEditor:', error)
+        console.error('Erro ao carregar listas dinâmicas no ProblemEditor:', error)
       }
     }
     
-    loadDynamicKeywords()
+    loadDynamicLists()
   }, [])
 
   useEffect(() => {
@@ -4000,62 +4065,66 @@ const ProblemEditor = ({
                   </div>
                 </div>
               ) : (
-                <Select value={keyword} onValueChange={setKeyword} onOpenChange={(open) => {
-                  // Quando abrir, rolar para o topo com múltiplas tentativas
-                  if (open) {
-                    // Tentativa imediata
-                    setTimeout(() => {
-                      const selectors = [
-                        '[data-radix-select-content]',
-                        '[role="listbox"]',
-                        '.max-h-80'
-                      ];
-                      
-                      for (const selector of selectors) {
-                        const element = document.querySelector(selector);
-                        if (element) {
-                          element.scrollTop = 0;
-                          console.log('🔝 Scroll resetado para o topo:', selector);
-                          break;
-                        }
-                      }
-                    }, 10);
-                    
-                    // Tentativa adicional após mais tempo
-                    setTimeout(() => {
-                      const elements = document.querySelectorAll('[data-radix-select-content], [role="listbox"], .max-h-80');
-                      elements.forEach((element, index) => {
-                        if (element) {
-                          element.scrollTop = 0;
-                          console.log(`🔝 Scroll resetado (tentativa 2) - elemento ${index}`);
-                        }
-                      });
-                    }, 100);
-                  }
-                }}>
+                <Select value={keyword} onValueChange={setKeyword}>
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="Selecione palavra-chave" />
                   </SelectTrigger>
                   <SelectContent className="max-h-80 overflow-y-auto">
+                    {/* 🔍 Campo de busca dentro do dropdown - CommentModal ProblemEditor */}
+                    <div className="sticky top-0 p-2 bg-white dark:bg-gray-900 border-b shadow-sm z-50">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                        <Input
+                          placeholder="🔍 Buscar palavra-chave..."
+                          className="pl-9 h-9 text-sm border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const searchValue = e.target.value.toLowerCase()
+                            // Filtrar keywords em tempo real usando atributo data
+                            const items = document.querySelectorAll('[data-keyword-item]')
+                            items.forEach(item => {
+                              const keywordText = item.getAttribute('data-keyword-item')?.toLowerCase() || ''
+                              const parent = item.closest('[data-keyword-group]')
+                              if (keywordText.includes(searchValue)) {
+                                (item as HTMLElement).style.display = ''
+                                if (parent) (parent as HTMLElement).style.display = ''
+                              } else {
+                                (item as HTMLElement).style.display = 'none'
+                              }
+                            })
+                            // Ocultar grupos vazios
+                            const groups = document.querySelectorAll('[data-keyword-group]')
+                            groups.forEach(group => {
+                              const visibleItems = group.querySelectorAll('[data-keyword-item]:not([style*="display: none"])')
+                              if (visibleItems.length === 0) {
+                                (group as HTMLElement).style.display = 'none'
+                              }
+                            })
+                          }}
+                        />
+                      </div>
+                    </div>
                     {(() => {
                       // Usar organizedKeywords primeiro se disponível, senão organizar dynamicKeywords local
                       const keywordsToUse = Object.keys(organizedKeywords).length > 0 
                         ? organizedKeywords 
-                        : organizeKeywordsByTopics(dynamicKeywords);
+                        : organizeKeywordsByTopics(dynamicKeywords, dynamicDepartments);
                       
                       console.log('🔍 Usando keywords no ProblemEditor:', {
                         organizedKeywordsAvailable: Object.keys(organizedKeywords).length > 0,
                         dynamicKeywordsLength: dynamicKeywords.length,
+                        dynamicDepartmentsLength: dynamicDepartments.length,
                         finalKeywordsCount: Object.values(keywordsToUse).flat().length
                       });
                       
                       return Object.entries(keywordsToUse).map(([topic, keywords]) => (
-                        <div key={topic}>
+                        <div key={topic} data-keyword-group>
                           <div className="px-2 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b">
                             📁 {topic}
                           </div>
                           {keywords.map((kw: string) => (
-                            <SelectItem key={kw} value={kw} className="pl-6">
+                            <SelectItem key={kw} value={kw} className="pl-6" data-keyword-item={kw}>
                               <div className="flex items-center gap-2">
                                 <div className={cn(
                                   "w-2 h-2 rounded-full", 
@@ -4097,9 +4166,33 @@ const ProblemEditor = ({
             <SelectTrigger className="h-9">
               <SelectValue placeholder="Selecione departamento" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-80">
+              {/* 🔍 Campo de busca dentro do dropdown - Departamento */}
+              <div className="sticky top-0 p-2 bg-white dark:bg-gray-900 border-b shadow-sm z-50">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  <Input
+                    placeholder="🔍 Buscar departamento..."
+                    className="pl-9 h-9 text-sm border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      const searchValue = e.target.value.toLowerCase()
+                      const items = document.querySelectorAll('[data-dept-item]')
+                      items.forEach(item => {
+                        const deptText = item.getAttribute('data-dept-item')?.toLowerCase() || ''
+                        if (deptText.includes(searchValue)) {
+                          (item as HTMLElement).style.display = ''
+                        } else {
+                          (item as HTMLElement).style.display = 'none'
+                        }
+                      })
+                    }}
+                  />
+                </div>
+              </div>
               {availableDepartments.map((dept) => (
-                <SelectItem key={dept} value={dept}>
+                <SelectItem key={dept} value={dept} data-dept-item={dept}>
                   <div className="flex items-center gap-2">
                     <div className={cn("w-3 h-3 rounded-full", getSectorColor(dept).replace(/text-\w+-\d+/g, '').replace(/border-\w+-\d+/g, ''))} />
                     {dept}
@@ -4192,8 +4285,32 @@ const ProblemEditor = ({
                     <SelectValue placeholder="Selecione problema" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* 🔍 Campo de busca dentro do dropdown - Problema */}
+                    <div className="sticky top-0 p-2 bg-white dark:bg-gray-900 border-b shadow-sm z-50">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                        <Input
+                          placeholder="🔍 Buscar problema..."
+                          className="pl-9 h-9 text-sm border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const searchValue = e.target.value.toLowerCase()
+                            const items = document.querySelectorAll('[data-problem-item]')
+                            items.forEach(item => {
+                              const problemText = item.getAttribute('data-problem-item')?.toLowerCase() || ''
+                              if (problemText.includes(searchValue)) {
+                                (item as HTMLElement).style.display = ''
+                              } else {
+                                (item as HTMLElement).style.display = 'none'
+                              }
+                            })
+                          }}
+                        />
+                      </div>
+                    </div>
                     {commonProblems.map((prob) => (
-                      <SelectItem key={prob} value={prob}>
+                      <SelectItem key={prob} value={prob} data-problem-item={prob}>
                         {prob === 'VAZIO' ? (
                           <span className="italic text-gray-500">Sem problemas</span>
                         ) : (
@@ -4270,6 +4387,11 @@ function AnalysisPageContent() {
   const [quickDateFilter, setQuickDateFilter] = useState("all")
   const [isRefreshing, setIsRefreshing] = useState(false)
   
+  // 🔍 Estados para busca nos filtros
+  const [sectorSearchTerm, setSectorSearchTerm] = useState("")
+  const [keywordSearchTerm, setKeywordSearchTerm] = useState("")
+  const [problemSearchTerm, setProblemSearchTerm] = useState("")
+  
   // Estados para animação de exclusão
   const [deletingFeedbacks, setDeletingFeedbacks] = useState<Set<string>>(new Set())
   const [showDeletedIndicator, setShowDeletedIndicator] = useState(false)
@@ -4300,13 +4422,18 @@ function AnalysisPageContent() {
   
   // Estado para listas dinâmicas do Firebase
   const [dynamicKeywords, setDynamicKeywords] = useState<string[]>([])
+  const [dynamicDepartments, setDynamicDepartments] = useState<string[]>([])
   
   // Função para carregar e sincronizar listas dinâmicas
-  const refreshDynamicKeywords = async () => {
+  const refreshDynamicLists = async () => {
     try {
       const lists = await getDynamicLists()
       setDynamicKeywords(lists.keywords)
-      console.log('📝 Keywords dinâmicas atualizadas:', lists.keywords.length)
+      setDynamicDepartments(lists.departments)
+      console.log('📝 Listas dinâmicas atualizadas:', {
+        keywords: lists.keywords.length,
+        departments: lists.departments.length
+      })
     } catch (error) {
       console.error('Erro ao carregar listas dinâmicas:', error)
     }
@@ -4314,7 +4441,7 @@ function AnalysisPageContent() {
   
   // Carregar listas dinâmicas quando componente monta
   useEffect(() => {
-    refreshDynamicKeywords()
+    refreshDynamicLists()
   }, [])
 
   const id = searchParams.get('id')
@@ -4369,7 +4496,7 @@ function AnalysisPageContent() {
         try {
           // Usar listas dinâmicas já carregadas ou recarregar se necessário
           if (dynamicKeywords.length === 0) {
-            await refreshDynamicKeywords()
+            await refreshDynamicLists()
           }
           console.log('📋 Keywords do Firebase carregadas:', dynamicKeywords.length)
           
@@ -4422,12 +4549,24 @@ function AnalysisPageContent() {
           }
         })
         
-        // Organizar keywords por tópicos
+        // Organizar keywords por tópicos usando departamentos do Firebase
         const keywordArray = Array.from(uniqueKeywords).sort()
         console.log('🔍 Keywords válidos encontrados:', keywordArray.length)
         console.log('📋 Keywords filtrados:', keywordArray.slice(0, 10), '...') // Mostrar só os primeiros 10
         
-        const organized = organizeKeywordsByTopics(keywordArray)
+        // Aguardar departamentos serem carregados se necessário
+        let departmentsToUse = dynamicDepartments
+        if (departmentsToUse.length === 0) {
+          try {
+            const lists = await getDynamicLists()
+            departmentsToUse = lists.departments
+          } catch (error) {
+            console.error('Erro ao carregar departamentos:', error)
+            departmentsToUse = availableDepartments
+          }
+        }
+        
+        const organized = organizeKeywordsByTopics(keywordArray, departmentsToUse)
         setOrganizedKeywords(organized)
         
         toast({
@@ -4835,6 +4974,31 @@ function AnalysisPageContent() {
     problems: Array.from(new Set(feedbacks.flatMap(f => splitByDelimiter(f.problem || ''))))
   }), [feedbacks])
 
+  // 🔍 Filtrar opções baseado na busca
+  const getFilteredSectors = useMemo(() => {
+    if (!sectorSearchTerm.trim()) return filterOptions.sectors;
+    const search = sectorSearchTerm.toLowerCase();
+    return filterOptions.sectors.filter(sector => 
+      sector.toLowerCase().includes(search)
+    );
+  }, [filterOptions.sectors, sectorSearchTerm]);
+
+  const getFilteredKeywords = useMemo(() => {
+    if (!keywordSearchTerm.trim()) return filterOptions.keywords;
+    const search = keywordSearchTerm.toLowerCase();
+    return filterOptions.keywords.filter(keyword => 
+      keyword.toLowerCase().includes(search)
+    );
+  }, [filterOptions.keywords, keywordSearchTerm]);
+
+  const getFilteredProblems = useMemo(() => {
+    if (!problemSearchTerm.trim()) return filterOptions.problems;
+    const search = problemSearchTerm.toLowerCase();
+    return filterOptions.problems.filter(problem => 
+      problem.toLowerCase().includes(search)
+    );
+  }, [filterOptions.problems, problemSearchTerm]);
+
   // 🚀 OTIMIZADO: clearFilters com useCallback para estabilidade
   const clearFilters = useCallback(() => {
     setSentimentFilter("all")
@@ -4845,6 +5009,11 @@ function AnalysisPageContent() {
     setDateRange(undefined)
     setQuickDateFilter("")
     setSearchTerm("")
+    
+    // 🔍 Limpar campos de busca nos filtros
+    setSectorSearchTerm("")
+    setKeywordSearchTerm("")
+    setProblemSearchTerm("")
   }, [])
 
   // 🚀 OTIMIZADO: exportData com useCallback
@@ -5050,11 +5219,42 @@ function AnalysisPageContent() {
                   <SelectTrigger className="border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 bg-white/80 backdrop-blur-sm">
                     <SelectValue placeholder="Selecionar departamento" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60">
+                    {/* 🔍 Campo de busca dentro do dropdown */}
+                    <div className="sticky top-0 p-2 bg-white dark:bg-gray-900 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
+                        <Input
+                          placeholder="🔍 Buscar departamento..."
+                          value={sectorSearchTerm}
+                          onChange={(e) => setSectorSearchTerm(e.target.value)}
+                          className="pl-8 h-8 text-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        {sectorSearchTerm && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSectorSearchTerm('');
+                            }}
+                            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     <SelectItem value="all">Todos os departamentos</SelectItem>
-                    {filterOptions.sectors.map((sector) => (
+                    {getFilteredSectors.map((sector) => (
                       <SelectItem key={sector} value={sector}>{sector}</SelectItem>
                     ))}
+                    {sectorSearchTerm && getFilteredSectors.length === 0 && (
+                      <div className="px-2 py-1 text-sm text-gray-500 italic">
+                        Nenhum departamento encontrado
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -5069,27 +5269,117 @@ function AnalysisPageContent() {
                   <SelectTrigger className="border-gray-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-all duration-200 bg-white/80 backdrop-blur-sm">
                     <SelectValue placeholder="Selecionar palavra-chave" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60">
+                    {/* 🔍 Campo de busca dentro do dropdown */}
+                    <div className="sticky top-0 p-2 bg-white dark:bg-gray-900 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
+                        <Input
+                          placeholder="🔍 Buscar palavra-chave..."
+                          value={keywordSearchTerm}
+                          onChange={(e) => setKeywordSearchTerm(e.target.value)}
+                          className="pl-8 h-8 text-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        {keywordSearchTerm && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setKeywordSearchTerm('');
+                            }}
+                            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     <SelectItem value="all">Todas as palavras-chave</SelectItem>
-                    {filterOptions.keywords.slice(0, 20).map((keyword) => (
-                      <SelectItem key={keyword} value={keyword}>{keyword}</SelectItem>
-                    ))}
+                    {(() => {
+                      // Organizar keywords por departamentos (igual ao gerenciador)
+                      const organizedKeywords = organizeKeywordsByTopics(getFilteredKeywords, dynamicDepartments);
+                      
+                      return Object.entries(organizedKeywords).map(([topic, keywords]) => (
+                        <div key={topic}>
+                          <div className="px-2 py-2 text-sm font-semibold text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-b">
+                            📁 {topic}
+                          </div>
+                          {keywords.map((kw: string) => (
+                            <SelectItem key={kw} value={kw} className="pl-6">
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "w-2 h-2 rounded-full", 
+                                  getSectorColor(topic).split(' ').find(c => c.startsWith('from-'))?.replace('from-', 'bg-') || 'bg-gray-300'
+                                )} />
+                                {kw}
+                                {!dynamicKeywords.includes(kw) && (
+                                  <Badge variant="outline" className="text-xs ml-auto">
+                                    Custom
+                                  </Badge>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ));
+                    })()}
+                    {keywordSearchTerm && getFilteredKeywords.length === 0 && (
+                      <div className="px-2 py-1 text-sm text-gray-500 italic">
+                        Nenhuma palavra-chave encontrada
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Filtro por problema */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Problema</label>
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  Problema
+                </label>
                 <Select value={problemFilter} onValueChange={setProblemFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-200 transition-all duration-200 bg-white/80 backdrop-blur-sm">
                     <SelectValue placeholder="Selecionar problema" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60">
+                    {/* 🔍 Campo de busca dentro do dropdown */}
+                    <div className="sticky top-0 p-2 bg-white dark:bg-gray-900 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
+                        <Input
+                          placeholder="🔍 Buscar problema..."
+                          value={problemSearchTerm}
+                          onChange={(e) => setProblemSearchTerm(e.target.value)}
+                          className="pl-8 h-8 text-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        {problemSearchTerm && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProblemSearchTerm('');
+                            }}
+                            className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     <SelectItem value="all">Todos os problemas</SelectItem>
-                    {filterOptions.problems.slice(0, 20).map((problem) => (
+                    {getFilteredProblems.slice(0, 50).map((problem) => (
                       <SelectItem key={problem} value={problem}>{problem}</SelectItem>
                     ))}
+                    {problemSearchTerm && getFilteredProblems.length === 0 && (
+                      <div className="px-2 py-1 text-sm text-gray-500 italic">
+                        Nenhum problema encontrado
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -5381,17 +5671,21 @@ function AnalysisPageContent() {
                       const groupedFeedbacks = filteredFeedbacks.reduce((groups, feedback) => {
                         const importDate = (feedback as any).importDate
                         
-                        // Corrigir timezone: adicionar 1 dia para compensar UTC
+                        // ✅ CORREÇÃO: Não adicionar +1 dia! Usar componentes locais da data
                         let dateKey: string
                         if (importDate?.seconds) {
                           const firebaseDate = new Date(importDate.seconds * 1000)
-                          // Adicionar 1 dia para compensar diferença de timezone
-                          firebaseDate.setDate(firebaseDate.getDate() + 1)
-                          dateKey = firebaseDate.toISOString().split('T')[0]
+                          // Usar componentes locais da data (não UTC)
+                          const year = firebaseDate.getFullYear()
+                          const month = String(firebaseDate.getMonth() + 1).padStart(2, '0')
+                          const day = String(firebaseDate.getDate()).padStart(2, '0')
+                          dateKey = `${year}-${month}-${day}`
                         } else {
                           const fallbackDate = new Date(importDate || 0)
-                          fallbackDate.setDate(fallbackDate.getDate() + 1)
-                          dateKey = fallbackDate.toISOString().split('T')[0]
+                          const year = fallbackDate.getFullYear()
+                          const month = String(fallbackDate.getMonth() + 1).padStart(2, '0')
+                          const day = String(fallbackDate.getDate()).padStart(2, '0')
+                          dateKey = `${year}-${month}-${day}`
                         }
                         
                         if (!groups[dateKey]) {
@@ -5642,7 +5936,7 @@ function AnalysisPageContent() {
                             allFeedbacks={filteredFeedbacks}
                             currentIndex={realIndex >= 0 ? realIndex : 0}
                             organizedKeywords={organizedKeywords}
-                            onKeywordsUpdated={refreshDynamicKeywords}
+                            onKeywordsUpdated={refreshDynamicLists}
                             onNavigate={(newIndex) => {
                               // Garantir que o newIndex está dentro dos limites dos feedbacks filtrados
                               if (newIndex >= 0 && newIndex < filteredFeedbacks.length) {

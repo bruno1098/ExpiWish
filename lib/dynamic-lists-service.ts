@@ -23,77 +23,9 @@ interface DynamicLists {
   };
 }
 
-// Listas padrão que sempre estarão disponíveis
-const DEFAULT_KEYWORDS = [
-  'Experiência',
-  'Localização',
-  'A&B - Café da manhã',
-  'A&B - Serviço',
-  'A&B - Variedade',
-  'A&B - Preço',
-  'Limpeza - Quarto',
-  'Limpeza - Banheiro',
-  'Limpeza - Áreas sociais',
-  'Enxoval',
-  'Manutenção - Quarto',
-  'Manutenção - Banheiro',
-  'Manutenção - Instalações',
-  'Ar-condicionado',
-  'Elevador',
-  'Frigobar',
-  'Infraestrutura',
-  'Lazer - Variedade',
-  'Lazer - Estrutura',
-  'Spa',
-  'Piscina',
-  'Tecnologia - Wi-fi',
-  'Tecnologia - TV',
-  'Estacionamento',
-  'Atendimento',
-  'Acessibilidade',
-  'Reserva de cadeiras (pool)',
-  'Processo',
-  'Custo-benefício',
-  'Comunicação',
-  'Check-in - Atendimento',
-  'Check-out - Atendimento',
-  'Concierge',
-  'Cotas',
-  'Reservas'
-];
-
-const DEFAULT_PROBLEMS = [
-  'VAZIO',
-  'Demora no Atendimento',
-  'Falta de Limpeza',
-  'Capacidade Insuficiente',
-  'Falta de Cadeiras',
-  'Não Funciona',
-  'Conexão Instável',
-  'Ruído Excessivo',
-  'Espaço Insuficiente',
-  'Qualidade da Comida',
-  'Muito Frio',
-  'Muito Quente',
-  'Pressão de Vendas',
-  'Check-in Lento',
-  'Check-out Lento'
-];
-
-const DEFAULT_DEPARTMENTS = [
-  'A&B',
-  'Governança', 
-  'Manutenção',
-  'Lazer',
-  'TI',
-  'Operações',
-  'Produto',
-  'Marketing',
-  'Comercial',
-  'Qualidade',
-  'Recepção',
-  'Programa de vendas'
-];
+// ⚠️ REMOVIDO: Listas DEFAULT hardcoded
+// Sistema agora usa 100% dados do Firebase
+// Para adicionar itens padrão, use o Firebase Console ou a interface de configuração
 
 // Nome da coleção no Firebase
 const DYNAMIC_LISTS_COLLECTION = 'dynamic-lists';
@@ -101,23 +33,16 @@ const GLOBAL_LISTS_DOC = 'global-lists';
 
 /**
  * Verifica se um item é padrão do sistema (não pode ser editado/removido)
+ * ⚠️ ATUALIZADO: Agora todos os itens podem ser editados (100% Firebase)
  */
 export const isDefaultItem = (item: string, type: 'keyword' | 'problem' | 'department'): boolean => {
-  switch (type) {
-    case 'keyword':
-      return DEFAULT_KEYWORDS.includes(item);
-    case 'problem':
-      return DEFAULT_PROBLEMS.includes(item);
-    case 'department':
-      return DEFAULT_DEPARTMENTS.includes(item);
-    default:
-      return false;
-  }
+  // Todos os itens agora são editáveis - removido conceito de "default"
+  return false;
 };
 
 /**
  * Busca as listas dinâmicas do Firebase
- * Se não existirem, cria com os valores padrão
+ * ⚠️ ATUALIZADO: Retorna APENAS dados do Firebase (sem merge com defaults)
  */
 export const getDynamicLists = async (): Promise<DynamicLists> => {
   try {
@@ -131,47 +56,47 @@ export const getDynamicLists = async (): Promise<DynamicLists> => {
       let keywordsArray: string[] = [];
       
       if (typeof data.keywords === 'object' && !Array.isArray(data.keywords)) {
-        // Nova estrutura: MAP por departamento
-        keywordsArray = Object.values(data.keywords).flat() as string[];
+        // Nova estrutura: MAP por departamento com objetos {label, details}
+        const allKeywordObjects = Object.values(data.keywords).flat();
+        keywordsArray = allKeywordObjects.map((kw: any) => 
+          typeof kw === 'string' ? kw : kw.label
+        );
       } else if (Array.isArray(data.keywords)) {
         // Estrutura antiga: ARRAY flat
-        keywordsArray = data.keywords;
+        keywordsArray = data.keywords.map((kw: any) => 
+          typeof kw === 'string' ? kw : kw.label
+        );
       }
       
-      // Garantir que as listas padrão estejam sempre incluídas
-      const keywordSet = new Set([...DEFAULT_KEYWORDS, ...keywordsArray]);
-      const problemSet = new Set([...DEFAULT_PROBLEMS, ...(data.problems || [])]);
-      const departmentSet = new Set([...DEFAULT_DEPARTMENTS, ...(data.departments || [])]);
+      // Processar problems - agora também são objetos {label, details}
+      const problemsArray = (data.problems || []).map((prob: any) =>
+        typeof prob === 'string' ? prob : prob.label
+      );
       
-      const mergedKeywords = Array.from(keywordSet);
-      const mergedProblems = Array.from(problemSet);
-      const mergedDepartments = Array.from(departmentSet);
-      
+      // ✅ APENAS dados do Firebase - sem merge com defaults
       return {
-        keywords: mergedKeywords.sort(),
-        problems: mergedProblems.sort(),
-        departments: mergedDepartments.sort(),
+        keywords: keywordsArray.sort(),
+        problems: problemsArray.sort(),
+        departments: (data.departments || []).sort(),
         lastUpdated: data.lastUpdated || Timestamp.now()
       };
     } else {
-      // Criar documento inicial com listas padrão
-      const initialData: DynamicLists = {
-        keywords: DEFAULT_KEYWORDS.sort(),
-        problems: DEFAULT_PROBLEMS.sort(),
-        departments: DEFAULT_DEPARTMENTS.sort(),
+      // Documento não existe - retornar listas vazias
+      console.warn('⚠️ Documento dynamic-lists não encontrado no Firebase. Configure as listas primeiro.');
+      return {
+        keywords: [],
+        problems: [],
+        departments: [],
         lastUpdated: Timestamp.now()
       };
-      
-      await setDoc(docRef, initialData);
-      return initialData;
     }
   } catch (error) {
-    console.error('Erro ao buscar listas dinâmicas:', error);
-    // Retornar listas padrão em caso de erro
+    console.error('❌ Erro ao buscar listas dinâmicas:', error);
+    // Retornar listas vazias em caso de erro
     return {
-      keywords: DEFAULT_KEYWORDS.sort(),
-      problems: DEFAULT_PROBLEMS.sort(),
-      departments: DEFAULT_DEPARTMENTS.sort(),
+      keywords: [],
+      problems: [],
+      departments: [],
       lastUpdated: Timestamp.now()
     };
   }
@@ -308,17 +233,13 @@ export const addDepartment = async (department: string): Promise<boolean> => {
 
 /**
  * Remove uma palavra-chave da lista global
+ * ⚠️ ATUALIZADO: Todos os itens agora podem ser removidos (100% Firebase)
  */
 export const removeKeyword = async (keyword: string): Promise<boolean> => {
   try {
     const trimmedKeyword = keyword.trim();
     if (!trimmedKeyword) {
       throw new Error('Palavra-chave não pode estar vazia');
-    }
-    
-    // Verificar se é uma palavra-chave padrão
-    if (DEFAULT_KEYWORDS.includes(trimmedKeyword)) {
-      throw new Error('Não é possível remover palavras-chave padrão do sistema');
     }
     
     const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
@@ -339,17 +260,13 @@ export const removeKeyword = async (keyword: string): Promise<boolean> => {
 
 /**
  * Remove um problema da lista global
+ * ⚠️ ATUALIZADO: Todos os itens agora podem ser removidos (100% Firebase)
  */
 export const removeProblem = async (problem: string): Promise<boolean> => {
   try {
     const trimmedProblem = problem.trim();
     if (!trimmedProblem) {
       throw new Error('Problema não pode estar vazio');
-    }
-    
-    // Verificar se é um problema padrão
-    if (DEFAULT_PROBLEMS.includes(trimmedProblem)) {
-      throw new Error('Não é possível remover problemas padrão do sistema');
     }
     
     const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
@@ -370,17 +287,13 @@ export const removeProblem = async (problem: string): Promise<boolean> => {
 
 /**
  * Remove um departamento da lista global
+ * ⚠️ ATUALIZADO: Todos os itens agora podem ser removidos (100% Firebase)
  */
 export const removeDepartment = async (department: string): Promise<boolean> => {
   try {
     const trimmedDepartment = department.trim();
     if (!trimmedDepartment) {
       throw new Error('Departamento não pode estar vazio');
-    }
-    
-    // Verificar se é um departamento padrão
-    if (DEFAULT_DEPARTMENTS.includes(trimmedDepartment)) {
-      throw new Error('Não é possível remover departamentos padrão do sistema');
     }
     
     const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
@@ -401,6 +314,7 @@ export const removeDepartment = async (department: string): Promise<boolean> => 
 
 /**
  * Edita uma palavra-chave existente
+ * ⚠️ ATUALIZADO: Todos os itens agora podem ser editados (100% Firebase)
  */
 export const editKeyword = async (oldKeyword: string, newKeyword: string): Promise<boolean> => {
   try {
@@ -413,11 +327,6 @@ export const editKeyword = async (oldKeyword: string, newKeyword: string): Promi
     
     if (trimmedOld === trimmedNew) {
       return true; // Não há mudança
-    }
-    
-    // Verificar se é uma palavra-chave padrão
-    if (DEFAULT_KEYWORDS.includes(trimmedOld)) {
-      throw new Error('Não é possível editar palavras-chave padrão do sistema');
     }
     
     const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
@@ -449,6 +358,7 @@ export const editKeyword = async (oldKeyword: string, newKeyword: string): Promi
 
 /**
  * Edita um problema existente
+ * ⚠️ ATUALIZADO: Todos os itens agora podem ser editados (100% Firebase)
  */
 export const editProblem = async (oldProblem: string, newProblem: string): Promise<boolean> => {
   try {
@@ -461,11 +371,6 @@ export const editProblem = async (oldProblem: string, newProblem: string): Promi
     
     if (trimmedOld === trimmedNew) {
       return true; // Não há mudança
-    }
-    
-    // Verificar se é um problema padrão
-    if (DEFAULT_PROBLEMS.includes(trimmedOld)) {
-      throw new Error('Não é possível editar problemas padrão do sistema');
     }
     
     const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);
@@ -497,6 +402,7 @@ export const editProblem = async (oldProblem: string, newProblem: string): Promi
 
 /**
  * Edita um departamento existente
+ * ⚠️ ATUALIZADO: Todos os itens agora podem ser editados (100% Firebase)
  */
 export const editDepartment = async (oldDepartment: string, newDepartment: string): Promise<boolean> => {
   try {
@@ -509,11 +415,6 @@ export const editDepartment = async (oldDepartment: string, newDepartment: strin
     
     if (trimmedOld === trimmedNew) {
       return true; // Não há mudança
-    }
-    
-    // Verificar se é um departamento padrão
-    if (DEFAULT_DEPARTMENTS.includes(trimmedOld)) {
-      throw new Error('Não é possível editar departamentos padrão do sistema');
     }
     
     const docRef = doc(db, DYNAMIC_LISTS_COLLECTION, GLOBAL_LISTS_DOC);

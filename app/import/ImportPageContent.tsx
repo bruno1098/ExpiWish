@@ -28,6 +28,7 @@ import SharedDashboardLayout from "../shared-layout"
 import { cn } from "@/lib/utils"
 import { getPerformanceProfile, estimateProcessingTime, formatEstimatedTime } from "@/lib/performance-config"
 import { processAIResponse, type LegacyFeedback } from "@/lib/ai-compatibility-adapter"
+import { toLocalDateString, excelSerialToDate, brazilianDateToISO, getNowBrasilia } from "@/lib/data-utils"
 
 // Configurações de processamento - OTIMIZADAS PARA PERFORMANCE
 const BATCH_SIZE = 100;
@@ -38,8 +39,9 @@ const REQUEST_DELAY = 50;
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 // Função para gerar ID único no formato hotelId_ddmmaa_hhmmss_mmm_counter
-const generateUniqueId = (hotelId: string) => {
-  const now = new Date();
+// ✅ Aceita um Date opcional para garantir consistência com importDate
+const generateUniqueId = (hotelId: string, timestamp?: Date) => {
+  const now = timestamp || getNowBrasilia(); // Usar timestamp fornecido ou pegar atual
   const day = now.getDate().toString().padStart(2, '0');
   const month = (now.getMonth() + 1).toString().padStart(2, '0');
   const year = now.getFullYear().toString().slice(-2); // Últimos 2 dígitos do ano
@@ -1194,22 +1196,21 @@ function ImportPageContent() {
           console.error('1. A coluna B não contém dados de data');
           console.error('2. O formato da planilha está diferente do esperado');
           console.error('3. As datas estão em outra coluna');
-          return new Date().toISOString();
+          return toLocalDateString(getNowBrasilia());
         }
 
         try {
-          let date: Date;
-
           // CASO 1: Número (Serial Date do Excel)
           if (typeof excelDate === 'number') {
 
-            // Excel serial date: 1 = 1/1/1900, ajuste para JavaScript
+            // Excel serial date: usar função centralizada que corrige fuso horário
             if (excelDate > 0 && excelDate < 2958466) { // Validar range razoável (1900-9999)
-              date = new Date((excelDate - 25569) * 86400 * 1000);
-              console.log('✅ Data convertida do serial:', date.toISOString());
+              const dateString = excelSerialToDate(excelDate);
+              console.log('✅ Data convertida do serial:', dateString);
+              return dateString;
             } else {
               console.error('❌ Número serial fora do range válido:', excelDate);
-              return new Date().toISOString();
+              return toLocalDateString(getNowBrasilia());
             }
           }
           // CASO 2: String com formato de data
@@ -1219,74 +1220,82 @@ function ImportPageContent() {
 
             // Formato brasileiro DD/MM/YYYY ou DD/MM/YY
             if (trimmedDate.includes('/')) {
-              const parts = trimmedDate.split('/');
-              if (parts.length === 3) {
-                const day = parts[0].padStart(2, '0');
-                const month = parts[1].padStart(2, '0');
-                let year = parts[2];
+              try {
+                const isoString = brazilianDateToISO(trimmedDate);
+                console.log('✅ Data convertida do formato DD/MM/YYYY:', trimmedDate, '→', isoString);
+                return isoString;
+              } catch (error) {
+                console.error('❌ Erro ao converter data brasileira:', trimmedDate, error);
+                // Fallback para conversão manual
+                const parts = trimmedDate.split('/');
+                if (parts.length === 3) {
+                  const day = parts[0].padStart(2, '0');
+                  const month = parts[1].padStart(2, '0');
+                  let year = parts[2];
 
-                // Ajustar ano de 2 dígitos
-                if (year.length === 2) {
-                  const currentYear = new Date().getFullYear();
-                  const century = Math.floor(currentYear / 100) * 100;
-                  year = (parseInt(year) + century).toString();
+                  // Ajustar ano de 2 dígitos
+                  if (year.length === 2) {
+                    const currentYear = getNowBrasilia().getFullYear();
+                    const century = Math.floor(currentYear / 100) * 100;
+                    year = (parseInt(year) + century).toString();
+                  }
+
+                  return `${year}-${month}-${day}`;
+                } else {
+                  return toLocalDateString(getNowBrasilia());
                 }
-
-                const isoString = `${year}-${month}-${day}`;
-                date = new Date(isoString);
-                console.log('✅ Data convertida do formato DD/MM/YYYY:', isoString, '→', date.toISOString());
-              } else {
-                date = new Date(trimmedDate);
               }
             }
             // Formato ISO YYYY-MM-DD
             else if (trimmedDate.includes('-')) {
-              date = new Date(trimmedDate);
-              console.log('✅ Data convertida do formato ISO:', date.toISOString());
+              // ⚠️ IMPORTANTE: new Date('YYYY-MM-DD') cria em UTC meia-noite
+              // Isso causa problemas de fuso horário (-3h em Brasília)
+              // Solução: parsear manualmente e criar data local
+              const [year, month, day] = trimmedDate.split('-').map(Number);
+              if (year && month && day && !isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                const localDate = new Date(year, month - 1, day); // Mês é 0-indexed
+                console.log('✅ Data convertida do formato ISO (local):', trimmedDate, '→', toLocalDateString(localDate));
+                return toLocalDateString(localDate);
+              } else {
+                console.error('❌ Erro ao parsear data ISO:', trimmedDate);
+                return toLocalDateString(getNowBrasilia());
+              }
             }
             // Outros formatos
             else {
-              date = new Date(trimmedDate);
-              console.log('✅ Data convertida (formato automático):', date.toISOString());
+              const localDate = new Date(trimmedDate);
+              if (!isNaN(localDate.getTime())) {
+                console.log('✅ Data convertida (formato automático):', toLocalDateString(localDate));
+                return toLocalDateString(localDate);
+              } else {
+                console.error('❌ Data inválida:', trimmedDate);
+                return toLocalDateString(getNowBrasilia());
+              }
             }
           }
           // CASO 3: Já é um objeto Date
           else if (excelDate instanceof Date) {
-
-            date = excelDate;
+            if (!isNaN(excelDate.getTime())) {
+              console.log('✅ Data já é objeto Date:', toLocalDateString(excelDate));
+              return toLocalDateString(excelDate);
+            } else {
+              console.error('❌ Objeto Date inválido');
+              return toLocalDateString(getNowBrasilia());
+            }
           }
           // CASO 4: Formato não reconhecido
           else {
             console.error('❌ Formato de data não reconhecido:', excelDate);
             console.error('Tipo recebido:', typeof excelDate);
             console.error('Valor:', excelDate);
-            return new Date().toISOString();
+            return toLocalDateString(getNowBrasilia());
           }
-
-          // Validar se a data resultante é válida
-          if (isNaN(date.getTime())) {
-            console.error('❌ Data inválida após conversão:', date);
-            console.error('Valor original:', excelDate);
-            return new Date().toISOString();
-          }
-
-          // Verificar se a data está em um range razoável
-          const year = date.getFullYear();
-          if (year < 1900 || year > 2100) {
-            console.error('❌ Data fora do range esperado (1900-2100):', date);
-            console.error('Valor original:', excelDate);
-            return new Date().toISOString();
-          }
-
-          const result = date.toISOString();
-
-          return result;
 
         } catch (error) {
           console.error('❌ ERRO ao processar data:', error);
           console.error('Valor original:', excelDate);
           console.error('Tipo:', typeof excelDate);
-          return new Date().toISOString();
+          return toLocalDateString(getNowBrasilia());
         }
       };
 
@@ -1302,7 +1311,22 @@ function ImportPageContent() {
         // Começar da linha 2 para pular o cabeçalho (índice 1 = linha 2 no Excel)
         for (let row = 1; row <= range.e.r; row++) {
           const cellB = worksheet[utils.encode_cell({ r: row, c: 1 })]; // Coluna B (data do feedback)
-          const dataFeedback = cellB?.v || cellB?.w; // Tentar valor formatado (.w) se valor bruto (.v) não existir
+          
+          // ⚠️ IMPORTANTE: Priorizar .v (valor bruto/serial number) sobre .w (string formatada)
+          // .v contém o número serial do Excel (ex: 45924 = 23/09/2025)
+          // .w contém string formatada (ex: "2025-09-23") que causa problemas de timezone
+          let dataFeedback = cellB?.v;
+          if (!dataFeedback && cellB?.w) {
+            console.log('⚠️ Usando .w como fallback para linha', row + 1, '- valor:', cellB.w);
+            dataFeedback = cellB.w;
+          }
+          
+          console.log(`📅 Linha ${row + 1} - Célula B:`, { 
+            v: cellB?.v, 
+            w: cellB?.w, 
+            t: cellB?.t, 
+            usado: dataFeedback 
+          });
 
           const nomeHotel = worksheet[utils.encode_cell({ r: row, c: 2 })]?.v;
           const fonte = worksheet[utils.encode_cell({ r: row, c: 3 })]?.v;
@@ -1884,21 +1908,21 @@ function ImportPageContent() {
       // Salvar os feedbacks no Firestore
       const saved = await storeFeedbacks(feedbacks);
 
-      // Preparar análise para salvar
-      // Calcular a data mais recente dos feedbacks ou a data média
-      const feedbackDates = feedbacks
-        .map(f => new Date(f.date))
-        .filter(date => !isNaN(date.getTime()));
-
-      const mostRecentFeedbackDate = feedbackDates.length > 0
-        ? new Date(Math.max(...feedbackDates.map(date => date.getTime())))
-        : new Date();
+      // ⚠️ IMPORTANTE: Capturar o momento EXATO da importação (Brasília)
+      // Esta data será usada como importDate e deve refletir quando a análise foi feita
+      const importMoment = getNowBrasilia();
+      console.log('📅 MOMENTO DA IMPORTAÇÃO CAPTURADO:', {
+        date: importMoment,
+        isoString: importMoment.toISOString(),
+        localString: toLocalDateString(importMoment),
+        timestamp: importMoment.getTime()
+      });
 
       const analysisToSave = {
         // Remover o campo 'id' interno - o saveAnalysis vai gerar o ID do documento
         hotelId: hotelId,
         hotelName: hotelName,
-        importDate: mostRecentFeedbackDate, // Usar a data mais recente dos feedbacks
+        importDate: importMoment, // ✅ Usar momento exato da importação (Brasília)
         data: feedbacks,
         analysis: {
           totalFeedbacks: feedbacks.length,
