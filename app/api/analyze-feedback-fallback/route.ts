@@ -51,22 +51,84 @@ export async function POST(request: NextRequest) {
     let selectedProblem = null;
     let department = 'Operacoes';
     
-    // Detectar contexto de A&B
-    if (text.includes('comida') || text.includes('garçom') || text.includes('atend') || text.includes('restaurante')) {
+    // Detectar contexto de A&B (somente com sinais claros de restaurante/bar)
+    const hasABContext = (
+      text.includes('comida') ||
+      text.includes('restaurante') ||
+      text.includes('café') ||
+      text.includes('jantar') ||
+      text.includes('almoço') ||
+      text.includes('bar') ||
+      text.includes('bebida') ||
+      text.includes('garçom') ||
+      text.includes('gastronomia') ||
+      text.includes('refeição') ||
+      text.includes('room service') ||
+      text.includes('serviço de quarto') ||
+      text.includes('servico de quarto')
+    );
+
+    const hasReceptionContext = (
+      text.includes('recepção') ||
+      text.includes('front desk') ||
+      text.includes('check-in') ||
+      text.includes('check-out')
+    );
+
+    const mentionsServiceStaff = (
+      text.includes('atendimento') ||
+      text.includes('atendente') ||
+      text.includes('equipe') ||
+      text.includes('staff') ||
+      text.includes('funcionário') ||
+      text.includes('funcionarios') ||
+      text.includes('colaborador')
+    );
+
+    if (hasABContext) {
       department = 'A&B';
-      
-      // Buscar keyword de A&B - Serviço
-      selectedKeyword = taxonomy.keywords.find(kw => 
-        kw.label.includes('A&B') && kw.label.includes('Serviço')
+      const hasRoomService = (
+        text.includes('room service') ||
+        text.includes('serviço de quarto') ||
+        text.includes('servico de quarto')
       );
-      
-      // Buscar problem de demora
-      if (text.includes('demorou') || text.includes('demora')) {
-        selectedProblem = taxonomy.problems.find(prob =>
-          prob.label.toLowerCase().includes('demora') && 
-          prob.label.toLowerCase().includes('atend')
-        );
-      }
+      // Priorizar A&B - Room Service quando houver menção explícita
+      selectedKeyword = hasRoomService
+        ? (
+            taxonomy.keywords.find(kw => kw.label.includes('A&B') && kw.label.includes('Room Service')) ||
+            taxonomy.keywords.find(kw => kw.label.includes('A&B') && kw.label.includes('Serviço'))
+          )
+        : taxonomy.keywords.find(kw => kw.label.includes('A&B') && kw.label.includes('Serviço'));
+    } else if (hasReceptionContext) {
+      department = 'Recepção';
+      selectedKeyword = taxonomy.keywords.find(kw => 
+        kw.label.includes('Recepção') && kw.label.includes('Atendimento')
+      );
+    } else if (mentionsServiceStaff) {
+      department = 'Operações';
+      selectedKeyword =
+        taxonomy.keywords.find(kw => kw.label.includes('Operações') && kw.label.includes('Atendimento')) ||
+        taxonomy.keywords.find(kw => kw.label === 'Atendimento') ||
+        null;
+    }
+
+    // Buscar problem de demora específico do departamento, quando aplicável
+    if (text.includes('demorou') || text.includes('demora')) {
+      const findByDept = (deptLabel: string) => taxonomy.problems.find(prob =>
+        prob.label.toLowerCase().includes('demora') &&
+        prob.label.toLowerCase().includes('atend') &&
+        prob.label.includes(deptLabel)
+      );
+
+      selectedProblem =
+        (department === 'A&B' && findByDept('A&B')) ||
+        (department === 'Operações' && findByDept('Operações')) ||
+        (department === 'Recepção' && findByDept('Recepção')) ||
+        taxonomy.problems.find(prob => prob.label.toLowerCase() === 'demora no atendimento') ||
+        taxonomy.problems.find(prob =>
+          prob.label.toLowerCase().includes('demora') && prob.label.toLowerCase().includes('atend')
+        ) ||
+        null;
     }
     
     // Fallback para matches encontrados

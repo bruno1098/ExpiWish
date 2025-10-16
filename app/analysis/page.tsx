@@ -1318,7 +1318,7 @@ const CommentModal = ({
     
     // � CORREÇÃO: Comparar apenas se realmente mudou para evitar loop infinito
     const newKeywords = processedProblems.map(p => p.keyword).join(';');
-    const currentKeywords = editedProblems.map(p => p.keyword).join(';');
+        const currentKeywords = editedProblems.map(p => p.keyword).join(';');
     
     // ✅ LÓGICA OTIMIZADA: só atualiza se dados realmente mudaram E não está salvando
     if (!isSaving && newKeywords !== currentKeywords) {
@@ -2008,8 +2008,8 @@ const CommentModal = ({
       // Converter problemas editados de volta para formato string com ';' (removendo o ID)
       const problemsWithoutId = editedProblems.map(({ id, ...problem }) => problem)
       const keywords = problemsWithoutId.map(p => p.keyword).join(';')
-      const sectors = problemsWithoutId.map(p => p.sector).join(';')
-      const problems = problemsWithoutId.map(p => p.problem).join(';')
+        const sectors = problemsWithoutId.map(p => p.sector).join(';')
+        const problems = problemsWithoutId.map(p => p.problem).join(';')
       
       // Atualizar feedback local
       const updatedFeedback = {

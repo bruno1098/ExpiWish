@@ -207,7 +207,7 @@ export default function HotelDetalhes() {
       // Processar departamentos
       const sectorCounts: Record<string, number> = {}
       allFeedbacks.forEach(f => {
-        if (f.sector) {
+        if (f.sector && !f.sector.startsWith('+')) {
           sectorCounts[f.sector] = (sectorCounts[f.sector] || 0) + 1
         }
       })
@@ -402,7 +402,7 @@ export default function HotelDetalhes() {
     // Recalcular setores baseado nos feedbacks filtrados
     const sectorCounts: Record<string, number> = {}
     filteredFeedbacks.forEach(f => {
-      if (f.sector) {
+      if (f.sector && !f.sector.startsWith('+')) {
         sectorCounts[f.sector] = (sectorCounts[f.sector] || 0) + 1
       }
     })
@@ -966,6 +966,12 @@ export default function HotelDetalhes() {
                     label: problem.name,
                     value: problem.count
                   }))
+                })()}
+                contextRows={(() => {
+                  const filteredData = getFilteredData()
+                  return selectedSentiment !== 'all' && filteredData
+                    ? filteredData.filteredFeedbacks
+                    : hotelData.recentFeedbacks
                 })()}
               />
             </Card>

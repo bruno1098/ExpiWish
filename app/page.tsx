@@ -37,7 +37,7 @@ import { getAllAnalyses } from "@/lib/firestore-service"
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Feedback } from "@/types"
-import { ProblemsDashboard } from "./components/ProblemsDashboard"
+
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -415,7 +415,7 @@ const InteractiveModal = ({ title, isOpen, onClose, selectedItem, allFeedbacks }
   // Agrupar por setores
   const sectorCounts: Record<string, number> = {};
   filteredFeedbacks.forEach(feedback => {
-    if (feedback.sector) {
+    if (feedback.sector && !feedback.sector.startsWith('+')) {
       sectorCounts[feedback.sector] = (sectorCounts[feedback.sector] || 0) + 1;
     }
   });

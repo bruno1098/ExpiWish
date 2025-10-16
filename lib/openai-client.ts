@@ -109,16 +109,13 @@ export async function analyzeWithGPT(
         problem: problem.problem || ''
       }));
       
-      // Concatenar múltiplos problemas com ponto e vírgula, removendo duplicatas
+      // Usar apenas o primeiro problema principal (mais relevante) ao invés de concatenar
       if (allProblems.length > 0) {
-        // Usar Set para remover duplicatas
-        const uniqueKeywords = Array.from(new Set(allProblems.map(p => p.keyword)));
-        const uniqueSectors = Array.from(new Set(allProblems.map(p => p.sector)));
-        const uniqueProblems = Array.from(new Set(allProblems.map(p => p.problem).filter(p => p.trim() !== '')));
-        
-        keyword = uniqueKeywords.join(';');
-        sector = uniqueSectors.join(';');
-        problem = uniqueProblems.join(';');
+        // Pegar o primeiro problema válido como principal
+        const firstProblem = allProblems[0];
+        keyword = firstProblem.keyword;
+        sector = firstProblem.sector;
+        problem = firstProblem.problem;
       }
     } else if (result.response && typeof result.response === 'string') {
       // Compatibilidade com estrutura antiga (caso ainda seja usada)
@@ -201,4 +198,4 @@ export function clearAnalysisCache() {
 // Função para obter o tamanho do cache
 export function getCacheSize() {
   return analysisCache.size;
-} 
+}

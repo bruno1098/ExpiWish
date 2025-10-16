@@ -88,7 +88,7 @@ const MODERN_COLORS = {
   // Cores específicas por categoria
   categories: {
     department: {
-      background: 'rgba(99, 102, 241, 0.8)',   // Indigo para departamentos
+      background: 'rgba(99, 102, 241, 0.8)',   // Indigo (fallback para departamentos)
       border: 'rgba(99, 102, 241, 1)',
       hover: 'rgba(99, 102, 241, 0.9)'
     },
@@ -96,6 +96,12 @@ const MODERN_COLORS = {
       background: 'rgba(16, 185, 129, 0.8)',   // Emerald para palavras-chave
       border: 'rgba(16, 185, 129, 1)',
       hover: 'rgba(16, 185, 129, 0.9)'
+    },
+    // Problemas terão cores por item, então este bloco é só fallback
+    problem: {
+      background: 'rgba(96, 165, 250, 0.8)',   // Azul médio como fallback
+      border: 'rgba(96, 165, 250, 1)',
+      hover: 'rgba(96, 165, 250, 0.9)'
     },
     language: {
       background: 'rgba(245, 158, 11, 0.8)',   // Amber para idiomas
@@ -187,6 +193,52 @@ const MODERN_COLORS = {
     neutro: 'rgba(245, 158, 11, 1)',
     negativo: 'rgba(239, 68, 68, 1)',
   }
+};
+
+// Mapa de cores por rating específico
+const RATING_COLORS: Record<number, string> = {
+  1: 'rgba(239, 68, 68, 0.8)',   // Vermelho
+  2: 'rgba(251, 146, 60, 0.8)',  // Laranja
+  3: 'rgba(245, 158, 11, 0.8)',  // Amarelo
+  4: 'rgba(34, 197, 94, 0.8)',   // Verde
+  5: 'rgba(59, 130, 246, 0.8)',  // Azul
+};
+
+const RATING_BORDER_COLORS: Record<number, string> = {
+  1: 'rgba(239, 68, 68, 1)',
+  2: 'rgba(251, 146, 60, 1)',
+  3: 'rgba(245, 158, 11, 1)',
+  4: 'rgba(34, 197, 94, 1)',
+  5: 'rgba(59, 130, 246, 1)',
+};
+
+// Cores por setor de problema (alinhadas com o restante do admin)
+const PROBLEM_SECTOR_COLORS: Record<string, string> = {
+  'A&B': 'rgba(14, 165, 233, 0.85)',          // Sky Blue (mais distinto de Lazer)
+  'Governança': 'rgba(239, 68, 68, 0.85)',    // Red
+  'Manutenção': 'rgba(245, 158, 11, 0.85)',   // Amber
+  'Recepção': 'rgba(6, 182, 212, 0.85)',      // Cyan
+  'TI': 'rgba(139, 92, 246, 0.85)',           // Violet
+  'Lazer': 'rgba(34, 197, 94, 0.85)',         // Green
+  'Operações': 'rgba(251, 146, 60, 0.85)',    // Orange
+  'Produto': 'rgba(67, 56, 202, 0.85)',       // Indigo Dark (mais contraste)
+  'Corporativo': 'rgba(236, 72, 153, 0.85)',  // Pink
+  'EG': 'rgba(190, 18, 60, 0.85)',            // Rose Dark
+  'Outros': 'rgba(156, 163, 175, 0.85)',      // Gray
+};
+
+const PROBLEM_SECTOR_BORDERS: Record<string, string> = {
+  'A&B': 'rgba(14, 165, 233, 1)',
+  'Governança': 'rgba(239, 68, 68, 1)',
+  'Manutenção': 'rgba(245, 158, 11, 1)',
+  'Recepção': 'rgba(6, 182, 212, 1)',
+  'TI': 'rgba(139, 92, 246, 1)',
+  'Lazer': 'rgba(34, 197, 94, 1)',
+  'Operações': 'rgba(251, 146, 60, 1)',
+  'Produto': 'rgba(67, 56, 202, 1)',
+  'Corporativo': 'rgba(236, 72, 153, 1)',
+  'EG': 'rgba(190, 18, 60, 1)',
+  'Outros': 'rgba(156, 163, 175, 1)',
 };
 
 // Configurações padrão para todos os gráficos
@@ -284,7 +336,9 @@ interface ModernChartProps {
   showValues?: boolean;
   maxItems?: number;
   isSentiment?: boolean;
-  categoryType?: 'department' | 'keyword' | 'language' | 'source' | 'rating';
+  categoryType?: 'department' | 'keyword' | 'language' | 'source' | 'rating' | 'problem';
+  // Linhas de feedback atuais para contextualizar tooltips
+  contextRows?: any[];
 }
 
 export function ModernChart({ 
@@ -296,7 +350,8 @@ export function ModernChart({
   showValues = false,
   maxItems,
   isSentiment,
-  categoryType 
+  categoryType,
+  contextRows
 }: ModernChartProps) {
   const [themeKey, setThemeKey] = useState(0);
 
@@ -344,6 +399,25 @@ export function ModernChart({
     return isBackground ? MODERN_COLORS.primary[0] : MODERN_COLORS.borders[0];
   };
   
+  // Detecta setor pelo início do label (antes do " - ")
+  const extractProblemSector = (rawLabel: string): string => {
+    if (!rawLabel) return 'Outros';
+    const base = rawLabel.split(';')[0]; // se houver concatenação
+    const first = base.split('-')[0].trim();
+    const normalized = first.toLowerCase();
+    if (normalized.startsWith('a&b')) return 'A&B';
+    if (normalized.startsWith('gover') || normalized.startsWith('limpeza')) return 'Governança';
+    if (normalized.startsWith('manuten')) return 'Manutenção';
+    if (normalized.startsWith('recep')) return 'Recepção';
+    if (normalized === 'ti' || normalized.startsWith('ti')) return 'TI';
+    if (normalized.startsWith('lazer')) return 'Lazer';
+    if (normalized.startsWith('opera')) return 'Operações';
+    if (normalized.startsWith('produto')) return 'Produto';
+    if (normalized.startsWith('corpor')) return 'Corporativo';
+    if (normalized.startsWith('eg')) return 'EG';
+    return first || 'Outros';
+  };
+
   // Função para obter cores por categoria
   const getCategoryColors = () => {
     if (shouldUseSentimentColors) {
@@ -353,7 +427,68 @@ export function ModernChart({
         hover: limitedData.map(item => getSentimentColor(item.name || item.label || '', true).replace('0.8', '0.9'))
       };
     }
-    
+
+    // Problemas: cores por item com base no setor
+    if (categoryType === 'problem') {
+      const backgrounds = limitedData.map(item => {
+        const sector = extractProblemSector(String(item.name || item.label || ''));
+        return PROBLEM_SECTOR_COLORS[sector] || PROBLEM_SECTOR_COLORS['Outros'];
+      });
+      const borders = limitedData.map(item => {
+        const sector = extractProblemSector(String(item.name || item.label || ''));
+        return PROBLEM_SECTOR_BORDERS[sector] || PROBLEM_SECTOR_BORDERS['Outros'];
+      });
+      return {
+        background: backgrounds,
+        border: borders,
+        hover: backgrounds.map(c => c.replace('0.8', '0.9')),
+      };
+    }
+
+    // Departamentos: cores específicas por área
+    if (categoryType === 'department') {
+      const backgrounds = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        const sector = extractProblemSector(label);
+        return PROBLEM_SECTOR_COLORS[sector] || PROBLEM_SECTOR_COLORS['Outros'];
+      });
+      const borders = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        const sector = extractProblemSector(label);
+        return PROBLEM_SECTOR_BORDERS[sector] || PROBLEM_SECTOR_BORDERS['Outros'];
+      });
+      return {
+        background: backgrounds,
+        border: borders,
+        hover: backgrounds.map(c => c.replace('0.8', '0.9')),
+      };
+    }
+
+    // Avaliações: cores por estrela
+    if (categoryType === 'rating') {
+      const getRatingFromLabel = (raw: string): number => {
+        const match = raw.match(/(\d+)/);
+        const num = match ? parseInt(match[1], 10) : NaN;
+        if (Number.isNaN(num) || num < 1 || num > 5) return 0;
+        return num as 1|2|3|4|5;
+      };
+      const backgrounds = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        const r = getRatingFromLabel(label);
+        return RATING_COLORS[r] || MODERN_COLORS.categories.rating.background;
+      });
+      const borders = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        const r = getRatingFromLabel(label);
+        return RATING_BORDER_COLORS[r] || MODERN_COLORS.categories.rating.border;
+      });
+      return {
+        background: backgrounds,
+        border: borders,
+        hover: backgrounds.map(c => c.replace('0.8', '0.9')),
+      };
+    }
+
     if (categoryType && MODERN_COLORS.categories[categoryType]) {
       const categoryColors = MODERN_COLORS.categories[categoryType];
       return {
@@ -389,8 +524,8 @@ export function ModernChart({
   const chartData = {
     labels: limitedData.map(item => {
       const label = item.name || item.label || '';
-      // Truncar labels muito longos
-      return label && typeof label === 'string' && label.length > 20 ? label.substring(0, 17) + '...' : label;
+      // Exibir labels completos sem truncar
+      return label;
     }),
     datasets: [
       {
@@ -410,6 +545,25 @@ export function ModernChart({
   // Configurações específicas por tipo de gráfico
   const getOptions = (): any => {
     const baseOptions = { ...getThemeAwareOptions() };
+
+    // Utilitário para quebrar linhas de labels longos
+    const wrapLabel = (text: string, max = 24): string[] | string => {
+      if (!text || typeof text !== 'string') return text;
+      if (text.length <= max) return text;
+      const words = text.split(' ');
+      const lines: string[] = [];
+      let current = '';
+      for (const w of words) {
+        if ((current + (current ? ' ' : '') + w).length > max) {
+          if (current) lines.push(current);
+          current = w;
+        } else {
+          current = current ? current + ' ' + w : w;
+        }
+      }
+      if (current) lines.push(current);
+      return lines;
+    };
     
     if (type === 'horizontalBar') {
       return {
@@ -421,6 +575,64 @@ export function ModernChart({
             ...baseOptions.plugins.legend,
             display: false,
           },
+          tooltip: {
+            ...baseOptions.plugins.tooltip,
+            callbacks: {
+              label: (context: any) => {
+                try {
+                  // Em gráficos horizontais do Chart.js, context.parsed pode ser um objeto {x, y}
+                  // Usamos o valor numérico (raw/x) para evitar "[object Object]" no tooltip
+                  const parsedValue =
+                    typeof context.raw === 'number'
+                      ? context.raw
+                      : typeof context.parsed === 'object'
+                        ? (context.parsed?.x ?? context.parsed?.y ?? 0)
+                        : context.parsed;
+                  const base = `${context.label}: ${parsedValue}`;
+                  // Somente para problemas com contexto
+                  if (categoryType !== 'problem' || !contextRows || !Array.isArray(contextRows) || contextRows.length === 0) {
+                    return base;
+                  }
+                  const idx = context.dataIndex ?? context.index;
+                  const label = String(limitedData[idx]?.name || limitedData[idx]?.label || context.label || '');
+                  const rows = contextRows.filter((r: any) => matchesProblemLabel(r, label));
+                  if (!rows.length) return base;
+                  const details = aggregateProblemDetails(rows, label);
+                  if (!details.length) return base;
+                  const lines = [base, '', 'Detalhes mais citados:'];
+                  details.forEach(d => {
+                    lines.push(`${d.detail} • ${d.count} (${d.pct.toFixed(0)}%)`);
+                  });
+                  // Embora Chart.js aceite string[], alguns temas podem não renderizar corretamente.
+                  // Mantemos apenas a linha base aqui; os detalhes são exibidos via afterBody.
+                  return base;
+                } catch {
+                  return `${context.label}: ${context.parsed}`;
+                }
+              },
+              // Mantém o label padrão e adiciona detalhes após o corpo
+              afterBody: (items: any[]) => {
+                try {
+                  if (!items || !items.length) return [];
+                  const idx = items[0].dataIndex ?? items[0].index;
+                  const label = String(limitedData[idx]?.name || limitedData[idx]?.label || '');
+                  // Apenas para gráficos de problema quando há contexto disponível
+                  if (categoryType !== 'problem' || !contextRows || !Array.isArray(contextRows) || contextRows.length === 0) {
+                    return [];
+                  }
+                  const rows = contextRows.filter((r: any) => matchesProblemLabel(r, label));
+                  if (!rows.length) return [];
+                  const details = aggregateProblemDetails(rows, label);
+                  if (!details.length) return [];
+                  const header = 'Detalhes mais citados:';
+                  const lines = details.map(d => `${d.detail} • ${d.count} (${d.pct.toFixed(0)}%)`);
+                  return [header, ...lines];
+                } catch {
+                  return [];
+                }
+              },
+            },
+          },
         },
         scales: {
           x: {
@@ -431,6 +643,15 @@ export function ModernChart({
             ...baseOptions.scales.y,
             grid: {
               display: false,
+            },
+            // Melhorar legibilidade com quebras de linha e leve padding
+            ticks: {
+              ...baseOptions.scales.y.ticks,
+              padding: 6,
+              callback: (value: any, index: number) => {
+                const raw = String(limitedData[index]?.name || limitedData[index]?.label || value || '');
+                return wrapLabel(raw, 28);
+              },
             },
           },
         },
@@ -567,10 +788,11 @@ export function ModernChart({
 }
 
 // Componente específico para gráfico de problemas (horizontal)
-export function ProblemsChart({ data, onClick, maxItems = 8 }: {
+export function ProblemsChart({ data, onClick, maxItems = 8, contextRows }: {
   data: ChartData[];
   onClick?: (item: ChartData, index: number) => void;
   maxItems?: number;
+  contextRows?: any[];
 }) {
   return (
     <ModernChart
@@ -579,6 +801,8 @@ export function ProblemsChart({ data, onClick, maxItems = 8 }: {
       onClick={onClick}
       height={Math.max(300, maxItems * 40)}
       maxItems={maxItems}
+      categoryType="problem"
+      contextRows={contextRows}
     />
   );
 }
@@ -594,14 +818,16 @@ export function RatingsChart({ data, onClick }: {
       type="bar"
       onClick={onClick}
       height={350}
+      categoryType="rating"
     />
   );
 }
 
 // Componente específico para gráfico de departamentos (pizza)
-export function DepartmentsChart({ data, onClick }: {
+export function DepartmentsChart({ data, onClick, maxItems }: {
   data: ChartData[];
   onClick?: (item: ChartData, index: number) => void;
+  maxItems?: number;
 }) {
   return (
     <ModernChart
@@ -610,6 +836,7 @@ export function DepartmentsChart({ data, onClick }: {
       onClick={onClick}
       height={400}
       categoryType="department"
+      maxItems={maxItems}
     />
   );
 }
@@ -726,3 +953,126 @@ export function ProblemsDistributionChart({ data, onClick }: {
     />
   );
 }
+    // ===== Tooltip helpers com contexto =====
+    const normalize = (v: any): string => {
+      if (!v) return '';
+      const s = String(v)
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, ''); // remove acentos
+      return s;
+    };
+    const extractProblemLabelName = (raw: string): string => {
+      if (!raw) return '';
+      const s = String(raw);
+      const normalizedDash = s.replace(' – ', ' - ');
+      const parts = normalizedDash.split('-');
+      if (parts.length > 1) {
+        // usa parte após o primeiro "-" como nome do problema
+        return parts.slice(1).join('-').trim();
+      }
+      return s.trim();
+    };
+    const extractLabelParts = (raw: string): { department: string; problem: string } => {
+      if (!raw) return { department: '', problem: '' };
+      const s = String(raw).replace(' – ', ' - ');
+      const parts = s.split('-');
+      const department = (parts[0] || '').trim();
+      const problem = parts.length > 1 ? parts.slice(1).join('-').trim() : '';
+      return { department, problem };
+    };
+    const matchesProblemLabel = (row: any, label: string): boolean => {
+      try {
+        const { department, problem } = extractLabelParts(label);
+        const depTarget = normalize(department);
+        const probTarget = normalize(problem);
+        if (!probTarget || !depTarget) return false;
+        // Preferir estrutura com allProblems
+        if (Array.isArray(row?.allProblems)) {
+          return row.allProblems.some((p: any) => {
+            const pMain = normalize(p?.problem);
+            const pDept = normalize(p?.sector ?? p?.department);
+            return pDept === depTarget && pMain.includes(probTarget);
+          });
+        }
+        // Fallback: checar setor e problema nos campos simples
+        const sectorRaw = String(row?.sector || row?.department || '').trim();
+        const sectors = sectorRaw
+          ? sectorRaw.split(/[;,|]/).map((s: string) => normalize(s))
+          : [];
+        const sectorMatches = sectors.includes(depTarget);
+        if (!sectorMatches) return false;
+        const main = normalize(row?.problem_main ?? '');
+        if (main && main.includes(probTarget)) return true;
+        if (typeof row?.problem === 'string') {
+          const parts = row.problem.split(';').map((s: string) => normalize(extractProblemLabelName(s)));
+          return parts.some((s: string) => s.includes(probTarget));
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    };
+    const aggregateProblemDetails = (rows: any[], selectedLabel?: string) => {
+      const map = new Map<string, { detail: string; count: number; ratingSum: number }>();
+      const parts = selectedLabel ? extractLabelParts(selectedLabel) : { department: '', problem: '' };
+      const depTarget = normalize(parts.department);
+      const probTarget = normalize(parts.problem);
+      for (const r of rows) {
+        if (Array.isArray(r?.allProblems) && depTarget && probTarget) {
+          for (const p of r.allProblems) {
+            const pMain = normalize(p?.problem);
+            const pDept = normalize(p?.sector ?? p?.department);
+            if (!pMain || !pDept || pDept !== depTarget || !pMain.includes(probTarget)) continue;
+            const det = String(p?.problem_detail ?? '').trim();
+            if (!det) continue;
+            const key = normalize(det);
+            const rating = parseFloat(String(r?.rating ?? r?.rating_value ?? 0)) || 0;
+            const prev = map.get(key);
+            if (prev) {
+              prev.count += 1;
+              prev.ratingSum += rating;
+            } else {
+              map.set(key, { detail: det, count: 1, ratingSum: rating });
+            }
+          }
+          continue;
+        }
+        if (depTarget && probTarget) {
+          const sectorRaw = String(r?.sector || r?.department || '').trim();
+          const sectors = sectorRaw
+            ? sectorRaw.split(/[;,|]/).map((s: string) => normalize(s))
+            : [];
+          const sectorMatches = sectors.includes(depTarget);
+          if (!sectorMatches) continue;
+          const main = normalize(r?.problem_main ?? '');
+          const list = typeof r?.problem === 'string'
+            ? r.problem.split(';').map((s: string) => normalize(extractProblemLabelName(s)))
+            : [];
+          const matches = (main && main.includes(probTarget)) || list.some((s: string) => s.includes(probTarget));
+          if (!matches) continue;
+        }
+        const det = String(r?.problem_detail ?? '').trim();
+        if (!det) continue;
+        const key = normalize(det);
+        const rating = parseFloat(String(r?.rating ?? r?.rating_value ?? 0)) || 0;
+        const prev = map.get(key);
+        if (prev) {
+          prev.count += 1;
+          prev.ratingSum += rating;
+        } else {
+          map.set(key, { detail: det, count: 1, ratingSum: rating });
+        }
+      }
+      const total = rows.length || 1;
+      const agg = Array.from(map.values()).map(v => ({
+        detail: v.detail,
+        count: v.count,
+        avg: v.ratingSum && v.count ? (v.ratingSum / v.count) : 0,
+        pct: (v.count / total) * 100,
+      }));
+      agg.sort((a, b) => b.count - a.count || b.pct - a.pct);
+      return agg.slice(0, 4); // top 4 detalhes
+    };

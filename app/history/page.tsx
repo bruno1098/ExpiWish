@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAllAnalyses, clearAnalysesCache } from '@/lib/firestore-service';
 import { Card } from '@/components/ui/card';
@@ -39,6 +39,23 @@ function HistoryPageContent() {
   const router = useRouter();
   const { userData } = useAuth();
   const { toast } = useToast();
+
+  // Notificar dashboards administrativos para invalidar cache e recarregar dados
+  const notifyAdminDashboardsUpdated = useCallback((reason: string) => {
+    try {
+      if (typeof window !== 'undefined' && (window as any).BroadcastChannel) {
+        const channel = new BroadcastChannel('admin-dashboard-sync');
+        channel.postMessage({ type: 'invalidate_admin_cache', reason, timestamp: Date.now() });
+        channel.close();
+      }
+      // Fallback via localStorage para disparar evento 'storage' entre abas
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('admin-dashboard-cache-invalidated', Date.now().toString());
+      }
+    } catch (e) {
+      console.warn('Falha ao notificar dashboards administrativos:', e);
+    }
+  }, []);
 
   // Função para recarregar as análises do Firebase
   const reloadAnalyses = async () => {
@@ -234,6 +251,8 @@ function HistoryPageContent() {
 
       // SOLUÇÃO: Pequeno delay e recarregar a lista completa do Firebase
       // Dar tempo para o Firebase processar a exclusão
+      // Notificar admin para limpar cache e recarregar imediatamente
+      notifyAdminDashboardsUpdated('delete-analysis');
       setTimeout(async () => {
         await reloadAnalyses();
       }, 500);
@@ -287,6 +306,8 @@ function HistoryPageContent() {
       }
 
       // Recarregar a lista para refletir as mudanças
+      // Notificar admin para limpar cache e recarregar imediatamente
+      notifyAdminDashboardsUpdated(currentlyHidden ? 'unhide-analysis' : 'hide-analysis');
       setTimeout(async () => {
         await reloadAnalyses();
       }, 300);
@@ -358,6 +379,8 @@ function HistoryPageContent() {
       }
       
       // Recarregar a lista após ocultar todas
+      // Notificar admin para limpar cache e recarregar imediatamente
+      notifyAdminDashboardsUpdated('hide-all-analyses');
       setTimeout(async () => {
         await reloadAnalyses();
       }, 500);

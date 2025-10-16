@@ -1,12 +1,16 @@
 /**
- * Sistema de Enriquecimento Semântico - ATUALIZADO
+ * Sistema de Enriquecimento Semântico - RECONSTRUÍDO
  * 
- * Taxonomia: 44 keywords organizadas em 10 departamentos
- * Última atualização: 04/10/2025
+ * Taxonomia: keywords definidas pelo cliente (apenas as listadas)
+ * Última atualização: 13/10/2025
+ * 
+ * Observação: A&B sempre refere-se a Alimentos & Bebidas (restaurante/bar).
+ * As listas de sinônimos e termos mantêm o contexto de cada área
+ * para reduzir confusão entre departamentos diferentes.
  */
 
 /**
- * Dicionário de contexto semântico para Keywords
+ * Dicionário de contexto semântico para Keywords (apenas as solicitadas)
  */
 export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
   synonyms: string[];
@@ -14,1383 +18,1227 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
   colloquial_variations: string[];
   examples: string[];
 }> = {
-  // ========== A&B (ALIMENTOS & BEBIDAS) - 6 keywords ==========
-  
+  // ========== A&B (ALIMENTOS & BEBIDAS) ==========
+
   "A&B - Café da manhã": {
-    synonyms: ["breakfast", "desjejum", "primeira refeição", "café"],
+    synonyms: [
+      "breakfast", "desjejum", "buffet matinal", "refeição matinal",
+      "café da manhã", "manhã", "serviço de café"
+    ],
     related_terms: [
-      "comida", "refeição", "buffet", "alimento", "pão", "bolo", "fruta", 
-      "suco", "leite", "queijo", "presunto", "ovo", "tapioca", "iogurte", 
-      "cereal", "granola", "café preto", "café com leite", "chá"
+      "A&B", "alimentos", "bebidas", "restaurante", "buffet",
+      "pães", "frutas", "suco", "iogurte", "café", "chá",
+      "variedade", "qualidade", "temperatura", "fresco"
     ],
     colloquial_variations: [
-      "café da manhã", "café", "breakfast", "manhã", "buffet da manhã"
+      "café", "breakfast", "buffet do café", "comida da manhã"
     ],
     examples: [
-      "café da manhã estava delicioso",
-      "buffet da manhã variado",
-      "breakfast excelente"
+      "buffet de café da manhã variado", "breakfast excelente", "café fresquinho"
     ]
   },
 
   "A&B - Jantar": {
-    synonyms: ["dinner", "janta", "refeição da noite", "jantar"],
+    synonyms: [
+      "dinner", "janta", "refeição noturna", "jantar"
+    ],
     related_terms: [
-      "comida", "prato", "refeição", "noite", "restaurante", "menu", 
-      "cardápio", "jantar", "ceia"
+      "A&B", "alimentos", "bebidas", "restaurante", "menu", "cardápio",
+      "pratos", "tempero", "qualidade", "horário do jantar"
     ],
     colloquial_variations: [
-      "jantar", "janta", "comida da noite", "dinner"
+      "janta", "comida da noite", "dinner"
     ],
     examples: [
-      "jantar estava ótimo",
-      "comida do jantar deliciosa",
-      "restaurante no jantar excelente"
+      "jantar muito saboroso", "cardápio do jantar variado", "restaurante à noite excelente"
     ]
   },
 
   "A&B - Almoço": {
-    synonyms: ["lunch", "refeição do meio-dia", "almoço"],
+    synonyms: [
+      "lunch", "refeição do meio-dia", "almoço"
+    ],
     related_terms: [
-      "comida", "prato", "refeição", "meio-dia", "restaurante", "menu"
+      "A&B", "alimentos", "bebidas", "restaurante", "menu", "pratos",
+      "meio-dia", "qualidade", "variedade", "serviço"
     ],
     colloquial_variations: [
-      "almoço", "almoçar", "comida do meio-dia", "lunch"
+      "almoçar", "comida do almoço", "lunch"
     ],
     examples: [
-      "almoço estava ótimo",
-      "comida do almoço deliciosa"
+      "almoço bem servido", "menu do almoço completo", "refeição do meio-dia ótima"
     ]
   },
 
   "A&B - Serviço": {
-    synonyms: ["atendimento restaurante", "serviço restaurante", "staff A&B"],
+    synonyms: [
+      "atendimento do restaurante", "serviço A&B", "garçom", "garçonete",
+      "maître", "recepção do restaurante", "preço das refeições", "cardápio"
+    ],
     related_terms: [
-      "garçom", "garçonete", "atendente", "funcionário", "staff",
-      "atendimento", "serviço", "prestativo", "atencioso", "educado",
-      "preço", "cardápio", "menu", "variedade", "opções",
-      "restaurante", "bar", "café da manhã", "maître", "recepção do restaurante"
+      "A&B", "alimentos", "bebidas", "restaurante", "bar", "café da manhã",
+      "tempo de atendimento", "pedido", "entrega", "conta", "cobrança",
+      "menu", "variedade", "opções", "preço do prato"
     ],
     colloquial_variations: [
-      "garçom", "moço", "moça", "atendente", "pessoal do restaurante"
+      "pessoal do restaurante", "garçom", "maître", "menu"
     ],
     examples: [
-      "garçom muito atencioso",
-      "atendimento do restaurante excelente",
-      "atendente do café da manhã muito educada",
-      "recepção do restaurante com serviço impecável",
-      "maître do restaurante prestativo",
-      "preço justo no restaurante",
-      "cardápio variado"
+      "garçom prestativo", "menu claro e preços justos", "atendimento do restaurante excelente"
     ]
   },
 
   "A&B - Gastronomia": {
-    synonyms: ["culinária", "cozinha", "comida", "alimentação", "food"],
+    synonyms: [
+      "culinária", "cozinha", "comida", "alimentação", "food", "preparo"
+    ],
     related_terms: [
-      "comida", "prato", "refeição", "sabor", "tempero", "qualidade",
-      "delicioso", "saboroso", "gostoso", "bem feito", "fresco"
+      "A&B", "alimentos", "bebidas", "sabor", "tempero", "qualidade",
+      "fresco", "bem feito", "apresentação", "chef"
     ],
     colloquial_variations: [
-      "comida", "comidinha", "pratão", "refeição"
+      "comida", "cozinha", "gastronomia"
     ],
     examples: [
-      "comida estava deliciosa",
-      "pratos muito bem feitos",
-      "gastronomia excelente"
+      "gastronomia excelente", "pratos muito bem preparados", "sabor impecável"
     ]
   },
 
   "A&B - Room Service": {
-    synonyms: ["serviço de quarto", "room service", "comida no quarto"],
+    synonyms: [
+      "serviço de quarto A&B", "room service", "pedido no quarto", "entrega no quarto"
+    ],
     related_terms: [
-      "quarto", "pedido", "entrega", "telefone", "cardápio",
-      "comida", "bebida", "atendimento", "demora", "rápido"
+      "A&B", "alimentos", "bebidas", "telefone", "cardápio", "pedido",
+      "tempo de entrega", "taxa de serviço", "horário", "noite"
     ],
     colloquial_variations: [
-      "room service", "comida no quarto", "pedido no quarto"
+      "room service", "comida no quarto", "pedido do quarto"
     ],
     examples: [
-      "room service rápido",
-      "comida no quarto deliciosa",
-      "serviço de quarto eficiente"
+      "room service rápido", "comida no quarto saborosa", "pedido entregue quente"
     ]
   },
 
-  // ========== GOVERNANÇA (LIMPEZA) - 6 keywords ==========
-  
+  // ========== GOVERNANÇA (LIMPEZA) ==========
+
   "Limpeza - Banheiro": {
-    synonyms: ["higiene do banheiro", "limpeza sanitária"],
+    synonyms: [
+      "higiene do banheiro", "limpeza sanitária", "banheiro limpo", "banheiro sujo"
+    ],
     related_terms: [
-      "banheiro limpo", "banheiro sujo", "sanitário limpo", "toalete limpo", 
-      "lavabo limpo", "pia suja", "vaso sujo", "box sujo", "chuveiro sujo",
-      "azulejo sujo", "espelho sujo", "higiene", "sujeira", "limpar"
+      "housekeeping", "camareira", "pia", "vaso", "box", "chuveiro",
+      "azulejo", "espelho", "sujeira", "desinfecção", "odor"
     ],
     colloquial_variations: [
-      "banheiro sujo", "banheiro limpo", "wc sujo", "lavabo sujo"
+      "lavabo", "toalete", "wc", "banheiro"
     ],
     examples: [
-      "banheiro estava sujo",
-      "falta de limpeza no banheiro",
-      "banheiro limpíssimo",
-      "pia do banheiro suja"
+      "banheiro impecável", "box com manchas", "pia do banheiro suja"
     ]
   },
 
   "Limpeza - Quarto": {
-    synonyms: ["arrumação", "higiene", "cleaning", "housekeeping"],
+    synonyms: [
+      "arrumação", "higiene do quarto", "limpeza do quarto", "housekeeping"
+    ],
     related_terms: [
-      "quarto limpo", "quarto sujo", "acomodação limpa", "arrumado", "bagunçado",
-      "camareira", "governança", "cama suja", "lençol sujo", "toalha suja", 
-      "chão sujo", "poeira", "sujeira", "limpeza", "arrumação"
+      "camareira", "cama", "lençol", "toalha", "poeira", "organização",
+      "aspiração", "troca de roupas", "checklist de limpeza", "cheiro"
     ],
     colloquial_variations: [
-      "quarto sujo", "quarto limpo", "arrumação", "camareira"
+      "quarto limpo", "quarto sujo", "arrumado", "bagunçado"
     ],
     examples: [
-      "quarto estava sujo",
-      "falta de limpeza no quarto",
-      "quarto limpíssimo",
-      "camareira não limpou"
+      "quarto muito bem limpo", "lençóis trocados", "poeira no móvel"
     ]
   },
 
   "Limpeza - Áreas sociais": {
-    synonyms: ["limpeza áreas comuns", "higiene espaços comuns"],
+    synonyms: [
+      "limpeza de áreas comuns", "higiene de espaços", "áreas sociais limpas"
+    ],
     related_terms: [
-      "lobby", "recepção", "corredor", "elevador", "piscina", "academia",
-      "restaurante", "limpo", "sujo", "organizado"
+      "lobby", "recepção", "corredores", "elevadores", "piscina", "academia",
+      "restaurante", "organização", "coleta", "frequência de limpeza"
     ],
     colloquial_variations: [
       "áreas comuns", "espaços comuns", "lobby"
     ],
     examples: [
-      "áreas comuns sempre limpas",
-      "lobby organizado",
-      "espaços bem cuidados"
+      "lobby sempre limpo", "corredores bem cuidados", "espaços comuns impecáveis"
     ]
   },
 
   "Limpeza - Enxoval": {
-    synonyms: ["roupa de cama", "lençóis", "toalhas"],
+    synonyms: [
+      "roupa de cama", "lençóis", "toalhas", "enxoval"
+    ],
     related_terms: [
-      "lençol", "toalha", "fronha", "cobertor", "travesseiro",
-      "limpo", "sujo", "manchado", "rasgado", "novo", "velho"
+      "fronha", "cobertor", "travesseiro", "maciez", "manchas", "rasgos",
+      "cheiro", "troca", "qualidade", "higienização"
     ],
     colloquial_variations: [
       "lençol", "toalha", "roupa de cama"
     ],
     examples: [
-      "lençóis limpos",
-      "toalhas macias",
-      "enxoval de qualidade"
+      "toalhas macias", "lençóis limpos", "enxoval com manchas"
     ]
   },
 
   "Limpeza - Amenities": {
-    synonyms: ["amenidades", "produtos de banho", "itens de cortesia"],
+    synonyms: [
+      "amenidades", "produtos de banho", "itens de cortesia"
+    ],
     related_terms: [
-      "shampoo", "sabonete", "condicionador", "creme", "gel",
-      "escova", "pente", "cotonete", "qualidade", "falta"
+      "shampoo", "sabonete", "condicionador", "creme", "cotonete",
+      "reposição", "qualidade", "falta", "fragrância", "kit banho"
     ],
     colloquial_variations: [
       "amenities", "produtos", "itens de banho"
     ],
     examples: [
-      "amenities de qualidade",
-      "produtos de banho bons",
-      "faltou shampoo"
+      "amenities completos", "faltou shampoo", "produtos de banho de qualidade"
     ]
   },
 
   "Limpeza - Frigobar": {
-    synonyms: ["frigobar", "minibar", "geladeira do quarto"],
+    synonyms: [
+      "frigobar", "minibar", "geladeira do quarto"
+    ],
     related_terms: [
-      "frigobar", "bebida", "água", "refrigerante", "cerveja",
-      "limpo", "sujo", "gelado", "quente", "preço", "caro"
+      "organização", "higiene", "temperatura", "inventário", "reposição",
+      "verificação", "limpeza", "controle de itens"
     ],
     colloquial_variations: [
-      "frigobar", "geladeira", "minibar"
+      "minibar", "geladeira", "frigobar"
     ],
     examples: [
-      "frigobar limpo",
-      "bebidas geladas",
-      "preço alto no frigobar"
+      "frigobar limpo", "bebidas geladas", "itens faltando no minibar"
     ]
   },
 
-  // ========== MANUTENÇÃO - 6 keywords ==========
-  
+  // ========== MANUTENÇÃO ==========
+
   "Manutenção - Ar-condicionado": {
-    synonyms: ["climatização", "ar condicionado", "AC"],
+    synonyms: [
+      "ar condicionado", "climatização", "AC", "refrigeração"
+    ],
     related_terms: [
-      "ar", "temperatura", "frio", "quente", "gelado", "não funciona",
-      "quebrado", "barulhento", "ruidoso", "pingando", "vazando"
+      "temperatura", "frio", "quente", "não gela", "vazamento",
+      "barulho", "filtro", "manutenção", "regulagem", "controle remoto"
     ],
     colloquial_variations: [
       "ar", "ar condicionado", "climatização"
     ],
     examples: [
-      "ar condicionado não funcionava",
-      "ar não gelava",
-      "ar barulhento"
+      "ar não gelava", "AC barulhento", "vazamento no ar"
+    ]
+  },
+
+  "Manutenção - Elétrica": {
+    synonyms: [
+      "instalação elétrica", "rede elétrica", "energia", "iluminação"
+    ],
+    related_terms: [
+      "tomada", "disjuntor", "fusível", "curto-circuito", "quadro elétrico",
+      "lâmpada", "interruptor", "queda de energia", "voltagem", "fio"
+    ],
+    colloquial_variations: [
+      "tomada queimada", "luz piscando", "falta de energia"
+    ],
+    examples: [
+      "tomada não funciona", "luz oscilando", "disjuntor desarmando"
     ]
   },
 
   "Manutenção - Banheiro": {
-    synonyms: ["reparo banheiro", "conserto banheiro"],
+    synonyms: [
+      "reparo banheiro", "conserto banheiro", "manutenção sanitária"
+    ],
     related_terms: [
       "chuveiro", "torneira", "vaso", "descarga", "ralo",
-      "vazamento", "entupido", "quebrado", "pingando"
+      "vazamento", "entupimento", "box", "vedação", "pressão da água"
     ],
     colloquial_variations: [
       "chuveiro quebrado", "vaso entupido", "torneira pingando"
     ],
     examples: [
-      "chuveiro não funcionava",
-      "vaso sanitário entupido",
-      "torneira pingando"
+      "chuveiro sem pressão", "vaso sanitário entupido", "torneira pingando"
     ]
   },
 
   "Manutenção - Instalações": {
-    synonyms: ["infraestrutura", "estrutura física", "instalações", "espaço", "tamanho"],
+    synonyms: [
+      "infraestrutura", "estrutura física", "instalações"
+    ],
     related_terms: [
       "parede", "teto", "piso", "porta", "janela", "fechadura",
-      "rachadura", "infiltração", "mofo", "umidade",
-      "banheiro apertado", "banheiro pequeno", "banheiro estreito",
-      "quarto apertado", "quarto pequeno", "quarto estreito",
-      "espaço", "tamanho", "dimensão", "apertado", "pequeno", "estreito",
-      "área", "amplo", "grande", "reduzido", "compacto"
+      "rachadura", "infiltração", "mofo", "umidade", "reforma"
     ],
     colloquial_variations: [
-      "infraestrutura", "estrutura", "instalações", "apertado", "pequeno"
+      "infraestrutura", "estrutura", "instalações"
     ],
     examples: [
-      "instalações precisam de reforma",
-      "infraestrutura antiga",
-      "parede com infiltração",
-      "banheiro muito apertado",
-      "quarto pequeno demais",
-      "espaço reduzido"
+      "parede com infiltração", "mofo no teto", "fechadura com problema"
     ]
   },
 
   "Manutenção - Quarto": {
-    synonyms: ["reparo quarto", "conserto quarto"],
+    synonyms: [
+      "reparo no quarto", "conserto no quarto", "manutenção de quarto"
+    ],
     related_terms: [
-      "tv", "controle", "tomada", "luz", "lâmpada", "cortina",
-      "persiana", "fechadura", "porta", "janela", "não funciona"
+      "cama quebrada", "controle", "tomada", "lâmpada", "cortina", "persiana",
+      "porta", "janela", "fechadura", "não funciona"
     ],
     colloquial_variations: [
-      "tv não funciona", "luz queimada", "tomada quebrada"
+      "cama quebrada", "luz queimada", "tomada quebrada"
     ],
     examples: [
-      "tv não ligava",
-      "lâmpada queimada",
-      "tomada não funcionava"
+      "tv sem sinal", "lâmpada queimada", "tomada sem energia"
     ]
   },
 
   "Manutenção - Elevador": {
-    synonyms: ["elevadores", "ascensor"],
+    synonyms: [
+      "elevadores", "ascensor", "lift"
+    ],
     related_terms: [
-      "elevador", "não funciona", "quebrado", "lento", "demora",
-      "parado", "fora de serviço", "escada"
+      "parado", "fora de serviço", "lento", "demora", "ruído",
+      "manutenção", "sinalização", "capacidade", "sensor", "porta do elevador"
     ],
     colloquial_variations: [
       "elevador", "elevadores", "lift"
     ],
     examples: [
-      "elevador não funcionava",
-      "elevadores sempre quebrados",
-      "demora no elevador"
+      "elevador não funcionava", "demora no elevador", "porta travando"
     ]
   },
 
   "Manutenção - Jardinagem": {
-    synonyms: ["jardim", "paisagismo", "área verde"],
+    synonyms: [
+      "jardim", "paisagismo", "área verde"
+    ],
     related_terms: [
-      "jardim", "planta", "grama", "árvore", "flor",
-      "bem cuidado", "mal cuidado", "bonito", "feio"
+      "grama", "árvore", "flor", "poda", "rega", "canteiro",
+      "horta", "ornamentação", "limpeza externa", "manutenção"
     ],
     colloquial_variations: [
-      "jardim", "área verde", "paisagem"
+      "área verde", "paisagem", "jardim"
     ],
     examples: [
-      "jardim bem cuidado",
-      "área verde bonita",
-      "plantas bonitas"
+      "jardim bem cuidado", "grama aparada", "área verde bonita"
     ]
   },
 
-  // ========== RECEPÇÃO - 4 keywords ==========
-  
+  // ========== RECEPÇÃO ==========
+
   "Recepção - Estacionamento": {
-    synonyms: ["garagem", "vaga", "parking"],
+    synonyms: [
+      "garagem", "vaga", "parking", "estacionamento"
+    ],
     related_terms: [
-      "estacionamento", "garagem", "vaga", "carro", "veículo",
-      "manobrista", "grátis", "pago", "seguro", "longe", "perto"
+      "carro", "veículo", "manobrista", "coberto", "descoberto",
+      "grátis", "pago", "seguro", "perto", "longe"
     ],
     colloquial_variations: [
-      "estacionamento", "garagem", "vaga"
+      "garagem", "vaga", "estacionamento"
     ],
     examples: [
-      "estacionamento gratuito",
-      "garagem segura",
-      "faltou vaga"
+      "estacionamento gratuito", "garagem segura", "faltou vaga"
     ]
   },
 
   "Recepção - Check-in": {
-    synonyms: ["entrada", "chegada", "registro"],
+    synonyms: [
+      "entrada", "chegada", "registro", "check-in"
+    ],
     related_terms: [
-      "check-in", "entrada", "chegada", "registro", "recepção",
-      "demorado", "rápido", "eficiente", "fila", "processo"
+      "recepção", "fila", "tempo", "documentos", "processo",
+      "cadastro", "chave", "liberação de quarto", "horário"
     ],
     colloquial_variations: [
-      "check-in", "entrada", "chegada"
+      "entrada", "chegada", "check-in"
     ],
     examples: [
-      "check-in demorado",
-      "processo de entrada lento",
-      "check-in eficiente"
+      "check-in demorado", "entrada rápida", "processo eficiente"
     ]
   },
 
   "Recepção - Check-out": {
-    synonyms: ["saída", "partida", "encerramento"],
+    synonyms: [
+      "saída", "partida", "encerramento", "check-out"
+    ],
     related_terms: [
-      "check-out", "saída", "partida", "recepção", "conta",
-      "demorado", "rápido", "eficiente"
+      "recepção", "conta", "pagamento", "tempo", "fatura",
+      "devolução de cartão", "aviso", "horário"
     ],
     colloquial_variations: [
-      "check-out", "saída", "partida"
+      "saída", "partida", "check-out"
     ],
     examples: [
-      "check-out demorado",
-      "processo de saída lento",
-      "check-out eficiente"
+      "check-out rápido", "processo de saída lento", "pagamento eficiente"
     ]
   },
 
   "Recepção - Serviço": {
-    synonyms: ["atendimento recepção", "front desk"],
+    synonyms: [
+      "atendimento recepção", "front desk", "serviço de lobby", "informações"
+    ],
     related_terms: [
-      "recepcionista", "atendente", "funcionário", "staff",
-      "educado", "prestativo", "atencioso", "rude", "grosseiro",
-      "empréstimo", "ferro", "item", "informação",
-      "lobby", "check-in", "check-out", "recepção do hotel", "entrada"
+      "recepcionista", "atendente", "staff", "educado", "prestativo", "orientações", "suporte", "solicitações", "lobby"
     ],
     colloquial_variations: [
-      "recepção", "recepcionista", "front desk"
+      "recepção", "front desk", "atendimento"
     ],
     examples: [
-      "recepcionista muito educada",
-      "atendimento da recepção excelente",
-      "atendimento no lobby impecável",
-      "recepção do hotel muito atenciosa",
-      "funcionários do check-in prestativos",
-      "empréstimo de ferro rápido"
+      "recepção atenciosa", "ajuda no lobby", "orientações claras"
     ]
   },
 
-  // ========== TI (TECNOLOGIA) - 2 keywords ==========
-  
-  "Tecnologia - TV": {
-    synonyms: ["televisão", "televisor", "tv a cabo"],
+  "Recepção - Emprestimo de itens": {
+    synonyms: [
+      "empréstimo de ferro", "emprestar objetos", "solicitar itens", "itens emprestados"
+    ],
     related_terms: [
-      "tv", "televisão", "canais", "controle", "smart tv",
-      "não funciona", "não liga", "sem sinal", "cabo"
+      "ferro de passar", "cabos", "adaptadores", "berço", "roupões",
+      "disponibilidade", "indisponibilidade", "pedido", "registro", "devolução"
+    ],
+    colloquial_variations: [
+      "emprestimo", "ferro", "pedir ferro", "emprestar"
+    ],
+    examples: [
+      "empréstimo de ferro rápido", "item indisponível", "solicitamos e atenderam"
+    ]
+  },
+
+  "Recepção - Reservas": {
+    synonyms: [
+      "booking", "reserva", "pré-reserva", "alteração de reserva", "cancelamento"
+    ],
+    related_terms: [
+      "confirmação", "número da reserva", "política", "prazo", "contato",
+      "agência", "OTA", "website", "disponibilidade", "garantia"
+    ],
+    colloquial_variations: [
+      "reserva", "booking", "marcar quarto"
+    ],
+    examples: [
+      "reserva confirmada", "alteração sem dificuldades", "cancelamento processado"
+    ]
+  },
+
+  // ========== TECNOLOGIA ==========
+
+  "Tecnologia - TV": {
+    synonyms: [
+      "televisão", "televisor", "tv a cabo", "smart tv"
+    ],
+    related_terms: [
+      "canais", "controle", "entrada HDMI", "sinal", "volume",
+      "aplicativos", "configuração", "sem sinal", "imagem", "som"
     ],
     colloquial_variations: [
       "tv", "televisão", "televisor"
     ],
     examples: [
-      "tv não funcionava",
-      "televisão sem sinal",
-      "poucos canais"
+      "tv sem sinal", "poucos canais", "smart tv funcionando bem"
     ]
   },
 
   "Tecnologia - Wi-fi": {
-    synonyms: ["internet", "wifi", "wireless", "conexão", "rede"],
+    synonyms: [
+      "internet", "wifi", "wi-fi", "rede", "conexão"
+    ],
     related_terms: [
-      "wifi", "wi-fi", "internet", "conexão", "rede", "wireless",
-      "lento", "rápido", "não funciona", "não pega", "cai", "senha", "sinal"
+      "velocidade", "estabilidade", "queda", "sinal", "senha",
+      "roteador", "alcance", "latência", "wireless", "rede hóspedes"
     ],
     colloquial_variations: [
-      "wifi", "wi-fi", "internet", "net", "conexão"
+      "wifi", "wi-fi", "internet", "net"
     ],
     examples: [
-      "wifi não funcionava",
-      "internet muito lenta",
-      "wi-fi instável"
+      "wi-fi instável", "internet muito lenta", "sinal fraco"
     ]
   },
 
-  // ========== LAZER - 7 keywords ==========
-  
+  // ========== LAZER ==========
+
   "Lazer - Estrutura": {
-    synonyms: ["infraestrutura de lazer", "instalações de lazer"],
+    synonyms: [
+      "infraestrutura de lazer", "instalações de lazer", "áreas de lazer"
+    ],
     related_terms: [
-      "estrutura", "instalação", "espaço", "área", "qualidade",
-      "boa", "ruim", "antiga", "moderna", "nova", "velha"
+      "piscina", "spa", "academia", "salas", "quadras", "kids club",
+      "equipamentos", "conservação", "manutenção", "capacidade"
     ],
     colloquial_variations: [
-      "estrutura", "instalações", "espaço de lazer"
+      "espaço de lazer", "instalações", "estrutura", "áreas de lazer"
     ],
     examples: [
-      "estrutura de lazer excelente",
-      "instalações bem cuidadas",
-      "área de lazer ampla"
+      "estrutura de lazer excelente", "áreas bem cuidadas", "equipamentos em bom estado"
     ]
   },
 
   "Lazer - Variedade": {
-    synonyms: ["diversidade de atividades", "opções de lazer"],
+    synonyms: [
+      "diversidade de atividades", "opções de lazer", "programação variada"
+    ],
     related_terms: [
-      "variedade", "opções", "atividades", "diversidade", "escolha",
-      "pouca", "muita", "falta"
+      "atividades", "esporte", "recreação", "música", "eventos",
+      "para crianças", "adultos", "família", "dia", "noite", "variedade"
     ],
     colloquial_variations: [
       "variedade", "opções", "atividades"
     ],
     examples: [
-      "pouca variedade de atividades",
-      "muitas opções de lazer",
-      "falta atividades"
+      "muitas opções de lazer", "programação diversa", "falta atividade para crianças"
     ]
   },
 
   "Lazer - Serviço": {
-    synonyms: ["atendimento lazer", "staff lazer"],
+    synonyms: [
+      "atendimento lazer", "staff de lazer", "monitores", "instrutores"
+    ],
     related_terms: [
-      "atendente", "funcionário", "staff", "monitor", "instrutor",
-      "educado", "prestativo", "atencioso", "rude"
+      "educado", "prestativo", "organização", "segurança", "suporte",
+      "programação", "horários", "equipamentos", "orientação", "atividades"
     ],
     colloquial_variations: [
-      "atendimento", "pessoal do lazer", "funcionários"
+      "pessoal do lazer", "monitores", "instrutores", "tio", "tia"
     ],
     examples: [
-      "atendimento na piscina excelente",
-      "funcionários do lazer prestativos",
-      "monitor atencioso"
+      "monitores atenciosos", "staff de lazer prestativo", "orientação clara"
     ]
   },
 
   "Lazer - Atividades de Lazer": {
-    synonyms: ["programação", "entretenimento", "recreação"],
+    synonyms: [
+      "programação", "entretenimento", "recreação", "agenda de lazer", "kids", 
+    ],
     related_terms: [
-      "atividade", "programação", "entretenimento", "recreação",
-      "jogo", "música", "show", "festa", "animação"
+      "jogos", "música", "show", "festa", "animação",
+      "esportes", "arte", "workshops", "concurso", "temático"
     ],
     colloquial_variations: [
       "atividades", "programação", "entretenimento"
     ],
     examples: [
-      "atividades de lazer divertidas",
-      "programação variada",
-      "entretenimento para crianças"
+      "programação divertida", "atividades para crianças", "agenda variada"
     ]
   },
 
   "Lazer - Piscina": {
-    synonyms: ["pool", "piscinas", "área de lazer aquática"],
+    synonyms: [
+      "pool", "área aquática", "piscinas"
+    ],
     related_terms: [
-      "piscina", "pool", "natação", "nadar", "água",
-      "limpa", "suja", "aquecida", "fria", "gelada"
+      "temperatura", "limpeza", "cloração", "profundidade", "cadeiras",
+      "toalhas", "bar na piscina", "horário", "salva-vidas", "aquecida"
     ],
     colloquial_variations: [
       "piscina", "piscininha", "pool"
     ],
     examples: [
-      "piscina estava limpa",
-      "água da piscina gelada",
-      "piscina aquecida ótima"
+      "piscina limpa", "água aquecida", "bar da piscina muito bom"
     ]
   },
 
   "Lazer - Spa": {
-    synonyms: ["spa", "centro de bem-estar", "wellness"],
+    synonyms: [
+      "spa", "wellness", "centro de bem-estar"
+    ],
     related_terms: [
-      "spa", "massagem", "tratamento", "relaxamento", "bem-estar",
-      "sauna", "jacuzzi", "serviço", "qualidade"
+      "massagem", "tratamentos", "sauna", "jacuzzi", "relaxamento",
+      "agenda", "preço do spa", "ambiente", "profissionais", "qualidade"
     ],
     colloquial_variations: [
       "spa", "massagem", "tratamento"
     ],
     examples: [
-      "spa excelente",
-      "massagem relaxante",
-      "tratamentos de qualidade"
+      "spa excelente", "massagem relaxante", "tratamentos muito bons"
     ]
   },
 
   "Lazer - Academia": {
-    synonyms: ["gym", "fitness", "sala de musculação"],
+    synonyms: [
+      "gym", "fitness", "sala de musculação"
+    ],
     related_terms: [
-      "academia", "gym", "fitness", "musculação", "exercício",
-      "treino", "equipamentos", "aparelhos", "esteira", "peso"
+      "equipamentos", "aparelhos", "esteira", "peso", "funcionamento",
+      "horário", "ventilação", "água", "toalhas", "limpeza"
     ],
     colloquial_variations: [
-      "academia", "gym", "sala de musculação"
+      "academia", "gym", "fitness"
     ],
     examples: [
-      "academia bem equipada",
-      "gym excelente",
-      "equipamentos de qualidade"
+      "academia bem equipada", "aparelhos novos", "equipamentos em bom estado"
     ]
   },
 
-  // ========== PRODUTO - 9 keywords ==========
-  
-  "Produto - Transfer": {
-    synonyms: ["transporte", "traslado", "shuttle"],
+  "Lazer - Entretenimento": {
+    synonyms: [
+      "shows", "música", "animação", "apresentações", "programação cultural"
+    ],
     related_terms: [
-      "transfer", "transporte", "traslado", "shuttle", "aeroporto",
-      "van", "ônibus", "carro", "motorista", "grátis", "pago"
+      "DJ", "bandas", "teatro", "cinema", "eventos", "festa",
+      "tema", "iluminação", "som", "cronograma"
+    ],
+    colloquial_variations: [
+      "entretenimento", "música", "show"
+    ],
+    examples: [
+      "entretenimento noturno ótimo", "música ao vivo", "shows animados"
+    ]
+  },
+
+  // ========== PRODUTO ==========
+
+  "Produto - Quarto": {
+    synonyms: [
+      "quarto", "acomodação", "room", "suíte"
+    ],
+    related_terms: [
+      "tamanho do quarto", "conforto", "cama", "móveis", "vista", "decoração",
+      "silêncio", "layout", "iluminação", "climatização", "quarto confortável"
+    ],
+    colloquial_variations: [
+      "quarto", "acomodação", "suíte", 
+    ],
+    examples: [
+      "quarto confortável", "tamanho adequado", "decoração bonita"
+    ]
+  },
+
+  "Produto - Banheiro": {
+    synonyms: [
+      "banheiro", "bathroom", "toalete", "lavabo"
+    ],
+    related_terms: [
+      "tamanho", "chuveiro", "pia", "amenities", "acabamento",
+      "pressão da água", "ventilação", "iluminação", "layout"
+    ],
+    colloquial_variations: [
+      "banheiro", "lavabo", "toalete"
+    ],
+    examples: [
+      "banheiro amplo", "chuveiro excelente", "amenities de qualidade"
+    ]
+  },
+
+  "Produto - Transfer": {
+    synonyms: [
+      "transporte", "traslado", "shuttle", "transfer"
+    ],
+    related_terms: [
+      "aeroporto", "van", "ônibus", "carro", "motorista",
+      "horário", "ponto de encontro", "grátis", "pago", "rota"
     ],
     colloquial_variations: [
       "transfer", "transporte", "traslado"
     ],
     examples: [
-      "transfer do aeroporto eficiente",
-      "transporte gratuito",
-      "traslado pontual"
+      "transfer pontual", "transporte gratuito", "traslado eficiente"
     ]
   },
 
   "Produto - Acessibilidade": {
-    synonyms: ["acessível", "adaptado", "PCD"],
+    synonyms: [
+      "acessível", "adaptado", "PCD", "acessibilidade"
+    ],
     related_terms: [
-      "acessibilidade", "cadeira de rodas", "rampa", "elevador",
-      "adaptado", "PCD", "deficiente", "mobilidade"
+      "cadeira de rodas", "rampa", "elevador", "barras de apoio",
+      "sinalização", "banheiro adaptado", "rotas acessíveis", "mobilidade", "normas"
     ],
     colloquial_variations: [
-      "acessibilidade", "acessível", "adaptado"
+      "acessível", "adaptado", "PCD"
     ],
     examples: [
-      "hotel acessível",
-      "rampa de acesso",
-      "quarto adaptado para PCD"
+      "quarto adaptado", "banheiro acessível", "rotas com rampa"
     ]
   },
 
   "Produto - Custo-benefício": {
-    synonyms: ["valor", "preço", "price", "cost"],
+    synonyms: [
+      "valor da hospedagem", "preço da diária", "price", "cost", "custo-benefício"
+    ],
     related_terms: [
-      "preço", "valor", "custo", "caro", "barato",
-      "vale a pena", "justo", "injusto"
+      "economia", "promoção", "tarifa", "justo", "barato", "caro",
+      "vale a pena", "comparativo", "pacote", "política de preço"
     ],
     colloquial_variations: [
-      "preço", "valor", "custo-benefício"
+      "preço da diária", "valor", "custo-benefício"
     ],
     examples: [
-      "preço justo",
-      "vale muito a pena",
-      "custo-benefício excelente"
+      "preço justo pela estadia", "ótimo custo-benefício", "tarifas competitivas"
     ]
   },
 
   "Produto - Localização": {
-    synonyms: ["location", "posição", "situação", "lugar"],
+    synonyms: [
+      "location", "posição", "situação", "lugar"
+    ],
     related_terms: [
-      "localização", "localizado", "location", "perto", "próximo",
-      "longe", "distante", "acesso", "região", "área", "praia", "centro"
+      "perto", "próximo", "acesso", "região", "bairro", "praia",
+      "centro", "transporte", "pontos turísticos", "rotas"
     ],
     colloquial_variations: [
-      "localização", "onde fica", "lugar", "bem localizado"
+      "bem localizado", "onde fica", "lugar"
     ],
     examples: [
-      "hotel bem localizado",
-      "localização perfeita",
-      "perto da praia"
+      "hotel bem localizado", "perto da praia", "acesso fácil"
     ]
   },
 
   "Produto - Vista": {
-    synonyms: ["view", "panorama", "visão"],
+    synonyms: [
+      "view", "panorama", "visão", "paisagem"
+    ],
     related_terms: [
-      "vista", "view", "panorama", "paisagem", "mar", "montanha",
-      "bonita", "feia", "linda", "maravilhosa"
+      "mar", "montanha", "cidade", "jardim", "linda", "maravilhosa",
+      "feia", "ampla", "janela", "varanda"
     ],
     colloquial_variations: [
       "vista", "view", "paisagem"
     ],
     examples: [
-      "vista para o mar linda",
-      "view maravilhosa",
-      "paisagem bonita"
+      "vista para o mar linda", "panorama da cidade", "paisagem bonita"
     ]
   },
 
   "Produto - Experiência": {
-    synonyms: ["estadia", "hospedagem", "stay", "vivência"],
+    synonyms: [
+      "estadia", "hospedagem", "stay", "vivência", "experiência"
+    ],
     related_terms: [
-      "experiência", "estadia", "hospedagem", "stay", "gostei",
-      "adorei", "amei", "recomendo", "perfeito", "maravilhoso"
+      "conforto", "satisfação", "recomendação", "positivo", "negativo",
+      "memória", "impressão", "qualidade geral", "serviços", "percepção"
     ],
     colloquial_variations: [
-      "experiência", "estadia", "adorei", "amei"
+      "adorei", "amei", "experiência", "estadia"
     ],
     examples: [
-      "experiência maravilhosa",
-      "adorei tudo",
-      "estadia perfeita"
+      "experiência maravilhosa", "adorei a estadia", "recomendo", "ótimo hotel"
     ]
   },
 
   "Produto - Modernização": {
-    synonyms: ["moderno", "atualizado", "novo", "renovado"],
+    synonyms: [
+      "moderno", "atualizado", "novo", "renovado", "modernização"
+    ],
     related_terms: [
-      "moderno", "novo", "atualizado", "renovado", "reforma",
-      "antigo", "velho", "ultrapassado", "contemporâneo"
+      "reforma", "revitalização", "decoração", "equipamentos", "instalações",
+      "contemporâneo", "antigo", "ultrapassado", "troca", "upgrade"
     ],
     colloquial_variations: [
-      "moderno", "novo", "renovado"
+      "moderno", "renovado", "atualizado"
     ],
     examples: [
-      "hotel modernizado",
-      "instalações novas",
-      "precisa de reforma"
+      "hotel modernizado", "instalações novas", "precisa de reforma"
     ]
   },
 
   "Produto - All Inclusive": {
-    synonyms: ["tudo incluído", "all inclusive", "pensão completa"],
+    synonyms: [
+      "tudo incluído", "all inclusive", "pensão completa"
+    ],
     related_terms: [
-      "all inclusive", "tudo incluído", "pensão completa",
-      "comida", "bebida", "atividades", "grátis", "incluído"
+      "comidas", "bebidas", "atividades", "pacote", "incluído",
+      "sem custo adicional", "buffet", "bar", "restaurant", "opções"
     ],
     colloquial_variations: [
       "all inclusive", "tudo incluído", "incluso"
     ],
     examples: [
-      "sistema all inclusive excelente",
-      "tudo incluído vale a pena",
-      "comidas e bebidas inclusas"
+      "sistema all inclusive excelente", "vale a pena", "bebidas inclusas"
     ]
   },
 
   "Produto - Isolamento Acustico": {
-    synonyms: ["isolamento acústico", "isolamento sonoro", "insonorização"],
+    synonyms: [
+      "isolamento acústico", "isolamento sonoro", "insonorização"
+    ],
     related_terms: [
-      "barulho", "ruído", "som", "silêncio", "silencioso",
-      "barulhento", "ruidoso", "dormir", "descanso"
+      "barulho", "ruído", "som", "silencioso", "lacre de porta",
+      "vedação", "janela", "descanso", "sono", "tratamento acústico"
     ],
     colloquial_variations: [
       "barulho", "isolamento", "silêncio"
     ],
     examples: [
-      "muito barulho",
-      "falta isolamento acústico",
-      "quarto silencioso"
+      "muito barulho", "quarto silencioso", "falta isolamento acústico", "muito barulho do show"
     ]
   },
 
-  // ⭐ NOVA KEYWORD DA CLIENTE:
   "Produto - Tamanho": {
-    synonyms: ["dimensões", "espaço", "área", "amplitude"],
+    synonyms: [
+      "dimensões", "espaço", "área", "amplitude", "tamanho"
+    ],
     related_terms: [
-      "tamanho", "espaço", "dimensão", "área", "grande", "pequeno",
-      "apertado", "amplo", "reduzido", "limitado", "compacto", "quarto"
+      "tamanho do hotel", "espaço das áreas", "amplo", "reduzido", "compacto",
+      "layout", "circulação", "metragem", "capacidade", "proporção"
     ],
     colloquial_variations: [
-      "tamanho", "espaço", "pequeno", "apertado"
+      "pequeno", "apertado", "espaçoso", "amplo"
     ],
     examples: [
-      "espaços reduzidos",
-      "quarto pequeno",
-      "tamanho limitado"
+      "hotel pequeno", "espaços reduzidos", "tamanho adequado"
     ]
   },
 
-  // ========== OPERAÇÕES - 6 keywords ⭐ ATUALIZADO: +2 keywords da cliente ==========
-  
+  // ========== OPERAÇÕES ==========
+
   "Operações - Atendimento": {
-    synonyms: ["serviço", "service", "staff", "equipe"],
+    synonyms: [
+      "atendimento geral", "service", "staff", "equipe", "atencioso", "atenciosos", "prestativo", "educado", "cordial"
+    ],
     related_terms: [
-      "atendimento", "serviço", "staff", "equipe", "funcionário",
-      "educado", "prestativo", "atencioso", "cordial", "simpático"
+      "funcionários", "prestativo", "educado", "cordial", "resposta",
+      "tempo", "tratativa", "suporte", "comunicação", "ajuda"
     ],
     colloquial_variations: [
-      "atendimento", "funcionários", "staff", "equipe"
+      "atendimento", "equipe", "staff"
     ],
     examples: [
-      "atendimento excelente",
-      "equipe muito prestativa",
-      "funcionários atenciosos"
+      "funcionários muito atenciosos", "equipe prestativa", "atendimento excelente"
     ]
   },
 
   "Operações - Cartão de acesso": {
-    synonyms: ["chave do quarto", "cartão magnético", "keycard"],
+    synonyms: [
+      "keycard", "cartão magnético", "RFID", "chave eletrônica"
+    ],
     related_terms: [
-      "cartão", "chave", "acesso", "porta", "quarto",
-      "não funciona", "desmagnetiza", "perde", "troca"
+      "falha no cartão", "não lê", "desmagnetizou", "porta", "acesso",
+      "troca de cartão", "ativação", "segurança", "reposição", "liberação"
     ],
     colloquial_variations: [
-      "cartão", "chave", "keycard"
+      "cartão de acesso", "cartão do quarto", "chave"
     ],
     examples: [
-      "cartão não funcionava",
-      "chave desmagnetizou",
-      "precisei trocar o cartão"
+      "cartão não funcionou", "chave desmagnetizada", "trocamos o keycard"
     ]
   },
 
   "Operações - Acesso ao quarto": {
-    synonyms: ["entrada no quarto", "acesso acomodação"],
+    synonyms: [
+      "acesso ao quarto", "liberação do quarto", "porta travada"
+    ],
     related_terms: [
-      "acesso", "entrada", "porta", "quarto", "chave", "cartão",
-      "dificuldade", "problema", "não consegui"
+      "porta", "fechadura", "trava", "liberação", "chave", "tempo",
+      "espera", "check-in", "entrada", "segurança"
     ],
     colloquial_variations: [
-      "entrar no quarto", "acesso", "porta"
+      "não abre a porta", "liberação do quarto", "acesso"
     ],
     examples: [
-      "dificuldade para entrar no quarto",
-      "problema no acesso",
-      "porta não abria"
+      "porta não abria", "demora na liberação", "acesso ao quarto resolvido", "cheguei no quarto e não estava pronto"
     ]
   },
 
   "Operações - Consumo Extra": {
-    synonyms: ["extras", "adicionais", "serviços extras"],
+    synonyms: [
+      "extras", "despesas adicionais", "consumo extra", "taxa adicional"
+    ],
     related_terms: [
-      "consumo", "extra", "adicional", "cobrança", "conta",
-      "frigobar", "telefone", "serviço", "preço"
+      "serviços", "lançamentos", "cobrança", "recibo",
+      "verificação", "auditoria", "ajuste", "checkout", "conta"
     ],
     colloquial_variations: [
-      "extras", "consumo", "cobrança extra"
+      "extras", "consumo", "taxa"
     ],
     examples: [
-      "cobrança de extras",
-      "consumo do frigobar",
-      "serviços adicionais"
+      "cobrança de extras", "consumo do frigobar", "ajuste de taxa"
     ]
   },
 
-  // ⭐ NOVAS KEYWORDS DA CLIENTE:
-  "Operações - Empréstimo de itens": {
-    synonyms: ["empréstimo de ferro", "emprestar objetos", "solicitar itens"],
-    related_terms: [
-      "empréstimo", "ferro de passar", "item", "objeto", "emprestar",
-      "solicitar", "pedir", "disponível", "indisponível", "falta"
-    ],
-    colloquial_variations: [
-      "empréstimo", "ferro", "pedir ferro", "emprestar"
-    ],
-    examples: [
-      "empréstimo de ferro rápido",
-      "ferro não disponível",
-      "pedimos ferro e atenderam"
-    ]
-  },
+  // ========== CORPORATIVO ==========
 
-  "Operações - Quarto": {
-    synonyms: ["liberação do quarto", "acesso ao quarto", "entrega do quarto"],
-    related_terms: [
-      "liberação", "acesso", "quarto pronto", "disponível", "espera",
-      "demora", "atraso", "check-in", "entrada", "acomodação"
-    ],
-    colloquial_variations: [
-      "quarto pronto", "liberação", "acesso ao quarto"
-    ],
-    examples: [
-      "demora na liberação do quarto",
-      "quarto não estava pronto",
-      "esperamos muito pelo quarto"
-    ]
-  },
-
-  // ========== CORPORATIVO - 4 keywords ⭐ ATUALIZADO: +1 keyword da cliente ==========
-  
   "Corporativo - Marketing": {
-    synonyms: ["divulgação", "comunicação", "propaganda"],
+    synonyms: [
+      "divulgação", "comunicação", "propaganda", "branding", "campanhas"
+    ],
     related_terms: [
-      "marketing", "propaganda", "divulgação", "comunicação",
-      "promessa", "expectativa", "realidade", "foto", "site"
+      "redes sociais", "site", "email", "promoções", "conteúdo",
+      "parcerias", "publicidade", "material", "imagem", "estratégia"
     ],
     colloquial_variations: [
-      "marketing", "propaganda", "fotos enganosas"
+      "marketing", "propaganda", "divulgação"
     ],
     examples: [
-      "marketing enganoso",
-      "fotos não correspondem",
-      "expectativa vs realidade"
+      "campanha bem feita", "comunicação clara", "material bonito"
     ]
   },
 
   "Corporativo - Reservas": {
-    synonyms: ["booking", "reserva", "agendamento"],
+    synonyms: [
+      "booking corporativo", "reservas corporativas", "contingente", "bloqueio"
+    ],
     related_terms: [
-      "reserva", "booking", "agendamento", "confirmação",
-      "cancelamento", "problema", "erro", "sistema"
+      "acordo", "negociação", "disponibilidade", "tarifa", "política",
+      "contrato", "rooming list", "evento", "empresa", "pagamento"
     ],
     colloquial_variations: [
-      "reserva", "booking", "agendamento"
+      "reservas", "booking", "bloqueio"
     ],
     examples: [
-      "problema na reserva",
-      "erro no booking",
-      "cancelamento difícil"
+      "bloqueio confirmado", "tarifa negociada", "rooming list entregue"
     ]
   },
 
   "Corporativo - Financeiro": {
-    synonyms: ["cobrança", "pagamento", "faturamento"],
+    synonyms: [
+      "financeiro", "pagamentos", "faturamento", "contas a receber"
+    ],
     related_terms: [
-      "cobrança", "pagamento", "conta", "valor", "preço",
-      "erro", "desconto", "reembolso", "cartão"
+      "nota fiscal", "boleto", "fatura", "cobrança", "prazo",
+      "conciliação", "auditoria", "NF-e", "política", "comprovante"
     ],
     colloquial_variations: [
-      "cobrança", "conta", "pagamento"
+      "financeiro", "pagamento", "fatura"
     ],
     examples: [
-      "erro na cobrança",
-      "valor incorreto na conta",
-      "problema no pagamento"
+      "pagamento processado", "fatura emitida", "conciliação concluída"
     ]
   },
 
-  // ⭐ NOVA KEYWORD DA CLIENTE:
   "Corporativo - Nota Fiscal": {
-    synonyms: ["NF", "nota", "documento fiscal", "recibo"],
+    synonyms: [
+      "NF", "nota fiscal", "documento fiscal", "comprovante fiscal"
+    ],
     related_terms: [
-      "nota fiscal", "NF", "documento", "fiscal", "recibo",
-      "falta", "não entregue", "não enviou", "emissão", "comprovante"
+      "emissão", "NF-e", "cadastro", "CNPJ", "dados", "chave",
+      "cancelamento", "reenvio", "prazo", "validação"
     ],
     colloquial_variations: [
-      "nota fiscal", "NF", "nota", "recibo"
+      "nota", "NF", "comprovante"
     ],
     examples: [
-      "NF não entregue",
-      "falta nota fiscal",
-      "nota fiscal não enviada"
+      "nota fiscal emitida", "reenvio de NF", "erro na nota corrigido"
     ]
   },
 
-  // ========== EG (EXPERIÊNCIA DO HÓSPEDE) - 2 keywords ⭐ ATUALIZADO: +1 keyword da cliente ==========
-  
+  // ========== EG ==========
+
   "EG - Abordagem": {
-    synonyms: ["atendimento personalizado", "relacionamento"],
-    related_terms: [
-      "abordagem", "tratamento", "relacionamento", "personalizado",
-      "educado", "gentil", "atenção", "cuidado", "especial"
-    ],
-    colloquial_variations: [
-      "abordagem", "tratamento", "atenção"
-    ],
-    examples: [
-      "abordagem personalizada",
-      "tratamento especial",
-      "atenção aos detalhes"
-    ]
-  },
+  synonyms: [
+    "abordagem ao hóspede", "contato", "apresentação", "captação",
+    "follow-up", "relacionamento", "pós-venda", "concierge de vendas"
+  ],
+  related_terms: [
+    "Exclusive Guest", "clube de férias", "programa de pontos", "RCI",
+    "intercâmbio de semanas", "benefícios", "vantagens", "oferta",
+    "agendamento de apresentação", "prospecção", "promessa de upgrades",
+    "equipe comercial", "captação no lobby", "termos e condições",
+    "uso de pontos", "reserva pelo programa"
+  ],
+  colloquial_variations: [
+    "abordagem", "pessoal do EG", "vendedor do EG",
+    "programa Exclusive Guest", "clube Exclusive"
+  ],
+  examples: [
+    "abordagem do EG no lobby foi cordial e informativa",
+    "vendedor do EG insistente para marcar apresentação",
+    "recebi follow-up do EG com proposta de pontos e estadias",
+    "prometeram vantagens via RCI, mas fiquei em dúvida sobre as regras",
+    "captação concierge do EG durante o café da manhã",
+    "dificuldade para usar pontos do EG na reserva",
+    "não percebi privilégios no hotel apesar de ser EG",
+    "tratativa rápida do EG para esclarecer benefícios"
+  ]
+}
 
-  // ⭐ NOVA KEYWORD DA CLIENTE:
-  "EG - Exclusive Guest": {
-    synonyms: ["programa EG", "exclusive guest", "VIP"],
-    related_terms: [
-      "exclusive guest", "EG", "programa", "VIP", "vendedor",
-      "abordagem", "insistente", "promessa", "recusa", "venda"
-    ],
-    colloquial_variations: [
-      "exclusive guest", "EG", "programa EG"
-    ],
-    examples: [
-      "abordagem do exclusive guest",
-      "vendedor do EG insistente",
-      "programa exclusive guest"
-    ]
-  }
-};
-
-/**
- * Dicionário de contexto semântico para Problems
- */
-export const PROBLEM_SEMANTIC_CONTEXT: Record<string, {
-  synonyms: string[];
-  indicators: string[];
-  negative_patterns: string[];
-  examples: string[];
-}> = {
-  "Demora no Atendimento": {
-    synonyms: ["lentidão", "demora", "delay", "espera"],
-    indicators: [
-      "demorou", "demora", "lento", "devagar", "esperando",
-      "esperei", "aguardando", "tempo", "minutos", "horas"
-    ],
-    negative_patterns: [
-      "demorou muito", "muito tempo", "esperando horas"
-    ],
-    examples: [
-      "demorou muito para atender",
-      "esperamos horas",
-      "atendimento muito lento"
-    ]
-  },
-
-  "Falta de Limpeza": {
-    synonyms: ["sujeira", "falta de higiene", "imundície"],
-    indicators: [
-      "sujo", "suja", "imundo", "nojento", "fedendo",
-      "não limparam", "não arrumaram", "bagunçado"
-    ],
-    negative_patterns: [
-      "muito sujo", "estava sujo", "falta de limpeza"
-    ],
-    examples: [
-      "quarto estava sujo",
-      "falta de limpeza",
-      "muito sujo e mal cheiroso"
-    ]
-  },
-
-  "Equipamento com Falha": {
-    synonyms: ["quebrado", "com defeito", "não funciona"],
-    indicators: [
-      "quebrado", "não funciona", "defeito", "problema",
-      "parado", "não liga", "estragado"
-    ],
-    negative_patterns: [
-      "não funciona", "quebrado", "com defeito"
-    ],
-    examples: [
-      "ar condicionado quebrado",
-      "chuveiro não funcionava",
-      "tv com defeito"
-    ]
-  },
-
-  "Qualidade da Refeição Abaixo do Esperado": {
-    synonyms: ["comida ruim", "qualidade baixa"],
-    indicators: [
-      "ruim", "péssimo", "horrível", "sem sabor",
-      "fria", "mal feito", "queimado", "cru"
-    ],
-    negative_patterns: [
-      "comida ruim", "sem sabor", "estava fria"
-    ],
-    examples: [
-      "comida estava ruim",
-      "refeição péssima",
-      "sem sabor nenhum"
-    ]
-  },
-
-  "Wi-Fi Instável": {
-    synonyms: ["internet ruim", "conexão ruim"],
-    indicators: [
-      "lento", "não funciona", "não pega", "cai",
-      "instável", "fraco", "ruim"
-    ],
-    negative_patterns: [
-      "wifi não funciona", "internet lenta", "sempre cai"
-    ],
-    examples: [
-      "wifi muito lento",
-      "internet sempre caindo",
-      "não consegui conectar"
-    ]
-  },
-
-  "Preço Alto": {
-    synonyms: ["caro", "preço elevado"],
-    indicators: [
-      "caro", "preço alto", "muito caro", "não vale"
-    ],
-    negative_patterns: [
-      "muito caro", "caro demais", "preço alto"
-    ],
-    examples: [
-      "muito caro para o que oferece",
-      "preço alto demais"
-    ]
-  },
-
-  "Ruído Excessivo": {
-    synonyms: ["barulho", "barulhento", "ruidoso"],
-    indicators: [
-      "barulho", "barulhento", "ruído", "ruidoso",
-      "alto", "não consegui dormir"
-    ],
-    negative_patterns: [
-      "muito barulho", "barulhento demais", "ruído excessivo"
-    ],
-    examples: [
-      "muito barulho à noite",
-      "quarto barulhento",
-      "não consegui dormir"
-    ]
-  },
-
-  "Falta de Variedade": {
-    synonyms: ["pouca opção", "limitado"],
-    indicators: [
-      "pouco", "pouca", "falta", "faltou", "limitado"
-    ],
-    negative_patterns: [
-      "pouca variedade", "faltou opções", "muito limitado"
-    ],
-    examples: [
-      "pouca variedade no café",
-      "faltou opções vegetarianas"
-    ]
-  }
 };
 
 /**
  * Gera texto enriquecido para embedding de uma keyword
- * ✅ NOVO: Fallback automático para keywords não mapeadas
+ * Inclui sinônimos, termos relacionados, variações e exemplos
  */
 export function generateEnrichedKeywordText(keywordLabel: string): string {
   const context = KEYWORD_SEMANTIC_CONTEXT[keywordLabel];
-  
-  // Se tem contexto manual, usar
+
   if (context) {
     const parts = [
       keywordLabel,
       ...context.synonyms,
-      ...context.related_terms.slice(0, 10),
+      ...context.related_terms.slice(0, 12),
       ...context.colloquial_variations,
       ...context.examples.slice(0, 3)
     ];
     return parts.join(' | ');
   }
 
-  // ✅ FALLBACK AUTOMÁTICO: Gerar contexto para keywords não mapeadas
-  console.log(`🔧 Gerando enriquecimento automático para: ${keywordLabel}`);
-  
+  // Fallback automático para keywords não mapeadas
   const parts = keywordLabel.split(' - ');
-  const department = parts[0]; // Ex: "Produto", "A&B", "Limpeza"
-  const aspect = parts[1] || keywordLabel; // Ex: "Transfer", "Serviço"
-  
-  // Gerar sinônimos automáticos baseados no aspecto
+  const department = parts[0];
+  const aspect = parts[1] || keywordLabel;
+
   const autoSynonyms = generateAutoSynonyms(aspect);
-  
-  // Gerar termos relacionados baseados no departamento
   const autoRelated = generateAutoRelatedTerms(department, aspect);
-  
-  // Gerar variações coloquiais
   const autoVariations = generateAutoVariations(aspect);
-  
-  const enrichedParts = [
-    keywordLabel,
-    department,
-    aspect,
-    ...autoSynonyms,
-    ...autoRelated,
-    ...autoVariations
-  ];
-  
-  return enrichedParts.join(' | ');
+
+  return [keywordLabel, department, aspect, ...autoSynonyms, ...autoRelated, ...autoVariations].join(' | ');
 }
 
 /**
- * ✅ NOVO: Gera sinônimos automáticos baseados em regras linguísticas
+ * Gera sinônimos automáticos baseados em regras e termos conhecidos
  */
 function generateAutoSynonyms(term: string): string[] {
   const lowerTerm = term.toLowerCase();
   const synonyms: string[] = [];
-  
-  // Mapeamento de sinônimos comuns
+
   const synonymMap: Record<string, string[]> = {
-    'serviço': ['atendimento', 'service', 'staff', 'equipe'],
-    'limpeza': ['higiene', 'arrumação', 'cleaning', 'housekeeping'],
-    'café da manhã': ['breakfast', 'café', 'manhã', 'desjejum'],
+    // A&B
+    'café da manhã': ['breakfast', 'café', 'desjejum', 'buffet matinal'],
+    'almoço': ['lunch', 'refeição do meio-dia'],
     'jantar': ['dinner', 'janta', 'refeição noturna'],
-    'almoço': ['lunch', 'refeição', 'meio-dia'],
-    'quarto': ['acomodação', 'suite', 'apartamento', 'room'],
-    'banheiro': ['sanitário', 'toalete', 'lavabo', 'bathroom'],
-    'wi-fi': ['wifi', 'internet', 'conexão', 'wireless', 'rede'],
-    'tv': ['televisão', 'televisor', 'smart tv'],
-    'piscina': ['pool', 'natação', 'área aquática'],
-    'academia': ['gym', 'fitness', 'musculação'],
-    'transfer': ['transporte', 'traslado', 'shuttle'],
-    'localização': ['location', 'lugar', 'posição', 'situado'],
-    'custo-benefício': ['preço', 'valor', 'price', 'cost'],
-    'vista': ['view', 'panorama', 'paisagem', 'visual'],
-    'experiência': ['estadia', 'hospedagem', 'stay', 'vivência'],
+    'serviço': ['garçom', 'garçonete', 'maître', 'pedido', 'comanda', 'conta', 'cardápio', 'restaurante', 'bar'],
+    'gastronomia': ['culinária', 'cozinha', 'food'],
+    'room service': ['serviço de quarto', 'pedido no quarto'],
+
+    // Governança
+    'banheiro': ['sanitário', 'toalete', 'lavabo'],
+    'quarto': ['acomodação', 'suíte', 'room'],
+    'áreas sociais': ['áreas comuns', 'espaços comuns'],
+    'enxoval': ['roupa de cama', 'lençóis', 'toalhas'],
+    'amenities': ['produtos de banho', 'itens de cortesia'],
+    'frigobar': ['minibar', 'geladeira do quarto'],
+
+    // Manutenção
+    'ar-condicionado': ['ar', 'climatização', 'ac'],
+    'elétrica': ['energia', 'rede elétrica', 'iluminação'],
+    'elevador': ['lift', 'ascensor'],
+
+    // Recepção
     'check-in': ['entrada', 'chegada', 'registro'],
     'check-out': ['saída', 'partida', 'checkout'],
-    'estacionamento': ['garagem', 'parking', 'vaga'],
-    'ar-condicionado': ['ar', 'climatização', 'ac', 'refrigeração'],
-    'elevador': ['lift', 'ascensor'],
-    'gastronomia': ['culinária', 'comida', 'cozinha', 'food'],
-    'room service': ['serviço de quarto', 'quarto service'],
+    'reservas': ['booking', 'pré-reserva'],
+
+    // Tecnologia
+    'wi-fi': ['wifi', 'internet', 'conexão'],
+    'tv': ['televisão', 'televisor', 'smart tv'],
+
+    // Lazer
+    'piscina': ['pool', 'área aquática'],
+    'academia': ['gym', 'fitness'],
+    'spa': ['wellness', 'bem-estar'],
+    'entretenimento': ['shows', 'música', 'animação'],
+
+    // Produto
+    'transfer': ['transporte', 'traslado', 'shuttle'],
+    'acessibilidade': ['adaptado', 'pcd'],
+    'custo-benefício': ['preço da diária', 'valor da hospedagem'],
+    'localização': ['location', 'onde fica'],
+    'vista': ['view', 'panorama', 'paisagem'],
+    'experiência': ['estadia', 'hospedagem', 'stay'],
     'all inclusive': ['tudo incluído', 'pensão completa'],
-    'isolamento acustico': ['barulho', 'ruído', 'silêncio', 'insonorização'],
-    'atendimento': ['service', 'staff', 'equipe', 'funcionários'],
-    'variedade': ['diversidade', 'opções', 'escolhas'],
-    'estrutura': ['instalações', 'infraestrutura', 'facilities']
+    'isolamento acustico': ['insonorização', 'isolamento sonoro'],
+    'tamanho': ['dimensões', 'espaço', 'amplitude'],
+
+    // Operações
+    'cartão de acesso': ['keycard', 'cartão magnético', 'rfid'],
+    'acesso ao quarto': ['liberação do quarto', 'porta travada'],
+    'consumo extra': ['extras', 'taxa adicional'],
+
+    // Corporativo
+    'marketing': ['propaganda', 'divulgação', 'branding'],
+    'reservas corporativas': ['booking corporativo', 'bloqueio'],
+    'financeiro': ['pagamentos', 'faturamento'],
+    'nota fiscal': ['nf', 'documento fiscal']
   };
-  
-  // Buscar sinônimos exatos
+
   for (const [key, syns] of Object.entries(synonymMap)) {
-    if (lowerTerm.includes(key)) {
-      synonyms.push(...syns);
-    }
+    if (lowerTerm.includes(key)) synonyms.push(...syns);
   }
-  
-  // Se não encontrou, adicionar termo em inglês genérico
-  if (synonyms.length === 0) {
-    synonyms.push(term.toLowerCase());
-  }
-  
-  return Array.from(new Set(synonyms)).slice(0, 5);
+
+  if (synonyms.length === 0) synonyms.push(lowerTerm);
+  return Array.from(new Set(synonyms)).slice(0, 6);
 }
 
 /**
- * ✅ NOVO: Gera termos relacionados baseados no departamento
+ * Gera termos relacionados automaticamente por departamento
  */
 function generateAutoRelatedTerms(department: string, aspect: string): string[] {
-  const related: string[] = [];
-  
-  // Termos relacionados por departamento
-  const deptTerms: Record<string, string[]> = {
-    'A&B': ['comida', 'bebida', 'restaurante', 'garçom', 'refeição', 'prato', 'menu'],
-    'Governança': ['limpo', 'sujo', 'arrumado', 'camareira', 'higiene'],
-    'Manutenção': ['quebrado', 'conserto', 'reparo', 'não funciona', 'defeito'],
-    'Recepção': ['recepcionista', 'lobby', 'front desk', 'atendimento'],
-    'TI': ['tecnologia', 'internet', 'conexão', 'funciona', 'sinal'],
-    'Tecnologia': ['tecnologia', 'internet', 'conexão', 'funciona', 'sinal'],
-    'Lazer': ['diversão', 'atividade', 'entretenimento', 'recreação'],
-    'Produto': ['hotel', 'qualidade', 'oferece', 'disponível'],
-    'Operações': ['funcionário', 'staff', 'equipe', 'atendimento', 'serviço'],
-    'Corporativo': ['gestão', 'administração', 'sistema'],
-    'EG': ['experiência', 'hóspede', 'personalizado', 'especial']
-  };
-  
-  if (deptTerms[department]) {
-    related.push(...deptTerms[department].slice(0, 7));
+  const dep = department.toLowerCase();
+  switch (dep) {
+    case 'a&b':
+      return ['alimentos', 'bebidas', 'restaurante', 'bar', 'cardápio', 'garçom', 'pedido', 'conta', 'preço das refeições', 'tempo de atendimento'];
+    case 'limpeza':
+    case 'governança':
+      return ['housekeeping', 'camareira', 'higiene', 'arrumação', 'troca de roupas', 'checklist', 'cheiro', 'poeira', 'organização', 'frequência'];
+    case 'manutenção':
+      return ['reparo', 'conserto', 'técnico', 'verificação', 'ajuste', 'peça', 'falha', 'funcionamento', 'preventiva', 'corretiva'];
+    case 'recepção':
+      return ['lobby', 'front desk', 'fila', 'documentos', 'orientação', 'suporte', 'registro', 'chave', 'liberação de quarto', 'política'];
+    case 'tecnologia':
+    case 'ti':
+      return ['rede', 'sinal', 'senha', 'estabilidade', 'latência', 'canais', 'imagem', 'som', 'configuração', 'equipamento'];
+    case 'lazer':
+      return ['piscina', 'spa', 'academia', 'programação', 'eventos', 'recreação', 'segurança', 'equipamentos', 'horários', 'capacidade'];
+    case 'produto':
+      return ['quarto', 'banheiro', 'vista', 'localização', 'experiência', 'conforto', 'layout', 'silêncio', 'tarifa', 'pacote'];
+    case 'operações':
+      return ['cartão', 'acesso', 'porta', 'keycard', 'segurança', 'consumo', 'lançamentos', 'cobrança', 'procedimento', 'ajuda'];
+    case 'corporativo':
+      return ['contrato', 'tarifa', 'nota fiscal', 'fatura', 'pagamento', 'reserva', 'empresa', 'acordo', 'política', 'prazo'];
+    case 'eg':
+      return ['hóspede', 'contato', 'feedback', 'satisfação', 'tratativa', 'resposta', 'follow-up', 'prevenção', 'proatividade', 'comunicação'];
+    default:
+      return [department, aspect];
   }
-  
-  // Adicionar termos específicos do aspecto
-  related.push(aspect.toLowerCase());
-  
-  return Array.from(new Set(related));
 }
 
 /**
- * ✅ NOVO: Gera variações coloquiais automáticas
+ * Gera variações coloquiais simples
  */
 function generateAutoVariations(term: string): string[] {
-  const variations: string[] = [];
-  const lowerTerm = term.toLowerCase();
-  
-  // Adicionar versão sem acentos
-  const noAccents = lowerTerm.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  variations.push(noAccents);
-  
-  // Adicionar versão sem hífens
-  if (lowerTerm.includes('-')) {
-    variations.push(lowerTerm.replace(/-/g, ' '));
-    variations.push(lowerTerm.replace(/-/g, ''));
-  }
-  
-  // Adicionar plural/singular simples
-  if (lowerTerm.endsWith('s') && lowerTerm.length > 3) {
-    variations.push(lowerTerm.slice(0, -1)); // Remove 's' final
-  } else {
-    variations.push(lowerTerm + 's'); // Adiciona 's'
-  }
-  
-  return Array.from(new Set(variations)).slice(0, 3);
+  const t = term.toLowerCase();
+  const variants = new Set<string>([t]);
+  variants.add(t.replace(/ç/g, 'c'));
+  variants.add(t.replace(/á|à|ã|â/g, 'a').replace(/é|ê/g, 'e').replace(/í/g, 'i').replace(/ó|ô/g, 'o').replace(/ú/g, 'u'));
+  variants.add(t.replace(/\s+/g, '-'));
+  return Array.from(variants).slice(0, 5);
 }
 
 /**
- * Gera texto enriquecido para embedding de um problem
- * ✅ NOVO: Fallback automático para problems não mapeados
+ * Gera texto enriquecido para embedding de um problem (alinhado à nova taxonomia)
  */
 export function generateEnrichedProblemText(problemLabel: string): string {
-  const context = PROBLEM_SEMANTIC_CONTEXT[problemLabel];
-  
-  // Se tem contexto manual, usar
-  if (context) {
-    const parts = [
-      problemLabel,
-      ...context.synonyms,
-      ...context.indicators.slice(0, 10),
-      ...context.negative_patterns,
-      ...context.examples.slice(0, 3)
-    ];
-    return parts.join(' | ');
-  }
+  const text = problemLabel.toLowerCase();
 
-  // ✅ FALLBACK AUTOMÁTICO: Gerar contexto para problems não mapeados
-  console.log(`🔧 Gerando enriquecimento automático para problem: ${problemLabel}`);
-  
-  const lowerLabel = problemLabel.toLowerCase();
-  
-  // Detectar palavras-chave negativas no label
-  const negativeIndicators = extractNegativeIndicators(lowerLabel);
-  
-  // Gerar sinônimos do problema
-  const problemSynonyms = generateProblemSynonyms(lowerLabel);
-  
-  // Adicionar padrões negativos comuns
-  const negativePatterns = [
-    `${problemLabel.toLowerCase()} problema`,
-    `falta de ${problemLabel.toLowerCase()}`,
-    `${problemLabel.toLowerCase()} ruim`,
-    `${problemLabel.toLowerCase()} não funciona`
-  ];
-  
-  const enrichedParts = [
-    problemLabel,
-    ...problemSynonyms,
-    ...negativeIndicators,
-    ...negativePatterns
-  ];
-  
-  return enrichedParts.join(' | ');
-}
-
-/**
- * ✅ NOVO: Extrai indicadores negativos de um problem label
- */
-function extractNegativeIndicators(problemText: string): string[] {
-  const indicators: string[] = [];
-  
-  // Palavras negativas comuns em problems
-  const negativeWords = [
-    'demora', 'lento', 'demorado', 'espera',
-    'falta', 'faltou', 'não tem', 'sem',
-    'sujo', 'suja', 'imundo', 'nojento',
-    'quebrado', 'não funciona', 'defeito', 'problema',
-    'ruim', 'péssimo', 'horrível', 'terrível',
-    'caro', 'alto', 'excessivo',
-    'barulho', 'barulhento', 'ruidoso',
-    'mal', 'erro', 'errado', 'incorreto'
-  ];
-  
-  // Adicionar palavras negativas que aparecem no texto
-  for (const word of negativeWords) {
-    if (problemText.includes(word)) {
-      indicators.push(word);
-    }
-  }
-  
-  // Adicionar indicadores genéricos
-  indicators.push('problema', 'insatisfeito', 'reclamação');
-  
-  return Array.from(new Set(indicators)).slice(0, 8);
-}
-
-/**
- * ✅ NOVO: Gera sinônimos para um problem
- */
-function generateProblemSynonyms(problemText: string): string[] {
   const synonyms: string[] = [];
-  
-  // Mapeamento de sinônimos de problems comuns
-  const problemSynonymMap: Record<string, string[]> = {
-    'demora': ['lentidão', 'delay', 'espera', 'demorado'],
-    'falta': ['faltou', 'não tem', 'sem', 'ausência'],
-    'limpeza': ['higiene', 'arrumação', 'sujeira'],
-    'quebrado': ['não funciona', 'defeito', 'problema', 'estragado'],
-    'atendimento': ['serviço', 'staff', 'funcionário'],
-    'caro': ['preço alto', 'excessivo', 'custoso'],
-    'barulho': ['ruído', 'som', 'barulhento', 'ruidoso'],
-    'qualidade': ['padrão', 'nível', 'estado']
-  };
-  
-  // Buscar sinônimos
-  for (const [key, syns] of Object.entries(problemSynonymMap)) {
-    if (problemText.includes(key)) {
-      synonyms.push(...syns);
-    }
+  const indicators: string[] = [];
+  const negatives: string[] = [];
+
+  const add = (arr: string[], items: string[]) => { for (const i of items) arr.push(i); };
+
+  // Demora / Atendimento
+  if (text.includes('demora') || text.includes('lento') || text.includes('espera')) {
+    add(synonyms, ['lentidão', 'delay', 'espera']);
+    add(indicators, ['demorou', 'lento', 'esperando', 'tempo', 'minutos']);
+    add(negatives, ['demorou muito', 'muito tempo', 'esperando horas']);
   }
-  
-  return Array.from(new Set(synonyms)).slice(0, 5);
+
+  // Limpeza
+  if (text.includes('sujo') || text.includes('limpeza') || text.includes('higiene')) {
+    add(synonyms, ['sujeira', 'falta de higiene']);
+    add(indicators, ['sujo', 'não limparam', 'bagunçado', 'odor']);
+    add(negatives, ['muito sujo', 'falta de limpeza']);
+  }
+
+  // Equipamento / Falha
+  if (text.includes('quebrado') || text.includes('defeito') || text.includes('não funciona')) {
+    add(synonyms, ['com defeito', 'falha', 'não funciona']);
+    add(indicators, ['quebrado', 'defeito', 'não liga', 'parado']);
+    add(negatives, ['não funciona', 'com defeito', 'quebrado']);
+  }
+
+  // Wi-Fi / Internet
+  if (text.includes('wifi') || text.includes('wi-fi') || text.includes('internet') || text.includes('conexão')) {
+    add(synonyms, ['conexão ruim', 'internet ruim', 'wifi instável']);
+    add(indicators, ['lento', 'cai', 'instável', 'fraco', 'não conecta']);
+    add(negatives, ['wifi não funciona', 'internet lenta', 'sempre cai']);
+  }
+
+  // Preço
+  if (text.includes('preço') || text.includes('caro') || text.includes('valor')) {
+    add(synonyms, ['preço elevado', 'valor alto']);
+    add(indicators, ['caro', 'preço alto', 'não vale']);
+    add(negatives, ['caro demais', 'preço alto']);
+  }
+
+  // Ruído
+  if (text.includes('barulho') || text.includes('ruído') || text.includes('barulhento')) {
+    add(synonyms, ['ruído', 'barulhento']);
+    add(indicators, ['barulho', 'som alto', 'não consegui dormir']);
+    add(negatives, ['muito barulho', 'ruído excessivo']);
+  }
+
+  // Fallback: variações mínimas quando não há mapeamento
+  if (synonyms.length === 0 && indicators.length === 0 && negatives.length === 0) {
+    const baseTokens = generateAutoVariations(problemLabel);
+    return [problemLabel, ...baseTokens].join(' | ');
+  }
+
+  const parts = [
+    problemLabel,
+    ...Array.from(new Set(synonyms)).slice(0, 8),
+    ...Array.from(new Set(indicators)).slice(0, 10),
+    ...Array.from(new Set(negatives)).slice(0, 6)
+  ];
+
+  return parts.join(' | ');
 }
 
 /**
- * Expande query do usuário com sinônimos e variações
- * ✅ MELHORADO: Expansão mais completa com as 44 keywords
+ * Expande query do usuário com sinônimos e variações (alinhado à nova taxonomia)
  */
 export function expandUserQuery(userText: string): string {
   const textLower = userText.toLowerCase();
   const expansions: string[] = [userText];
 
-  // ✅ EXPANDIDO: Mapeamento completo para todas as 44 keywords
   const commonExpansions: Record<string, string[]> = {
     // A&B
-    "comida": ["refeição", "prato", "alimento", "gastronomia", "food"],
-    "café da manhã": ["breakfast", "café", "manhã", "desjejum"],
-    "almoço": ["lunch", "meio-dia", "refeição"],
-    "jantar": ["janta", "dinner", "refeição noturna"],
-    "garçom": ["garçonete", "atendente", "funcionário do restaurante", "staff"],
-    "restaurante": ["comida", "gastronomia", "refeição", "A&B"],
-    "room service": ["serviço de quarto", "comida no quarto"],
-    
-    // Governança (Limpeza)
-    "limpeza": ["higiene", "arrumação", "cleaning", "housekeeping"],
-    "sujo": ["sujeira", "falta de limpeza", "não limpo", "imundo"],
-    "limpo": ["limpeza", "higiene", "arrumado", "impecável"],
-    "quarto": ["acomodação", "suite", "apartamento", "room"],
-    "banheiro": ["sanitário", "toalete", "lavabo", "bathroom", "box", "chuveiro"],
-    "toalha": ["enxoval", "roupa de cama", "lençol"],
-    "amenities": ["produtos de banho", "shampoo", "sabonete"],
-    
+    'restaurante': ['a&b', 'gastronomia', 'comida', 'cardápio', 'garçom'],
+    'café da manhã': ['breakfast', 'café', 'desjejum', 'buffet matinal'],
+    'almoço': ['lunch', 'meio-dia', 'refeição do almoço'],
+    'jantar': ['dinner', 'janta', 'refeição noturna'],
+    'room service': ['serviço de quarto', 'pedido no quarto'],
+
+    // Governança
+    'limpeza': ['higiene', 'arrumação', 'housekeeping'],
+    'banheiro': ['sanitário', 'toalete', 'lavabo'],
+    'quarto': ['acomodação', 'suíte', 'room'],
+    'amenities': ['produtos de banho', 'itens de cortesia'],
+    'frigobar': ['minibar', 'geladeira do quarto'],
+
     // Manutenção
-    "ar condicionado": ["ar", "climatização", "ac", "refrigeração"],
-    "quebrado": ["não funciona", "defeito", "problema", "estragado"],
-    "conserto": ["reparo", "manutenção", "arrumação"],
-    "elevador": ["lift", "ascensor"],
-    
+    'ar condicionado': ['ar-condicionado', 'climatização', 'ac'],
+    'elétrica': ['energia', 'rede elétrica', 'iluminação'],
+    'elevador': ['lift', 'ascensor'],
+
     // Recepção
-    "recepção": ["recepcionista", "front desk", "lobby", "atendimento"],
-    "check-in": ["entrada", "chegada", "registro"],
-    "check-out": ["saída", "partida", "checkout"],
-    "estacionamento": ["garagem", "parking", "vaga", "carro"],
-    
-    // TI/Tecnologia
-    "wifi": ["wi-fi", "internet", "conexão", "wireless", "rede"],
-    "internet": ["wifi", "wi-fi", "conexão", "rede"],
-    "tv": ["televisão", "televisor", "smart tv", "canais"],
-    
+    'recepção': ['front desk', 'lobby', 'atendimento'],
+    'check-in': ['entrada', 'chegada', 'registro'],
+    'check-out': ['saída', 'partida', 'checkout'],
+    'estacionamento': ['garagem', 'parking', 'vaga'],
+    'reservas': ['booking', 'pré-reserva'],
+
+    // Tecnologia
+    'wifi': ['wi-fi', 'internet', 'conexão', 'rede'],
+    'tv': ['televisão', 'televisor', 'smart tv', 'canais'],
+
     // Lazer
-    "piscina": ["pool", "natação", "área aquática"],
-    "academia": ["gym", "fitness", "musculação", "treino"],
-    "spa": ["massagem", "tratamento", "relaxamento"],
-    
+    'piscina': ['pool', 'área aquática'],
+    'academia': ['gym', 'fitness', 'musculação'],
+    'spa': ['wellness', 'bem-estar', 'massagem'],
+    'entretenimento': ['shows', 'música', 'animação'],
+
     // Produto
-    "transfer": ["transporte", "traslado", "shuttle", "aeroporto"],
-    "localização": ["localizado", "location", "perto", "próximo", "situado"],
-    "custo benefício": ["preço", "valor", "cost", "barato", "caro"],
-    "vista": ["view", "panorama", "paisagem", "visual"],
-    "experiência": ["estadia", "hospedagem", "stay", "vivência"],
-    "all inclusive": ["tudo incluído", "pensão completa", "incluso"],
-    "barulho": ["ruído", "isolamento acústico", "som", "barulhento"],
-    
+    'transfer': ['transporte', 'traslado', 'shuttle'],
+    'localização': ['location', 'onde fica', 'próximo'],
+    'custo benefício': ['preço da diária', 'valor da hospedagem'],
+    'vista': ['view', 'panorama', 'paisagem'],
+    'experiência': ['estadia', 'hospedagem', 'stay'],
+    'all inclusive': ['tudo incluído', 'pensão completa'],
+    'isolamento acústico': ['insonorização', 'isolamento sonoro'],
+
     // Operações
-    "atendimento": ["serviço", "service", "staff", "equipe", "funcionários"],
-    "funcionário": ["staff", "equipe", "atendente", "colaborador"],
-    "cartão": ["chave", "acesso", "keycard"],
-    
-    // Sentimentos positivos
-    "muito bom": ["excelente", "ótimo", "maravilhoso", "perfeito"],
-    "excelente": ["ótimo", "maravilhoso", "perfeito", "incrível"],
-    "adorei": ["amei", "gostei muito", "excelente", "maravilhoso"],
-    
-    // Sentimentos negativos
-    "ruim": ["péssimo", "horrível", "terrível", "muito ruim"],
-    "péssimo": ["horrível", "ruim", "terrível", "muito ruim"],
-    "deixa a desejar": ["ruim", "insatisfatório", "poderia melhorar"]
+    'cartão de acesso': ['keycard', 'cartão magnético', 'rfid'],
+    'acesso ao quarto': ['liberação do quarto', 'porta travada'],
+    'consumo extra': ['extras', 'taxa adicional'],
+
+    // Corporativo
+    'nota fiscal': ['nf', 'nf-e', 'documento fiscal'],
+    'financeiro': ['pagamentos', 'faturamento'],
+    'marketing': ['divulgação', 'propaganda'],
   };
 
-  // Expandir com sinônimos
-  for (const [term, synonyms] of Object.entries(commonExpansions)) {
-    if (textLower.includes(term)) {
-      expansions.push(...synonyms);
-    }
+  for (const [term, syns] of Object.entries(commonExpansions)) {
+    if (textLower.includes(term)) expansions.push(...syns);
   }
 
-  // Adicionar o texto original sem acentos
   const noAccents = userText.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   expansions.push(noAccents);
 

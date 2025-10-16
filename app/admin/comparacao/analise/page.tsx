@@ -264,7 +264,7 @@ export default function ComparacaoAvancada() {
         // Setores problemáticos
         const sectorCounts: Record<string, number> = {}
         allFeedbacks.forEach(f => {
-          if (f.sector) {
+          if (f.sector && !f.sector.startsWith('+')) {
             sectorCounts[f.sector] = (sectorCounts[f.sector] || 0) + 1
           }
         })

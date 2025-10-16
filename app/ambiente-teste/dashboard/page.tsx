@@ -170,7 +170,8 @@ function TestDashboardContent() {
         const problems = Array.from(new Set(feedback.problem.split(';').map((p: string) => p.trim()))) as string[];
         
         problems.forEach(problem => {
-          if (isValidProblem(problem)) {
+          // Filtrar problemas que começam com '+' (como '+2 outros')
+          if (isValidProblem(problem) && !problem.startsWith('+')) {
             problemCounts[problem] = (problemCounts[problem] || 0) + 1;
           }
         });
@@ -501,4 +502,4 @@ export default function TestDashboard() {
       </SharedDashboardLayout>
     </RequireAdmin>
   );
-} 
+}

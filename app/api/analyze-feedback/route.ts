@@ -19,6 +19,7 @@ import {
   autoCorrectDepartment, 
   KEYWORD_DEPARTMENT_MAP 
 } from '@/lib/taxonomy-validation';
+import { KEYWORD_SEMANTIC_CONTEXT } from '@/lib/semantic-enrichment';
 
 // Cache em memória para análises repetidas
 interface AnalysisCache {
@@ -204,8 +205,19 @@ Identifique TODOS os aspectos mencionados e crie 1 issue para CADA aspecto (máx
 
 3️⃣ ELOGIOS E CRÍTICAS COEXISTEM
    • Feedback tem positivo E negativo? → Crie issues para AMBOS!
+
+4️⃣ COERÊNCIA DEPARTAMENTO ↔ PROBLEM (REGRA CURTA)
+   • O problem DEVE pertencer ao MESMO departamento da keyword
+   • Keywords "Limpeza - X" pertencem ao departamento Governança → problems de Governança
+   • Evite usar problems de Governança quando a keyword não é de Governança
+   • Governança = higiene/arrumação/amenities/padrões; outros departamentos usam seus próprios problems
    • ❌ NÃO ignore elogios porque há críticas
    • Exemplo: "localização boa mas recepção ruim" = 2 issues
+
+   🔒 REGRA ABSOLUTA SOBRE PROBLEMS:
+   • É PROIBIDO escolher problem de departamento diferente da keyword
+   • Se não existir problem aplicável no mesmo departamento, use problem="EMPTY"
+   • NÃO tente remapear departamentos. A coerência deve vir da sua escolha correta.
 
 4️⃣ COMO PRESUMIR (REGRAS DE PRESUNÇÃO):
    • Banheiro sujo/problema → Limpeza-Banheiro (1ª opção) ou Manutenção-Banheiro (se mencionar quebrado/vazamento)
@@ -300,7 +312,7 @@ REGRAS TECNICAS:
 • SEMPRE use o problem EXATAMENTE como está na lista com seu departamento
 • NUNCA invente problems ou mude o formato "Departamento - Problema"
 
-�📊 EXEMPLOS DE USO CORRETO:
+  �📊 EXEMPLOS DE USO CORRETO:
 ✅ "Café da manhã delicioso" 
    → keyword="A&B - Café da manhã", problem="EMPTY" (elogio, sem problema)
 
@@ -310,19 +322,30 @@ REGRAS TECNICAS:
 ✅ "Comida sem variedade"
    → keyword="A&B - Gastronomia", problem="A&B - Variedade limitada" (crítica real)
 
-✅ "Wi-fi não conectava"
+  ✅ "Wi-fi não conectava"
    → keyword="Tecnologia - Wi-fi", problem="TI - Wi-fi não conecta" (problema real)
 
 ❌ ERRADO: "Restaurante excelente" → problem="A&B - Atendimento insistente"
-   (Não há problema! Use problem="EMPTY")
+   (Elogio! Use problem="EMPTY")
 
 ❌ ERRADO: "Comida boa" → problem="A&B - Qualidade da comida"
-   (É elogio! Use problem="EMPTY")
+   (Elogio! Use problem="EMPTY")
 
-• Sentiment 1-2 (negativo) → use problem_label válido DA LISTA
-• Sentiment 3 (neutro) → use problem_label="EMPTY" (exceto se mencion problema específico)
-• Sentiment 4-5 (positivo) → use problem_label="EMPTY" SEMPRE
-• Keywords "Limpeza-X" pertencem ao dept "Governança" (veja campo "Dept:")
+  ✅ Exemplos de elogio → SEMPRE problem="EMPTY":
+   • "Ótimo café da manhã" (A&B - Gastronomia)
+   • "Quarto confortável" (Produto - Quarto)
+   • "Serviços de quarto eficientes" (Operações/Recepção - Serviço)
+   • "Funcionários simpáticos e prestativos" (Operações/Recepção - Atendimento)
+
+  • Sentiment 1-2 (negativo) → use problem_label válido DA LISTA
+  • Sentiment 3 (neutro) → use problem_label="EMPTY" (exceto se mencionar problema específico)
+  • Sentiment 4-5 (positivo) → use problem_label="EMPTY" SEMPRE
+  • Keywords "Limpeza-X" pertencem ao dept "Governança" (veja campo "Dept:")
+
+   🔒 COERÊNCIA OBRIGATÓRIA:
+   • Problem sempre do mesmo departamento da keyword
+   • Se o department_id não possuir problem aplicável → problem="EMPTY"
+   • Exemplo: keyword="Produto - Localização" → problem deve iniciar com "Produto -" ou ser "EMPTY"
 
 ⚠️ TRADUÇÃO OBRIGATÓRIA:
 • Traduza TUDO para português brasileiro (detail, reasoning, suggestion_summary, propostas)
@@ -333,8 +356,22 @@ REGRAS TECNICAS:
 REGRA DE ESPECIFICIDADE (CRITICA!):
 → Se feedback menciona termo especifico (ex: "estacionamento", "ferro", "wifi")
 → SEMPRE escolha a keyword ESPECIFICA correspondente, NUNCA generica!
-→ Ex: "estacionamento" = "Recepcao-Estacionamento" (NAO "Operacoes-Atendimento")
-→ Ex: "ferro/tabua" = "Recepcao-Servico" (NAO "Limpeza-Amenities")
+→ Ex: "estacionamento" = "Recepção - Estacionamento" (NÃO "Operações - Atendimento")
+→ Ex: "ferro/tábua" = "Recepção - Empréstimo de itens" (NÃO "Limpeza - Amenities")
+
+REGRAS DE PROBLEMAS (COERÊNCIA E ESPECIFICIDADE):
+→ Escolha problemas do MESMO departamento da keyword, salvo menção explícita cruzada.
+→ Prefira problemas ESPECÍFICOS quando houver candidato que se alinhe ao conceito mencionado.
+→ Exemplos:
+   • "barulho", "ruído", "isolamento acústico" → Produto - Isolamento acústico ruim
+   • "demora no atendimento" → use a variante de demorar específica do departamento (A&B/Operações/Recepção)
+→ Evite cair em genéricos de outro departamento (ex.: "Falta de manutenção") se o núcleo é de Produto.
+
+🚨 ESCOPO EXCLUSIVO DE A&B (alimentos & bebidas):
+• A&B refere-se APENAS a restaurante/bar/comida/bebida/alimentos.
+• "Room Service" (pedido/entrega de comida no quarto) = "A&B - Room Service".
+• Elogios/críticas sobre arrumação/limpeza do quarto NUNCA são A&B.
+  → Use "Limpeza - Quarto/Enxoval" (Governança) ou "Operações - Atendimento" quando for equipe geral.
 `;
 
   const userPrompt = `
@@ -383,14 +420,36 @@ ${candidates.problems.length > 0 ? candidates.problems.map(p =>
   💡 Exemplo: ${p.examples[0] || 'N/A'}`
   ).join('\n\n') : '⚠️ NENHUM problem candidato encontrado'}
 
+**🔒 PROBLEMAS POR DEPARTAMENTO (coerência obrigatória):**
+${(() => {
+  const byDept: Record<string, typeof candidates.problems> = {} as any;
+  for (const p of candidates.problems) {
+    const dept = (p.label.split('-')[0] || '').trim();
+    if (!dept) continue;
+    (byDept[dept] ||= []).push(p);
+  }
+  const lines: string[] = [];
+  for (const dept of Object.keys(byDept)) {
+    const top = byDept[dept]
+      .slice()
+      .sort((a, b) => b.similarity_score - a.similarity_score)
+      .slice(0, 6)
+      .map(p => `"${p.label}"`)
+      .join(', ');
+    lines.push(`• ${dept}: ${top || 'N/A'}`);
+  }
+  return lines.length ? lines.join('\n') : '⚠️ Nenhum agrupamento disponível';
+})()}
+
 **📌 DEPARTAMENTOS:**
 ${candidates.departments.map(d => `- ${d.id}: ${d.label}`).join('\n')}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚠️ **ATENÇÃO - MAPEAMENTO CRÍTICO:**
-Keywords "Limpeza - X" pertencem ao departamento "Governança" (não "Limpeza")!
-Sempre extraia o departamento do campo "Dept:" mostrado acima!
+⚠️ **ATENÇÃO - MAPEAMENTO CRÍTICO (CURTO):**
+• Keywords "Limpeza - X" → departamento Governança (não "Limpeza")
+• Problemas SEMPRE do mesmo departamento da keyword
+• Se elogio → problem="EMPTY"; se crítica → escolha o mais específico do mesmo departamento
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
@@ -485,7 +544,7 @@ EXEMPLO COMPLETO COM PROBLEMS:
               problem_label: {
                 type: "string",
                 enum: problemLabels,
-                description: "⚠️ PROBLEM = TIPO DE PROBLEMA detectado no aspecto (ex: 'A&B - Atendimento demora', 'Manutenção - TV com falha'). ✅ ELOGIOS/NEUTROS → EMPTY SEMPRE! ❌ CRÍTICAS → escolha problem específico da lista! Exemplo: 'garçons lentos' → problem='A&B - Atendimento demora' (não deixe EMPTY se for crítica!)"
+                description: "⚠️ PROBLEM = TIPO DE PROBLEMA detectado no aspecto (ex: 'A&B - Atendimento demora', 'Manutenção - TV com falha'). 🔒 OBRIGATÓRIO: Problem do MESMO departamento da keyword. Se não houver candidato aplicável do mesmo departamento, use 'EMPTY'. ✅ ELOGIOS/NEUTROS → 'EMPTY' SEMPRE. ❌ CRÍTICAS → escolha problem específico da lista do mesmo departamento. Exemplo: 'garçons lentos' → problem='A&B - Atendimento demora' (não deixe 'EMPTY' se for crítica!)"
               },
               detail: {
                 type: "string",
@@ -601,6 +660,93 @@ function processLLMResponse(
 ): ClassificationResult {
 
   const issues: ClassificationIssue[] = [];
+
+  // Modo estrito: priorizar integralmente a decisão do reasoning
+const STRICT_REASONING = true;
+const ALLOW_PROBLEM_HEURISTICS = false; // desativa heurísticas de preenchimento de problema
+const ALLOW_DEPT_REMAP = false; // desativa remapeamentos pós-IA para evitar heurísticas; IA deve acertar na origem
+  
+  // Helper global para mapear contexto ↔ keyword canônica neutra por departamento
+  const deriveNeutralKeyword = (detailText: string, departmentHint?: string): string => {
+    const t = (detailText || '').toLowerCase();
+    const dept = (departmentHint || '').toLowerCase();
+
+    // Produto: qualidade/conforto semântica
+    if (dept.startsWith('produto')) {
+      if (t.includes('banheiro') || t.includes('sanitário') || t.includes('sanitario')) {
+        return 'Produto - Banheiro';
+      }
+      if (
+        t.includes('travesseiro') ||
+        t.includes('colchão') || t.includes('colchao') ||
+        t.includes('cama') ||
+        t.includes('lençol') || t.includes('lencol') ||
+        t.includes('enxoval')
+      ) {
+        return 'Produto - Quarto';
+      }
+      if (t.includes('localização') || t.includes('localizacao') || t.includes('location')) {
+        return 'Produto - Localização';
+      }
+      return 'Produto - Quarto';
+    }
+
+    // Manutenção: falhas/defeitos
+    if (dept.startsWith('manutenção') || dept.startsWith('manutencao')) {
+      if (t.includes('banheiro') || t.includes('sanitário') || t.includes('sanitario')) {
+        return 'Manutenção - Banheiro';
+      }
+      if (t.includes('quarto') || t.includes('suíte') || t.includes('suite') || t.includes('acomodação') || t.includes('acomodacao')) {
+        return 'Manutenção - Quarto';
+      }
+      if (t.includes('tomada') || t.includes('iluminação') || t.includes('iluminacao') || t.includes('lâmpada') || t.includes('lampada') || t.includes('luz')) {
+        return 'Manutenção - Instalações';
+      }
+      return 'Manutenção - Instalações';
+    }
+
+    // Governança/Limpeza
+    if (dept.startsWith('governança') || dept.startsWith('governanca') || dept.startsWith('limpeza')) {
+      if (t.includes('banheiro') || t.includes('sanitário') || t.includes('sanitario')) {
+        return 'Limpeza - Banheiro';
+      }
+      if (
+        t.includes('lençol') || t.includes('lencol') ||
+        t.includes('toalha') ||
+        t.includes('enxoval') ||
+        t.includes('travesseiro') ||
+        t.includes('fronha')
+      ) {
+        return 'Limpeza - Enxoval';
+      }
+      return 'Limpeza - Quarto';
+    }
+
+    // A&B
+    if (dept.startsWith('a&b') || dept === 'ab') {
+      if (t.includes('room service') || t.includes('serviço de quarto') || t.includes('servico de quarto')) {
+        return 'A&B - Room Service';
+      }
+      if (t.includes('café da manhã') || t.includes('breakfast')) {
+        return 'A&B - Café da manhã';
+      }
+      if (t.includes('restaurante') || t.includes('garçom') || t.includes('garcom') || t.includes('comida') || t.includes('jantar') || t.includes('almoço') || t.includes('almoco')) {
+        return 'A&B - Serviço';
+      }
+      if (t.includes('bar') || t.includes('bebida') || t.includes('drinks')) {
+        return 'A&B - Bar';
+      }
+      return 'A&B - Serviço';
+    }
+
+    // Recepção/Operações default
+    if (dept.startsWith('recepção') || dept.startsWith('recepcao') || dept.startsWith('operações') || dept.startsWith('operacoes')) {
+      return 'Atendimento';
+    }
+
+    // Fallback geral
+    return 'Atendimento';
+  };
   
   // 🎯 Pegar keyword/problem propostos GLOBAIS (fora do array de issues)
   const globalProposedKeyword = response.proposed_keyword_label;
@@ -673,6 +819,41 @@ function processLLMResponse(
     let departmentId = issue.department_id;
     let matchedBy: 'embedding' | 'proposed' | 'exact' | 'direct' = 'direct';
     
+    // Helpers para evitar confusão entre problem e keyword e resolver propostas
+    const isProblemLabel = (label: string | undefined): boolean => {
+      if (!label) return false;
+      return candidates.problems.some(p => p.label === label);
+    };
+
+    const resolveToCandidateKeyword = (suggestedLabel: string | undefined, detailText: string): { id?: string; label?: string } => {
+      if (!suggestedLabel || suggestedLabel.trim() === '') return {};
+
+      // 1) Se o sugerido já é um candidato válido, usar direto
+      const exactCandidate = candidates.keywords.find(k => k.label === suggestedLabel);
+      if (exactCandidate) {
+        return { id: exactCandidate.id, label: exactCandidate.label };
+      }
+
+      // 2) Se o sugerido é um PROBLEM, escolher keyword canônica por contexto
+      if (isProblemLabel(suggestedLabel)) {
+        const deptPrefix = suggestedLabel.split('-')[0].trim().toLowerCase();
+        const targetLabel = deriveNeutralKeyword(detailText, deptPrefix);
+        const candidate = candidates.keywords.find(k => k.label === targetLabel);
+        if (candidate) return { id: candidate.id, label: candidate.label };
+      }
+
+      // 3) Heurística simples: tentar casar por departamento e termos
+      const lower = suggestedLabel.toLowerCase();
+      if (lower.startsWith('manutenção') || lower.startsWith('manutencao') || lower.startsWith('produto')) {
+        const targetLabel = deriveNeutralKeyword(detailText, lower.split(' - ')[0]);
+        const candidate = candidates.keywords.find(k => k.label === targetLabel);
+        if (candidate) return { id: candidate.id, label: candidate.label };
+      }
+
+      // 4) Fallback: não resolver
+      return {};
+    };
+
     if (keyword) {
       // 1ª opção: Keyword encontrada nos candidatos por label
       keywordId = keyword.id;
@@ -682,24 +863,31 @@ function processLLMResponse(
       
       // ✅ VALIDAÇÃO ESTRUTURAL: Verificar se keyword está no departamento correto
       const validation = validateKeywordDepartment(keywordLabel, departmentId);
-      if (!validation.valid && validation.correctDepartment) {
-        console.warn(`⚠️ CORREÇÃO AUTOMÁTICA: "${keywordLabel}" de "${departmentId}" → "${validation.correctDepartment}"`);
-        departmentId = validation.correctDepartment;
+      if (!validation.valid) {
+        console.warn(`⚠️ INCOERÊNCIA DETECTADA (sem correção automática): keyword="${keywordLabel}" em dept="${departmentId}"`);
+        // Sem heurística: NÃO corrigir automaticamente departmentId
       }
       
     } else if (issue.proposed_keyword) {
-      // 2ª opção: Usar keyword proposta ESPECIFICAMENTE para esta issue
-      keywordLabel = issue.proposed_keyword;
-      matchedBy = 'proposed';
+      // 2ª opção: Resolver keyword proposta para uma keyword VÁLIDA dos candidatos
       const contextPreview = issue.detail?.substring(0, 40);
-      console.log(`💡 Issue propôs keyword específica: "${keywordLabel}" para contexto "${contextPreview}..."`);
-      
-      // ✅ VALIDAÇÃO ESTRUTURAL: Corrigir departamento automaticamente
-      const correction = autoCorrectDepartment(keywordLabel, departmentId);
-      if (correction.corrected) {
-        console.warn(`⚠️ CORREÇÃO AUTOMÁTICA: "${keywordLabel}" de "${departmentId}" → "${correction.newDepartmentId}"`);
-        console.warn(`   Razão: ${correction.reason}`);
-        departmentId = correction.newDepartmentId;
+      const resolved = resolveToCandidateKeyword(issue.proposed_keyword, issue.detail || '');
+      if (resolved.label && resolved.id) {
+        keywordLabel = resolved.label;
+        keywordId = resolved.id;
+        matchedBy = 'proposed';
+        console.log(`💡 Keyword proposta resolvida para candidato: "${keywordLabel}" (ID: ${keywordId}) | contexto "${contextPreview}..."`);
+      } else {
+        // Sem heurística: rejeitar se não resolver exatamente para candidato
+        console.error(`❌ ISSUE REJEITADA: proposed_keyword não corresponde a candidatos. Valor: "${issue.proposed_keyword}"`);
+        continue; // Pular issue inválida
+      }
+
+      // ✅ VALIDAÇÃO ESTRUTURAL: Corrigir departamento automaticamente conforme keyword final
+      // Sem heurística: NÃO corrigir automaticamente departmentId com autoCorrectDepartment
+      const correction = validateKeywordDepartment(keywordLabel, departmentId);
+      if (!correction.valid) {
+        console.warn(`⚠️ INCOERÊNCIA DETECTADA (sem correção automática): keyword="${keywordLabel}" em dept="${departmentId}"`);
       }
       
     } else if (issue.keyword_label === 'EMPTY') {
@@ -714,7 +902,109 @@ function processLLMResponse(
       console.error(`   ⚠️ IA deve escolher keyword dos candidatos ou preencher proposed_keyword`);
       continue; // Pular esta issue inválida
     }
-    
+
+    // 🔎 VALIDAÇÃO CONTEXTUAL: Garantir que A&B só apareça com âncoras de alimentos/bebidas
+    if (keywordLabel !== 'Experiência') {
+      const isValidContext = validateKeywordContext(keywordLabel, departmentId, originalText || issue.detail || '');
+      if (!isValidContext) {
+        const textLower = (originalText || issue.detail || '').toLowerCase();
+
+        // Caso especial: se mencionar room service, corrigir para A&B - Room Service
+        if (textLower.includes('room service') || textLower.includes('serviço de quarto') || textLower.includes('servico de quarto')) {
+          const rs = candidates.keywords.find(k => k.label === 'A&B - Room Service');
+          if (rs) {
+            console.warn(`🔧 Correção contextual: "${keywordLabel}" → "${rs.label}" por menção a room service`);
+            keywordLabel = rs.label;
+            keywordId = rs.id;
+            departmentId = 'A&B';
+          }
+        } else if (departmentId === 'A&B' || keywordLabel.includes('A&B')) {
+          // Sem contexto de A&B: remapear para Operações - Atendimento quando for elogio geral à equipe
+          const staffLike = textLower.includes('atencios') ||
+                            textLower.includes('prestativ') ||
+                            textLower.includes('educad') ||
+                            textLower.includes('cordial') ||
+                            textLower.includes('funcion') ||
+                            textLower.includes('equipe') ||
+                            textLower.includes('staff') ||
+                            textLower.includes('profission');
+
+          if (staffLike) {
+            const opsAtt = candidates.keywords.find(k => k.label === 'Operações - Atendimento');
+            if (opsAtt) {
+              console.warn(`🔧 Correção contextual: "${keywordLabel}" (A&B) → "${opsAtt.label}" por elogio geral à equipe`);
+              keywordLabel = opsAtt.label;
+              keywordId = opsAtt.id;
+              departmentId = 'Operações';
+            }
+          } else {
+            // Fallback: derivar keyword neutra pelo departamento
+            const correctedLabel = deriveNeutralKeyword(issue.detail || originalText || '', departmentId);
+            const candidate = candidates.keywords.find(k => k.label === correctedLabel);
+            if (candidate) {
+              console.warn(`🔧 Correção contextual neutra: "${keywordLabel}" → "${candidate.label}"`);
+              keywordLabel = candidate.label;
+              keywordId = candidate.id;
+            } else {
+              console.warn(`⚠️ Keyword fora de contexto e sem correção disponível. Removendo issue.`);
+              continue;
+            }
+          }
+        } else {
+          // Outros departamentos: primeiro tentar correção específica para Recepção (check-in/check-out)
+          const tl = (originalText || issue.detail || '').toLowerCase();
+          const isReceptionContext = departmentId === 'Recepção' || tl.includes('recepção') || tl.includes('recepcao');
+          const mentionsCheckIn = tl.includes('check-in') || tl.includes('check in') || tl.includes('entrada');
+          const mentionsCheckOut = tl.includes('check-out') || tl.includes('check out') || tl.includes('saída') || tl.includes('saida');
+
+          if (isReceptionContext && (mentionsCheckIn || mentionsCheckOut)) {
+            const targetLabel = mentionsCheckOut ? 'Recepção - Check-out' : 'Recepção - Check-in';
+            const targetKw = candidates.keywords.find(k => k.label === targetLabel);
+            if (targetKw) {
+              console.warn(`🔧 Correção contextual específica: "${keywordLabel}" → "${targetKw.label}" por menção a ${mentionsCheckOut ? 'check-out' : 'check-in'}`);
+              keywordLabel = targetKw.label;
+              keywordId = targetKw.id;
+            } else {
+              // Fallback neutro se não existir keyword específica
+              const correctedLabel = deriveNeutralKeyword(issue.detail || originalText || '', departmentId);
+              const candidate = candidates.keywords.find(k => k.label === correctedLabel);
+              if (candidate) {
+                console.warn(`🔧 Correção contextual: "${keywordLabel}" → "${candidate.label}"`);
+                keywordLabel = candidate.label;
+                keywordId = candidate.id;
+              } else {
+                console.warn(`⚠️ Keyword fora de contexto e sem correção disponível. Removendo issue.`);
+                continue;
+              }
+            }
+          } else {
+            // Correção neutra para demais casos
+            const correctedLabel = deriveNeutralKeyword(issue.detail || originalText || '', departmentId);
+            const candidate = candidates.keywords.find(k => k.label === correctedLabel);
+            if (candidate) {
+              console.warn(`🔧 Correção contextual: "${keywordLabel}" → "${candidate.label}"`);
+              keywordLabel = candidate.label;
+              keywordId = candidate.id;
+            } else {
+              console.warn(`⚠️ Keyword fora de contexto e sem correção disponível. Removendo issue.`);
+              continue;
+            }
+          }
+        }
+      }
+    }
+
+    // ⚠️ Se IA confundiu e usou o mesmo texto para keyword e problem, corrigir keyword
+    if (issue.problem_label && (issue.problem_label === keywordLabel || isProblemLabel(keywordLabel))) {
+      const correctedLabel = deriveNeutralKeyword(issue.detail || '', departmentId);
+      const candidate = candidates.keywords.find(k => k.label === correctedLabel);
+      if (candidate) {
+        console.warn(`🔧 Correção: keyword confundida com problem. "${keywordLabel}" → "${candidate.label}"`);
+        keywordLabel = candidate.label;
+        keywordId = candidate.id;
+      }
+    }
+
     // Processar problem da mesma forma
     if (problem) {
       problemId = problem.id;
@@ -722,8 +1012,246 @@ function processLLMResponse(
       console.log(`✅ Problem encontrado: "${problemLabel}" (ID: ${problemId})`);
     } else if (issue.problem_label === 'EMPTY') {
       problemLabel = 'VAZIO';
+      problemId = 'EMPTY';
+    } else {
+      // Rótulo de problem não encontrado entre candidatos → tratar como vazio para aplicar heurísticas
+      console.warn(`⚠️ Problem label não encontrado nos candidatos: "${issue.problem_label}" → aplicando heurísticas`);
+      problemLabel = 'VAZIO';
+      problemId = 'EMPTY';
+    }
+
+    // 🛡️ GUARDA DE ELOGIOS: se for elogio geral, zerar o problem (mas respeitar sugestões)
+    {
+      const detailLower = (issue.detail || originalText || '').toLowerCase();
+      const praiseTerms = [
+        'atencioso','atenciosa','atenciosos','prestativo','prestativa','prestativos',
+        'educado','educada','cordial','simpatico','simpática','simpático','amavel','amável',
+        'gentil','solícito','solicito','hospitalidade',
+        // Termos positivos comuns
+        'ótimo','otimo','excelente','perfeito','maravilhoso','maravilhosa','fantástico','fantastico',
+        'bom','boa','muito bom','muito boa','agradável','agradavel','recomendo','confortável','confortavel',
+        'eficiente','eficientes','bem localizado','boa localização','boa localizacao'
+      ];
+      const negativeHints = [
+        'ruim','péssim','pessim','demora','lento','falha','quebr','defeit','sujo','barulho',
+        'não funciona','nao funciona','mal educad','falta de','insistent','abordagem'
+      ];
+      const suggestionCues = [
+        'melhorar','poderia melhorar','mais opções','mais opcoes','outras opções','outras opcoes',
+        'outras comidas','variedade','adicionar','ampliar','comidas do tipo','cuscuz',
+        'pode ter mais','poderia ter','deveria ter',
+        'aparelho','aparelhos','equipamento','equipamentos','mais aparelhos','mais equipamentos'
+      ];
+      const hasPraise = praiseTerms.some(t => detailLower.includes(t));
+      const hasNegative = negativeHints.some(t => detailLower.includes(t));
+      const hasSuggestionCue = suggestionCues.some(t => detailLower.includes(t));
+      const hasSuggestionFlag = Boolean(response.has_suggestion);
+
+      if (!hasNegative && !hasSuggestionCue && !hasSuggestionFlag && (hasPraise || (typeof response.sentiment === 'number' && response.sentiment >= 4))) {
+        // Elogio → problem vazio
+        problemLabel = 'VAZIO';
+        problemId = 'EMPTY';
+      }
+    }
+
+    // 🎯 HEURÍSTICAS DE PROBLEMA POR PADRÕES: desativadas em modo estrito
+    if (ALLOW_PROBLEM_HEURISTICS && (problemLabel === 'VAZIO' || problemId === 'EMPTY')) {
+      const t = (issue.detail || originalText || '').toLowerCase();
+      const negCues = [
+        'ruim','péssim','pessim','demor','lento','falha','quebr','defeit','sujo','barulh',
+        'não funciona','nao funciona','mal educad','falta de','insistent','indispon','inadequad','mof'
+      ];
+      const hasNegCue = negCues.some(s => t.includes(s)) || /\bsem\b/.test(t);
+      const suggestionCues = [
+        'melhorar','poderia melhorar','mais opções','mais opcoes','outras opções','outras opcoes',
+        'outras comidas','variedade','adicionar','ampliar','comidas do tipo','cuscuz'
+      ];
+      const hasSuggestionCue = suggestionCues.some(s => t.includes(s));
+      const sentimentIsNegOrNeu = (typeof response.sentiment === 'number' && response.sentiment <= 3);
+      if (!hasNegCue && !sentimentIsNegOrNeu && !hasSuggestionCue) {
+        // Elogio/positivo sem pista negativa → manter problem vazio
+        console.log('ℹ️ Elogio/positivo sem pistas negativas. Mantendo problem=EMPTY.');
+      } else {
+        const byDept = (dept: string, includes: (s: string) => boolean): { id?: string; label?: string } => {
+          // Demora no atendimento
+          if (includes('demora') || includes('demorou') || includes('lento')) {
+            const p = candidates.problems.find(p => p.label.startsWith(`${dept} -`) && p.label.toLowerCase().includes('demora') && p.label.toLowerCase().includes('atend'))
+              || candidates.problems.find(p => p.label === `${dept} - Atendimento demora`)
+              || candidates.problems.find(p => p.label === `${dept} - Demora no serviço`);
+            if (p) return { id: p.id, label: p.label };
+          }
+          // Atendimento insistente
+          if (includes('insistent') || includes('abordagem')) {
+            const p = candidates.problems.find(p => p.label === `${dept} - Atendimento insistente`)
+              || candidates.problems.find(p => p.label.startsWith(`${dept} -`) && p.label.toLowerCase().includes('insistent'));
+            if (p) return { id: p.id, label: p.label };
+          }
+          // Atendimento ruim / falta de cordialidade
+          if (includes('ruim') || includes('mal educad') || includes('falta de cordial')) {
+            const p = candidates.problems.find(p => p.label === `${dept} - Atendimento ruim`)
+              || candidates.problems.find(p => p.label.startsWith(`${dept} -`) && p.label.toLowerCase().includes('atendimento ruim'))
+              || candidates.problems.find(p => p.label.startsWith(`${dept} -`) && p.label.toLowerCase().includes('falta de cordial'));
+            if (p) return { id: p.id, label: p.label };
+          }
+          // Falta de comunicação (recepção/operações)
+          if (includes('falta de comunicação') || includes('sem informação') || includes('falta de informação')) {
+            const p = candidates.problems.find(p => p.label === `${dept} - Falta de comunicação`) || candidates.problems.find(p => p.label === 'Recepção - Falta de informação');
+            if (p) return { id: p.id, label: p.label };
+          }
+          return {};
+        };
+
+        // Regras por departamento
+        let chosen: { id?: string; label?: string } = {};
+
+        // Caso específico: A&B variedade limitada por sugestão/menção explícita
+        if ((departmentId === 'A&B' || (keywordLabel && keywordLabel.includes('A&B'))) && (
+          t.includes('variedade') || t.includes('outras opções') || t.includes('outras opcoes') ||
+          t.includes('outras comidas') || t.includes('mais opções') || t.includes('mais opcoes') || t.includes('cuscuz') ||
+          t.includes('falta de opções') || t.includes('falta de opcoes')
+        )) {
+          const pVar = candidates.problems.find(p => p.label === 'A&B - Variedade limitada')
+            || candidates.problems.find(p => p.label === 'A&B - Falta de opções');
+          if (pVar) {
+            chosen = { id: pVar.id, label: pVar.label };
+          }
+        }
+
+        // Preferência explícita: isolamento acústico é problema de Produto
+        // Se o texto/keyword indica barulho/isolamento, escolher "Produto - Isolamento acústico ruim"
+        {
+          const acousticHint = (
+            t.includes('isolamento acústico') || t.includes('isolamento acustico') ||
+            (keywordLabel && keywordLabel.toLowerCase().includes('isolamento')) ||
+            t.includes('isolamento') || t.includes('ruído') || t.includes('ruido') ||
+            t.includes('barulho') || t.includes('som alto') || t.includes('barulh')
+          );
+          if (acousticHint) {
+            const pAc = candidates.problems.find(p => p.label === 'Produto - Isolamento acústico ruim');
+            if (pAc) {
+              chosen = { id: pAc.id, label: pAc.label };
+            }
+          }
+        }
+
+        if (departmentId === 'Operações') {
+          chosen = byDept('Operações', (s: string) => t.includes(s));
+        } else if (departmentId === 'A&B' || (keywordLabel.includes('A&B'))) {
+          chosen = byDept('A&B', (s: string) => t.includes(s));
+        } else if (departmentId === 'Recepção' || t.includes('recepção') || t.includes('check-in') || t.includes('check-out')) {
+          // Demora com check-in/check-out específicos
+          if (t.includes('demora') || t.includes('demorou')) {
+            if (t.includes('check-in')) {
+              const pIn = candidates.problems.find(p => p.label === 'Recepção - Check-in demora');
+              if (pIn) chosen = { id: pIn.id, label: pIn.label };
+            } else if (t.includes('check-out')) {
+              const pOut = candidates.problems.find(p => p.label === 'Recepção - Check-out demora');
+              if (pOut) chosen = { id: pOut.id, label: pOut.label };
+            }
+          }
+          if (!chosen.id) {
+            chosen = byDept('Recepção', (s: string) => t.includes(s));
+          }
+        }
+
+        if (chosen.id && chosen.label) {
+          problemId = chosen.id;
+          problemLabel = chosen.label;
+          console.log(`🔧 Problem heurístico aplicado: "${problemLabel}" (dept: ${departmentId})`);
+        }
+      }
+    }
+
+    // 🔒 Coerência departamento ↔ problem: desativada em modo estrito
+    if (ALLOW_DEPT_REMAP && problemLabel && problemLabel !== 'VAZIO' && problemId !== 'EMPTY') {
+      const currentProblemDept = problemLabel.split('-')[0]?.trim();
+      if (currentProblemDept && currentProblemDept !== departmentId) {
+        const core = problemLabel.split('-').slice(1).join('-').trim();
+        const desiredLabel = `${departmentId} - ${core}`;
+        const sameDeptExact = candidates.problems.find(p => p.label === desiredLabel);
+        if (sameDeptExact) {
+          console.warn(`🔧 Ajuste department↔problem: "${problemLabel}" → "${desiredLabel}"`);
+          problemLabel = sameDeptExact.label;
+          problemId = sameDeptExact.id;
+        } else {
+          const alt = candidates.problems.find(p => p.label.startsWith(`${departmentId} -`) && p.label.toLowerCase().includes(core.toLowerCase()));
+          if (alt) {
+            console.warn(`🔧 Ajuste alternativo de problem para departamento: "${alt.label}"`);
+            problemLabel = alt.label;
+            problemId = alt.id;
+          } else {
+            // 🔎 Seleção genérica por similaridade de texto dentro do departamento
+            const detailText = (originalText || '').toLowerCase();
+            const deptProblems = candidates.problems.filter(p => p.label.startsWith(`${departmentId} -`));
+            const tokenize = (s: string) => s
+              .toLowerCase()
+              .replace(/[^a-zà-ú0-9\s-]/g, ' ')
+              .split(/\s+/)
+              .filter(w => w && w.length >= 3 && !['departamento','problema','atendimento','serviço','servico','geral','ruim'].includes(w));
+            const detailTokens = tokenize(detailText);
+            let best: { p?: typeof deptProblems[number]; score: number } = { score: 0 };
+            for (const p of deptProblems) {
+              const labelTokens = tokenize(p.label.split('-').slice(1).join(' '));
+              // score: número de tokens do label presentes no detalhe
+              const score = labelTokens.reduce((acc, tok) => acc + (detailTokens.includes(tok) ? 1 : 0), 0);
+              if (score > best.score) {
+                best = { p, score };
+              }
+            }
+            if (best.p && best.score > 0) {
+              console.warn(`🔧 Ajuste por similaridade: "${problemLabel}" → "${best.p.label}" (dept: ${departmentId})`);
+              problemLabel = best.p.label;
+              problemId = best.p.id;
+            } else {
+              console.warn(`⚠️ Sem variante de problem para departamento "${departmentId}" com núcleo "${core}". Mantendo problem original.`);
+            }
+          }
+        }
+      }
     }
     
+    // 🔒 ENFORCE: Problema deve pertencer ao mesmo departamento da keyword (desativado em modo estrito)
+    if (ALLOW_DEPT_REMAP && problemLabel && problemLabel !== 'VAZIO' && problemId !== 'EMPTY') {
+      const deptNorm = (departmentId || '').toLowerCase();
+      const problemDeptPrefix = (problemLabel.split(' - ')[0] || '').toLowerCase();
+      if (problemDeptPrefix && deptNorm && problemDeptPrefix !== deptNorm) {
+        console.warn(`⚠️ Ajuste de coerência dept-problem: dept="${departmentId}" vs problem="${problemLabel}" → buscando equivalente dentro do departamento correto`);
+
+        // Tentar encontrar o problem mais similar dentro do mesmo departamento
+        const detailText = (issue.detail || '').toLowerCase();
+        // Compatível com ES5: tokenização simples (ASCII), evitando propriedades Unicode e flag 'u'
+        const tokens: string[] = (detailText.match(/[a-zA-Z0-9]+/g) || []);
+        const candidatesInDept = candidates.problems.filter(p => p.label.toLowerCase().startsWith(`${deptNorm} -`));
+
+        let bestMatch: { p: typeof candidatesInDept[number]; score: number } | null = null;
+        for (const p of candidatesInDept) {
+          const pl = p.label.toLowerCase();
+          const score = tokens.reduce((acc: number, t: string) => acc + (pl.includes(t) ? 1 : 0), 0) + (detailText && pl.includes('sujo') ? 0.5 : 0);
+          if (!bestMatch || score > bestMatch.score) bestMatch = { p, score };
+        }
+
+        if (bestMatch && bestMatch.score > 0) {
+          problemLabel = bestMatch.p.label;
+          problemId = bestMatch.p.id;
+          console.log(`✅ Remapeado problem para mesmo departamento: "${problemLabel}"`);
+        } else {
+          // Caso específico: Governança/Limpeza
+          if (deptNorm === 'governança' || deptNorm === 'governanca') {
+            const cues = ['sujo','sujeira','banheiro','quarto','lençol','lencol','toalha','amenities','cheiro','odor','poeira','limpeza','arrumação','arrumacao'];
+            const hasCleaningCue = cues.some((c: string) => detailText.includes(c));
+            if (hasCleaningCue) {
+              const fallback = candidatesInDept.find(p => p.label.toLowerCase().includes('limpeza')) || candidatesInDept[0];
+              if (fallback) {
+                problemLabel = fallback.label;
+                problemId = fallback.id;
+                console.log(`✅ Fallback Governança ajustado para limpeza: "${problemLabel}"`);
+              }
+            }
+          }
+        }
+      }
+    }
+
     // ✅ Buscar department atualizado após correção
     const finalDepartment = candidates.departments.find(d => d.id === departmentId) || department;
     
@@ -766,6 +1294,99 @@ function processLLMResponse(
   issues.push(...uniqueIssues);
   
   console.log(`✅ Issues APÓS deduplicação: ${issues.length}`);
+
+  // 🛡️ GUARDA GLOBAL DE ELOGIO: se texto tiver fortes sinais positivos e nenhum negativo → problem=EMPTY
+  // Respeita STRICT_REASONING/ALLOW_PROBLEM_HEURISTICS e sinais de sugestão
+  if (ALLOW_PROBLEM_HEURISTICS) {
+    const txt = (originalText || '').toLowerCase();
+    const positiveHints = [
+      'ótimo','otimo','excelente','perfeito','maravilhoso','maravilhosa','fantástico','fantastico',
+      'bom','boa','muito bom','muito boa','agradável','agradavel','recomendo','confortável','confortavel',
+      'eficiente','eficientes','bem localizado','boa localização','boa localizacao','simpat', 'prestativ'
+    ];
+    const negativeHints = [
+      'ruim','péssim','pessim','demor','lento','falha','quebr','defeit','sujo','barulh','não funciona','nao funciona',
+      'mal educad','falta de','insistent','abordagem','indispon','problema','inadequad','sujidade','mof'
+    ];
+    const suggestionHints = [
+      'sugestão','sugiro','poderia','deveria','pode ter mais','poderia ter','deveria ter',
+      'adicionar','ampliar','mais opções','mais opcoes','outras opções','outras comidas','variedade',
+      'aparelho','aparelhos','equipamento','equipamentos','mais aparelhos','mais equipamentos'
+    ];
+    const hasPos = positiveHints.some(h => txt.includes(h));
+    const hasNeg = negativeHints.some(h => txt.includes(h));
+    const hasSuggestionCueInText = suggestionHints.some(h => txt.includes(h));
+    const hasSuggestionFlag = Boolean(response?.has_suggestion);
+
+    if (hasPos && !hasNeg && !hasSuggestionFlag && !hasSuggestionCueInText) {
+      for (const issue of issues) {
+        issue.problem_id = 'EMPTY';
+        issue.problem_label = 'VAZIO';
+      }
+      console.log('🛡️ Guarda global aplicada: feedback só-elogio → todos problems vazios');
+    }
+  }
+
+  // 🔒 GUARDA PÓS-PROCESSAMENTO: reforçar separação keyword vs problem
+  // - Keywords devem pertencer à whitelist oficial (KEYWORD_SEMANTIC_CONTEXT)
+  // - Termos negativos no label/detalhe → garantir problem específico e keyword neutra canônica
+  const validKeywordLabels = new Set<string>(Object.keys(KEYWORD_SEMANTIC_CONTEXT));
+  const negativePatterns = [
+    'vazamento','falha','quebrado','quebrada','defeito','danificado',
+    'ruim','péssimo','pessimo','lento','demora','demorado','barulho',
+    'sujo','sujeira','mofado','mofo','mal cheiro','cheiro ruim',
+    'não funciona','nao funciona','trincado','quebra','quebrada'
+  ];
+  const containsNegative = (txt: string | undefined): boolean => {
+    if (!txt) return false;
+    const t = txt.toLowerCase();
+    return negativePatterns.some(p => t.includes(p));
+  };
+
+  for (const issue of issues) {
+    const keywordInvalidOrNegative = !validKeywordLabels.has(issue.keyword_label) || containsNegative(issue.keyword_label) || containsNegative(issue.detail);
+    if (keywordInvalidOrNegative) {
+      // Não preencher problema se o contexto é claramente positivo
+      const t = (issue.detail || originalText || '').toLowerCase();
+      const positiveHints = ['ótimo','otimo','excelente','perfeito','maravilhoso','maravilhosa','fantástico','fantastico','bom','boa','muito bom','muito boa','agradável','agradavel','recomendo','confortável','confortavel','eficiente','eficientes','bem localizado','boa localização','boa localizacao','simpat','prestativ'];
+      const negativeHints = ['ruim','péssim','pessim','demor','lento','falha','quebr','defeit','sujo','barulh','não funciona','nao funciona','mal educad','falta de','insistent','abordagem','indispon','problema','inadequad','sujidade','mof'];
+      const hasPosCue = positiveHints.some(h => t.includes(h));
+      const hasNegCue = negativeHints.some(h => t.includes(h));
+      const sentimentIsPositive = (typeof response.sentiment === 'number' && response.sentiment >= 4);
+
+      // Garantir problem específico se estiver vazio, SOMENTE se houver pistas negativas ou sentimento <=3
+      if (ALLOW_PROBLEM_HEURISTICS && (issue.problem_id === 'EMPTY' || issue.problem_label === 'VAZIO') && (!hasPosCue || hasNegCue || !sentimentIsPositive)) {
+        const detail = issue.detail || '';
+        // Heurísticas simples para escolher problem candidato
+        let prob = candidates.problems.find(p => {
+          const l = p.label.toLowerCase();
+          return (
+            l.includes('vazamento') && detail.toLowerCase().includes('banheiro')
+          );
+        });
+        if (!prob) {
+          prob = candidates.problems.find(p => {
+            const l = p.label.toLowerCase();
+            return containsNegative(l) && (detail ? detail.toLowerCase().split(' ').some(w => l.includes(w)) : true);
+          }) || candidates.problems[0];
+        }
+        if (prob) {
+          issue.problem_id = prob.id;
+          issue.problem_label = prob.label;
+        }
+      }
+
+      // Remapear keyword para canônica e neutra por departamento (manutenção com contexto)
+      const correctedLabel = deriveNeutralKeyword(issue.detail || '', issue.department_id);
+      const candidateKw = candidates.keywords.find(k => k.label === correctedLabel)
+        || candidates.keywords.find(k => k.department_id === issue.department_id)
+        || candidates.keywords[0];
+      if (candidateKw) {
+        issue.keyword_id = candidateKw.id;
+        issue.keyword_label = candidateKw.label;
+      }
+    }
+  }
 
   if (issues.length === 0) {
  
@@ -1001,20 +1622,85 @@ export async function POST(request: NextRequest) {
       let selectedProblem = null;
       let department = 'Operacoes';
 
-      // Detectar contexto de A&B
-      if (text.includes('comida') || text.includes('garçom') || text.includes('atend') || text.includes('restaurante')) {
+      // Detectar contexto de A&B (somente com sinais claros de restaurante/bar)
+      const hasABContext = (
+        text.includes('comida') ||
+        text.includes('restaurante') ||
+        text.includes('café') ||
+        text.includes('jantar') ||
+        text.includes('almoço') ||
+        text.includes('bar') ||
+        text.includes('bebida') ||
+        text.includes('garçom') ||
+        text.includes('gastronomia') ||
+        text.includes('refeição') ||
+        text.includes('room service')
+      );
+
+      const hasReceptionContext = (
+        text.includes('recepção') ||
+        text.includes('front desk') ||
+        text.includes('check-in') ||
+        text.includes('check-out')
+      );
+
+      const mentionsServiceStaff = (
+        text.includes('atendimento') ||
+        text.includes('atendente') ||
+        text.includes('equipe') ||
+        text.includes('staff') ||
+        text.includes('funcionário') ||
+        text.includes('funcionarios') ||
+        text.includes('colaborador')
+      );
+
+      if (hasABContext) {
         department = 'A&B';
-        selectedKeyword = taxonomy.keywords.find(kw =>
-          kw.label.includes('A&B') && kw.label.includes('Serviço')
+        const hasRoomService = (
+          text.includes('room service') ||
+          text.includes('serviço de quarto') ||
+          text.includes('servico de quarto')
         );
+        if (hasRoomService) {
+          selectedKeyword = taxonomy.keywords.find(kw =>
+            kw.label.includes('A&B') && kw.label.includes('Room Service')
+          ) || taxonomy.keywords.find(kw => kw.label.includes('A&B') && kw.label.includes('Serviço'));
+        } else {
+          selectedKeyword = taxonomy.keywords.find(kw =>
+            kw.label.includes('A&B') && kw.label.includes('Serviço')
+          );
+        }
+      } else if (hasReceptionContext) {
+        department = 'Recepção';
+        selectedKeyword = taxonomy.keywords.find(kw =>
+          kw.label.includes('Recepção') && kw.label.includes('Atendimento')
+        );
+      } else if (mentionsServiceStaff) {
+        department = 'Operações';
+        selectedKeyword =
+          taxonomy.keywords.find(kw => kw.label.includes('Operações') && kw.label.includes('Atendimento')) ||
+          taxonomy.keywords.find(kw => kw.label === 'Atendimento') ||
+          null;
       }
 
       // Detectar problemas específicos
       if (text.includes('demorou') || text.includes('demora')) {
-        selectedProblem = taxonomy.problems.find(prob =>
+        // Preferir problema específico do departamento quando disponível
+        const findByDept = (deptLabel: string) => taxonomy.problems.find(prob =>
           prob.label.toLowerCase().includes('demora') &&
-          prob.label.toLowerCase().includes('atend')
+          prob.label.toLowerCase().includes('atend') &&
+          prob.label.includes(deptLabel)
         );
+
+        selectedProblem =
+          (department === 'A&B' && findByDept('A&B')) ||
+          (department === 'Operações' && findByDept('Operações')) ||
+          (department === 'Recepção' && findByDept('Recepção')) ||
+          taxonomy.problems.find(prob => prob.label.toLowerCase() === 'demora no atendimento') ||
+          taxonomy.problems.find(prob =>
+            prob.label.toLowerCase().includes('demora') && prob.label.toLowerCase().includes('atend')
+          ) ||
+          null;
       }
 
       if (text.includes('fria') || text.includes('frio')) {

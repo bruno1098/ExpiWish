@@ -284,8 +284,31 @@ const processDistribution = (data: Feedback[], field: keyof Feedback) => {
   const distribution: Record<string, number> = {};
   
   data.forEach(item => {
-    const value = String(item[field] || 'Não especificado');
-    distribution[value] = (distribution[value] || 0) + 1;
+    if (field === 'sector') {
+      // Para sector, usar allProblems se disponível, senão usar sector concatenado
+      if (item.allProblems && Array.isArray(item.allProblems)) {
+        item.allProblems.forEach((problemObj: any) => {
+          if (problemObj.sector && problemObj.sector.trim() !== '') {
+            const sector = problemObj.sector.trim();
+            if (!sector.startsWith('+')) { // Filtrar "+X outros"
+              distribution[sector] = (distribution[sector] || 0) + 1;
+            }
+          }
+        });
+      } else if (item.sector) {
+        // Fallback para dados concatenados, filtrando "+X outros"
+        const sectorList = item.sector.split(';').map((s: string) => s.trim());
+        sectorList.forEach(sector => {
+          if (sector && !sector.startsWith('+')) {
+            distribution[sector] = (distribution[sector] || 0) + 1;
+          }
+        });
+      }
+    } else {
+      // Para outros campos, usar o valor direto
+      const value = String(item[field] || 'Não especificado');
+      distribution[value] = (distribution[value] || 0) + 1;
+    }
   });
   
   // Converter para o formato de array esperado pelos gráficos
@@ -339,8 +362,25 @@ const processKeywordDistribution = (data: Feedback[]) => {
   const keywords: Record<string, number> = {};
   
   data.forEach(item => {
-    const keyword = item.keyword || 'Não especificado';
-    keywords[keyword] = (keywords[keyword] || 0) + 1;
+    // Usar allProblems se disponível (dados separados), senão usar keyword concatenado
+    if (item.allProblems && Array.isArray(item.allProblems)) {
+      item.allProblems.forEach((problemObj: any) => {
+        if (problemObj.keyword && problemObj.keyword.trim() !== '') {
+          const keyword = problemObj.keyword.trim();
+          if (!keyword.startsWith('+')) { // Filtrar "+X outros"
+            keywords[keyword] = (keywords[keyword] || 0) + 1;
+          }
+        }
+      });
+    } else if (item.keyword) {
+      // Fallback para dados concatenados, filtrando "+X outros"
+      const keywordList = item.keyword.split(';').map((k: string) => k.trim());
+      keywordList.forEach(keyword => {
+        if (keyword && !keyword.startsWith('+')) {
+          keywords[keyword] = (keywords[keyword] || 0) + 1;
+        }
+      });
+    }
   });
   
   return Object.entries(keywords)
