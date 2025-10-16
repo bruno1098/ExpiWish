@@ -795,10 +795,29 @@ function DashboardContent() {
     const problemCounts: Record<string, number> = {};
     
     data.forEach(feedback => {
-      if (feedback.problem) {
+      // Usar allProblems se disponível (dados separados), senão usar problem concatenado
+      if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+        feedback.allProblems.forEach((problemObj: any) => {
+          if (problemObj.problem) {
+            const trimmedProblem = problemObj.problem.trim();
+            // Filtrar problemas que começam com '+' (como '+2 outros') e VAZIO
+            if (trimmedProblem && 
+                isValidProblem(trimmedProblem) && 
+                !trimmedProblem.startsWith('+') &&
+                trimmedProblem.toLowerCase() !== 'vazio') {
+              problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
+            }
+          }
+        });
+      } else if (feedback.problem) {
+        // Fallback para dados antigos concatenados
         feedback.problem.split(';').forEach((problem: string) => {
           const trimmedProblem = problem.trim();
-          if (trimmedProblem && isValidProblem(trimmedProblem)) {
+          // Filtrar problemas que começam com '+' (como '+2 outros') e VAZIO
+          if (trimmedProblem && 
+              isValidProblem(trimmedProblem) && 
+              !trimmedProblem.startsWith('+') &&
+              trimmedProblem.toLowerCase() !== 'vazio') {
             problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
           }
         });
@@ -806,7 +825,7 @@ function DashboardContent() {
     });
     
     return Object.entries(problemCounts)
-      .filter(([problem]) => isValidProblem(problem)) // Dupla verificação
+      .filter(([problem]) => isValidProblem(problem) && !problem.startsWith('+')) // Dupla verificação
       .map(([problem, count]) => ({ label: problem, value: count }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 20);
@@ -816,10 +835,21 @@ function DashboardContent() {
     const keywordCounts: Record<string, number> = {};
     
     data.forEach(feedback => {
-      if (feedback.keyword) {
+      // Usar allProblems se disponível (dados separados), senão usar keyword concatenado
+      if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+        feedback.allProblems.forEach((problemObj: any) => {
+          if (problemObj.keyword) {
+            const trimmedKeyword = problemObj.keyword.trim();
+            if (trimmedKeyword && trimmedKeyword !== 'VAZIO') {
+              keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1;
+            }
+          }
+        });
+      } else if (feedback.keyword) {
+        // Fallback para dados antigos concatenados
         feedback.keyword.split(';').forEach((keyword: string) => {
           const trimmedKeyword = keyword.trim();
-          if (trimmedKeyword) {
+          if (trimmedKeyword && trimmedKeyword !== 'VAZIO') {
             keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1;
           }
         });
@@ -880,7 +910,7 @@ function DashboardContent() {
       if (feedback.sector) {
         feedback.sector.split(';').forEach((sector: string) => {
           const trimmedSector = sector.trim();
-          if (trimmedSector) {
+          if (trimmedSector && !trimmedSector.startsWith('+')) { // Filtrar "+X outros"
             sectorCounts[trimmedSector] = (sectorCounts[trimmedSector] || 0) + 1;
           }
         });
@@ -889,42 +919,34 @@ function DashboardContent() {
     
     return Object.entries(sectorCounts)
       .map(([sector, count]) => ({ label: sector, value: count }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 15);
+      .sort((a, b) => b.value - a.value);
   };
 
   // Nova função melhorada para contar problemas por departamento
   const processDepartmentProblemsDistribution = () => {
-    const departmentProblems: Record<string, number> = {};
+    const departmentCounts: Record<string, number> = {};
     
     filteredData.forEach(feedback => {
-      if (feedback.problem && feedback.sector) {
-        const allProblems = feedback.problem.split(';').map((p: string) => p.trim());
+      if (feedback.sector) {
         const allSectors = feedback.sector.split(';').map((s: string) => s.trim());
         
-        // Para cada problema válido, contar em cada departamento válido
-        allProblems.forEach((problem: string) => {
-          const trimmedProblem = problem.trim();
-          if (trimmedProblem && trimmedProblem !== 'VAZIO' && trimmedProblem.toLowerCase() !== 'sem problemas') {
-            allSectors.forEach((sector: string) => {
-              const trimmedSector = sector.trim();
-              if (trimmedSector && trimmedSector !== 'VAZIO') {
-                departmentProblems[trimmedSector] = (departmentProblems[trimmedSector] || 0) + 1;
-              }
-            });
+        // Contar cada feedback em cada departamento válido
+        allSectors.forEach((sector: string) => {
+          const trimmedSector = sector.trim();
+          if (trimmedSector && trimmedSector !== 'VAZIO' && !trimmedSector.startsWith('+')) { // Filtrar "+X outros"
+            departmentCounts[trimmedSector] = (departmentCounts[trimmedSector] || 0) + 1;
           }
         });
       }
     });
     
-    return Object.entries(departmentProblems)
-      .map(([department, problemCount]) => ({ 
+    return Object.entries(departmentCounts)
+      .map(([department, count]) => ({ 
         label: department, 
-        value: problemCount,
+        value: count,
         name: department
       }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 15);
+      .sort((a, b) => b.value - a.value);
   };
 
   const processApartamentoDistribution = () => {
@@ -1040,7 +1062,8 @@ function DashboardContent() {
         // Para cada problema válido, contar no apartamento
         allProblems.forEach((problem: string) => {
           const trimmedProblem = problem.trim();
-          if (trimmedProblem && trimmedProblem !== 'VAZIO' && trimmedProblem.toLowerCase() !== 'sem problemas' && isValidProblem(trimmedProblem)) {
+          // Filtrar problemas que começam com '+' (como '+2 outros')
+          if (trimmedProblem && trimmedProblem !== 'VAZIO' && trimmedProblem.toLowerCase() !== 'sem problemas' && isValidProblem(trimmedProblem) && !trimmedProblem.startsWith('+')) {
             apartamentoProblems[apartamento] = (apartamentoProblems[apartamento] || 0) + 1;
           }
         });
@@ -1682,41 +1705,14 @@ function DashboardContent() {
           </Card>
         </TabsContent>
 
-        {/* Problemas - NOVA VISUALIZAÇÃO DETALHADA */}
+        {/* Problemas - VISUALIZAÇÃO AVANÇADA COM SELETOR */}
         <TabsContent value="problems" className="space-y-6">
-          {/* Novo Sistema de Visualização de Problemas Detalhados */}
+          {/* Sistema de Visualização de Problemas com Múltiplos Modos */}
           <ProblemsVisualizationOptions 
             filteredData={filteredData}
             setSelectedItem={setSelectedItem}
             setChartDetailOpen={setChartDetailOpen}
           />
-
-          {/* Gráfico de Backup (caso necessário) - Mantido como fallback */}
-          <Card className="p-6 mt-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">📊 Visão Clássica - Problemas Resumidos</h3>
-              <Button
-                onClick={() => handleViewChart('problem', 'Principais Problemas', processProblemDistribution(filteredData), 'bar')}
-                variant="outline"
-                size="sm"
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Ver Completo
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Para comparação: visualização resumida tradicional (genérica)
-            </p>
-            <div className="h-[400px]">
-              <ProblemsChart 
-                data={processProblemDistribution(filteredData).slice(0, 15)}
-                onClick={(item: any, index: number) => {
-                  console.log(`Clique no problema: ${item.label || item.name}`);
-                  handleChartClick(item, 'problem');
-                }}
-              />
-            </div>
-          </Card>
         </TabsContent>
 
         {/* Departamentos */}
@@ -2528,7 +2524,7 @@ function DashboardContent() {
                 </Card>
 
                 {/* Tendência Mensal */}
-                {selectedItem.stats.monthlyTrend.length > 1 && (
+                {selectedItem?.stats?.monthlyTrend?.length > 1 && (
                   <Card className="p-6 shadow-lg border-0">
                     <h4 className="font-semibold mb-4 flex items-center text-lg">
                       <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg mr-3">
@@ -2539,7 +2535,7 @@ function DashboardContent() {
                     <div className="h-40">
                       <ModernChart 
                         type="line"
-                        data={selectedItem.stats.monthlyTrend.map((item: any) => ({
+                        data={(selectedItem?.stats?.monthlyTrend ?? []).map((item: any) => ({
                           label: item.month,
                           value: item.count
                         }))}
@@ -2549,7 +2545,7 @@ function DashboardContent() {
                 )}
 
                 {/* Palavras-chave Relacionadas */}
-                {selectedItem.stats.topKeywords.length > 0 && (
+                {selectedItem?.stats?.topKeywords?.length > 0 && (
                   <Card className="p-6 shadow-lg border-0">
                     <h4 className="font-semibold mb-4 flex items-center text-lg">
                       <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg mr-3">
@@ -2558,7 +2554,7 @@ function DashboardContent() {
                       Principais Palavras-chave
                     </h4>
                                          <div className="space-y-3">
-                       {selectedItem.stats.topKeywords.map((item: any, idx: number) => (
+                       {(selectedItem?.stats?.topKeywords ?? []).map((item: any, idx: number) => (
                          <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                            <span className="font-medium">{cleanDataWithSeparator(item.keyword)}</span>
                            <Badge variant="secondary" className="px-3 py-1">{item.count}</Badge>
@@ -2569,7 +2565,7 @@ function DashboardContent() {
                 )}
 
                 {/* Problemas Relacionados */}
-                {selectedItem.stats.topProblems.length > 0 && (
+                {selectedItem?.stats?.topProblems?.length > 0 && (
                   <Card className="p-6 shadow-lg border-0">
                     <h4 className="font-semibold mb-4 flex items-center text-lg">
                       <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg mr-3">
@@ -2578,7 +2574,7 @@ function DashboardContent() {
                       Problemas Relacionados
                     </h4>
                                          <div className="space-y-3">
-                       {selectedItem.stats.topProblems.map((item: any, idx: number) => (
+                       {(selectedItem?.stats?.topProblems ?? []).map((item: any, idx: number) => (
                          <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                            <span className="font-medium">{cleanDataWithSeparator(item.problem)}</span>
                            <Badge variant="destructive" className="px-3 py-1">{item.count}</Badge>

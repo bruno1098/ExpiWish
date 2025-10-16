@@ -1,6 +1,8 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { parseISODateLocal } from "./data-utils";
+import { KEYWORD_SEMANTIC_CONTEXT } from "./semantic-enrichment";
+import { KEYWORD_DEPARTMENT_MAP } from "./taxonomy-validation";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -76,76 +78,45 @@ export function formatDateTime(dateInput: string | Date): string {
   }
 }
 
-// Keywords oficiais válidas - SINCRONIZADO com a API
-const VALID_KEYWORDS = [
-  "A&B - Café da manhã", "A&B - Serviço", "A&B - Variedade", "A&B - Preço",
-  "Limpeza - Quarto", "Limpeza - Banheiro", "Limpeza - Áreas sociais", "Enxoval",
-  "Manutenção - Quarto", "Manutenção - Banheiro", "Manutenção - Instalações",
-  "Ar-condicionado", "Elevador", "Frigobar", "Infraestrutura",
-  "Lazer - Variedade", "Lazer - Estrutura", "Spa", "Piscina",
-  "Tecnologia - Wi-fi", "Tecnologia - TV", "Comodidade", "Estacionamento",
-  "Atendimento", "Acessibilidade", "Reserva de cadeiras (pool)", "Processo",
-  "Custo-benefício", "Comunicação", "Check-in - Atendimento", "Check-out - Atendimento",
-  "Concierge", "Cotas", "Reservas", "Água", "Recreação",
-  "Travesseiro", "Colchão", "Espelho"
-];
-
-// Departamentos oficiais válidos - SINCRONIZADO com a API
-const VALID_DEPARTMENTS = [
-  "A&B", "Governança", "Manutenção", "Manutenção - Quarto", "Manutenção - Instalações",
-  "Lazer", "TI", "Produto", "Operações", "Qualidade", "Recepção", 
-  "Programa de vendas", "Comercial"
-];
-
-// Problemas padronizados válidos
-const VALID_PROBLEMS = [
-  "Demora no Atendimento", "Espaço Insuficiente", "Qualidade da Comida",
-  "Não Funciona", "Muito Frio/Quente", "Conexão Instável", "Falta de Limpeza",
-  "Ruído Excessivo", "Capacidade Insuficiente", "Falta de Cadeiras", 
-  "Preço Alto", "Falta de Variedade", "Qualidade Baixa", "Falta de Manutenção",
-  "Demora no Check-in", "Demora no Check-out", "Falta de Acessibilidade",
-  "Comunicação Ruim", "Processo Lento", "Falta de Equipamento", "Fila Longa",
-  "Qualidade de Bebida", "Falta de Disponibilidade", "VAZIO"
-];
+// Conjuntos derivados dinamicamente da taxonomia atual
+const ALLOWED_DEPARTMENTS = new Set<string>(Object.values(KEYWORD_DEPARTMENT_MAP));
+const ALLOWED_KEYWORDS = new Set<string>(Object.keys(KEYWORD_SEMANTIC_CONTEXT));
 
 // Função para verificar se um problema é válido (não é "Não identificado" ou vazio inválido)
 export function isValidProblem(problem: string): boolean {
   if (!problem || typeof problem !== 'string') return false;
-  
   const cleanProblem = problem.trim();
-  
-  // Se está na lista de problemas válidos, é válido
-  if (VALID_PROBLEMS.includes(cleanProblem)) return true;
-  
-  // Verificar termos inválidos
-  const invalidTerms = [
-    'não identificado',
-    'nao identificado',
-    'não analisado',
-    'nao analisado'
-  ];
-  
+
+  // "VAZIO" é um placeholder válido quando não há problema associado
+  if (cleanProblem === 'VAZIO') return true;
+
+  // Rejeitar termos inválidos/placeholder
+  const invalidTerms = ['não identificado', 'nao identificado', 'não analisado', 'nao analisado'];
   const lowerProblem = cleanProblem.toLowerCase();
-  return !invalidTerms.some(term => lowerProblem.includes(term));
+  if (invalidTerms.some(term => lowerProblem.includes(term))) return false;
+
+  // Problema deve seguir o padrão "Departamento - Nome do problema" e departamento deve existir
+  const match = cleanProblem.match(/^\s*([^\-]+?)\s*-\s*(.+?)\s*$/);
+  if (!match) return false;
+  const dept = match[1].trim();
+  const core = match[2].trim();
+  if (!dept || !core) return false;
+
+  return ALLOWED_DEPARTMENTS.has(dept);
 }
 
 // Função para verificar se um setor/keyword é válido
 export function isValidSectorOrKeyword(value: string): boolean {
   if (!value || typeof value !== 'string') return false;
-  
   const cleanValue = value.trim();
-  
-  // Se está nas listas oficiais, é válido
-  if (VALID_KEYWORDS.includes(cleanValue) || VALID_DEPARTMENTS.includes(cleanValue)) {
+
+  // Válido se for keyword do contexto semântico ou um departamento conhecido
+  if (ALLOWED_KEYWORDS.has(cleanValue) || ALLOWED_DEPARTMENTS.has(cleanValue)) {
     return true;
   }
-  
-  // Verificar termos explicitamente inválidos
-  const invalidTerms = [
-    'não identificado',
-    'nao identificado'
-  ];
-  
+
+  // Invalidar placeholders explícitos
+  const invalidTerms = ['não identificado', 'nao identificado'];
   const lowerValue = cleanValue.toLowerCase();
   return !invalidTerms.some(term => lowerValue === term);
 }
@@ -156,12 +127,25 @@ export function filterValidFeedbacks(feedbacks: any[]) {
     const keyword = feedback.keyword || '';
     const sector = feedback.sector || '';
     
-    // Verificar se não é "não identificado" explicitamente
-    const hasValidKeyword = isValidSectorOrKeyword(keyword);
-    const hasValidSector = isValidSectorOrKeyword(sector);
+    // Verificar termos explicitamente inválidos
+    const invalidTerms = [
+      'não identificado',
+      'nao identificado',
+      'VAZIO',
+      ''
+    ];
     
-    // Pelo menos keyword e sector devem ser válidos
-    return hasValidKeyword && hasValidSector;
+    const isKeywordInvalid = invalidTerms.some(term => 
+      keyword.toLowerCase().trim() === term.toLowerCase()
+    );
+    
+    const isSectorInvalid = invalidTerms.some(term => 
+      sector.toLowerCase().trim() === term.toLowerCase()
+    );
+    
+    // Aceitar feedbacks que tenham pelo menos keyword OU sector válidos
+    // (excluir apenas quando AMBOS são inválidos)
+    return !(isKeywordInvalid && isSectorInvalid);
   });
 }
 
@@ -171,12 +155,25 @@ export function processSectorDistribution(data: any[]) {
   const sectorCounts: Record<string, number> = {};
   
   validFeedbacks.forEach(feedback => {
-    if (feedback.sector) {
+    // Usar allProblems se disponível (dados separados), senão usar sector concatenado
+    if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+      feedback.allProblems.forEach((problemObj: any) => {
+        if (problemObj.sector && isValidSectorOrKeyword(problemObj.sector)) {
+          const trimmedSector = problemObj.sector.trim();
+          if (trimmedSector && trimmedSector !== 'VAZIO') {
+            sectorCounts[trimmedSector] = (sectorCounts[trimmedSector] || 0) + 1;
+          }
+        }
+      });
+    } else if (feedback.sector) {
+      // Fallback para dados antigos concatenados
       // Separar por ; e remover duplicatas
       const sectors = Array.from(new Set(feedback.sector.split(';').map((s: string) => s.trim()))) as string[];
       
       sectors.forEach((sector: string) => {
-        if (isValidSectorOrKeyword(sector)) {
+        if (isValidSectorOrKeyword(sector) && 
+            sector !== 'VAZIO' && 
+            !sector.startsWith('+')) { // Filtrar "+X outros" dos dados antigos
           sectorCounts[sector] = (sectorCounts[sector] || 0) + 1;
         }
       });
@@ -194,12 +191,25 @@ export function processKeywordDistribution(data: any[]) {
   const keywordCounts: Record<string, number> = {};
   
   validFeedbacks.forEach(feedback => {
-    if (feedback.keyword) {
+    // Usar allProblems se disponível (dados separados), senão usar keyword concatenado
+    if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+      feedback.allProblems.forEach((problemObj: any) => {
+        if (problemObj.keyword && isValidSectorOrKeyword(problemObj.keyword)) {
+          const trimmedKeyword = problemObj.keyword.trim();
+          if (trimmedKeyword && trimmedKeyword !== 'VAZIO') {
+            keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1;
+          }
+        }
+      });
+    } else if (feedback.keyword) {
+      // Fallback para dados antigos concatenados
       // Separar por ; e remover duplicatas
       const keywords = Array.from(new Set(feedback.keyword.split(';').map((k: string) => k.trim()))) as string[];
       
       keywords.forEach((keyword: string) => {
-        if (isValidSectorOrKeyword(keyword)) {
+        if (isValidSectorOrKeyword(keyword) && 
+            keyword !== 'VAZIO' && 
+            !keyword.startsWith('+')) { // Filtrar "+X outros" dos dados antigos
           keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
         }
       });
@@ -217,12 +227,27 @@ export function processProblemDistribution(data: any[]) {
   const problemCounts: Record<string, number> = {};
   
   validFeedbacks.forEach(feedback => {
-    if (feedback.problem) {
+    // Usar allProblems se disponível (dados separados), senão usar problem concatenado
+    if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+      feedback.allProblems.forEach((problemObj: any) => {
+        if (problemObj.problem && isValidProblem(problemObj.problem)) {
+          const trimmedProblem = problemObj.problem.trim();
+          if (trimmedProblem && 
+              trimmedProblem.toLowerCase() !== 'vazio' && 
+              !trimmedProblem.startsWith('+')) {
+            problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
+          }
+        }
+      });
+    } else if (feedback.problem) {
+      // Fallback para dados antigos concatenados
       // Separar por ; e remover duplicatas
       const problems = Array.from(new Set(feedback.problem.split(';').map((p: string) => p.trim()))) as string[];
       
       problems.forEach((problem: string) => {
-        if (isValidProblem(problem)) {
+        if (isValidProblem(problem) && 
+            problem.toLowerCase() !== 'vazio' && 
+            !problem.startsWith('+')) {
           problemCounts[problem] = (problemCounts[problem] || 0) + 1;
         }
       });
@@ -232,4 +257,82 @@ export function processProblemDistribution(data: any[]) {
   return Object.entries(problemCounts)
     .map(([problem, count]) => ({ label: problem, value: count }))
     .sort((a, b) => b.value - a.value);
-} 
+}
+
+// Funções utilitárias para extrair dados separados de feedbacks
+// Sempre prioriza allProblems quando disponível, filtra "+X outros" dos dados antigos
+
+export function getFeedbackKeywords(feedback: any): string[] {
+  if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+    // Usar dados separados
+    const keywords = feedback.allProblems
+      .map((problemObj: any) => problemObj.keyword)
+      .filter((keyword: string) => keyword && isValidSectorOrKeyword(keyword))
+      .map((keyword: string) => keyword.trim());
+    return Array.from(new Set(keywords));
+  } else if (feedback.keyword) {
+    // Fallback para dados concatenados, filtrando "+X outros"
+    return Array.from(new Set(
+      feedback.keyword.split(';')
+        .map((k: string) => k.trim())
+        .filter((k: string) => k && isValidSectorOrKeyword(k) && !k.startsWith('+'))
+    ));
+  }
+  return [];
+}
+
+export function getFeedbackSectors(feedback: any): string[] {
+  if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+    // Usar dados separados
+    const sectors = feedback.allProblems
+      .map((problemObj: any) => problemObj.sector)
+      .filter((sector: string) => sector && isValidSectorOrKeyword(sector))
+      .map((sector: string) => sector.trim());
+    return Array.from(new Set(sectors));
+  } else if (feedback.sector) {
+    // Fallback para dados concatenados, filtrando "+X outros"
+    return Array.from(new Set(
+      feedback.sector.split(';')
+        .map((s: string) => s.trim())
+        .filter((s: string) => s && isValidSectorOrKeyword(s) && !s.startsWith('+'))
+    ));
+  }
+  return [];
+}
+
+export function getFeedbackProblems(feedback: any): string[] {
+  if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+    // Usar dados separados
+    const problems = feedback.allProblems
+      .map((problemObj: any) => problemObj.problem)
+      .filter((problem: string) => problem && isValidProblem(problem))
+      .map((problem: string) => problem.trim());
+    return Array.from(new Set(problems));
+  } else if (feedback.problem) {
+    // Fallback para dados concatenados, filtrando "+X outros"
+    return Array.from(new Set(
+      feedback.problem.split(';')
+        .map((p: string) => p.trim())
+        .filter((p: string) => p && isValidProblem(p) && !p.startsWith('+'))
+    ));
+  }
+  return [];
+}
+
+// Função para obter o primeiro keyword válido (para compatibilidade)
+export function getFeedbackPrimaryKeyword(feedback: any): string {
+  const keywords = getFeedbackKeywords(feedback);
+  return keywords.length > 0 ? keywords[0] : 'Não identificado';
+}
+
+// Função para obter o primeiro setor válido (para compatibilidade)
+export function getFeedbackPrimarySector(feedback: any): string {
+  const sectors = getFeedbackSectors(feedback);
+  return sectors.length > 0 ? sectors[0] : 'Não identificado';
+}
+
+// Função para obter o primeiro problema válido (para compatibilidade)
+export function getFeedbackPrimaryProblem(feedback: any): string {
+  const problems = getFeedbackProblems(feedback);
+  return problems.length > 0 ? problems[0] : '';
+}

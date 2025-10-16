@@ -64,6 +64,7 @@ import {
   ProblemsBySentimentChart,
   ProblemsDistributionChart
 } from "@/components/modern-charts";
+import DetailProblem from "@/app/admin/components/detail_problem";
 import { 
   filterValidFeedbacks, 
   isValidProblem, 
@@ -72,6 +73,7 @@ import {
   processKeywordDistribution as processValidKeywordDistribution,
   processProblemDistribution as processValidProblemDistribution
 } from "@/lib/utils";
+import { AdminProblemsVisualizationOptions } from "./ProblemsVisualizationOptions";
 
 // Interfaces
 interface AnalysisData {
@@ -260,11 +262,14 @@ function AdminDashboardContent() {
 
   // Auto-aplicar filtros quando qualquer filtro é alterado
   useEffect(() => {
-    if (analysisData?.data) {
-      const filtered = applyGlobalFilters(analysisData.data);
-      setGlobalFilteredData(filtered);
-    }
-  }, [dateRange, sentimentFilter, sourceFilter, languageFilter, apartmentFilter, hiddenRatings, analysisData?.data]);
+    // Aplicar filtros globais sobre a base correta:
+    // se houver filtro de hotel, usar dados do hotel; caso contrário, usar todos os dados
+    const baseData = isFilterApplied
+      ? (filteredData?.data || [])
+      : (analysisData?.data || []);
+    const filtered = applyGlobalFilters(baseData);
+    setGlobalFilteredData(filtered);
+  }, [dateRange, sentimentFilter, sourceFilter, languageFilter, apartmentFilter, hiddenRatings, analysisData?.data, filteredData?.data, isFilterApplied]);
 
   // Função para aplicar filtros globais
   const applyGlobalFilters = useCallback((data: any[]) => {
@@ -317,13 +322,14 @@ function AdminDashboardContent() {
     });
   }, [hiddenRatings, dateRange, sentimentFilter, sourceFilter, languageFilter, apartmentFilter]);
   
-  // Atualizar dados filtrados apenas quando os dados originais mudarem (não quando filtros mudarem)
+  // Atualizar dados filtrados quando a base de dados mudar (dados originais ou dados por hotel)
   useEffect(() => {
-    if (analysisData?.data) {
-      const filtered = applyGlobalFilters(analysisData.data);
-      setGlobalFilteredData(filtered);
-    }
-  }, [analysisData?.data, applyGlobalFilters]);
+    const baseData = isFilterApplied
+      ? (filteredData?.data || [])
+      : (analysisData?.data || []);
+    const filtered = applyGlobalFilters(baseData);
+    setGlobalFilteredData(filtered);
+  }, [analysisData?.data, filteredData?.data, isFilterApplied, applyGlobalFilters]);
 
   // Função para diagnóstico
   const runDiagnostics = async () => {
@@ -493,19 +499,15 @@ function AdminDashboardContent() {
 
   // Função centralizada para obter dados consistentes
   const getCurrentData = () => {
-    // Se há filtro de hotel aplicado, usar filteredData
-    if (isFilterApplied && filteredData) {
-      const cleanedData = filteredData.data ? filteredData.data.filter((feedback: any) => !isNotIdentifiedFeedback(feedback)) : [];
-      return cleanedData;
-    }
-    
-    // Caso contrário, usar globalFilteredData ou analysisData
-    const data = globalFilteredData.length > 0 ? globalFilteredData : analysisData?.data;
-    
-    // Filtrar feedbacks "não identificados" do dashboard principal
-    const cleanedData = data ? data.filter((feedback: any) => !isNotIdentifiedFeedback(feedback)) : [];
-    
-    return cleanedData;
+    // Sempre preferir os dados já filtrados globalmente (aplicando período, sentimento, fontes, idioma, ratings ocultas, apartamento, etc.)
+    // Quando há filtro de hotel aplicado, globalFilteredData contém os filtros globais sobre os feedbacks desse hotel.
+    // Como fallback, usa filteredData.data (apenas hotel) ou analysisData.data (sem filtros globais).
+    const baseData = isFilterApplied
+      ? (globalFilteredData.length > 0 ? globalFilteredData : (filteredData?.data || []))
+      : (globalFilteredData.length > 0 ? globalFilteredData : (analysisData?.data || []));
+
+    // Remover feedbacks explicitamente marcados como "não identificado"
+    return (baseData || []).filter((feedback: any) => !isNotIdentifiedFeedback(feedback));
   };
 
   // Função para lidar com cliques em gráficos
@@ -537,12 +539,38 @@ function AdminDashboardContent() {
 
       case 'problem':
         const problemLabel = data.label || data.name;
+        const norm = (s: string) => s
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+        const extractLabelParts = (raw: string): { department: string; problem: string } => {
+          const normalizedDash = raw.replace(' – ', ' - ');
+          const parts = normalizedDash.split('-');
+          const department = (parts[0] || '').trim();
+          const problem = parts.length > 1 ? parts.slice(1).join('-').trim() : '';
+          return { department, problem };
+        };
+        const { department, problem } = extractLabelParts(String(problemLabel));
+        const depTarget = norm(department);
+        const probTarget = norm(problem);
         filteredFeedbacks = dataToUse.filter((feedback: any) => {
-          if (feedback.problems && Array.isArray(feedback.problems)) {
-            return feedback.problems.includes(problemLabel);
+          if (Array.isArray(feedback?.allProblems)) {
+            return feedback.allProblems.some((p: any) => {
+              const pMain = norm(String(p?.problem || ''));
+              const pDept = norm(String((p?.sector ?? p?.department) ?? ''));
+              return pDept === depTarget && pMain.includes(probTarget);
+            });
           }
-          if (feedback.problem && typeof feedback.problem === 'string') {
-            return feedback.problem.split(';').map((p: string) => p.trim()).includes(problemLabel);
+          const sectorRaw = String(feedback?.sector || feedback?.department || '').trim();
+          const sectors = sectorRaw ? sectorRaw.split(/[;,|]/).map((s: string) => norm(s)) : [];
+          const sectorMatches = sectors.includes(depTarget);
+          if (!sectorMatches) return false;
+          const main = norm(String(feedback?.problem_main || ''));
+          if (main && main.includes(probTarget)) return true;
+          if (typeof feedback?.problem === 'string') {
+            const parts = feedback.problem.split(';').map((s: string) => norm(String(s).split('-').slice(1).join('-').trim()));
+            return parts.some((s: string) => s.includes(probTarget));
           }
           return false;
         });
@@ -835,6 +863,54 @@ function AdminDashboardContent() {
     setChartModalOpen(true);
   };
 
+  // Abrir painel de detalhes com visão geral (sem filtro específico)
+  const openDetailOverview = (label: string) => {
+    const dataToUse = getCurrentData();
+    if (!dataToUse || dataToUse.length === 0) {
+      toast({
+        title: "Nenhum feedback encontrado",
+        description: "Não há feedbacks disponíveis no período/escopo atual",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const filteredFeedbacks = dataToUse;
+
+    const stats = {
+      totalOccurrences: filteredFeedbacks.length,
+      averageRating: filteredFeedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) / filteredFeedbacks.length || 0,
+      sentimentDistribution: {
+        positive: filteredFeedbacks.filter(f => f.sentiment === 'positive').length,
+        neutral: filteredFeedbacks.filter(f => f.sentiment === 'neutral').length,
+        negative: filteredFeedbacks.filter(f => f.sentiment === 'negative').length,
+      },
+      ratingDistribution: {
+        1: filteredFeedbacks.filter(f => f.rating === 1).length,
+        2: filteredFeedbacks.filter(f => f.rating === 2).length,
+        3: filteredFeedbacks.filter(f => f.rating === 3).length,
+        4: filteredFeedbacks.filter(f => f.rating === 4).length,
+        5: filteredFeedbacks.filter(f => f.rating === 5).length,
+      },
+      percentage: ((filteredFeedbacks.length / dataToUse.length) * 100).toFixed(1),
+      recentFeedbacks: filteredFeedbacks
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      topKeywords: getTopKeywordsForItem(filteredFeedbacks),
+      topProblems: getTopProblemsForItem(filteredFeedbacks),
+      topHotels: getTopHotelsForItem(filteredFeedbacks),
+      monthlyTrend: getMonthlyTrendForItem(filteredFeedbacks)
+    };
+
+    setSelectedItem({
+      type: 'general',
+      value: label,
+      data: { label },
+      feedbacks: filteredFeedbacks,
+      stats
+    });
+    setDetailPanelOpen(true);
+  };
+
   // Funções de processamento de dados - usando dados centralizados
   const processRatingDistribution = (data?: any[]) => {
     const dataToUse = data || getCurrentData();
@@ -861,7 +937,22 @@ function AdminDashboardContent() {
     const problemCounts: Record<string, number> = {};
     
     dataToUse.forEach(feedback => {
-      if (feedback.problem) {
+      // Usar allProblems se disponível (dados separados), senão usar problem concatenado
+      if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+        feedback.allProblems.forEach((problemObj: any) => {
+          if (problemObj.problem) {
+            const trimmedProblem = problemObj.problem.trim();
+            // Contar apenas problemas válidos que não sejam VAZIO e não comecem com '+'
+            if (trimmedProblem && 
+                isValidProblem(trimmedProblem) && 
+                trimmedProblem.toLowerCase() !== 'vazio' &&
+                !trimmedProblem.startsWith('+')) {
+              problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
+            }
+          }
+        });
+      } else if (feedback.problem) {
+        // Fallback para dados antigos concatenados
         const allProblems = feedback.problem.split(';').map((p: string) => p.trim());
         
         // Verificar se o feedback tem pelo menos um problema válido (incluindo VAZIO se acompanhado)
@@ -873,10 +964,11 @@ function AdminDashboardContent() {
         if (hasValidProblems) {
           allProblems.forEach((problem: string) => {
             const trimmedProblem = problem.trim();
-            // Contar apenas problemas válidos que não sejam VAZIO
+            // Contar apenas problemas válidos que não sejam VAZIO e não comecem com '+'
             if (trimmedProblem && 
                 isValidProblem(trimmedProblem) && 
-                trimmedProblem.toLowerCase() !== 'vazio') {
+                trimmedProblem.toLowerCase() !== 'vazio' &&
+                !trimmedProblem.startsWith('+')) {
               problemCounts[trimmedProblem] = (problemCounts[trimmedProblem] || 0) + 1;
             }
           });
@@ -951,26 +1043,18 @@ function AdminDashboardContent() {
     const sectorCounts: Record<string, number> = {};
     
     (dataToUse || []).forEach(feedback => {
-      if (feedback.problem && feedback.sector) {
-        const allProblems = feedback.problem.split(';').map((p: string) => p.trim());
+      if (feedback.sector) {
         const allSectors = feedback.sector.split(';').map((s: string) => s.trim());
         
-        // Verificar se há problemas válidos neste feedback (incluindo VAZIO se acompanhado)
-        const hasValidProblems = allProblems.some((problem: string) => 
-          isValidProblemWithContext(problem, allProblems)
-        );
-        
-        // Se o feedback tem problemas válidos, contar para cada departamento válido
-        if (hasValidProblems) {
-          allSectors.forEach((sector: string) => {
-            const trimmedSector = sector.trim();
-            if (trimmedSector && trimmedSector !== 'VAZIO') {
-              // Normalizar o nome do departamento para unificar variações de manutenção
-              const normalizedSector = normalizeDepartmentName(trimmedSector);
-              sectorCounts[normalizedSector] = (sectorCounts[normalizedSector] || 0) + 1;
-            }
-          });
-        }
+        // Contar cada ocorrência de setor válida, independente de problemas
+        allSectors.forEach((sector: string) => {
+          const trimmedSector = sector.trim();
+          if (trimmedSector && trimmedSector !== 'VAZIO' && !trimmedSector.startsWith('+')) { // Filtrar "+X outros" e VAZIO
+            // Normalizar o nome do departamento para unificar variações de manutenção e EG
+            const normalizedSector = normalizeDepartmentName(trimmedSector);
+            sectorCounts[normalizedSector] = (sectorCounts[normalizedSector] || 0) + 1;
+          }
+        });
       }
     });
     
@@ -995,7 +1079,8 @@ function AdminDashboardContent() {
         // Para cada problema válido, contar em cada departamento válido
         allProblems.forEach((problem: string) => {
           const trimmedProblem = problem.trim();
-          if (trimmedProblem && trimmedProblem !== 'VAZIO' && trimmedProblem.toLowerCase() !== 'sem problemas') {
+          // Filtrar problemas que começam com '+' (como '+2 outros')
+          if (trimmedProblem && trimmedProblem !== 'VAZIO' && trimmedProblem.toLowerCase() !== 'sem problemas' && !trimmedProblem.startsWith('+')) {
             allSectors.forEach((sector: string) => {
               const trimmedSector = sector.trim();
               if (trimmedSector && trimmedSector !== 'VAZIO') {
@@ -1026,10 +1111,21 @@ function AdminDashboardContent() {
     const dataToUse = data && data.length > 0 ? data : getCurrentData();
     
     (dataToUse || []).forEach(feedback => {
-      if (feedback.keyword) {
+      // Usar allProblems se disponível (dados separados), senão usar keyword concatenado
+      if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+        feedback.allProblems.forEach((problemObj: any) => {
+          if (problemObj.keyword) {
+            const trimmedKeyword = problemObj.keyword.trim();
+            if (trimmedKeyword && trimmedKeyword !== 'VAZIO') {
+              keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1;
+            }
+          }
+        });
+      } else if (feedback.keyword) {
+        // Fallback para dados antigos concatenados
         feedback.keyword.split(';').forEach((keyword: string) => {
           const trimmedKeyword = keyword.trim();
-          if (trimmedKeyword) {
+          if (trimmedKeyword && trimmedKeyword !== 'VAZIO') {
             keywordCounts[trimmedKeyword] = (keywordCounts[trimmedKeyword] || 0) + 1;
           }
         });
@@ -1384,10 +1480,16 @@ function AdminDashboardContent() {
           const filteredData = analysis.data.filter(filterByDate);
           totalFeedbacks += filteredData.length;
           
-          allFeedbacks.push(...filteredData.map((f: any) => ({
-            ...f,
-            hotel: analysis.hotelName || "Hotel não especificado"
-          })));
+          const hotelDisplayName = (analysis as any).hotelDisplayName || analysis.hotelName || "Hotel não especificado";
+          const hotelDocId = (analysis as any).hotelDocId || analysis.hotelId || "";
+          allFeedbacks.push(
+            ...filteredData.map((f: any) => ({
+              ...f,
+              hotel: hotelDisplayName,
+              hotelName: hotelDisplayName,
+              hotelId: f.hotelId || hotelDocId,
+            }))
+          );
           
           filteredData.forEach((f: any) => {
             if (f.rating) {
@@ -1414,7 +1516,7 @@ function AdminDashboardContent() {
               });
             }
             
-            const hotelName = f.hotel || analysis.hotelName || "Hotel não especificado";
+            const hotelName = f.hotel || (analysis as any).hotelDisplayName || analysis.hotelName || "Hotel não especificado";
             hotelMap.set(hotelName, (hotelMap.get(hotelName) || 0) + 1);
             
             if (f.source) {
@@ -1497,6 +1599,40 @@ function AdminDashboardContent() {
   };
 
   // Função para aplicar filtro por hotel
+  const normalizeStringForHotel = (s: string) => {
+    try {
+      return (s || "")
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    } catch {
+      return (s || "").toLowerCase().trim();
+    }
+  };
+
+  const matchesHotel = (feedback: any, hotelId: string, hotelName: string) => {
+    const nfName = normalizeStringForHotel(feedback.hotel || feedback.hotelName || "");
+    const nfId = normalizeStringForHotel(feedback.hotelId || "");
+    const nhId = normalizeStringForHotel(hotelId || "");
+    const nhName = normalizeStringForHotel(hotelName || "");
+
+    // Igualdade por ID
+    if (nfId && nhId && nfId === nhId) return true;
+
+    // Igualdade por nome normalizado
+    if (nfName && nhName && nfName === nhName) return true;
+
+    // Fallback de substring para variações (ex.: "wish foz" vs "wish foz do iguacu")
+    if (nfName && nhName && (nfName.includes(nhName) || nhName.includes(nfName))) return true;
+
+    // Fallback de substring para IDs normalizados (ex.: "wish foz" vs "wish foz do iguacu" em IDs)
+    if (nfId && nhId && (nfId.includes(nhId) || nhId.includes(nfId))) return true;
+
+    return false;
+  };
+
   const applyHotelFilter = (hotelId: string) => {
     if (hotelId === "todos") {
       setFilteredData(null);
@@ -1525,11 +1661,34 @@ function AdminDashboardContent() {
     const hotel = hotels.find(h => h.id === hotelId);
     const hotelName = hotel ? hotel.name : "Hotel desconhecido";
     
-    const filteredFeedbacks = analysisData.data.filter(
-      (feedback: any) => feedback.hotel === hotelName
-    );
+    // Compatibilizar diferentes formatos de referência de hotel nos feedbacks
+    const filteredFeedbacks = analysisData.data.filter((feedback: any) => {
+      return matchesHotel(feedback, hotelId, hotelName);
+    });
     
     if (filteredFeedbacks.length === 0) {
+      // Quando não há feedbacks, ainda aplicar o filtro para evitar manter dados do hotel anterior
+      const emptyAnalysis: AnalysisData = {
+        ...analysisData,
+        hotelId: hotelId,
+        hotelName: hotelName,
+        data: [],
+        analysis: {
+          averageRating: 0,
+          positiveSentiment: 0,
+          ratingDistribution: [],
+          problemDistribution: [],
+          hotelDistribution: [{ label: hotelName, value: 0 }],
+          sourceDistribution: [],
+          languageDistribution: [],
+          keywordDistribution: [],
+          apartamentoDistribution: [],
+          recentFeedbacks: []
+        }
+      };
+      setFilteredData(emptyAnalysis);
+      setIsFilterApplied(true);
+      setGlobalFilteredData([]);
       toast({
         title: "Nenhum feedback encontrado",
         description: `Não há feedbacks disponíveis para o hotel ${hotelName}`,
@@ -1762,6 +1921,58 @@ function AdminDashboardContent() {
     loadData();
   }, [authLoading, isAuthenticated, userData, loadFromCache, toast]); // Dependências otimizadas
 
+  // Função para forçar recarregamento dos dados
+  const forceReload = useCallback(async () => {
+    clearDashboardCache();
+    setIsLoading(true);
+    try {
+      await fetchData();
+      toast({
+        title: "Dashboard atualizado",
+        description: "Dados recarregados com sucesso do servidor.",
+      });
+    } catch (error) {
+      console.error('Erro ao recarregar dados:', error);
+      toast({
+        title: "Erro na atualização",
+        description: "Houve um problema ao recarregar os dados.",
+        variant: "destructive",
+      });
+    }
+  }, [clearDashboardCache, toast]);
+
+  // Listener para sincronização entre abas: invalida cache quando staff ocultar/excluir análises
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'admin-dashboard-cache-invalidated') {
+        forceReload();
+      }
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if ((window as any).BroadcastChannel) {
+        bc = new BroadcastChannel('admin-dashboard-sync');
+        bc.onmessage = (evt: MessageEvent) => {
+          const data = (evt && evt.data) || {};
+          if (data.type === 'invalidate_admin_cache') {
+            forceReload();
+          }
+        };
+      }
+    } catch (err) {
+      console.warn('BroadcastChannel não disponível:', err);
+    }
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      if (bc) bc.close();
+    };
+  }, [forceReload]);
+
   // Calcular totais baseados nos dados filtrados
   const totalFeedbacks = globalFilteredData?.length || 0;
   const totalHotels = useMemo(() => {
@@ -1798,26 +2009,6 @@ function AdminDashboardContent() {
 
   // Renderização condicional - removida a segunda tela de carregamento
   // O carregamento agora é gerenciado apenas pelo HotelLoadingScreen no login
-
-  // Função para forçar recarregamento dos dados
-  const forceReload = useCallback(async () => {
-    clearDashboardCache();
-    setIsLoading(true);
-    try {
-      await fetchData();
-      toast({
-        title: "Dashboard atualizado",
-        description: "Dados recarregados com sucesso do servidor.",
-      });
-    } catch (error) {
-      console.error('Erro ao recarregar dados:', error);
-      toast({
-        title: "Erro na atualização",
-        description: "Houve um problema ao recarregar os dados.",
-        variant: "destructive",
-      });
-    }
-  }, [clearDashboardCache, toast]);
 
   // Mostrar estado de carregamento enquanto os dados estão sendo buscados ou autenticação está em andamento
   if (isLoading || authLoading) {
@@ -2142,7 +2333,7 @@ function AdminDashboardContent() {
                           className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                         >
                           <option value="all">🌐 Todas as plataformas</option>
-                          {Array.from(new Set(analysisData.data.map(f => f.source).filter(Boolean))).map(source => (
+                          {Array.from(new Set((getCurrentData() || []).map(f => f.source).filter(Boolean))).map(source => (
                             <option key={source} value={source}>📱 {source}</option>
                           ))}
                         </select>
@@ -2164,7 +2355,7 @@ function AdminDashboardContent() {
                           className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                         >
                           <option value="all">🗣️ Todos os idiomas</option>
-                          {Array.from(new Set(analysisData.data.map(f => f.language).filter(Boolean))).map(language => (
+                          {Array.from(new Set((getCurrentData() || []).map(f => f.language).filter(Boolean))).map(language => (
                             <option key={language} value={language}>
                               {language === 'portuguese' ? '🇧🇷' : language === 'english' ? '🇺🇸' : language === 'spanish' ? '🇪🇸' : '🌍'} {language}
                             </option>
@@ -2186,7 +2377,7 @@ function AdminDashboardContent() {
                           className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                         >
                           <option value="all">🏠 Todos os apartamentos</option>
-                          {Array.from(new Set(analysisData.data.map(f => f.apartamento).filter(Boolean))).map(apartamento => (
+                          {Array.from(new Set((getCurrentData() || []).map(f => f.apartamento).filter(Boolean))).map(apartamento => (
                             <option key={apartamento} value={apartamento}>🏢 Apto {apartamento}</option>
                           ))}
                         </select>
@@ -2248,13 +2439,13 @@ function AdminDashboardContent() {
                           <div className="flex items-center justify-between text-sm mb-2">
                             <span className="font-medium text-gray-700 dark:text-gray-300">Resultados da filtragem:</span>
                             <span className="font-bold text-purple-600 dark:text-purple-400">
-                              {globalFilteredData.length} de {analysisData.data.filter((f: any) => !isNotIdentifiedFeedback(f)).length} feedbacks identificados
+                              {globalFilteredData.length} de {(getCurrentData() || []).length} feedbacks identificados
                             </span>
                           </div>
                           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                             <div 
                               className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${(globalFilteredData.length / analysisData.data.filter((f: any) => !isNotIdentifiedFeedback(f)).length) * 100}%` }}
+                              style={{ width: `${(((getCurrentData() || []).length > 0 ? (globalFilteredData.length / (getCurrentData() || []).length) * 100 : 0))}%` }}
                             ></div>
                           </div>
                         </div>
@@ -2440,12 +2631,7 @@ function AdminDashboardContent() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => handleViewChart(
-                      'problem',
-                      'Principais Problemas',
-                      processProblemDistribution(),
-                      'bar'
-                    )}
+                    onClick={() => openDetailOverview('Principais Problemas')}
                   >
                     Ver Detalhes
                   </Button>
@@ -2456,6 +2642,7 @@ function AdminDashboardContent() {
                     data={processProblemDistribution()}
                     onClick={(item) => handleChartClick(item, 'problem')}
                     maxItems={6}
+                    contextRows={getCurrentData()}
                   />
                 </div>
               </Card>
@@ -2756,31 +2943,14 @@ function AdminDashboardContent() {
 
           {/* Problemas */}
           <TabsContent value="problems" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card className="p-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-semibold">Problemas Mais Comuns</h3>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleViewChart(
-                      'problem',
-                      'Problemas Mais Comuns',
-                      processProblemDistribution(),
-                      'bar'
-                    )}
-                  >
-                    Ver Detalhes
-                  </Button>
-                </div>
-                <div className="h-[480px]">
-                  <ProblemsChart 
-                    data={processProblemDistribution().slice(0, 15)}
-                    onClick={(item: any) => handleChartClick(item, 'problem')}
-                  />
-                </div>
-              </Card>
+            <AdminProblemsVisualizationOptions 
+              filteredData={getCurrentData()} 
+              setSelectedItem={setSelectedItem} 
+              setChartDetailOpen={setDetailPanelOpen}
+            />
+        {/* Seção movida: Detalhamento de Problemas aparecerá ao final da aba */}
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card className="p-4">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-semibold">Distribuição de Problemas</h3>
@@ -2854,85 +3024,15 @@ function AdminDashboardContent() {
               </Card>
             </div>
 
-            {/* Tabela de problemas com detalhes */}
-            <Card className="p-4">
-              <h3 className="text-lg font-semibold mb-4">Lista de Problemas</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="py-2 px-4 bg-muted border-b text-left">Problema</th>
-                      <th className="py-2 px-4 bg-muted border-b text-center">Ocorrências</th>
-                      <th className="py-2 px-4 bg-muted border-b text-center">% do Total</th>
-                      <th className="py-2 px-4 bg-muted border-b text-center">Hotéis Principais</th>
-                      <th className="py-2 px-4 bg-muted border-b text-center">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {processProblemDistribution()
-                      .slice(0, 20)
-                      .map((problem: ProblemItem, index: number) => {
-                        const dataToUse = getCurrentData();
-                        
-                        const hotelEntries = Object.entries(
-                          (dataToUse || [])
-                            .filter((item: any) => {
-                              if (item.problems && Array.isArray(item.problems)) {
-                                return item.problems.includes(problem.label);
-                              }
-                              if (item.problem && typeof item.problem === 'string') {
-                                return item.problem.split(';').map((p: string) => p.trim()).includes(problem.label);
-                              }
-                              return false;
-                            })
-                            .reduce((acc: Record<string, number>, item: any) => {
-                              const hotel = item.hotel || "Desconhecido";
-                              acc[hotel] = (acc[hotel] || 0) + 1;
-                              return acc;
-                            }, {} as Record<string, number>)
-                        )
-                        .sort((a, b) => (b[1] as number) - (a[1] as number))
-                        .slice(0, 2)
-                        .map(([hotel]) => hotel);
-
-                        const totalProblems = processProblemDistribution()
-                          .reduce((sum: number, p: ProblemItem) => sum + p.value, 0);
-                        const percentage = totalProblems > 0 ? ((problem.value / totalProblems) * 100).toFixed(1) : "0";
-
-                        return (
-                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
-                            <td className="py-2 px-4 border-b">{problem.label}</td>
-                            <td className="py-2 px-4 border-b text-center">{problem.value}</td>
-                            <td className="py-2 px-4 border-b text-center">{percentage}%</td>
-                            <td className="py-2 px-4 border-b text-center">
-                              {hotelEntries.length > 0 ? (
-                                <div className="flex flex-wrap gap-1 justify-center">
-                                  {hotelEntries.map((hotel, idx) => (
-                                    <Badge key={idx} variant="outline">
-                                      {hotel}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground">N/A</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-4 border-b text-center">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleChartClick({label: problem.label}, 'problem')}
-                              >
-                                Ver feedbacks
-                              </Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+        {/* Detalhamento de Problemas — seção final */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-2xl font-semibold">Detalhamento de Problemas</h3>
+          </div>
+          <div className="w-full">
+            <DetailProblem rows={getCurrentData()} maxProblems={24} maxDetails={12} />
+          </div>
+        </Card>
           </TabsContent>
 
           {/* Avaliações */}
@@ -3827,9 +3927,9 @@ function AdminDashboardContent() {
                   <div className="h-48">
                     <ModernChart 
                       data={[
-                        { label: 'Positivo', value: selectedItem.stats.sentimentDistribution.positive },
-                        { label: 'Neutro', value: selectedItem.stats.sentimentDistribution.neutral },
-                        { label: 'Negativo', value: selectedItem.stats.sentimentDistribution.negative }
+                        { label: 'Positivo', value: selectedItem.stats.sentimentDistribution?.positive ?? 0 },
+                        { label: 'Neutro', value: selectedItem.stats.sentimentDistribution?.neutral ?? 0 },
+                        { label: 'Negativo', value: selectedItem.stats.sentimentDistribution?.negative ?? 0 }
                       ].filter(item => item.value > 0)}
                       onClick={() => {}}
                       type="pie"
@@ -3848,11 +3948,11 @@ function AdminDashboardContent() {
                   <div className="h-40">
                     <RatingsChart 
                       data={[
-                        { label: '1⭐', value: selectedItem.stats.ratingDistribution[1] },
-                        { label: '2⭐', value: selectedItem.stats.ratingDistribution[2] },
-                        { label: '3⭐', value: selectedItem.stats.ratingDistribution[3] },
-                        { label: '4⭐', value: selectedItem.stats.ratingDistribution[4] },
-                        { label: '5⭐', value: selectedItem.stats.ratingDistribution[5] }
+                        { label: '1⭐', value: selectedItem.stats.ratingDistribution?.[1] ?? 0 },
+                        { label: '2⭐', value: selectedItem.stats.ratingDistribution?.[2] ?? 0 },
+                        { label: '3⭐', value: selectedItem.stats.ratingDistribution?.[3] ?? 0 },
+                        { label: '4⭐', value: selectedItem.stats.ratingDistribution?.[4] ?? 0 },
+                        { label: '5⭐', value: selectedItem.stats.ratingDistribution?.[5] ?? 0 }
                       ]}
                       onClick={() => {}}
                     />
@@ -3860,7 +3960,7 @@ function AdminDashboardContent() {
                 </Card>
 
                 {/* Tendência Mensal */}
-                {selectedItem.stats.monthlyTrend.length > 1 && (
+                {selectedItem.stats.monthlyTrend?.length > 1 && (
                   <Card className="p-6 shadow-lg border-0">
                     <h4 className="font-semibold mb-4 flex items-center text-lg">
                       <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg mr-3">
@@ -3879,7 +3979,7 @@ function AdminDashboardContent() {
                 )}
 
                 {/* Hotéis Afetados */}
-                {selectedItem.stats.topHotels.length > 0 && (
+                {selectedItem.stats.topHotels?.length > 0 && (
                   <Card className="p-6 shadow-lg border-0">
                     <h4 className="font-semibold mb-4 flex items-center text-lg">
                       <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg mr-3">
@@ -3899,7 +3999,7 @@ function AdminDashboardContent() {
                 )}
 
                 {/* Palavras-chave Relacionadas */}
-                {selectedItem.stats.topKeywords.length > 0 && (
+                {selectedItem.stats.topKeywords?.length > 0 && (
                   <Card className="p-6 shadow-lg border-0">
                     <h4 className="font-semibold mb-4 flex items-center text-lg">
                       <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg mr-3">
@@ -3919,7 +4019,7 @@ function AdminDashboardContent() {
                 )}
 
                 {/* Problemas Relacionados */}
-                {selectedItem.stats.topProblems.length > 0 && (
+                {selectedItem.stats.topProblems?.length > 0 && (
                   <Card className="p-6 shadow-lg border-0">
                     <h4 className="font-semibold mb-4 flex items-center text-lg">
                       <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg mr-3">

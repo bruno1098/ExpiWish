@@ -201,50 +201,28 @@ export function adaptNewAIToLegacyFormat(newResponse: NewAIResponse): LegacyFeed
   const uniqueProblems = Array.from(new Set(consolidatedProblems)).sort();
   const uniqueCompliments = Array.from(new Set(consolidatedCompliments)).sort();
 
-  // Lógica inteligente de consolidação
+  // Lógica inteligente de consolidação - MANTENDO MÚLTIPLOS ASPECTOS
   let consolidatedKeyword = 'Não identificado';
   let consolidatedSector = 'Não identificado';
   let consolidatedProblem = '';
   let consolidatedCompliment = '';
 
-  // Para keywords: se há múltiplas, usar separador ";" mas limitar a 3 para legibilidade
+  // CORREÇÃO: Usar TODOS os aspectos separados por "; " ao invés de apenas o primeiro
   if (uniqueKeywords.length > 0) {
-    if (uniqueKeywords.length <= 3) {
-      consolidatedKeyword = uniqueKeywords.join(';');
-    } else {
-      // Se há muitas keywords, usar as 2 primeiras + "e outros"
-      consolidatedKeyword = `${uniqueKeywords.slice(0, 2).join(';')};+${uniqueKeywords.length - 2} outros`;
-    }
+    consolidatedKeyword = uniqueKeywords.join('; ');
   }
 
-  // Para setores: similar lógica mas mais conservadora
   if (uniqueSectors.length > 0) {
-    if (uniqueSectors.length <= 2) {
-      consolidatedSector = uniqueSectors.join(';');
-    } else {
-      // Se há muitos setores, usar o primeiro + "e outros"
-      consolidatedSector = `${uniqueSectors[0]};+${uniqueSectors.length - 1} outros`;
-    }
+    consolidatedSector = uniqueSectors.join('; ');
   }
 
-  // Para problemas: consolidar de forma inteligente
   if (uniqueProblems.length > 0) {
-    if (uniqueProblems.length <= 2) {
-      consolidatedProblem = uniqueProblems.join(';');
-    } else {
-      // Se há muitos problemas, usar os 2 primeiros + indicador
-      consolidatedProblem = `${uniqueProblems.slice(0, 2).join(';')};+${uniqueProblems.length - 2} outros`;
-    }
+    consolidatedProblem = uniqueProblems.join('; ');
   }
 
-  // Para elogios: consolidar de forma inteligente
+  // Para elogios: mostrar todos os elogios separados por "; "
   if (uniqueCompliments.length > 0) {
-    if (uniqueCompliments.length <= 2) {
-      consolidatedCompliment = uniqueCompliments.join('; ');
-    } else {
-      // Se há muitos elogios, usar os 2 primeiros + indicador
-      consolidatedCompliment = `${uniqueCompliments.slice(0, 2).join('; ')}; +${uniqueCompliments.length - 2} outros elogios`;
-    }
+    consolidatedCompliment = uniqueCompliments.join('; ');
   }
 
   // Calcular confidence média ponderada

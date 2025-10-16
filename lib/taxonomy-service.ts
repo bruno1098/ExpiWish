@@ -27,7 +27,7 @@ import {
   TaxonomyProposal 
 } from './taxonomy-types';
 import { generateEmbedding, cosineSimilarity } from '@/lib/embeddings-service';
-import { generateEnrichedKeywordText, generateEnrichedProblemText, expandUserQuery } from '@/lib/semantic-enrichment';
+import { generateEnrichedKeywordText, generateEnrichedProblemText, expandUserQuery } from './semantic-enrichment';
 import { validateKeywordDepartment } from '@/lib/taxonomy-validation';
 
 // Cache global

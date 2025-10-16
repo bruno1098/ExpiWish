@@ -2282,19 +2282,46 @@ function ImportPageContent() {
 
     return Object.entries(
       data.reduce((acc, item) => {
-        if (item.sector) {
-          let sector = item.sector.toLowerCase();
-          let mappedSector = sectorMap[sector] || item.sector;
+        // Usar allProblems se disponível (dados separados), senão usar sector concatenado
+        if (item.allProblems && Array.isArray(item.allProblems)) {
+          item.allProblems.forEach((problemObj: any) => {
+            if (problemObj.sector && problemObj.sector.trim() !== '') {
+              const sector = problemObj.sector.trim();
+              if (!sector.startsWith('+')) { // Filtrar "+X outros"
+                let sectorLower = sector.toLowerCase();
+                let mappedSector = sectorMap[sectorLower] || sector;
 
-          for (const [key, value] of Object.entries(sectorMap)) {
-            if (sector.includes(key)) {
-              mappedSector = value;
-              break;
+                for (const [key, value] of Object.entries(sectorMap)) {
+                  if (sectorLower.includes(key)) {
+                    mappedSector = value;
+                    break;
+                  }
+                }
+
+                if (!acc[mappedSector]) acc[mappedSector] = 0;
+                acc[mappedSector]++;
+              }
             }
-          }
+          });
+        } else if (item.sector) {
+          // Fallback para dados concatenados, filtrando "+X outros"
+          const sectorList = item.sector.split(';').map((s: string) => s.trim());
+          sectorList.forEach(sectorItem => {
+            if (sectorItem && !sectorItem.startsWith('+')) {
+              let sector = sectorItem.toLowerCase();
+              let mappedSector = sectorMap[sector] || sectorItem;
 
-          if (!acc[mappedSector]) acc[mappedSector] = 0;
-          acc[mappedSector]++;
+              for (const [key, value] of Object.entries(sectorMap)) {
+                if (sector.includes(key)) {
+                  mappedSector = value;
+                  break;
+                }
+              }
+
+              if (!acc[mappedSector]) acc[mappedSector] = 0;
+              acc[mappedSector]++;
+            }
+          });
         }
         return acc;
       }, {} as Record<string, number>)
@@ -2308,9 +2335,24 @@ function ImportPageContent() {
     const keywordCounts: Record<string, number> = {};
 
     data.forEach(feedback => {
-      const keyword = feedback.keyword;
-      if (keyword) {
-        keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+      // Usar allProblems se disponível (dados separados), senão usar keyword concatenado
+      if (feedback.allProblems && Array.isArray(feedback.allProblems)) {
+        feedback.allProblems.forEach((problemObj: any) => {
+          if (problemObj.keyword && problemObj.keyword.trim() !== '') {
+            const keyword = problemObj.keyword.trim();
+            if (!keyword.startsWith('+')) { // Filtrar "+X outros"
+              keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+            }
+          }
+        });
+      } else if (feedback.keyword) {
+        // Fallback para dados concatenados, filtrando "+X outros"
+        const keywordList = feedback.keyword.split(';').map((k: string) => k.trim());
+        keywordList.forEach(keyword => {
+          if (keyword && !keyword.startsWith('+')) {
+            keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+          }
+        });
       }
     });
 
@@ -2355,22 +2397,52 @@ function ImportPageContent() {
 
     return Object.entries(
       data.reduce((acc, item) => {
-        if (item.problem) {
-          let matched = false;
+        // Usar allProblems se disponível (dados separados), senão usar problem concatenado
+        if (item.allProblems && Array.isArray(item.allProblems)) {
+          item.allProblems.forEach((problemObj: any) => {
+            if (problemObj.problem && problemObj.problem.trim() !== '') {
+              const problem = problemObj.problem.trim();
+              if (!problem.startsWith('+')) { // Filtrar "+X outros"
+                let matched = false;
 
-          for (const [key, group] of Object.entries(problemMap)) {
-            if (item.problem.toLowerCase().includes(key)) {
-              if (!acc[group]) acc[group] = 0;
-              acc[group]++;
-              matched = true;
-              break;
+                for (const [key, group] of Object.entries(problemMap)) {
+                  if (problem.toLowerCase().includes(key)) {
+                    if (!acc[group]) acc[group] = 0;
+                    acc[group]++;
+                    matched = true;
+                    break;
+                  }
+                }
+
+                if (!matched) {
+                  if (!acc["Outros"]) acc["Outros"] = 0;
+                  acc["Outros"]++;
+                }
+              }
             }
-          }
+          });
+        } else if (item.problem) {
+          // Fallback para dados concatenados, filtrando "+X outros"
+          const problemList = item.problem.split(';').map((p: string) => p.trim());
+          problemList.forEach(problemItem => {
+            if (problemItem && !problemItem.startsWith('+')) {
+              let matched = false;
 
-          if (!matched) {
-            if (!acc["Outros"]) acc["Outros"] = 0;
-            acc["Outros"]++;
-          }
+              for (const [key, group] of Object.entries(problemMap)) {
+                if (problemItem.toLowerCase().includes(key)) {
+                  if (!acc[group]) acc[group] = 0;
+                  acc[group]++;
+                  matched = true;
+                  break;
+                }
+              }
+
+              if (!matched) {
+                if (!acc["Outros"]) acc["Outros"] = 0;
+                acc["Outros"]++;
+              }
+            }
+          });
         }
 
         return acc;

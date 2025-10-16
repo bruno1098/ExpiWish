@@ -4,7 +4,15 @@ import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   Star, 
   AlertTriangle,
@@ -27,10 +35,13 @@ import {
   Filter,
   Calendar,
   Zap,
-  Lightbulb
+  Lightbulb,
+  BarChart3,
+  PieChart,
+  MessageSquare
 } from "lucide-react";
 import { Feedback } from "@/types";
-import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
+import { Line, Bar, Pie, Doughnut, Scatter } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -43,6 +54,19 @@ import {
   Legend,
   ArcElement,
 } from 'chart.js';
+
+// Recharts para Sankey e barras empilhadas
+import {
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  BarChart as RechartsBarChart,
+  Bar as RechartsBar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend as RechartsLegend,
+  LabelList
+} from 'recharts';
 
 // Registrar componentes do Chart.js
 ChartJS.register(
@@ -692,48 +716,194 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
       </Card>
 
       {/* Gráficos e Visualizações */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-6">
-        {/* Distribuição de Ratings */}
-        <Card className="p-3 md:p-6">
-          <h4 className="text-base md:text-lg font-bold text-gray-900 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
-            📊 Distribuição de Avaliações
-          </h4>
-          <div className="space-y-3">
-            {[5, 4, 3, 2, 1].map(rating => {
-              let count = 0;
-              if (type === 'problem') {
-                count = item.ratings.filter((r: number) => r === rating).length;
-              } else if (type === 'department') {
-                count = (item.allExamples || []).filter((ex: any) => ex.rating === rating).length;
-              }
-              
-              const total = type === 'problem' ? item.ratings.length : (item.allExamples || []).length;
-              const percentage = total > 0 ? (count / total) * 100 : 0;
-              
-              return (
-                <div key={rating} className="flex items-center gap-3">
-                  <span className="w-8 text-sm font-medium">{rating}⭐</span>
-                  <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 relative">
-                    <div 
-                      className={`h-4 rounded-full ${
-                        rating >= 4 ? 'bg-green-500' : 
-                        rating === 3 ? 'bg-yellow-500' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${percentage}%` }}
-                    />
+      <div className="space-y-6">
+
+        {/* Visualizações adicionais específicas para Top 10 (no modal) */}
+        {type === 'problem' && item?.problem === 'Top 10 Problemas' && (
+          <div className="space-y-6">
+            {/* Cabeçalho descritivo */}
+            <div className="bg-gray-50 dark:bg-gray-900/30 p-4 rounded-lg border border-gray-200 dark:border-gray-800">
+              <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+                Painel: Quantidade e Departamentos
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                Visualiza todos os problemas por ocorrência e sua distribuição por departamento, com foco no principal e detalhes abaixo.
+              </p>
+            </div>
+
+            {/* Principal: Todos os Problemas por Quantidade (maior, largura total) */}
+            <Card className="p-6">
+              <h4 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-2">
+                📊 Todos os Problemas por Quantidade
+              </h4>
+              <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mb-4">Ranking completo dos problemas mencionados nos exemplos do Top 10.</p>
+              <div className="h-[520px] sm:h-[560px] md:h-[620px]">
+                {(() => {
+                  const dataSrc = Array.isArray(item?.allExamples)
+                    ? item.allExamples
+                    : Array.isArray(filteredData)
+                      ? filteredData
+                      : [];
+                  if (!dataSrc.length) {
+                    return (
+                      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">Sem dados</div>
+                    );
+                  }
+
+                  const counts: Record<string, number> = {};
+                  dataSrc.forEach((ex: any) => {
+                    const prob = String(ex.problem || '').trim();
+                    if (!prob) return;
+                    counts[prob] = (counts[prob] || 0) + 1;
+                  });
+                  // Ordena por ocorrência e limita a 20 itens para melhor legibilidade
+                  const items = Object.entries(counts)
+                    .sort(([,a],[,b]) => b - a)
+                    .slice(0, 20)
+                    .map(([name, count]) => ({
+                      name: name.length > 60 ? name.substring(0, 60) + '…' : name,
+                      fullName: name,
+                      count
+                    }));
+
+                  return (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsBarChart data={items} layout="vertical" margin={{ left: 12, right: 32, top: 10, bottom: 10 }} barCategoryGap={"30%"}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" allowDecimals={false} domain={[0, 'dataMax']} />
+                        <YAxis type="category" dataKey="name" width={360} tick={{ fontSize: 13 }} tickLine={false} interval={0} />
+                        <RechartsTooltip formatter={(value: any, _name: any, props: any) => [value, props.payload.fullName]} />
+                        <RechartsBar dataKey="count" fill="#3B82F6" name="Ocorrências" barSize={18}>
+                          <LabelList dataKey="count" position="right" />
+                        </RechartsBar>
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
+                  );
+                })()}
+              </div>
+              <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-3">Dica: Passe o mouse para ver o nome completo.</p>
+            </Card>
+
+            {/* Secundário abaixo: Problemas agrupados por Departamento (mesmo gráfico, por blocos) */}
+            <Card className="p-6">
+              <h4 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-2">
+                🏢 Problemas por Departamento (Agrupado)
+              </h4>
+              <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Departamentos ordenados por total de feedbacks; abaixo de cada título, os problemas desse departamento.
+              </p>
+              {(() => {
+                  const dataSrc = Array.isArray(item?.allExamples)
+                    ? item.allExamples
+                    : Array.isArray(filteredData)
+                      ? filteredData
+                      : [];
+                  if (!dataSrc.length) {
+                    return (
+                      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">Sem dados</div>
+                    );
+                  }
+
+                  // Totais por departamento
+                  const deptTotals: Record<string, number> = {};
+                  dataSrc.forEach((ex: any) => {
+                    const dept = String(ex.department || '').trim() || 'Outros';
+                    deptTotals[dept] = (deptTotals[dept] || 0) + 1;
+                  });
+                  const sortedDepts = Object.entries(deptTotals)
+                    .sort(([,a],[,b]) => b - a)
+                    .map(([d]) => d);
+
+                  // Construir lista com cabeçalhos e problemas por departamento
+                  const groupedData: any[] = [];
+                  sortedDepts.forEach((dept) => {
+                    // Cabeçalho do departamento
+                    groupedData.push({
+                      name: `— ${dept} —`,
+                      fullName: dept,
+                      dept,
+                      isHeader: true,
+                      count: 0
+                    });
+
+                    // Contagens dos problemas do departamento
+                    const probs: Record<string, number> = {};
+                    dataSrc.forEach((ex: any) => {
+                      const d = String(ex.department || '').trim() || 'Outros';
+                      if (d !== dept) return;
+                      const p = String(ex.problem || '').trim();
+                      if (!p) return;
+                      probs[p] = (probs[p] || 0) + 1;
+                    });
+
+                    // Inserir problemas ordenados por quantidade
+                    Object.entries(probs)
+                      .sort(([,a],[,b]) => b - a)
+                      .forEach(([name, count]) => {
+                        groupedData.push({
+                          name: name.length > 50 ? name.substring(0, 50) + '…' : name,
+                          fullName: name,
+                          dept,
+                          isHeader: false,
+                          count
+                        });
+                      });
+                  });
+
+                  // Tick customizado para destacar cabeçalhos
+                  const CustomTick = (tickProps: any) => {
+                    const { x, y, payload } = tickProps;
+                    const row = payload?.payload || {};
+                    const isHeader = !!row.isHeader;
+                    return (
+                      <text x={x} y={y} dy={4} textAnchor="end" fill={isHeader ? '#0F172A' : '#334155'} fontWeight={isHeader ? 700 : 500} fontSize={isHeader ? 15 : 12}>
+                        {payload.value}
+                      </text>
+                    );
+                  };
+
+                  // Altura dinâmica baseada no número de linhas (cabeçalhos + problemas)
+                  const rowHeight = 28; // altura por categoria
+                  const baseHeight = 360; // altura mínima
+                  const chartHeight = Math.min(1000, baseHeight + groupedData.length * rowHeight);
+
+                  return (
+                    <div style={{ height: chartHeight }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsBarChart data={groupedData} layout="vertical" margin={{ left: 12, right: 32, top: 20, bottom: 10 }} barCategoryGap={"35%"}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" allowDecimals={false} domain={[0, 'dataMax']} />
+                          <YAxis type="category" dataKey="name" width={420} tick={<CustomTick />} tickLine={false} interval={0} />
+                          <RechartsTooltip 
+                            formatter={(value: any, _name: any, props: any) => {
+                              const row = props?.payload || {};
+                              if (row.isHeader) {
+                                return [deptTotals[row.fullName] || 0, row.fullName];
+                              }
+                              return [value, `${row.dept} • ${row.fullName}`];
+                            }}
+                          />
+                          <RechartsBar dataKey="count" fill="#6366F1" name="Ocorrências" barSize={22}>
+                            <LabelList position="right" content={(labelProps: any) => {
+                              const { value, payload } = labelProps || {};
+                              // Ocultar rótulos em cabeçalhos ou valores 0
+                              if (value === 0 || (payload && payload.isHeader)) return null;
+                              return null; // Evita rótulos sobrepostos que pareçam títulos
+                            }} />
+                          </RechartsBar>
+                      </RechartsBarChart>
+                    </ResponsiveContainer>
                   </div>
-                  <span className="w-16 text-sm text-gray-600 dark:text-gray-400">
-                    {count} ({percentage.toFixed(1)}%)
-                  </span>
-                </div>
-              );
-            })}
+                  );
+                })()}
+              <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 mt-3">Ordem dos departamentos baseada no total de feedbacks.</p>
+            </Card>
           </div>
-        </Card>
+        )}
 
         {/* Distribuição por Rating */}
         <Card className="p-3 md:p-6">
-          <h4 className="text-base md:text-lg font-bold text-gray-900 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
+          <h4 className="text-xl md:text-2xl font-bold tracking-tight text-gray-900 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
             ⭐ Distribuição de Avaliações
           </h4>
           <div className="h-40 md:h-48">
@@ -838,6 +1008,48 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
             })()}
           </div>
         </Card>
+
+        {/* Distribuição de Avaliações (reposicionado para o rodapé) */}
+        <Card className="p-3 md:p-6">
+          <h4 className="text-base md:text-lg font-bold text-gray-900 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
+            📊 Distribuição de Avaliações
+          </h4>
+          <div className="space-y-3">
+            {[5, 4, 3, 2, 1].map(rating => {
+              let count = 0;
+              if (type === 'problem') {
+                const ratings = Array.isArray(item.ratings) ? item.ratings : [];
+                count = ratings.filter((r: number) => r === rating).length;
+              } else if (type === 'department') {
+                const examples = Array.isArray(item.allExamples) ? item.allExamples : [];
+                count = examples.filter((ex: any) => ex.rating === rating).length;
+              }
+
+              const total = type === 'problem' ?
+                (Array.isArray(item.ratings) ? item.ratings.length : 0) :
+                (Array.isArray(item.allExamples) ? item.allExamples.length : 0);
+              const percentage = total > 0 ? (count / total) * 100 : 0;
+
+              return (
+                <div key={rating} className="flex items-center gap-3">
+                  <span className="w-8 text-sm font-medium">{rating}⭐</span>
+                  <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4 relative">
+                    <div
+                      className={`h-4 rounded-full ${
+                        rating >= 4 ? 'bg-green-500' :
+                        rating === 3 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                  <span className="w-16 text-sm text-gray-600 dark:text-gray-400">
+                    {count} ({percentage.toFixed(1)}%)
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       </div>
 
       {/* Segunda linha de gráficos */}
@@ -850,33 +1062,55 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
             </h4>
             <div className="h-48">
               {(() => {
-                let departmentData: { [key: string]: { problems: number, comments: number, avgRating: number } } = {};
+                let departmentData: { [key: string]: { problems: number, comments: number, avgRating: number, ratings: number[] } } = {};
                 
                 if (type === 'problem') {
                   // Para problemas específicos, contar ocorrências por departamento
                   Array.from(item.departments || []).forEach((dept: any) => {
                     if (!departmentData[dept]) {
-                      departmentData[dept] = { problems: 0, comments: 0, avgRating: 0 };
+                      departmentData[dept] = { problems: 0, comments: 0, avgRating: 0, ratings: [] };
                     }
                     departmentData[dept].problems += 1;
                   });
                   
-                  // Contar comentários por departamento
+                  // Contar comentários por departamento usando dados processados
                   (item.examples || []).forEach((example: any) => {
                     const dept = example.department || 'Não identificado';
                     if (!departmentData[dept]) {
-                      departmentData[dept] = { problems: 0, comments: 0, avgRating: 0 };
+                      departmentData[dept] = { problems: 0, comments: 0, avgRating: 0, ratings: [] };
                     }
                     departmentData[dept].comments += 1;
-                    departmentData[dept].avgRating = (departmentData[dept].avgRating + (example.rating || 0)) / 2;
+                    departmentData[dept].ratings.push(example.rating || 0);
                   });
                 } else if (type === 'department') {
                   departmentData[item.name] = { 
                     problems: item.totalProblems || 0, 
                     comments: (item.allExamples || []).length,
-                    avgRating: item.totalRating ? (item.totalRating / item.totalProblems) : 0
+                    avgRating: item.totalRating ? (item.totalRating / item.totalProblems) : 0,
+                    ratings: (item.allExamples || []).map((ex: any) => ex.rating || 0)
                   };
+                } else {
+                  // Fallback: usar dados filtrados diretamente
+                  filteredData.forEach((feedback: any) => {
+                    if (feedback.sector) {
+                      const dept = feedback.sector || 'Não identificado';
+                      if (!departmentData[dept]) {
+                        departmentData[dept] = { problems: 0, comments: 0, avgRating: 0, ratings: [] };
+                      }
+                      departmentData[dept].problems += 1;
+                      departmentData[dept].comments += 1;
+                      departmentData[dept].ratings.push(feedback.rating || 0);
+                    }
+                  });
                 }
+
+                // Calcular médias corretas
+                Object.keys(departmentData).forEach(dept => {
+                  const ratings = departmentData[dept].ratings;
+                  if (ratings.length > 0) {
+                    departmentData[dept].avgRating = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
+                  }
+                });
 
                 // Criar labels mais informativos
                 const chartLabels = Object.entries(departmentData).map(([dept, data]) => {
@@ -942,34 +1176,67 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
           <div className="h-48">
             {(() => {
               let keywordData: { [key: string]: { count: number, ratings: number[] } } = {};
-              
+
               if (type === 'problem') {
-                Array.from(item.keywords || []).forEach((keyword: any) => {
-                  if (!keywordData[keyword]) {
-                    keywordData[keyword] = { count: 0, ratings: [] };
-                  }
-                  keywordData[keyword].count += 1;
-                });
-                // Adicionar ratings se disponível
-                if (item.ratings) {
-                  Array.from(item.keywords || []).forEach((keyword: any, index: number) => {
-                    if (keywordData[keyword] && item.ratings[index]) {
-                      keywordData[keyword].ratings.push(item.ratings[index]);
+                // Preferir exemplos para contagem e correlação de rating
+                if (Array.isArray(item.examples) && item.examples.length > 0) {
+                  item.examples.forEach((ex: any) => {
+                    // aceitar string única ou lista
+                    const rawKeywords = ex.keyword
+                      ? String(ex.keyword)
+                      : Array.isArray(ex.keywords) ? ex.keywords.join(',') : '';
+                    const tokens = String(rawKeywords)
+                      .split(/[;,|]/)
+                      .map(k => k.trim())
+                      .filter(k => k && k.toUpperCase() !== 'VAZIO');
+
+                    tokens.forEach((kw) => {
+                      if (!keywordData[kw]) {
+                        keywordData[kw] = { count: 0, ratings: [] };
+                      }
+                      keywordData[kw].count += 1;
+                      if (typeof ex.rating === 'number' && ex.rating > 0) {
+                        keywordData[kw].ratings.push(ex.rating);
+                      }
+                    });
+                  });
+                } else {
+                  // Fallback: usar o Set de keywords do item
+                  Array.from(item.keywords || []).forEach((keyword: any) => {
+                    const kw = String(keyword).trim();
+                    if (!kw || kw.toUpperCase() === 'VAZIO') return;
+                    if (!keywordData[kw]) {
+                      keywordData[kw] = { count: 0, ratings: [] };
                     }
+                    keywordData[kw].count += 1;
                   });
                 }
               } else if (type === 'department') {
                 (item.keywordsArray || []).forEach((keyword: any) => {
-                  if (!keywordData[keyword]) {
-                    keywordData[keyword] = { count: 0, ratings: [] };
+                  const kw = String(keyword).trim();
+                  if (!kw || kw.toUpperCase() === 'VAZIO') return;
+                  if (!keywordData[kw]) {
+                    keywordData[kw] = { count: 0, ratings: [] };
                   }
-                  keywordData[keyword].count += 1;
+                  keywordData[kw].count += 1;
                 });
               }
 
               const topKeywords = Object.entries(keywordData)
                 .sort(([,a], [,b]) => b.count - a.count)
                 .slice(0, 8);
+
+              // Validar se há dados para renderizar
+              if (topKeywords.length === 0) {
+                return (
+                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">📊</div>
+                      <div>Nenhuma palavra-chave encontrada</div>
+                    </div>
+                  </div>
+                );
+              }
 
               const chartData = {
                 labels: topKeywords.map(([keyword, data]) => {
@@ -1081,6 +1348,18 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
               
               const totalRatings = ratings.length;
               const avgRating = totalRatings > 0 ? (ratings.reduce((sum, r) => sum + r, 0) / totalRatings).toFixed(1) : '0.0';
+
+              // Validar se há dados para renderizar
+              if (totalRatings === 0) {
+                return (
+                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">😊</div>
+                      <div>Nenhuma avaliação encontrada</div>
+                    </div>
+                  </div>
+                );
+              }
 
               const chartData = {
                 labels: [
@@ -1400,6 +1679,10 @@ export function ProblemsVisualizationOptions({
   setChartDetailOpen 
 }: ProblemsVisualizationOptionsProps) {
   
+  // Estado para controlar qual visualização está selecionada (substitui tabs)
+  // Padrão: top10 (Top 10 Problemas) - visualização analítica preferida
+  const [selectedVisualization, setSelectedVisualization] = useState<'top10' | 'option6' | 'option3' | 'option1' | 'option5'>('top10');
+  
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [viewType, setViewType] = useState<'grid' | 'list' | 'compact' | 'detailed'>('detailed');
   const [sortBy, setSortBy] = useState<'frequency' | 'alphabetical' | 'severity' | 'recent'>('frequency');
@@ -1411,6 +1694,71 @@ export function ProblemsVisualizationOptions({
   const [selectedDetailItem, setSelectedDetailItem] = useState<any>(null);
   const [detailModalType, setDetailModalType] = useState<'problem' | 'department' | 'executive' | 'conversational'>('problem');
   const [modalFilteredData, setModalFilteredData] = useState<Feedback[]>([]);  // Dados filtrados para o modal
+
+  // Helper: normalização simples para comparação robusta
+  const normalize = (v: any): string => {
+    return String(v || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  };
+
+  // Helper: agrega problem_detail para um problema (opcionalmente filtrando por departamento)
+  const aggregateProblemDetailsFromFeedbacks = (
+    rows: any[],
+    problemLabel: string,
+    departmentFilter?: string
+  ) => {
+    const map = new Map<string, { detail: string; count: number }>();
+    const probTarget = normalize(problemLabel);
+    const depTarget = departmentFilter ? normalize(departmentFilter) : '';
+
+    for (const r of rows || []) {
+      // Preferir estrutura nova: allProblems
+      if (Array.isArray(r?.allProblems)) {
+        for (const p of r.allProblems) {
+          const pMain = normalize(p?.problem);
+          const pDept = normalize(p?.sector ?? p?.department ?? r?.sector ?? '');
+          if (!pMain) continue;
+          if (depTarget && pDept !== depTarget) continue;
+          if (!pMain.includes(probTarget)) continue;
+          const det = String(p?.problem_detail ?? '').trim();
+          if (!det) continue;
+          const key = normalize(det);
+          const prev = map.get(key);
+          if (prev) prev.count += 1; else map.set(key, { detail: det, count: 1 });
+        }
+        continue;
+      }
+      // Fallback: estrutura antiga
+      const pConcat = String(r?.problem || '').trim();
+      if (!pConcat) continue;
+      const pList = pConcat.includes(';') ? pConcat.split(';').map((s: string) => s.trim()) : [pConcat];
+      const matches = pList.some((s: string) => normalize(s).includes(probTarget));
+      if (!matches) continue;
+      if (depTarget) {
+        const sectorRaw = String(r?.sector || r?.department || '').trim();
+        const sectors = sectorRaw ? sectorRaw.split(/[;,|]/).map((s: string) => normalize(s)) : [];
+        if (!sectors.includes(depTarget)) continue;
+      }
+      const det = String(r?.problem_detail ?? '').trim();
+      if (!det) continue;
+      const key = normalize(det);
+      const prev = map.get(key);
+      if (prev) prev.count += 1; else map.set(key, { detail: det, count: 1 });
+    }
+
+    const total = Array.from(map.values()).reduce((acc, v) => acc + v.count, 0) || 1;
+    const agg = Array.from(map.values()).map(v => ({
+      detail: v.detail,
+      count: v.count,
+      pct: (v.count / total) * 100,
+    }));
+    agg.sort((a, b) => b.count - a.count || b.pct - a.pct);
+    return agg.slice(0, 4);
+  };
 
   // Função para abrir modal de detalhes avançados
   const openDetailModal = (item: any, type: 'problem' | 'department' | 'executive' | 'conversational') => {
@@ -1477,28 +1825,96 @@ export function ProblemsVisualizationOptions({
     });
   };
 
+  // Função helper para validar se um problema é realmente um problema (não elogio)
+  const isValidProblem = (problem: string): boolean => {
+    if (!problem || typeof problem !== 'string') return false;
+    
+    const normalizedProblem = problem.toLowerCase().trim();
+    
+    // Lista de problemas inválidos que devem ser filtrados
+    const invalidProblems = [
+      'vazio', 
+      'sem problemas', 
+      'nao identificado', 
+      'não identificado',
+      'sem problema',
+      'nenhum problema',
+      'ok',
+      'tudo ok',
+      'sem',
+      'n/a',
+      'na',
+      '-',
+      '',
+      'empty',
+      'elogio',
+      'positivo',
+      'bom',
+      'boa',
+      'excelente',
+      'ótimo',
+      'otimo',
+      'perfeito',
+      'maravilhoso',
+      'satisfeito',
+      'satisfeita'
+    ];
+    
+    return !invalidProblems.includes(normalizedProblem) && 
+           !normalizedProblem.includes('vazio') &&
+           !normalizedProblem.includes('sem problemas') &&
+           !normalizedProblem.includes('sem problema') &&
+           !normalizedProblem.includes('não identificado') &&
+           !normalizedProblem.includes('nao identificado') &&
+           normalizedProblem.length > 2; // Evitar problemas muito curtos
+  };
+
+  // Função para verificar se um feedback tem pelo menos um problema válido
+  const feedbackHasValidProblems = (feedback: any): boolean => {
+    // Verificar na nova estrutura allProblems
+    if (feedback.allProblems && Array.isArray(feedback.allProblems) && feedback.allProblems.length > 0) {
+      return feedback.allProblems.some((problemObj: any) => 
+        problemObj.problem && isValidProblem(problemObj.problem)
+      );
+    }
+    
+    // Verificar na estrutura antiga
+    if (feedback.problem && feedback.problem.trim() !== '') {
+      const problems = feedback.problem.includes(';') 
+        ? feedback.problem.split(';').map((p: string) => p.trim()) 
+        : [feedback.problem];
+      
+      return problems.some((problem: string) => isValidProblem(problem));
+    }
+    
+    return false;
+  };
+
   // Função melhorada para processar problemas (incluindo compatibilidade com dados antigos)
   const processProblemsData = () => {
     const allProblemsData: any[] = [];
 
     filteredData.forEach(feedback => {
+      // Primeiro verificar se o feedback tem problemas válidos
+      if (!feedbackHasValidProblems(feedback)) {
+        return; // Pular feedbacks sem problemas válidos
+      }
+
       // NOVA ESTRUTURA: allProblems (preferência)
       if (feedback.allProblems && Array.isArray(feedback.allProblems) && feedback.allProblems.length > 0) {
         feedback.allProblems.forEach(problemObj => {
-          if (problemObj.problem && problemObj.problem.trim() !== '' && 
-              problemObj.problem !== 'VAZIO' && problemObj.problem !== 'Sem problemas' &&
-              problemObj.problem !== 'Não identificado') {
+          if (problemObj.problem && isValidProblem(problemObj.problem)) {
             allProblemsData.push({
               ...problemObj,
               feedback: feedback,
               originalComment: feedback.comment,
               author: feedback.author || 'Anônimo',
               date: feedback.date,
-              rating: feedback.rating,
-              hotel: feedback.hotel || feedback.hotelName,
-              suggestion: feedback.suggestion_summary,
-              department: problemObj.sector || 'Não identificado',
-              keyword: problemObj.keyword || 'Não identificado',
+              rating: feedback.rating || 0,
+              hotel: feedback.hotel || feedback.hotelName || 'Não identificado',
+              suggestion: feedback.suggestion_summary || '',
+              department: problemObj.sector || feedback.sector || 'Não identificado',
+              keyword: problemObj.keyword || feedback.keyword || 'Não identificado',
               hasDetail: !!(problemObj.problem_detail && problemObj.problem_detail.trim() !== ''),
               source: 'allProblems' // marcador de origem
             });
@@ -1507,15 +1923,14 @@ export function ProblemsVisualizationOptions({
       }
       
       // ESTRUTURA ANTIGA: problem único (fallback)
-      else if (feedback.problem && feedback.problem.trim() !== '' && 
-               feedback.problem !== 'VAZIO' && feedback.problem !== 'Sem problemas') {
+      else if (feedback.problem && feedback.problem.trim() !== '') {
         // Lidar com múltiplos problemas separados por ';'
         const problems = feedback.problem.includes(';') 
           ? feedback.problem.split(';').map(p => p.trim()) 
           : [feedback.problem];
 
         problems.forEach(problem => {
-          if (problem && problem.trim() !== '' && problem.trim() !== 'Não identificado') {
+          if (isValidProblem(problem)) {
             allProblemsData.push({
               problem: problem.trim(),
               problem_detail: feedback.problem_detail || '',
@@ -1523,9 +1938,9 @@ export function ProblemsVisualizationOptions({
               originalComment: feedback.comment,
               author: feedback.author || 'Anônimo',
               date: feedback.date,
-              rating: feedback.rating,
-              hotel: feedback.hotel || feedback.hotelName,
-              suggestion: feedback.suggestion_summary,
+              rating: feedback.rating || 0,
+              hotel: feedback.hotel || feedback.hotelName || 'Não identificado',
+              suggestion: feedback.suggestion_summary || '',
               department: feedback.sector || 'Não identificado',
               keyword: feedback.keyword || 'Não identificado',
               hasDetail: !!(feedback.problem_detail && feedback.problem_detail.trim() !== ''),
@@ -2580,24 +2995,654 @@ export function ProblemsVisualizationOptions({
   };
 
   return (
-    <Card className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border-blue-200">
-      <h2 className="text-xl font-bold mb-4 text-center">🎯 Escolha a Visualização de Problemas</h2>
-      <p className="text-sm text-muted-foreground text-center mb-4">
-        Selecione a opção que melhor atende às suas necessidades de análise
-      </p>
-      
-      <Tabs defaultValue="option1" className="w-full">
-        <TabsList className="grid grid-cols-2 lg:grid-cols-6 w-full mb-6">
-          <TabsTrigger value="option1">📋 Cartões Detalhados</TabsTrigger>
-          <TabsTrigger value="option2">🏢 Por Departamento</TabsTrigger>
-          <TabsTrigger value="option3">📊 Resumo Executivo</TabsTrigger>
-          <TabsTrigger value="option4">💬 Análise Conversacional</TabsTrigger>
-          <TabsTrigger value="option5">📈 Central de Gráficos</TabsTrigger>
-          <TabsTrigger value="option6">🧪 Gráficos Teste</TabsTrigger>
-        </TabsList>
+    <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border-blue-200">
+      {/* Header com título e seletor de visualização */}
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold mb-2 text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          🎯 Análise de Problemas
+        </h2>
+        <p className="text-sm text-muted-foreground text-center mb-4">
+          Selecione o modo de visualização que melhor atende às suas necessidades
+        </p>
+        
+        {/* Seletor de Visualização Elegante */}
+        <div className="max-w-2xl mx-auto">
+          <Select value={selectedVisualization} onValueChange={(value: any) => setSelectedVisualization(value)}>
+            <SelectTrigger className="w-full h-14 text-lg font-medium border-2 border-purple-200 dark:border-purple-700 hover:border-purple-400 dark:hover:border-purple-500 transition-colors bg-white dark:bg-gray-800 shadow-lg">
+              <SelectValue placeholder="Escolha uma visualização" />
+            </SelectTrigger>
+            <SelectContent className="w-full">
+              <SelectGroup>
+                <SelectLabel className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide px-2 py-1">
+                  📊 Visualizações Analíticas
+                </SelectLabel>
+                
+                {/* TOP 10 PROBLEMAS - Visualização Principal */}
+                <SelectItem value="top10" className="py-3 cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center text-white text-lg">
+                      �
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">Top 10 Problemas</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Ranking profissional com métricas-chave</div>
+                    </div>
+                  </div>
+                </SelectItem>
 
-        {/* OPÇÃO 1: DASHBOARD DE CARTÕES DETALHADOS COM MÚLTIPLAS VISUALIZAÇÕES */}
-        <TabsContent value="option1" className="space-y-6">
+                {/* GRÁFICO INTERATIVO POR DEPARTAMENTO */}
+                <SelectItem value="option6" className="py-3 cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-lg">
+                      🏢
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">Análise por Departamento</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Problemas agrupados por setor</div>
+                    </div>
+                  </div>
+                </SelectItem>
+
+                {/* RESUMO EXECUTIVO */}
+                <SelectItem value="option3" className="py-3 cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white text-lg">
+                      📈
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">Dashboard Executivo</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">KPIs e indicadores estratégicos</div>
+                    </div>
+                  </div>
+                </SelectItem>
+
+                {/* CENTRAL DE GRÁFICOS */}
+                <SelectItem value="option5" className="py-3 cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center text-white text-lg">
+                      📉
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold text-gray-900 dark:text-gray-100">Múltiplos Gráficos</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Diversos tipos de visualização</div>
+                    </div>
+                  </div>
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* TOP 10 PROBLEMAS - VISUALIZAÇÃO ANALÍTICA PROFISSIONAL */}
+      {selectedVisualization === 'top10' && (
+        <div className="space-y-6">
+          {/* Header com botão para cartões detalhados */}
+          <div className="flex items-start justify-between mb-6">
+            <div className="flex-1">
+              <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                Top 10 Problemas Identificados
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                Ranking dos problemas mais recorrentes com análise de impacto
+              </p>
+            </div>
+            <Button
+              onClick={() => setSelectedVisualization('option1')}
+              variant="ghost"
+              size="sm"
+              className="ml-4 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
+            >
+              <Eye className="w-4 h-4 mr-1" />
+              Ver Detalhes Completos
+            </Button>
+          </div>
+
+          {/* KPIs Principais */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Total de Problemas</p>
+                  <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                    {(() => {
+                      const detailedProblems = getDetailedProblems();
+                      return detailedProblems ? Object.keys(detailedProblems).length : 0;
+                    })()}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <AlertTriangle className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Ocorrências Totais</p>
+                  <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                    {executiveSummary.totalProblems}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <TrendingUp className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Casos Críticos</p>
+                  <p className="text-3xl font-bold text-red-600 dark:text-red-400 mt-1">
+                    {executiveSummary.criticalProblems}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Rating Médio</p>
+                  <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+                    {executiveSummary.averageRating.toFixed(1)}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                  <Star className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Visualizações Gráficas Top 10 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Gráfico 1: Bar Chart Horizontal - Volume de Ocorrências */}
+            <Card className="p-6 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-blue-500" />
+                  Top 10 - Volume de Ocorrências
+                </h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="px-5 py-2 text-sm"
+                  onClick={() => {
+                    const detailedProblems = getDetailedProblems();
+                    const problemsArray = Object.values(detailedProblems);
+                    if (!problemsArray || problemsArray.length === 0) return;
+                    const top10Problems = problemsArray
+                      .filter((p: any) => p && p.count > 0)
+                      .sort((a: any, b: any) => b.count - a.count)
+                      .slice(0, 10);
+                    if (top10Problems.length === 0) return;
+
+                    // Flatten examples for filteredData used inside modal visualizations
+                    const flattenedExamples = top10Problems.flatMap((p: any) =>
+                      Array.isArray(p.examples)
+                        ? p.examples.map((ex: any) => ({
+                            ...ex,
+                            problem: p.problem,
+                            problem_detail: p.problem_detail,
+                            department: ex.department || Array.from(p.departments || [])[0] || '',
+                            keyword: ex.keyword || Array.from(p.keywords || [])[0] || ''
+                          }))
+                        : []
+                    );
+                    // Também coletar todos os exemplos do conjunto completo
+                    const allExamples = problemsArray.flatMap((p: any) =>
+                      Array.isArray(p.examples)
+                        ? p.examples.map((ex: any) => ({
+                            ...ex,
+                            problem: p.problem,
+                            problem_detail: p.problem_detail,
+                            department: ex.department || Array.from(p.departments || [])[0] || '',
+                            keyword: ex.keyword || Array.from(p.keywords || [])[0] || ''
+                          }))
+                        : []
+                    );
+                    setModalFilteredData(flattenedExamples);
+
+                    // Derivar keywords agregadas a partir dos exemplos (prioridade para exemplos)
+                    const aggregatedKeywordsArray = flattenedExamples.flatMap((ex: any) => {
+                      const raw = ex.keyword
+                        ? String(ex.keyword)
+                        : Array.isArray(ex.keywords) ? ex.keywords.join(',') : '';
+                      return String(raw)
+                        .split(/[;,|]/)
+                        .map((t) => t.trim())
+                        .filter((t) => t && t.toUpperCase() !== 'VAZIO');
+                    });
+                    const aggregatedKeywords = new Set(aggregatedKeywordsArray);
+
+                    // Build an aggregated item compatible with type 'problem'
+                    const aggregatedItem = {
+                      problem: 'Top 10 Problemas',
+                      problem_detail: 'Análise consolidada dos 10 problemas mais recorrentes',
+                      count: top10Problems.reduce((sum: number, p: any) => sum + (p.count || 0), 0),
+                      totalRating: top10Problems.reduce((sum: number, p: any) => sum + (p.totalRating || 0), 0),
+                      ratings: top10Problems.flatMap((p: any) => Array.isArray(p.ratings) ? p.ratings : []),
+                      examples: flattenedExamples,
+                      authors: new Set(top10Problems.flatMap((p: any) => Array.from(p.authors || []))),
+                      dates: top10Problems.flatMap((p: any) => Array.isArray(p.dates) ? p.dates : []),
+                      suggestions: new Set(top10Problems.flatMap((p: any) => Array.from(p.suggestions || []))),
+                      sources: new Set(top10Problems.flatMap((p: any) => Array.from(p.sources || []))),
+                      departments: new Set(top10Problems.flatMap((p: any) => Array.from(p.departments || []))),
+                      keywords: aggregatedKeywords,
+                      allExamples
+                    };
+
+                    openDetailModal(aggregatedItem, 'problem');
+                  }}
+                >
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Ver Detalhes dos Top 10
+                </Button>
+              </div>
+              <div className="h-96">
+                {(() => {
+                  const detailedProblems = getDetailedProblems();
+                  const problemsArray = Object.values(detailedProblems);
+                  
+
+                  
+                  // Verificar se há dados válidos
+                  if (!problemsArray || problemsArray.length === 0) {
+                    return (
+                      <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
+                        <p>Nenhum problema encontrado nos dados filtrados</p>
+                      </div>
+                    );
+                  }
+                  
+                  const top10 = problemsArray
+                    .filter((p: any) => p && p.count > 0) // Filtrar problemas válidos
+                    .sort((a: any, b: any) => b.count - a.count)
+                    .slice(0, 10);
+
+                  if (top10.length === 0) {
+                    return (
+                      <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
+                        <p>Nenhum problema válido encontrado</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <Bar 
+                      data={{
+                        labels: top10.map((p: any) => 
+                          p.problem.length > 35 ? p.problem.substring(0, 35) + '...' : p.problem
+                        ),
+                        datasets: [{
+                          label: 'Ocorrências',
+                          data: top10.map((p: any) => p.count),
+                          backgroundColor: top10.map((p: any) => {
+                            const ratings = Array.isArray(p.ratings) ? p.ratings : [];
+                            const avgRating = ratings.length > 0 
+                              ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length 
+                              : 3; // valor padrão
+                            if (avgRating <= 2) return '#DC2626'; // red-600
+                            if (avgRating <= 3) return '#F97316'; // orange-500
+                            if (avgRating <= 3.5) return '#FBBF24'; // amber-400
+                            return '#6B7280'; // gray-500
+                          }),
+                          borderRadius: 8,
+                          barThickness: 30
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        onClick: (_event: any, elements: any) => {
+                          if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const problem: any = top10[index];
+                            const ratings = Array.isArray(problem.ratings) ? problem.ratings : [];
+                            const avgRating = ratings.length > 0 
+                              ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length 
+                              : 3;
+                            
+                            // Calcular distribuições
+                            const sentimentDistribution = {
+                              positive: ratings.filter((r: number) => r >= 4).length,
+                              neutral: ratings.filter((r: number) => r === 3).length,
+                              negative: ratings.filter((r: number) => r <= 2).length
+                            };
+                            
+                            const ratingDistribution: Record<number, number> = {
+                              1: ratings.filter((r: number) => r === 1).length,
+                              2: ratings.filter((r: number) => r === 2).length,
+                              3: ratings.filter((r: number) => r === 3).length,
+                              4: ratings.filter((r: number) => r === 4).length,
+                              5: ratings.filter((r: number) => r === 5).length
+                            };
+                            
+                            setSelectedItem({
+                              type: 'problem_analysis',
+                              data: {
+                                ...problem,
+                                label: problem.problem,
+                                name: problem.problem,
+                                value: problem.count
+                              },
+                              title: problem.problem,
+                              examples: problem.examples,
+                              stats: {
+                                totalOccurrences: problem.count,
+                                averageRating: avgRating,
+                                sentimentDistribution: sentimentDistribution,
+                                ratingDistribution: ratingDistribution,
+                                // Tendência mensal (garantir array para evitar TypeError)
+                                monthlyTrend: (() => {
+                                  const monthlyData: Record<string, number> = {};
+                                  (problem.examples || []).forEach((ex: any) => {
+                                    const d = new Date(ex.date);
+                                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                                    monthlyData[key] = (monthlyData[key] || 0) + 1;
+                                  });
+                                  return Object.entries(monthlyData)
+                                    .sort(([a], [b]) => a.localeCompare(b))
+                                    .slice(-6)
+                                    .map(([month, count]) => ({
+                                      month: new Date(month + '-01').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+                                      count
+                                    }));
+                                })(),
+                                percentage: ((problem.count / executiveSummary.totalProblems) * 100).toFixed(1),
+                                uniqueAuthors: problem.authors.size
+                              }
+                            });
+                            setChartDetailOpen(true);
+                          }
+                        },
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: '#1e293b',
+                            padding: 12,
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#cbd5e1',
+                            callbacks: {
+                              label: (context: any) => {
+                                const problem: any = top10[context.dataIndex];
+                                const avgRating = problem.ratings.reduce((a: number, b: number) => a + b, 0) / problem.ratings.length;
+                                const criticalCount = problem.ratings.filter((r: number) => r <= 2).length;
+                                const percentage = ((problem.count / executiveSummary.totalProblems) * 100).toFixed(1);
+                                // Agregar detalhes específicos do problema para exibir no hover
+                                const detailsAgg = aggregateProblemDetailsFromFeedbacks(filteredData, problem.problem);
+
+                                const base = [
+                                  `Ocorrências: ${context.parsed.x}`,
+                                  `Rating Médio: ${avgRating.toFixed(1)}★`,
+                                  `Críticos: ${criticalCount} (${((criticalCount/problem.count)*100).toFixed(0)}%)`,
+                                  `% do Total: ${percentage}%`,
+                                  `Autores: ${problem.authors.size}`,
+                                  '',
+                                  'Detalhes mais citados:'
+                                ];
+
+                                const detailLines = detailsAgg.length > 0
+                                  ? detailsAgg.map((d: any) => `• ${d.detail} (${d.count}, ${d.pct.toFixed(0)}%)`)
+                                  : ['• Sem detalhes específicos'];
+
+                                return [...base, ...detailLines, '', '💡 Clique para ver detalhes'];
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          x: {
+                            beginAtZero: true,
+                            ticks: {
+                              stepSize: 1,
+                              color: '#64748b',
+                              font: { size: 11 }
+                            },
+                            grid: {
+                              color: '#e2e8f0'
+                            }
+                          },
+                          y: {
+                            ticks: {
+                              color: '#475569',
+                              font: { 
+                                size: 11,
+                                weight: 500
+                              }
+                            },
+                            grid: {
+                              display: false
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  );
+                })()}
+              </div>
+              {/* Legenda removida para manter foco no gráfico */}
+            </Card>
+
+            {/* Botão movido para o cabeçalho acima para melhor harmonia visual */}
+
+            {/* Gráfico 2: Distribuição por Departamento (Top 10) */}
+            <Card className="p-6 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <h4 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
+                <PieChart className="w-5 h-5 text-purple-500" />
+                Distribuição por Departamento (Top 10)
+              </h4>
+              <div className="h-96">
+                {(() => {
+                  // Contar departamentos apenas para feedbacks que tenham problemas válidos
+                  const departmentCounts: Record<string, number> = {};
+                  
+                  filteredData.forEach(feedback => {
+                    // Só contar se o feedback tem problemas válidos
+                    if (feedbackHasValidProblems(feedback) && feedback.sector) {
+                      const allSectors = feedback.sector.split(';').map((s: string) => s.trim());
+                      
+                      // Contar cada feedback em cada departamento válido
+                      allSectors.forEach((sector: string) => {
+                        const trimmedSector = sector.trim();
+                        if (trimmedSector && trimmedSector !== 'VAZIO') {
+                          departmentCounts[trimmedSector] = (departmentCounts[trimmedSector] || 0) + 1;
+                        }
+                      });
+                    }
+                  });
+                  
+                  const sortedDepts = Object.entries(departmentCounts)
+                    .map(([department, count]) => ({ 
+                      label: department, 
+                      value: count,
+                      name: department
+                    }))
+                    .sort((a, b) => b.value - a.value);
+
+                  const colors = [
+                    '#3B82F6', // blue-500
+                    '#8B5CF6', // violet-500
+                    '#EC4899', // pink-500
+                    '#F59E0B', // amber-500
+                    '#10B981', // emerald-500
+                    '#6366F1', // indigo-500
+                    '#F97316', // orange-500
+                    '#14B8A6', // teal-500
+                    '#A855F7', // purple-500
+                    '#64748B'  // slate-500
+                  ];
+
+                  if (sortedDepts.length === 0) {
+                    return (
+                      <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
+                        <p>Nenhum departamento encontrado nos dados filtrados</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <Doughnut
+                      data={{
+                        labels: sortedDepts.map(dept => dept.label),
+                        datasets: [{
+                          data: sortedDepts.map(dept => dept.value),
+                          backgroundColor: colors,
+                          borderColor: '#ffffff',
+                          borderWidth: 3,
+                          hoverOffset: 15
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        onClick: (_event: any, elements: any) => {
+                          if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const deptData = sortedDepts[index];
+                            
+                            // Filtrar feedbacks deste departamento que tenham problemas válidos
+                            const deptFeedbacks = filteredData.filter(feedback => 
+                              feedbackHasValidProblems(feedback) && 
+                              feedback.sector && feedback.sector.includes(deptData.label)
+                            );
+                            
+                            // Calcular rating médio do departamento
+                            const allRatings = deptFeedbacks
+                              .map(f => f.rating)
+                              .filter(r => r && r > 0);
+                            const avgRating = allRatings.length > 0 
+                              ? allRatings.reduce((a: number, b: number) => a + b, 0) / allRatings.length 
+                              : 0;
+                            
+                            // Calcular autores únicos
+                            const uniqueAuthors = new Set(deptFeedbacks.map(f => f.author).filter(a => a));
+                            
+                            // Calcular distribuição de sentimentos
+                            const sentimentDistribution = {
+                              positive: allRatings.filter((r: number) => r >= 4).length,
+                              neutral: allRatings.filter((r: number) => r === 3).length,
+                              negative: allRatings.filter((r: number) => r <= 2).length
+                            };
+                            
+                            // Calcular distribuição de ratings
+                            const ratingDistribution: Record<number, number> = {
+                              1: allRatings.filter((r: number) => r === 1).length,
+                              2: allRatings.filter((r: number) => r === 2).length,
+                              3: allRatings.filter((r: number) => r === 3).length,
+                              4: allRatings.filter((r: number) => r === 4).length,
+                              5: allRatings.filter((r: number) => r === 5).length
+                            };
+                            
+                            const totalFeedbacks = sortedDepts.reduce((sum, dept) => sum + dept.value, 0);
+                            
+                            setSelectedItem({
+                              type: 'department',
+                              data: {
+                                label: deptData.label,
+                                name: deptData.label,
+                                value: deptData.value
+                              },
+                              title: deptData.label,
+                              stats: {
+                                totalProblems: deptFeedbacks.length,
+                                totalOccurrences: deptData.value,
+                                averageRating: avgRating,
+                                uniqueAuthors: uniqueAuthors.size,
+                                sentimentDistribution: sentimentDistribution,
+                                ratingDistribution: ratingDistribution,
+                                // Tendência mensal para departamento
+                                monthlyTrend: (() => {
+                                  const monthlyData: Record<string, number> = {};
+                                  (deptFeedbacks || []).forEach((f: any) => {
+                                    const d = new Date(f.date);
+                                    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                                    monthlyData[key] = (monthlyData[key] || 0) + 1;
+                                  });
+                                  return Object.entries(monthlyData)
+                                    .sort(([a], [b]) => a.localeCompare(b))
+                                    .slice(-6)
+                                    .map(([month, count]) => ({
+                                      month: new Date(month + '-01').toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+                                      count
+                                    }));
+                                })(),
+                                percentage: ((deptData.value / totalFeedbacks) * 100).toFixed(1)
+                              }
+                            });
+                            setChartDetailOpen(true);
+                          }
+                        },
+                        plugins: {
+                          legend: {
+                            position: 'right',
+                            labels: {
+                              padding: 15,
+                              font: { size: 12 },
+                              color: '#64748b',
+                              generateLabels: (chart: any) => {
+                                const data = chart.data;
+                                return data.labels.map((label: string, i: number) => {
+                                  const value = data.datasets[0].data[i];
+                                  const total = data.datasets[0].data.reduce((a: number, b: number) => a + b, 0);
+                                  const percentage = ((value / total) * 100).toFixed(1);
+                                  return {
+                                    text: `${label}: ${value} (${percentage}%)`,
+                                    fillStyle: data.datasets[0].backgroundColor[i],
+                                    hidden: false,
+                                    index: i
+                                  };
+                                })
+                              }
+                            }
+                          },
+                          tooltip: {
+                            backgroundColor: '#1e293b',
+                            padding: 12,
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#cbd5e1',
+                            callbacks: {
+                              label: (context: any) => {
+                                const total = sortedDepts.reduce((sum, dept) => sum + dept.value, 0);
+                                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                
+                                return [
+                                  `Feedbacks: ${context.parsed}`,
+                                  `Percentual: ${percentage}%`,
+                                  '',
+                                  '💡 Clique para ver detalhes'
+                                ];
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  );
+                })()}
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-xs text-slate-600 dark:text-slate-400 text-center">
+                  💡 Clique em qualquer setor do gráfico para ver os problemas específicos daquele departamento
+                </p>
+              </div>
+            </Card>
+
+          </div>
+        </div>
+      )}
+
+
+      {/* OPÇÃO 1: DASHBOARD DE CARTÕES DETALHADOS COM MÚLTIPLAS VISUALIZAÇÕES */}
+      {selectedVisualization === 'option1' && (
+        <div className="space-y-6">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-green-200 dark:border-green-800">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
               <div>
@@ -2858,1188 +3903,378 @@ export function ProblemsVisualizationOptions({
               </div>
             )}
           </div>
-        </TabsContent>
+        </div>
+      )}
 
-        {/* OPÇÃO 2: ANÁLISE DETALHADA POR DEPARTAMENTO */}
-        <TabsContent value="option2" className="space-y-6">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-blue-200 dark:border-blue-800">
-            <h3 className="text-xl font-bold text-blue-800 dark:text-blue-200 mb-2">
-              🏢 Análise Detalhada por Departamento
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-              Análise completa de cada departamento com problemas, palavras-chave, detalhes específicos e insights estratégicos
-            </p>
-
-            {/* Resumo geral dos departamentos */}
-            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-blue-200">
-              <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-3">📊 Visão Geral Departamental</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div className="p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-bold text-blue-600">{Object.keys(departmentAnalysis).length}</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Departamentos</div>
-                </div>
-                <div className="p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-bold text-orange-600">
-                    {Object.values(departmentAnalysis).reduce((sum: number, dept: any) => sum + dept.totalProblems, 0)}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Total Problemas</div>
-                </div>
-                <div className="p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-bold text-green-600">
-                    {(() => {
-                      const total = Object.values(departmentAnalysis).reduce((sum: number, dept: any) => sum + dept.totalProblems, 0);
-                      const totalRating = Object.values(departmentAnalysis).reduce((sum: number, dept: any) => sum + dept.totalRating, 0);
-                      return total > 0 ? (totalRating / total).toFixed(1) : '0.0';
-                    })()}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Média Geral</div>
-                </div>
-                <div className="p-3 bg-white dark:bg-gray-700 rounded-lg">
-                  <div className="text-lg font-bold text-purple-600">
-                    {(() => {
-                      const criticalDepts = Object.values(departmentAnalysis).filter((dept: any) => 
-                        (dept.totalRating / dept.totalProblems) <= 2
-                      ).length;
-                      return criticalDepts;
-                    })()}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">Depts. Críticos</div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-6">
-              {Object.values(departmentAnalysis)
-                .map((dept: any) => ({
-                  ...dept,
-                  averageRating: dept.totalProblems > 0 ? dept.totalRating / dept.totalProblems : 0,
-                  problemDetailsArray: Object.values(dept.problemDetails).sort((a: any, b: any) => b.count - a.count),
-                  keywordsArray: Array.from(dept.keywords),
-                  suggestionsArray: Array.from(dept.suggestions),
-                  authorsCount: dept.authors.size
-                }))
-                .filter((dept: any) => dept.name !== 'Não identificado') // Filtrar departamento "Não identificado"
-                .sort((a: any, b: any) => b.totalProblems - a.totalProblems)
-                .map((dept: any, deptIndex: number) => {
-                  const severityColor = dept.averageRating <= 2 ? 'red' : dept.averageRating <= 3 ? 'yellow' : 'green';
-                  const [isExpanded, setIsExpanded] = useState(deptIndex < 3); // Primeiros 3 expandidos por padrão
-                  
-                  return (
-                    <Card key={deptIndex} className={`border-l-4 transition-all duration-200 ${
-                      severityColor === 'red' ? 'border-l-red-500 bg-red-50 dark:bg-red-950/20' :
-                      severityColor === 'yellow' ? 'border-l-yellow-500 bg-yellow-50 dark:bg-yellow-950/20' :
-                      'border-l-green-500 bg-green-50 dark:bg-green-950/20'
-                    }`}>
-                      
-                      {/* Cabeçalho do Departamento */}
-                      <div className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex-1">
-                            <h4 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
-                              <Building2 className="w-6 h-6" />
-                              {dept.name}
-                            </h4>
-                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
-                              <span className="flex items-center gap-1">
-                                <AlertTriangle className="w-4 h-4" />
-                                {dept.totalProblems} problema{dept.totalProblems !== 1 ? 's' : ''}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Users className="w-4 h-4" />
-                                {dept.authorsCount} cliente{dept.authorsCount !== 1 ? 's' : ''}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Star className="w-4 h-4 text-yellow-500" />
-                                {dept.averageRating.toFixed(1)}/5
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Target className="w-4 h-4" />
-                                {dept.keywordsArray.length} palavra{dept.keywordsArray.length !== 1 ? 's' : ''}-chave
-                              </span>
-                              {dept.suggestionsArray.length > 0 && (
-                                <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
-                                  <Lightbulb className="w-4 h-4" />
-                                  {dept.suggestionsArray.length} sugestõe{dept.suggestionsArray.length !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-2">
-                            <Badge variant={severityColor === 'red' ? 'destructive' : severityColor === 'yellow' ? 'secondary' : 'default'}>
-                              {severityColor === 'red' ? 'Crítico' : severityColor === 'yellow' ? 'Atenção' : 'Estável'}
-                            </Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              type="button"
-                              title="Ver análise detalhada completa"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                openDetailModal(dept, 'department');
-                              }}
-                            >
-                              <Eye className="w-4 h-4 text-violet-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              type="button"
-                              onClick={() => setIsExpanded(!isExpanded)}
-                            >
-                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Métricas Rápidas */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                          <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg border">
-                            <div className="text-lg font-bold text-red-600">
-                              {dept.problemDetailsArray.filter((p: any) => (p.totalRating / p.count) <= 2).length}
-                            </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400">Problemas Críticos</div>
-                          </div>
-                          <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg border">
-                            <div className="text-lg font-bold text-blue-600">{dept.worstRating}</div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400">Pior Rating</div>
-                          </div>
-                          <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg border">
-                            <div className="text-lg font-bold text-green-600">{dept.bestRating}</div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400">Melhor Rating</div>
-                          </div>
-                          <div className="text-center p-3 bg-white dark:bg-gray-700 rounded-lg border">
-                            <div className="text-lg font-bold text-purple-600">
-                              {((dept.totalProblems / executiveSummary.totalProblems) * 100).toFixed(1)}%
-                            </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400">% do Total</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Detalhes Expandidos */}
-                      {isExpanded && (
-                        <div className="px-6 pb-6 space-y-6">
-                          
-                          {/* Palavras-chave do Departamento */}
-                          <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 rounded-lg border border-purple-200 dark:border-purple-700">
-                            <h5 className="font-semibold text-purple-900 dark:text-purple-100 mb-3 text-sm flex items-center gap-1">
-                              🎯 Palavras-Chave Principais ({dept.keywordsArray.length})
-                            </h5>
-                            <div className="flex flex-wrap gap-2">
-                              {dept.keywordsArray.slice(0, 10).map((keyword: any, keyIndex: number) => (
-                                <span key={keyIndex} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200">
-                                  {keyword}
-                                </span>
-                              ))}
-                              {dept.keywordsArray.length > 10 && (
-                                <span className="text-xs text-purple-600 dark:text-purple-400 py-1">
-                                  +{dept.keywordsArray.length - 10} mais
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Problemas e Detalhes Específicos */}
-                          <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-lg border border-amber-200 dark:border-amber-700">
-                            <h5 className="font-semibold text-amber-900 dark:text-amber-100 mb-4 text-sm flex items-center gap-1">
-                              🔍 Problemas e Detalhes Específicos ({dept.problemDetailsArray.length})
-                            </h5>
-                            
-                            <div className="space-y-4">
-                              {dept.problemDetailsArray.slice(0, 6).map((detail: any, detailIndex: number) => {
-                                const avgRating = detail.totalRating / detail.count;
-                                const problemSeverity = avgRating <= 2 ? 'critical' : avgRating <= 3 ? 'warning' : 'normal';
-                                const specificDetailsArray: string[] = Array.from(detail.specificDetails || new Set());
-                                const hasMultipleDetails = specificDetailsArray.length > 1;
-                                
-                                return (
-                                  <div key={detailIndex} className={`p-4 rounded-lg border-l-4 ${
-                                    problemSeverity === 'critical' ? 'bg-red-50 dark:bg-red-950/20 border-l-red-400' :
-                                    problemSeverity === 'warning' ? 'bg-yellow-50 dark:bg-yellow-950/20 border-l-yellow-400' :
-                                    'bg-green-50 dark:bg-green-950/20 border-l-green-400'
-                                  } border border-gray-200 dark:border-gray-700`}>
-                                    
-                                    {/* Problema Principal */}
-                                    <div className="mb-3">
-                                      <div className="flex justify-between items-start mb-2">
-                                        <h6 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight flex items-center gap-2">
-                                          <span className="text-lg">⚠️</span>
-                                          {detail.problem}
-                                        </h6>
-                                        <div className="flex items-center gap-2">
-                                          <Badge variant={problemSeverity === 'critical' ? 'destructive' : problemSeverity === 'warning' ? 'secondary' : 'default'} className="text-xs">
-                                            {detail.count} ocorrências
-                                          </Badge>
-                                          <div className={`flex items-center gap-1 px-2 py-1 rounded ${
-                                            problemSeverity === 'critical' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
-                                            problemSeverity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
-                                            'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                          }`}>
-                                            <Star className="w-3 h-3" />
-                                            <span className="font-medium text-xs">{avgRating.toFixed(1)}</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                                        <Target className="w-3 h-3" />
-                                        <span>{detail.keyword}</span>
-                                        {hasMultipleDetails && (
-                                          <>
-                                            <span>•</span>
-                                            <span className="text-amber-600 dark:text-amber-400 font-medium">
-                                              {specificDetailsArray.length} variações específicas
-                                            </span>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    {/* Detalhes Específicos */}
-                                    {specificDetailsArray.length > 0 && (
-                                      <div className="border-t pt-3 border-gray-200 dark:border-gray-600">
-                                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
-                                          📝 Detalhes Específicos Relatados:
-                                        </div>
-                                        <div className="space-y-2">
-                                          {specificDetailsArray.slice(0, 3).map((specificDetail: string, sdIndex: number) => (
-                                            <div key={sdIndex} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-700 rounded border-l-2 border-amber-300 dark:border-amber-600">
-                                              <span className="text-amber-600 dark:text-amber-400 mt-1 text-xs">▸</span>
-                                              <span className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
-                                                {specificDetail}
-                                              </span>
-                                            </div>
-                                          ))}
-                                          
-                                          {specificDetailsArray.length > 3 && (
-                                            <div className="text-center">
-                                              <span className="text-xs text-amber-600 dark:text-amber-400 italic">
-                                                +{specificDetailsArray.length - 3} detalhes específicos adicionais
-                                              </span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Exemplos de Feedback */}
-                                    {detail.examples && detail.examples.length > 0 && (
-                                      <div className="border-t pt-3 mt-3 border-gray-200 dark:border-gray-600">
-                                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
-                                          💬 Exemplos de Feedback:
-                                        </div>
-                                        <div className="space-y-1">
-                                          {detail.examples.slice(0, 2).map((example: any, exIndex: number) => (
-                                            <div key={exIndex} className="text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 p-2 rounded italic">
-                                              "{example.comment.substring(0, 80)}..."
-                                              <span className="ml-2 text-gray-500">
-                                                ({example.rating}⭐)
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            
-                            {dept.problemDetailsArray.length > 6 && (
-                              <div className="mt-4 text-center">
-                                <span className="text-sm text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/20 px-3 py-1 rounded-full">
-                                  E mais {dept.problemDetailsArray.length - 6} problemas específicos com detalhes...
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Sugestões de Clientes */}
-                          {dept.suggestionsArray.length > 0 && (
-                            <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border border-green-200 dark:border-green-700">
-                              <h5 className="font-semibold text-green-900 dark:text-green-100 mb-3 text-sm flex items-center gap-1">
-                                💡 Sugestões dos Clientes ({dept.suggestionsArray.length})
-                              </h5>
-                              <div className="space-y-2">
-                                {dept.suggestionsArray.slice(0, 4).map((suggestion: any, suggIndex: number) => (
-                                  <div key={suggIndex} className="flex items-start gap-2 p-2 bg-white dark:bg-gray-700 rounded border">
-                                    <span className="text-green-600 dark:text-green-400 mt-1 text-sm">•</span>
-                                    <span className="text-sm text-green-800 dark:text-green-200 leading-relaxed">
-                                      {suggestion}
-                                    </span>
-                                  </div>
-                                ))}
-                                {dept.suggestionsArray.length > 4 && (
-                                  <div className="text-center">
-                                    <span className="text-xs text-green-600 dark:text-green-400 italic">
-                                      +{dept.suggestionsArray.length - 4} sugestões adicionais
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Insights Estratégicos */}
-                          <div className="p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900/20 dark:to-gray-900/20 rounded-lg border border-slate-200 dark:border-slate-700">
-                            <h5 className="font-semibold text-slate-900 dark:text-slate-100 mb-3 text-sm flex items-center gap-1">
-                              🎯 Insights Estratégicos
-                            </h5>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                              <div className="space-y-2">
-                                <div className="flex items-start gap-2">
-                                  <span className="text-blue-600 dark:text-blue-400 mt-0.5">📊</span>
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    <strong>Volume:</strong> {dept.totalProblems} problemas ({((dept.totalProblems / executiveSummary.totalProblems) * 100).toFixed(1)}% do total)
-                                  </span>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <span className="text-orange-600 dark:text-orange-400 mt-0.5">⚠️</span>
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    <strong>Criticidade:</strong> {dept.problemDetailsArray.filter((p: any) => (p.totalRating / p.count) <= 2).length} problemas críticos
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="space-y-2">
-                                <div className="flex items-start gap-2">
-                                  <span className="text-purple-600 dark:text-purple-400 mt-0.5">🎯</span>
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    <strong>Diversidade:</strong> {dept.keywordsArray.length} áreas específicas identificadas
-                                  </span>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <span className="text-green-600 dark:text-green-400 mt-0.5">💡</span>
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    <strong>Oportunidades:</strong> {dept.suggestionsArray.length} sugestões dos clientes
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </Card>
-                  );
-                })}
-            </div>
-            
-            {Object.values(departmentAnalysis).length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Building2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Nenhum dado departamental encontrado nos dados filtrados.</p>
-              </div>
-            )}
-          </div>
-        </TabsContent>
-
-        {/* OPÇÃO 3: RESUMO EXECUTIVO DETALHADO COM INSIGHTS MASTIGADOS */}
-        <TabsContent value="option3" className="space-y-4">
-          <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-950/20 dark:to-indigo-950/20 p-6 rounded-lg border-2 border-violet-200 dark:border-violet-800">
-            <h3 className="text-2xl font-bold text-violet-800 dark:text-violet-200 mb-2 flex items-center gap-2">
-              📊 Resumo Executivo Estratégico
-            </h3>
-            <p className="text-sm text-violet-600 dark:text-violet-300 mb-6">
-              Análise completa com insights acionáveis e recomendações estratégicas mastigadas
-            </p>
-            
-            {/* Alertas de Saúde Geral do Sistema */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              {/* Status Crítico */}
-              <Card className={`p-4 ${
-                executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.3)
-                  ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700'
-                  : executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.15)
-                  ? 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-300 dark:border-yellow-700'
-                  : 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.3)
-                      ? 'bg-red-100 dark:bg-red-900/50'
-                      : executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.15)
-                      ? 'bg-yellow-100 dark:bg-yellow-900/50'
-                      : 'bg-green-100 dark:bg-green-900/50'
-                  }`}>
-                    {executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.3) ? '🚨' :
-                     executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.15) ? '⚠️' : '✅'}
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold text-gray-900 dark:text-white">
-                      {((executiveSummary.criticalProblems / executiveSummary.totalProblems) * 100).toFixed(1)}%
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Problemas Críticos</div>
-                    <div className={`text-xs font-medium ${
-                      executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.3)
-                        ? 'text-red-600 dark:text-red-400'
-                        : executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.15)
-                        ? 'text-yellow-600 dark:text-yellow-400'
-                        : 'text-green-600 dark:text-green-400'
-                    }`}>
-                      {executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.3)
-                        ? 'AÇÃO URGENTE'
-                        : executiveSummary.criticalProblems > (executiveSummary.totalProblems * 0.15)
-                        ? 'ATENÇÃO NECESSÁRIA'
-                        : 'SOB CONTROLE'}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Status de Satisfação */}
-              <Card className={`p-4 ${
-                executiveSummary.averageRating >= 4
-                  ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700'
-                  : executiveSummary.averageRating >= 3
-                  ? 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-300 dark:border-yellow-700'
-                  : 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    executiveSummary.averageRating >= 4
-                      ? 'bg-green-100 dark:bg-green-900/50'
-                      : executiveSummary.averageRating >= 3
-                      ? 'bg-yellow-100 dark:bg-yellow-900/50'
-                      : 'bg-red-100 dark:bg-red-900/50'
-                  }`}>
-                    {executiveSummary.averageRating >= 4 ? '😊' :
-                     executiveSummary.averageRating >= 3 ? '😐' : '😞'}
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold text-gray-900 dark:text-white">
-                      {executiveSummary.averageRating.toFixed(1)}★
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Satisfação Média</div>
-                    <div className={`text-xs font-medium ${
-                      executiveSummary.averageRating >= 4
-                        ? 'text-green-600 dark:text-green-400'
-                        : executiveSummary.averageRating >= 3
-                        ? 'text-yellow-600 dark:text-yellow-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}>
-                      {executiveSummary.averageRating >= 4
-                        ? 'EXCELENTE'
-                        : executiveSummary.averageRating >= 3
-                        ? 'SATISFATÓRIO'
-                        : 'INSATISFATÓRIO'}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Status de Engajamento */}
-              <Card className={`p-4 ${
-                executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.4)
-                  ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700'
-                  : executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.2)
-                  ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-300 dark:border-indigo-700'
-                  : 'bg-gray-50 dark:bg-gray-950/30 border-gray-300 dark:border-gray-700'
-              }`}>
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.4)
-                      ? 'bg-blue-100 dark:bg-blue-900/50'
-                      : executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.2)
-                      ? 'bg-indigo-100 dark:bg-indigo-900/50'
-                      : 'bg-gray-100 dark:bg-gray-900/50'
-                  }`}>
-                    {executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.4) ? '💡' :
-                     executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.2) ? '🔍' : '📝'}
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold text-gray-900 dark:text-white">
-                      {((executiveSummary.withSuggestions / executiveSummary.totalProblems) * 100).toFixed(1)}%
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Engajamento</div>
-                    <div className={`text-xs font-medium ${
-                      executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.4)
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.2)
-                        ? 'text-indigo-600 dark:text-indigo-400'
-                        : 'text-gray-600 dark:text-gray-400'
-                    }`}>
-                      {executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.4)
-                        ? 'ALTO NÍVEL'
-                        : executiveSummary.withSuggestions > (executiveSummary.totalProblems * 0.2)
-                        ? 'NÍVEL MÉDIO'
-                        : 'BAIXO NÍVEL'}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            {/* Painel de KPIs Detalhados */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
-              <Card className="p-4 text-center bg-gradient-to-br from-red-50 to-pink-50 dark:from-red-950/20 dark:to-pink-950/20 border-red-200 dark:border-red-700">
-                <div className="text-2xl font-bold text-red-700 dark:text-red-300">{executiveSummary.criticalProblems}</div>
-                <div className="text-sm font-medium text-red-600 dark:text-red-400">Críticos</div>
-                <div className="text-xs text-red-500 dark:text-red-500">≤ 2★ Rating</div>
-              </Card>
-              
-              <Card className="p-4 text-center bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border-blue-200 dark:border-blue-700">
-                <div className="text-2xl font-bold text-blue-700 dark:text-blue-300">{executiveSummary.totalProblems}</div>
-                <div className="text-sm font-medium text-blue-600 dark:text-blue-400">Total</div>
-                <div className="text-xs text-blue-500 dark:text-blue-500">Problemas</div>
-              </Card>
-              
-              <Card className="p-4 text-center bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/20 border-amber-200 dark:border-amber-700">
-                <div className="text-2xl font-bold text-amber-700 dark:text-amber-300">{executiveSummary.averageRating.toFixed(1)}</div>
-                <div className="text-sm font-medium text-amber-600 dark:text-amber-400">Rating Médio</div>
-                <div className="text-xs text-amber-500 dark:text-amber-500">Satisfação</div>
-              </Card>
-              
-              <Card className="p-4 text-center bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/20 dark:to-green-950/20 border-emerald-200 dark:border-emerald-700">
-                <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{executiveSummary.uniqueAuthors}</div>
-                <div className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Usuários</div>
-                <div className="text-xs text-emerald-500 dark:text-emerald-500">Únicos</div>
-              </Card>
-              
-              <Card className="p-4 text-center bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/20 dark:to-violet-950/20 border-purple-200 dark:border-purple-700">
-                <div className="text-2xl font-bold text-purple-700 dark:text-purple-300">{executiveSummary.withSuggestions}</div>
-                <div className="text-sm font-medium text-purple-600 dark:text-purple-400">Sugestões</div>
-                <div className="text-xs text-purple-500 dark:text-purple-500">Propostas</div>
-              </Card>
-
-              <Card className="p-4 text-center bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/20 dark:to-cyan-950/20 border-teal-200 dark:border-teal-700">
-                <div className="text-2xl font-bold text-teal-700 dark:text-teal-300">{executiveSummary.withDetails}</div>
-                <div className="text-sm font-medium text-teal-600 dark:text-teal-400">Detalhados</div>
-                <div className="text-xs text-teal-500 dark:text-teal-500">Com contexto</div>
-              </Card>
-            </div>
-
-            {/* Análise de Departamentos com Insights Estratégicos */}
-            <Card className="p-6 mb-6 bg-gradient-to-br from-slate-50 to-gray-50 dark:from-slate-900/20 dark:to-gray-900/20 border-slate-200 dark:border-slate-700">
-              <h4 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                🏢 Análise Departamental Estratégica
-              </h4>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {Object.values(departmentAnalysis)
-                  .map((dept: any) => ({
-                    ...dept,
-                    averageRating: dept.totalProblems > 0 ? dept.totalRating / dept.totalProblems : 0,
-                    problemDetailsArray: Object.values(dept.problemDetails || {}).sort((a: any, b: any) => b.count - a.count),
-                    keywordsArray: Array.from(dept.keywords || []),
-                    suggestionsArray: Array.from(dept.suggestions || []),
-                    authorsCount: dept.authors ? dept.authors.size : 0
-                  }))
-                  .filter((dept: any) => dept.name !== 'Não identificado')
-                  .sort((a: any, b: any) => b.totalProblems - a.totalProblems)
-                  .slice(0, 6)
-                  .map((dept: any, index: number) => {
-                    const criticidade = (dept.problemDetailsArray || []).filter((p: any) => (p.totalRating / p.count) <= 2).length;
-                    const avgRating = dept.totalRating / dept.totalProblems;
-                    const impacto = (dept.totalProblems / executiveSummary.totalProblems) * 100;
-                    const urgencia = criticidade > 0 ? 'Alta' : avgRating < 3 ? 'Média' : 'Baixa';
-                    
-                    return (
-                      <div key={index} className={`p-4 rounded-lg border-l-4 ${
-                        criticidade > 0
-                          ? 'bg-red-50 dark:bg-red-950/20 border-l-red-500'
-                          : avgRating < 3
-                          ? 'bg-yellow-50 dark:bg-yellow-950/20 border-l-yellow-500'
-                          : 'bg-green-50 dark:bg-green-950/20 border-l-green-500'
-                      } border border-gray-200 dark:border-gray-700`}>
-                        
-                        <div className="flex justify-between items-start mb-3">
-                          <h5 className="font-bold text-gray-900 dark:text-white text-lg">
-                            🏛️ {dept.name}
-                          </h5>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={
-                              criticidade > 0 ? 'destructive' : avgRating < 3 ? 'secondary' : 'default'
-                            }>
-                              {urgencia} Prioridade
-                            </Badge>
-                            
-                            {/* Botão de visualização detalhada */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              type="button"
-                              title="Ver análise departamental detalhada"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                openDetailModal(dept, 'department');
-                              }}
-                            >
-                              <Eye className="w-4 h-4 text-violet-600" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                              {dept.totalProblems}
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400">
-                              Problemas ({impacto.toFixed(1)}% do total)
-                            </div>
-                          </div>
-                          <div>
-                            <div className={`text-2xl font-bold ${
-                              criticidade > 0
-                                ? 'text-red-600 dark:text-red-400'
-                                : avgRating < 3
-                                ? 'text-yellow-600 dark:text-yellow-400'
-                                : 'text-green-600 dark:text-green-400'
-                            }`}>
-                              {avgRating.toFixed(1)}★
-                            </div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400">
-                              Rating Médio
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Insights Mastigados */}
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-start gap-2">
-                            <span className="text-amber-600 dark:text-amber-400 mt-0.5">📊</span>
-                            <span className="text-gray-700 dark:text-gray-300">
-                              <strong>Impacto:</strong> Responsável por {impacto.toFixed(1)}% dos problemas totais
-                              {impacto > 20 ? ' (Alto impacto - priorizar recursos)' : 
-                               impacto > 10 ? ' (Impacto moderado)' : ' (Baixo impacto)'}
-                            </span>
-                          </div>
-                          
-                          {criticidade > 0 && (
-                            <div className="flex items-start gap-2">
-                              <span className="text-red-600 dark:text-red-400 mt-0.5">🚨</span>
-                              <span className="text-gray-700 dark:text-gray-300">
-                                <strong>Criticidade:</strong> {criticidade} problema{criticidade > 1 ? 's' : ''} crítico{criticidade > 1 ? 's' : ''} 
-                                {criticidade > 3 ? ' - AÇÃO IMEDIATA necessária' : ' - Requer atenção urgente'}
-                              </span>
-                            </div>
-                          )}
-                          
-                          <div className="flex items-start gap-2">
-                            <span className="text-blue-600 dark:text-blue-400 mt-0.5">🎯</span>
-                            <span className="text-gray-700 dark:text-gray-300">
-                              <strong>Diversidade:</strong> {(dept.keywordsArray || []).length} área{(dept.keywordsArray || []).length > 1 ? 's' : ''} específica{(dept.keywordsArray || []).length > 1 ? 's' : ''} identificada{(dept.keywordsArray || []).length > 1 ? 's' : ''}
-                              {(dept.keywordsArray || []).length > 5 ? ' (Alta fragmentação - revisar processos)' : 
-                               (dept.keywordsArray || []).length > 2 ? ' (Moderada diversidade)' : ' (Foco específico)'}
-                            </span>
-                          </div>
-                          
-                          {(dept.suggestionsArray || []).length > 0 && (
-                            <div className="flex items-start gap-2">
-                              <span className="text-green-600 dark:text-green-400 mt-0.5">💡</span>
-                              <span className="text-gray-700 dark:text-gray-300">
-                                <strong>Oportunidades:</strong> {(dept.suggestionsArray || []).length} sugestões dos clientes
-                                {(dept.suggestionsArray || []).length > 5 ? ' (Alto engajamento - capitalizar feedback)' : 
-                                 (dept.suggestionsArray || []).length > 2 ? ' (Bom nível de sugestões)' : ' (Poucas sugestões)'}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Recomendação Estratégica */}
-                          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-950/30 rounded border border-blue-200 dark:border-blue-700">
-                            <div className="flex items-start gap-2">
-                              <span className="text-blue-700 dark:text-blue-300 mt-0.5">🎯</span>
-                              <div className="text-blue-800 dark:text-blue-200">
-                                <strong>Recomendação:</strong> {
-                                  criticidade > 0
-                                    ? `Prioridade MÁXIMA - Implementar plano de ação imediato para resolver ${criticidade} problema${criticidade > 1 ? 's' : ''} crítico${criticidade > 1 ? 's' : ''}.`
-                                    : avgRating < 3
-                                    ? `Atenção necessária - Revisar processos e implementar melhorias nos próximos 30 dias.`
-                                    : impacto > 15
-                                    ? `Monitorar de perto - Alto volume requer acompanhamento constante para manter qualidade.`
-                                    : `Manter padrão atual - Departamento em situação estável, foco em melhoria contínua.`
-                                }
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </Card>
-
-            {/* Top 5 Problemas Críticos com Análise Detalhada */}
-            <Card className="p-6 mb-6 bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/20 dark:to-orange-950/20 border-red-200 dark:border-red-700">
-              <h4 className="text-xl font-bold text-red-900 dark:text-red-100 mb-4 flex items-center gap-2">
-                🚨 TOP 5 Problemas Críticos - Ação Imediata
-              </h4>
-              <p className="text-sm text-red-700 dark:text-red-300 mb-4">
-                Problemas com rating ≤ 2★ que requerem intervenção urgente
+      {/* OPÇÃO 3: DASHBOARD EXECUTIVO PROFISSIONAL */}
+      {selectedVisualization === 'option3' && (
+        <div className="space-y-6">
+          {/* Header Limpo e Profissional */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                Dashboard Executivo
+              </h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                Indicadores estratégicos e análise de performance
               </p>
-              
-              <div className="space-y-4">
-                {Object.values(detailedProblems)
-                  .filter((problem: any) => {
-                    const avgRating = problem.ratings.reduce((a: number, b: number) => a + b, 0) / problem.ratings.length;
-                    return avgRating <= 2;
-                  })
-                  .sort((a: any, b: any) => {
-                    const avgA = a.ratings.reduce((sum: number, r: number) => sum + r, 0) / a.ratings.length;
-                    const avgB = b.ratings.reduce((sum: number, r: number) => sum + r, 0) / b.ratings.length;
-                    if (avgA !== avgB) return avgA - avgB; // Pior rating primeiro
-                    return b.count - a.count; // Depois por frequência
-                  })
-                  .slice(0, 5)
-                  .map((problem: any, index: number) => {
-                    const avgRating = problem.ratings.reduce((a: number, b: number) => a + b, 0) / problem.ratings.length;
-                    const impacto = (problem.count / executiveSummary.totalProblems) * 100;
-                    const urgencia = avgRating <= 1.5 ? 'EXTREMA' : 'ALTA';
-                    
+            </div>
+          </div>
+
+          {/* KPIs Principais em Cards Limpos */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total de Problemas */}
+            <Card className="p-5 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400">Total de Problemas</h4>
+                <AlertTriangle className="w-5 h-5 text-blue-500" />
+              </div>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                {(() => {
+                  const detailedProblems = getDetailedProblems();
+                  return detailedProblems && typeof detailedProblems === 'object' 
+                    ? Object.keys(detailedProblems).length 
+                    : 0;
+                })()}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
+                {executiveSummary.totalProblems} ocorrências totais
+              </p>
+            </Card>
+
+            {/* Taxa de Criticidade */}
+            <Card className="p-5 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400">Taxa de Criticidade</h4>
+                <AlertCircle className="w-5 h-5 text-red-500" />
+              </div>
+              <p className="text-3xl font-bold text-red-600 dark:text-red-400">
+                {((executiveSummary.criticalProblems / executiveSummary.totalProblems) * 100).toFixed(1)}%
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
+                {executiveSummary.criticalProblems} casos com rating ≤2★
+              </p>
+            </Card>
+
+            {/* Satisfação Média */}
+            <Card className="p-5 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400">Satisfação Média</h4>
+                <Star className="w-5 h-5 text-amber-500" />
+              </div>
+              <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
+                {executiveSummary.averageRating.toFixed(2)}★
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
+                Rating médio geral dos feedbacks
+              </p>
+            </Card>
+
+            {/* Usuários Impactados */}
+            <Card className="p-5 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400">Usuários Impactados</h4>
+                <Users className="w-5 h-5 text-purple-500" />
+              </div>
+              <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                {executiveSummary.uniqueAuthors}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
+                Autores únicos de feedbacks
+              </p>
+            </Card>
+          </div>
+
+          {/* Gráficos Principais - 2 Colunas */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Distribuição de Criticidade */}
+            <Card className="p-6 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+                Distribuição por Nível de Criticidade
+              </h4>
+              <div className="h-64">
+                <Doughnut 
+                  data={{
+                    labels: ['Crítico (1-2★)', 'Regular (3★)', 'Satisfatório (4-5★)'],
+                    datasets: [{
+                      data: [
+                        executiveSummary.criticalProblems,
+                        Object.values(getDetailedProblems())
+                          .reduce((sum: number, p: any) => sum + (Array.isArray(p.ratings) ? p.ratings.filter((r: number) => r === 3).length : 0), 0),
+                        Object.values(getDetailedProblems())
+                          .reduce((sum: number, p: any) => sum + (Array.isArray(p.ratings) ? p.ratings.filter((r: number) => r >= 4).length : 0), 0)
+                      ],
+                      backgroundColor: [
+                        '#DC2626', // red-600
+                        '#F59E0B', // amber-500
+                        '#10B981'  // emerald-500
+                      ],
+                      borderWidth: 2,
+                      borderColor: '#ffffff'
+                    }]
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: 'bottom',
+                        labels: {
+                          padding: 15,
+                          font: { size: 12 },
+                          color: '#64748b'
+                        }
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: (context: any) => {
+                            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return `${context.label}: ${context.parsed} (${percentage}%)`;
+                          }
+                        }
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </Card>
+
+            {/* Top 5 Problemas */}
+            <Card className="p-6 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+              <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+                Top 5 Problemas Mais Recorrentes
+              </h4>
+              <div className="h-64">
+                {(() => {
+                  const detailedProblems = getDetailedProblems();
+                  const problemsArray = Object.values(detailedProblems);
+                  
+                  if (!problemsArray || problemsArray.length === 0) {
                     return (
-                      <div key={index} className="p-4 bg-white dark:bg-gray-800 rounded-lg border-l-4 border-l-red-500 shadow-sm">
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start gap-3">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
-                                index === 0 ? 'bg-red-600' : index === 1 ? 'bg-red-500' : 'bg-red-400'
-                              }`}>
-                                #{index + 1}
-                              </div>
-                              <div className="flex-1">
-                                <h5 className="font-bold text-gray-900 dark:text-white text-base leading-tight mb-2">
-                                  🎯 {problem.problem}
-                                </h5>
-                                {problem.problem_detail && problem.problem_detail.trim() !== '' && (
-                                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 leading-relaxed">
-                                    📝 {problem.problem_detail}
-                                  </p>
-                                )}
-                                
-                                <div className="flex flex-wrap gap-2 mb-3">
-                                  <Badge variant="destructive" className="text-xs">
-                                    Urgência {urgencia}
-                                  </Badge>
-                                  <Badge variant="secondary" className="text-xs">
-                                    {problem.count} ocorrências
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs">
-                                    {impacto.toFixed(1)}% do total
-                                  </Badge>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 ml-4">
-                            <div className="text-right">
-                              <div className="flex items-center gap-1">
-                                <Star className="w-4 h-4 text-red-500" />
-                                <span className="font-bold text-red-700 dark:text-red-300">
-                                  {avgRating.toFixed(1)}
-                                </span>
-                              </div>
-                              <div className="text-xs text-red-600 dark:text-red-400">
-                                Rating Crítico
-                              </div>
-                            </div>
-                            
-                            {/* Botão de visualização detalhada */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              type="button"
-                              title="Ver análise detalhada completa"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                openDetailModal(problem, 'problem');
-                              }}
-                            >
-                              <Eye className="w-4 h-4 text-violet-600" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Informações Contextuais */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3 text-sm">
-                          <div>
-                            <span className="text-gray-500 dark:text-gray-400">� Departamentos:</span>
-                            <div className="font-medium text-gray-700 dark:text-gray-300">
-                              {Array.from(problem.departments).slice(0, 2).join(', ')}
-                              {Array.from(problem.departments).length > 2 && ` +${Array.from(problem.departments).length - 2}`}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-gray-500 dark:text-gray-400">🎯 Palavras-chave:</span>
-                            <div className="font-medium text-gray-700 dark:text-gray-300">
-                              {Array.from(problem.keywords).slice(0, 2).join(', ')}
-                              {Array.from(problem.keywords).length > 2 && ` +${Array.from(problem.keywords).length - 2}`}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Recomendação Específica */}
-                        <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-700">
-                          <div className="flex items-start gap-2">
-                            <span className="text-red-700 dark:text-red-300 mt-0.5">🎯</span>
-                            <div className="text-red-800 dark:text-red-200 text-sm">
-                              <strong>Ação Recomendada:</strong> {
-                                avgRating <= 1.5
-                                  ? `CRÍTICO - Formar task force imediata. Resolver em 24-48h. Comunicar ações à gerência superior.`
-                                  : impacto > 10
-                                  ? `ALTO IMPACTO - Priorizar recursos nos próximos 7 dias. Monitorar progresso diariamente.`
-                                  : problem.count > 5
-                                  ? `RECORRENTE - Identificar causa raiz. Implementar processo para prevenir recorrência.`
-                                  : `PONTUAL - Resolver individualmente, mas monitorar para evitar escalação.`
-                              }
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Exemplo de Feedback */}
-                        {problem.examples && problem.examples.length > 0 && (
-                          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900 rounded border">
-                            <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              💬 Exemplo de Feedback Recente:
-                            </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400 italic">
-                              "{problem.examples[0].comment.substring(0, 120)}..."
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                              — {problem.examples[0].author} ({problem.examples[0].rating}⭐)
-                            </div>
-                          </div>
-                        )}
+                      <div className="flex items-center justify-center h-full text-gray-500">
+                        <p>Nenhum problema encontrado</p>
                       </div>
                     );
-                  })}
-              </div>
-              
-              {Object.values(detailedProblems).filter((problem: any) => {
-                const avgRating = problem.ratings.reduce((a: number, b: number) => a + b, 0) / problem.ratings.length;
-                return avgRating <= 2;
-              }).length === 0 && (
-                <div className="text-center py-6 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-700">
-                  <div className="text-green-600 dark:text-green-400 mb-2">🎉</div>
-                  <p className="text-green-700 dark:text-green-300 font-medium">
-                    Excelente! Nenhum problema crítico detectado.
-                  </p>
-                  <p className="text-green-600 dark:text-green-400 text-sm">
-                    Continue o bom trabalho mantendo a qualidade alta.
-                  </p>
-                </div>
-              )}
-            </Card>
-
-            {/* Diagnóstico Técnico dos Dados */}
-            <Card className="p-6 mb-6 bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-950/20 dark:to-blue-950/20 border-indigo-200 dark:border-indigo-700">
-              <h4 className="text-xl font-bold text-indigo-900 dark:text-indigo-100 mb-4 flex items-center gap-2">
-                🔍 Diagnóstico Técnico dos Dados
-              </h4>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h5 className="font-semibold text-indigo-800 dark:text-indigo-200 mb-3">Qualidade dos Dados</h5>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center p-3 bg-white dark:bg-gray-800 rounded">
-                      <span className="text-gray-700 dark:text-gray-300">Total de Problemas:</span>
-                      <Badge variant="outline">{executiveSummary.totalProblems}</Badge>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-white dark:bg-gray-800 rounded">
-                      <span className="text-gray-700 dark:text-gray-300">Com Análise IA:</span>
-                      <Badge variant={executiveSummary.dataSourcesCount.allProblems > 0 ? 'default' : 'secondary'}>
-                        {executiveSummary.dataSourcesCount.allProblems} ({((executiveSummary.dataSourcesCount.allProblems / executiveSummary.totalProblems) * 100).toFixed(1)}%)
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-white dark:bg-gray-800 rounded">
-                      <span className="text-gray-700 dark:text-gray-300">Formato Legado:</span>
-                      <Badge variant={executiveSummary.dataSourcesCount.legacy > 0 ? 'secondary' : 'outline'}>
-                        {executiveSummary.dataSourcesCount.legacy} ({((executiveSummary.dataSourcesCount.legacy / executiveSummary.totalProblems) * 100).toFixed(1)}%)
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-white dark:bg-gray-800 rounded">
-                      <span className="text-gray-700 dark:text-gray-300">Com Detalhes Específicos:</span>
-                      <Badge variant={executiveSummary.withDetails > 0 ? 'default' : 'destructive'}>
-                        {executiveSummary.withDetails} ({((executiveSummary.withDetails / executiveSummary.totalProblems) * 100).toFixed(1)}%)
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h5 className="font-semibold text-indigo-800 dark:text-indigo-200 mb-3">Alertas e Recomendações</h5>
-                  <div className="space-y-3">
-                    {/* Alertas sobre dados */}
-                    {executiveSummary.dataSourcesCount.allProblems === 0 && (
-                      <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg border border-yellow-300">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                              ⚠️ Dados no formato legado
-                            </p>
-                            <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                              Para análises mais precisas, reprocesse com IA
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {executiveSummary.withDetails === 0 && (
-                      <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg border border-red-300">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                              🚨 Falta de detalhes específicos
-                            </p>
-                            <p className="text-xs text-red-700 dark:text-red-300">
-                              Dados incompletos podem limitar ações corretivas
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {(executiveSummary.dataSourcesCount.allProblems / executiveSummary.totalProblems) >= 0.8 && (
-                      <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg border border-green-300">
-                        <div className="flex items-start gap-2">
-                          <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                              ✅ Boa qualidade dos dados
-                            </p>
-                            <p className="text-xs text-green-700 dark:text-green-300">
-                              Maioria dos dados com análise IA detalhada
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Plano de Ação Estratégico */}
-            <Card className="p-6 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 border-emerald-200 dark:border-emerald-700">
-              <h4 className="text-xl font-bold text-emerald-900 dark:text-emerald-100 mb-4 flex items-center gap-2">
-                🎯 Plano de Ação Estratégico - Próximos 30 Dias
-              </h4>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Prioridade 1: Críticos */}
-                <div className="p-4 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-700">
-                  <h5 className="font-bold text-red-800 dark:text-red-200 mb-3 flex items-center gap-2">
-                    🚨 Prioridade 1 (0-7 dias)
-                  </h5>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-start gap-2">
-                      <span className="text-red-600 dark:text-red-400 mt-0.5">•</span>
-                      <span className="text-red-700 dark:text-red-300">
-                        Resolver {executiveSummary.criticalProblems} problema{executiveSummary.criticalProblems !== 1 ? 's' : ''} crítico{executiveSummary.criticalProblems !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-red-600 dark:text-red-400 mt-0.5">•</span>
-                      <span className="text-red-700 dark:text-red-300">
-                        Formar task forces para departamentos com rating &lt; 2★
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-red-600 dark:text-red-400 mt-0.5">•</span>
-                      <span className="text-red-700 dark:text-red-300">
-                        Comunicação diária de progresso à gerência
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Prioridade 2: Melhorias */}
-                <div className="p-4 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg border border-yellow-200 dark:border-yellow-700">
-                  <h5 className="font-bold text-yellow-800 dark:text-yellow-200 mb-3 flex items-center gap-2">
-                    ⚠️ Prioridade 2 (7-21 dias)
-                  </h5>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-start gap-2">
-                      <span className="text-yellow-600 dark:text-yellow-400 mt-0.5">•</span>
-                      <span className="text-yellow-700 dark:text-yellow-300">
-                        Revisar processos em departamentos com rating 2-3★
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-yellow-600 dark:text-yellow-400 mt-0.5">•</span>
-                      <span className="text-yellow-700 dark:text-yellow-300">
-                        Implementar {executiveSummary.withSuggestions} sugestões prioritárias dos clientes
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-yellow-600 dark:text-yellow-400 mt-0.5">•</span>
-                      <span className="text-yellow-700 dark:text-yellow-300">
-                        Treinamento de equipes em áreas problemáticas
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Prioridade 3: Prevenção */}
-                <div className="p-4 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-700">
-                  <h5 className="font-bold text-green-800 dark:text-green-200 mb-3 flex items-center gap-2">
-                    ✅ Prioridade 3 (21-30 dias)
-                  </h5>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-start gap-2">
-                      <span className="text-green-600 dark:text-green-400 mt-0.5">•</span>
-                      <span className="text-green-700 dark:text-green-300">
-                        Implementar sistema de monitoramento preventivo
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-green-600 dark:text-green-400 mt-0.5">•</span>
-                      <span className="text-green-700 dark:text-green-300">
-                        Otimizar processos em departamentos estáveis
-                      </span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-green-600 dark:text-green-400 mt-0.5">•</span>
-                      <span className="text-green-700 dark:text-green-300">
-                        Revisar e documentar melhores práticas
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Indicadores de Sucesso */}
-              <div className="mt-6 p-4 bg-white dark:bg-gray-800 rounded-lg border">
-                <h5 className="font-bold text-gray-900 dark:text-white mb-3">📈 Indicadores de Sucesso (KPIs)</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-red-600">0</div>
-                    <div className="text-gray-600 dark:text-gray-400">Problemas críticos (meta)</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-green-600">&gt;3.5★</div>
-                    <div className="text-gray-600 dark:text-gray-400">Rating médio (meta)</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-blue-600">&lt;15%</div>
-                    <div className="text-gray-600 dark:text-gray-400">Taxa de problemas recorrentes</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-purple-600">&gt;50%</div>
-                    <div className="text-gray-600 dark:text-gray-400">Sugestões implementadas</div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </TabsContent>
-
-        {/* OPÇÃO 4: ANÁLISE CONVERSACIONAL */}
-        <TabsContent value="option4" className="space-y-4">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border-2 border-teal-200 dark:border-teal-800">
-            <h3 className="text-lg font-bold text-teal-800 dark:text-teal-200 mb-2">
-              💬 Análise Conversacional - Contexto Completo
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-              Problemas apresentados como conversas reais com contexto completo
-            </p>
-            
-            <div className="space-y-6">
-              {filteredData
-                .filter(f => f.allProblems && f.comment && f.comment.trim() !== '')
-                .slice(0, 8)
-                .map((feedback, index) => {
-                  const problems = (feedback.allProblems || []).filter((p: any) => 
-                    p.problem_detail && p.problem_detail.trim() !== ''
-                  );
+                  }
                   
-                  if (problems.length === 0) return null;
-                  
+                  const top5 = problemsArray
+                    .sort((a: any, b: any) => b.count - a.count)
+                    .slice(0, 5);
+
                   return (
-                    <Card key={index} className="p-4 border border-gray-200 dark:border-gray-700">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                            {feedback.author ? feedback.author.charAt(0).toUpperCase() : 'A'}
-                          </div>
-                          <div>
-                            <div className="font-medium text-gray-900 dark:text-white">
-                              {feedback.author || 'Usuário Anônimo'}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(feedback.date).toLocaleDateString('pt-BR')} • {feedback.hotel}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
-                            {[...Array(5)].map((_, i) => (
-                              <Star 
-                                key={i} 
-                                className={`w-4 h-4 ${i < (feedback.rating || 0) ? 'text-yellow-500 fill-current' : 'text-gray-300'}`} 
-                              />
-                            ))}
-                          </div>
-                          
-                          {/* Botão de visualização detalhada */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            type="button"
-                            title="Ver análise conversacional detalhada"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              openDetailModal(feedback, 'conversational');
-                            }}
-                          >
-                            <Eye className="w-4 h-4 text-violet-600" />
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg mb-3">
-                        <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">
-                          "{feedback.comment}"
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <h6 className="font-medium text-gray-900 dark:text-white text-sm">🔍 Problemas Identificados:</h6>
-                        {problems.slice(0, 3).map((problem: any, pIndex: number) => (
-                          <div key={pIndex} className="flex items-start gap-2 text-sm">
-                            <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1">
-                              <div className="text-gray-900 dark:text-white font-medium">
-                                {problem.problem_detail}
-                              </div>
-                              <div className="text-gray-600 dark:text-gray-300 text-xs">
-                                {problem.sector} • {problem.keyword} • {problem.problem}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      {feedback.suggestion_summary && (
-                        <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-950/30 rounded text-sm">
-                          <span className="text-blue-700 dark:text-blue-300">
-                            💡 <strong>Sugestão:</strong> {feedback.suggestion_summary}
-                          </span>
-                        </div>
-                      )}
-                    </Card>
+                    <Bar 
+                      data={{
+                        labels: top5.map((p: any) => 
+                          p.problem.length > 30 ? p.problem.substring(0, 30) + '...' : p.problem
+                        ),
+                        datasets: [{
+                          label: 'Ocorrências',
+                          data: top5.map((p: any) => p.count),
+                          backgroundColor: '#3B82F6', // blue-500
+                          borderRadius: 6,
+                          barThickness: 40
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: (context: any) => {
+                                const problem: any = top5[context.dataIndex];
+                                const ratings = Array.isArray(problem.ratings) ? problem.ratings : [];
+                                const avgRating = ratings.length > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length : 3;
+                                return [
+                                  `Ocorrências: ${context.parsed.x}`,
+                                  `Rating Médio: ${avgRating.toFixed(1)}★`,
+                                  `Autores: ${problem.authors?.size || 0}`
+                                ];
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          x: {
+                            beginAtZero: true,
+                            ticks: {
+                              stepSize: 1,
+                              color: '#64748b'
+                            },
+                            grid: {
+                              color: '#e2e8f0'
+                            }
+                          },
+                          y: {
+                            ticks: {
+                              color: '#64748b',
+                              font: { size: 11 }
+                            },
+                            grid: {
+                              display: false
+                            }
+                          }
+                        }
+                      }}
+                    />
                   );
-                })}
-            </div>
-            
-            {filteredData.filter(f => f.allProblems && f.comment && f.comment.trim() !== '').length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <AlertTriangle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>Nenhum feedback com contexto conversacional encontrado.</p>
+                })()}
               </div>
-            )}
+            </Card>
           </div>
-        </TabsContent>
 
-        {/* OPÇÃO 5: CENTRAL DE GRÁFICOS E ANALYTICS AVANÇADOS */}
-        <TabsContent value="option5" className="space-y-6">
+          {/* Análise por Departamento - Tabela Profissional */}
+          <Card className="p-6 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+            <h4 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+              Análise por Departamento
+            </h4>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-700">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Departamento</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Feedbacks</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Críticos</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Rating Médio</th>
+                    <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const depts = getDepartmentAnalysis();
+                    return Object.entries(depts)
+                      .sort(([,a]: any, [,b]: any) => b.allExamples.length - a.allExamples.length)
+                      .map(([deptName, dept]: any, index: number) => {
+                        const totalFeedbacks = dept.allExamples.length; // Total de feedbacks/comentários
+                        const avgRating = dept.totalRating / totalFeedbacks;
+                        const criticalCount = dept.allExamples.filter((ex: any) => ex.rating <= 2).length;
+                        const criticalPercentage = (criticalCount / totalFeedbacks) * 100;
+
+                        return (
+                          <tr key={deptName} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                            <td className="py-3 px-4 text-sm font-medium text-slate-900 dark:text-slate-100">
+                              {deptName}
+                            </td>
+                            <td className="py-3 px-4 text-center text-sm text-slate-700 dark:text-slate-300">
+                              {totalFeedbacks}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                criticalPercentage > 30 ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' :
+                                criticalPercentage > 15 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' :
+                                'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                              }`}>
+                                {criticalCount} ({criticalPercentage.toFixed(0)}%)
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Star className="w-4 h-4 text-amber-500" />
+                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                  {avgRating.toFixed(2)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {avgRating <= 2.5 ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                                  Crítico
+                                </span>
+                              ) : avgRating <= 3.5 ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
+                                  Atenção
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                                  Estável
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Insights e Recomendações */}
+          <Card className="p-6 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border-blue-200 dark:border-blue-800">
+            <h4 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5" />
+              Insights e Recomendações
+            </h4>
+            <div className="space-y-3">
+              {(() => {
+                const insights = [];
+                const criticalRate = (executiveSummary.criticalProblems / executiveSummary.totalProblems) * 100;
+                
+                if (criticalRate > 30) {
+                  insights.push({
+                    type: 'warning',
+                    text: `Taxa de criticidade elevada (${criticalRate.toFixed(1)}%). Ação imediata necessária nos principais problemas.`
+                  });
+                } else if (criticalRate > 15) {
+                  insights.push({
+                    type: 'attention',
+                    text: `Taxa de criticidade moderada (${criticalRate.toFixed(1)}%). Monitoramento próximo recomendado.`
+                  });
+                }
+
+                if (executiveSummary.averageRating < 3) {
+                  insights.push({
+                    type: 'warning',
+                    text: 'Rating médio abaixo de 3★. Revisar processos e implementar melhorias urgentes.'
+                  });
+                }
+
+                if (executiveSummary.withSuggestions > 0) {
+                  insights.push({
+                    type: 'info',
+                    text: `${executiveSummary.withSuggestions} feedbacks contêm sugestões de melhoria dos clientes.`
+                  });
+                }
+
+                const detailedProblems = getDetailedProblems();
+                const topProblems = detailedProblems && typeof detailedProblems === 'object' 
+                  ? Object.values(detailedProblems)
+                      .sort((a: any, b: any) => b.count - a.count)
+                      .slice(0, 3)
+                  : [];
+                
+                if (topProblems.length > 0) {
+                  insights.push({
+                    type: 'focus',
+                    text: `Priorizar ação nos 3 principais problemas: ${topProblems.map((p: any) => p.problem).join(', ')}.`
+                  });
+                }
+
+                return insights.map((insight, index) => (
+                  <div 
+                    key={index}
+                    className={`p-4 rounded-lg border-l-4 ${
+                      insight.type === 'warning' ? 'bg-red-50 dark:bg-red-950/20 border-red-500' :
+                      insight.type === 'attention' ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-500' :
+                      insight.type === 'focus' ? 'bg-purple-50 dark:bg-purple-950/20 border-purple-500' :
+                      'bg-blue-50 dark:bg-blue-950/20 border-blue-500'
+                    }`}
+                  >
+                    <p className="text-sm text-slate-700 dark:text-slate-300">{insight.text}</p>
+                  </div>
+                ));
+              })()}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* OPÇÃO 5: CENTRAL DE GRÁFICOS E ANALYTICS AVANÇADOS */}
+      {selectedVisualization === 'option5' && (
+        <div className="space-y-6">
           <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 p-6 rounded-lg border-2 border-emerald-200 dark:border-emerald-800">
             <h3 className="text-2xl font-bold text-emerald-800 dark:text-emerald-200 mb-2 flex items-center gap-2">
               📈 Central de Gráficos e Analytics Avançados
@@ -4103,31 +4338,40 @@ export function ProblemsVisualizationOptions({
                       }]
                     };
 
-                    const chartOptions = {
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      indexAxis: 'y' as const,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          callbacks: {
-                            title: (context: any) => {
-                              const problem = topProblems[context[0].dataIndex];
-                              return problem.fullProblem;
-                            },
-                            label: (context: any) => {
-                              const problem = topProblems[context.dataIndex];
-                              return [
-                                `Ocorrências: ${problem.count}`,
-                                `Rating médio: ${problem.avgRating}⭐`,
-                                `Severidade: ${problem.severity}`,
-                                `% do total: ${((problem.count / problemsData.length) * 100).toFixed(1)}%`
-                              ];
+                  const chartOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y' as const,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        callbacks: {
+                          title: (context: any) => {
+                            const problem = topProblems[context[0].dataIndex];
+                            return problem.fullProblem;
+                          },
+                          label: (context: any) => {
+                            const problem = topProblems[context.dataIndex];
+                            const base = [
+                              `📊 Ocorrências: ${problem.count}`,
+                              `⭐ Rating médio: ${problem.avgRating}⭐`,
+                              `⚠️ Severidade: ${problem.severity}`,
+                              `📈 % do total: ${((problem.count / problemsData.length) * 100).toFixed(1)}%`
+                            ];
+                            const detailsAgg = aggregateProblemDetailsFromFeedbacks(filteredData, problem.fullProblem);
+                            if (detailsAgg.length > 0) {
+                              base.push('');
+                              base.push('Detalhes mais citados:');
+                              detailsAgg.forEach(d => {
+                                base.push(`• ${d.detail} • ${d.count} (${d.pct.toFixed(0)}%)`);
+                              });
                             }
+                            return base;
                           }
                         }
-                      },
-                      scales: {
+                      }
+                    },
+                    scales: {
                         x: {
                           beginAtZero: true,
                           ticks: {
@@ -5083,16 +5327,18 @@ export function ProblemsVisualizationOptions({
               })()}
             </Card>
           </div>
-        </TabsContent>
+        </div>
+      )}
 
-        {/* OPÇÃO 6: GRÁFICOS TESTE - UM GRÁFICO POR DEPARTAMENTO */}
-        <TabsContent value="option6" className="space-y-6">
+      {/* OPÇÃO 6: GRÁFICO INTERATIVO - UM GRÁFICO POR DEPARTAMENTO */}
+      {selectedVisualization === 'option6' && (
+        <div className="space-y-6">
           <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 p-6 rounded-lg border-2 border-purple-200 dark:border-purple-800">
             <h3 className="text-2xl font-bold text-purple-800 dark:text-purple-200 mb-2 flex items-center gap-2">
-              🧪 Gráficos Teste - Por Departamento
+              ⚡ Gráfico Interativo - Por Departamento
             </h3>
             <p className="text-sm text-purple-600 dark:text-purple-300 mb-6">
-              Visualização individual de cada departamento com problemas e palavras-chave. Clique nos botões para ver detalhes completos.
+              Visualização individual de cada departamento com problemas e palavras-chave. Passe o mouse sobre os gráficos para detalhes e clique para análise completa.
             </p>
             
             {(() => {
@@ -5307,7 +5553,6 @@ export function ProblemsVisualizationOptions({
                                           detailedProblem.problem === problemItem.fullProblem && detailedProblem.problem_detail
                                         ) as any;
                                         const problemDetail = detailData?.problem_detail ? String(detailData.problem_detail) : null;
-
                                         const tooltipLines = [
                                           `📊 ${problemItem.count} ocorrências (${percentage}%)`,
                                           `🏢 Departamento: ${department}`,
@@ -5315,7 +5560,15 @@ export function ProblemsVisualizationOptions({
                                           `⭐ Rating médio do dept: ${avgRating}/5`
                                         ];
 
-                                        if (problemDetail && problemDetail.length > 0) {
+                                        // Agregar múltiplos detalhes específicos para o problema dentro do departamento
+                                        const detailsAgg = aggregateProblemDetailsFromFeedbacks(filteredData, problemItem.fullProblem, department);
+                                        if (detailsAgg.length > 0) {
+                                          tooltipLines.push('');
+                                          tooltipLines.push('Detalhes mais citados:');
+                                          detailsAgg.forEach(d => {
+                                            tooltipLines.push(`• ${d.detail} • ${d.count} (${d.pct.toFixed(0)}%)`);
+                                          });
+                                        } else if (problemDetail && problemDetail.length > 0) {
                                           const shortDetail = problemDetail.length > 100 ? problemDetail.substring(0, 100) + '...' : problemDetail;
                                           tooltipLines.push(`📝 Detalhe: ${shortDetail}`);
                                         }
@@ -5343,6 +5596,18 @@ export function ProblemsVisualizationOptions({
                                   }
                                 }
                               };
+
+                              // Validar se há dados para renderizar
+                              if (topProblems.length === 0) {
+                                return (
+                                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                                    <div className="text-center">
+                                      <div className="text-2xl mb-2">📊</div>
+                                      <div>Nenhum problema encontrado</div>
+                                    </div>
+                                  </div>
+                                );
+                              }
 
                               return <Bar data={problemChartData} options={problemChartOptions} />;
                             })()}
@@ -5432,6 +5697,18 @@ export function ProblemsVisualizationOptions({
                                 }
                               };
 
+                              // Validar se há dados para renderizar
+                              if (topKeywords.length === 0) {
+                                return (
+                                  <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                                    <div className="text-center">
+                                      <div className="text-2xl mb-2">🎯</div>
+                                      <div>Nenhuma palavra-chave encontrada</div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
                               return <Doughnut data={keywordChartData} options={keywordChartOptions} />;
                             })()}
                           </div>
@@ -5465,8 +5742,8 @@ export function ProblemsVisualizationOptions({
               });
             })()}
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
       
       {/* MODAL DE DETALHES AVANÇADOS */}
       {detailModalOpen && selectedDetailItem && (

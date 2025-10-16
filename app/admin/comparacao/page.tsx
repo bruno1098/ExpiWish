@@ -958,6 +958,7 @@ export default function HoteisPage() {
                     }))}
                     onClick={(item) => setSearchTerm(item.label)}
                     maxItems={15}
+                    contextRows={allFeedbacks}
                   />
                 </div>
               )}

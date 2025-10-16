@@ -28,6 +28,8 @@ interface ProblematicHotel {
   worstApartments: Array<{ apartment: string; problems: number; rating: number }>
   urgentIssues: string[]
   riskLevel: 'alto' | 'medio' | 'baixo'
+  // Linhas de feedback válidas do hotel para contexto nos tooltips
+  feedbacks: Feedback[]
 }
 
 interface GPTProblematicAnalysis {
@@ -204,7 +206,8 @@ export default function HoteisProblematicos() {
           criticalProblems,
           worstApartments,
           urgentIssues,
-          riskLevel
+          riskLevel,
+          feedbacks: allFeedbacks
         }
       }).filter(Boolean) as ProblematicHotel[]
 
@@ -601,6 +604,7 @@ Seja específico, prático e focado em recuperação rápida da reputação e sa
                       label: problem.name,
                       value: problem.count
                     }))}
+                    contextRows={hotel.feedbacks}
                   />
                 </div>
               </Card>

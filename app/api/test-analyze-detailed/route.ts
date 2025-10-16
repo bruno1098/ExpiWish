@@ -60,19 +60,19 @@ export async function POST(request: NextRequest) {
     console.log('📊 RESULTADO FINAL DA IA');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
-    console.log(`\n🎭 Sentimento: ${result.analise?.sentimento?.valor}/5 - ${result.analise?.sentimento?.descricao}`);
-    console.log(`🏢 Departamento: ${result.analise?.departamento}`);
-    console.log(`🏷️  Palavra-chave: ${result.analise?.palavra_chave}`);
-    console.log(`❌ Problema: ${result.analise?.problema}`);
-    console.log(`💬 Detalhes: ${result.analise?.detalhes_positivos || result.analise?.detalhes_problema}`);
-    console.log(`⏱️  Tempo de processamento: ${result.metadata?.tempo_processamento_ms}ms`);
-    console.log(`🎯 Confiança: ${result.analise?.confianca}`);
+    console.log(`\n🎭 Sentimento (rating): ${result.rating}/5`);
+    console.log(`🏢 Departamento: ${result.sector}`);
+    console.log(`🏷️  Palavra-chave: ${result.keyword}`);
+    console.log(`❌ Problema: ${result.problem || 'Nenhum'}`);
+    console.log(`💬 Detalhes positivos: ${result.positive_details || '—'}`);
+    console.log(`⏱️  Tempo de processamento: ${result.processing_time_ms}ms`);
+    console.log(`🎯 Confiança média: ${result.confidence}`);
 
-    if (result.resultado_completo?.allProblems) {
+    if (result.allProblems) {
       console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('🔍 TODAS AS ISSUES DETECTADAS');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      result.resultado_completo.allProblems.forEach((issue: any, index: number) => {
+      result.allProblems.forEach((issue: any, index: number) => {
         console.log(`\n📌 Issue ${index + 1}:`);
         console.log(`   🏷️  Keyword: ${issue.keyword}`);
         console.log(`   🏢 Setor: ${issue.sector}`);
@@ -93,19 +93,19 @@ export async function POST(request: NextRequest) {
       feedback_analisado: feedbackText,
       
       analise_resumo: {
-        sentimento: result.analise?.sentimento,
-        departamento: result.analise?.departamento,
-        palavra_chave: result.analise?.palavra_chave,
-        problema: result.analise?.problema,
-        detalhes: result.analise?.detalhes_positivos || result.analise?.detalhes_problema,
-        confianca: result.analise?.confianca,
+        sentimento: { valor: result.rating, descricao: result.rating >= 4 ? 'Positivo' : (result.rating <= 2 ? 'Negativo' : 'Neutro') },
+        departamento: result.sector,
+        palavra_chave: result.keyword,
+        problema: result.problem || 'Nenhum',
+        detalhes: result.positive_details || undefined,
+        confianca: result.confidence,
       },
 
-      issues_detectadas: result.resultado_completo?.allProblems || [],
+      issues_detectadas: result.allProblems || [],
 
       metadata: {
-        tempo_processamento_ms: result.metadata?.tempo_processamento_ms,
-        versao_taxonomia: result.metadata?.versao_taxonomia,
+        tempo_processamento_ms: result.processing_time_ms,
+        versao_taxonomia: result.taxonomy_version,
         modo_direto: true,
       },
 
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
         contexto_analisado: 'IA recebe TODAS as keywords e deve escolher baseado em CONTEXTO, não em palavras isoladas',
       },
 
-      resultado_completo: result.resultado_completo,
+      resultado_completo: result,
     });
 
   } catch (error: any) {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getAnalysisById, getAllAnalyses, updateFeedbackInFirestore } from '@/lib/firestore-service';
+import { getAnalysisById, getAnalysisByIdAdmin, updateFeedbackInFirestore } from '@/lib/firestore-service';
 import { formatDateBR, cn } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -549,8 +549,8 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: any, onSave: (updat
       // Converter problemas editados de volta para formato string com ';' (removendo o ID)
       const problemsWithoutId = editedProblems.map(({ id, ...problem }) => problem)
       const keywords = problemsWithoutId.map(p => p.keyword).join(';')
-      const sectors = problemsWithoutId.map(p => p.sector).join(';')
-      const problems = problemsWithoutId.map(p => p.problem).join(';')
+        const sectors = problemsWithoutId.map(p => p.sector).join(';')
+        const problems = problemsWithoutId.map(p => p.problem).join(';')
       
       // Atualizar feedback local
       const updatedFeedback = {
@@ -850,26 +850,24 @@ export default function AnalysisDetailPage() {
       setLoading(true);
       setError('');
 
-      if (!id || !userData?.hotelId) {
+      if (!id || !userData) {
         setError('ID da análise ou dados do usuário não encontrados');
         return;
       }
 
-      // Buscar todas as análises e encontrar a que tem o ID correspondente
-      const allAnalyses = await getAllAnalyses();
-      
-      if (!allAnalyses || allAnalyses.length === 0) {
-        setError('Nenhuma análise encontrada');
+      // Buscar análise diretamente por ID
+      let specificAnalysis: any = null;
+      try {
+        if (userData.role === 'admin') {
+          specificAnalysis = await getAnalysisByIdAdmin(id);
+        } else {
+          specificAnalysis = await getAnalysisById(id);
+        }
+      } catch (fetchErr) {
+        console.error('Erro ao obter análise por ID:', fetchErr);
+        setError('Análise não encontrada');
         return;
       }
-
-      // Filtrar análises do hotel do usuário
-      const userHotelAnalyses = allAnalyses.filter((analysis: any) => 
-        analysis.hotelId === userData.hotelId
-      );
-
-      // Encontrar a análise específica
-      const specificAnalysis = userHotelAnalyses.find((analysis: any) => analysis.id === id);
 
       if (!specificAnalysis) {
         setError('Análise não encontrada');

@@ -4,95 +4,10 @@ import { db } from '@/lib/firebase';
 import { generateBatchEmbeddings } from '@/lib/embeddings-service';
 import { generateSlug } from '@/lib/taxonomy-service';
 import { calculateTaxonomyVersion, markEmbeddingsUpdated, updateTaxonomyVersion } from '@/lib/taxonomy-version-manager';
+import { KEYWORD_SEMANTIC_CONTEXT, generateEnrichedKeywordText } from '@/lib/semantic-enrichment';
 
 const BATCH_SIZE = 20; // Processar 20 por vez
 
-/**
- * Dicionário de CONTEXTOS SEMÂNTICOS CONCEITUAIS para embeddings
- * 
- * ABORDAGEM: Enriquecer com CONCEITOS e SIGNIFICADOS, não palavras literais
- * OBJETIVO: IA entende o SENTIDO da keyword, não faz match de palavras
- * 
- * Exemplo:
- * - ❌ ERRADO: "Limpeza - Banheiro" → "banheiro sujo" (palavra literal)
- * - ✅ CERTO: "Limpeza - Banheiro" → "higienização, arrumação, organização de ambiente sanitário"
- * 
- * Baseado em: scripts/organize-keywords-by-department.ts (48 keywords reais)
- */
-const SEMANTIC_CONTEXT_DICT: Record<string, string[]> = {
-  // A&B (6 keywords) - Conceitos de alimentação e bebidas
-  "A&B - Café da manhã": ["primeira refeição do dia", "desjejum matinal", "buffet breakfast"],
-  "A&B - Jantar": ["refeição noturna", "dinner service", "gastronomia da noite"],
-  "A&B - Almoço": ["refeição do meio-dia", "almoço executivo", "lunch service"],
-  "A&B - Serviço": ["atendimento de restaurante e bar", "qualidade do serviço gastronômico", "hospitalidade alimentação", "APENAS RELACIONADO AO RESTAURANTE E NAO OUTROS SERVIÇOS"],
-  "A&B - Gastronomia": ["qualidade culinária", "sabor das refeições", "experiência gastronômica"],
-  "A&B - Room Service": ["serviço de refeições no apartamento", "pedidos in-room"],
-  
-  // Limpeza/Governança (6 keywords) - Conceitos de higiene e organização
-  "Limpeza - Banheiro": ["higienização de ambiente sanitário", "limpeza e organização de banheiros", "condições de higiene"],
-  "Limpeza - Quarto": ["arrumação de acomodações", "higienização de apartamentos", "organização do espaço"],
-  "Limpeza - Áreas sociais": ["higiene de espaços comuns", "limpeza de áreas públicas do hotel", "manutenção de zonas sociais"],
-  "Limpeza - Enxoval": ["condições de roupas de cama e banho", "qualidade e higiene de têxteis", "troca e reposição de enxoval"],
-  "Limpeza - Amenities": ["reposição de produtos de higiene", "disponibilidade de amenidades", "itens de cortesia"],
-  "Limpeza - Frigobar": ["limpeza e organização de frigobar", "reposição de bebidas e snacks"],
-  
-  // Manutenção (6 keywords) - Conceitos de reparos e funcionamento
-  "Manutenção - Ar-condicionado": ["funcionamento de sistema de climatização", "controle térmico", "regulação de temperatura"],
-  "Manutenção - Banheiro": ["reparos hidráulicos", "funcionamento de instalações sanitárias", "problemas técnicos em banheiros"],
-  "Manutenção - Instalações": ["conservação da estrutura física", "estado geral das instalações", "manutenção predial"],
-  "Manutenção - Quarto": ["reparos em acomodações", "funcionamento de equipamentos do quarto", "defeitos estruturais"],
-  "Manutenção - Elevador": ["funcionamento de elevadores", "sistema de transporte vertical"],
-  "Manutenção - Jardinagem": ["manutenção de áreas verdes", "paisagismo e jardins", "conservação externa"],
-  
-  // Recepção (4 keywords) - Conceitos de recepção e entrada/saída
-  "Recepção - Estacionamento": ["disponibilidade de vagas", "serviço de estacionamento", "facilidade de estacionar"],
-  "Recepção - Check-in": ["processo de entrada", "chegada ao hotel", "procedimentos de registro"],
-  "Recepção - Check-out": ["processo de saída", "finalização da hospedagem", "procedimentos de partida"],
-  "Recepção - Serviço": ["atendimento de recepcionistas", "qualidade do front desk", "hospitalidade na chegada"],
-  
-  // TI/Tecnologia (2 keywords) - Conceitos de tecnologia
-  "Tecnologia - TV": ["sistema de televisão", "qualidade de canais", "funcionamento de entretenimento audiovisual"],
-  "Tecnologia - Wi-fi": ["conectividade de internet", "qualidade de rede sem fio", "estabilidade de conexão"],
-  
-  // Lazer (7 keywords) - Conceitos de entretenimento e bem-estar
-  "Lazer - Estrutura": ["infraestrutura de entretenimento", "qualidade das instalações de lazer", "espaços recreativos"],
-  "Lazer - Variedade": ["diversidade de atividades recreativas", "opções de entretenimento", "programação disponível"],
-  "Lazer - Serviço": ["atendimento em áreas de lazer", "qualidade do serviço recreativo", "hospitalidade em entretenimento"],
-  "Lazer - Atividades de Lazer": ["programação de entretenimento", "atividades recreativas oferecidas", "opções de diversão"],
-  "Lazer - Piscina": ["área aquática", "espaço de natação", "infraestrutura de piscina"],
-  "Lazer - Spa": ["serviços de bem-estar", "área de relaxamento", "tratamentos de beleza e massagem"],
-  "Lazer - Academia": ["espaço fitness", "equipamentos de ginástica", "área de exercícios"],
-  
-  // Produto (10 keywords) - Conceitos MUITO ESPECÍFICOS para evitar confusão ⭐ ATUALIZADO: +1 keyword da cliente
-  "Produto - Transfer": ["serviço de transporte aeroporto-hotel", "traslado entre destinos", "locomoção de chegada e partida"],
-  "Produto - Acessibilidade": ["infraestrutura para pessoas com deficiência", "adaptações para mobilidade reduzida", "facilidades para cadeirantes"],
-  "Produto - Custo-benefício": ["relação entre preço pago e valor recebido", "justificativa do investimento na hospedagem", "percepção de valor pelo custo"],
-  "Produto - Localização": ["posicionamento geográfico do hotel", "distância de pontos turísticos", "conveniência de acesso ao entorno"],
-  "Produto - Vista": ["paisagem visível das acomodações", "cenário externo observado", "panorama das janelas"],
-  "Produto - Experiência": ["avaliação completa e holística da estadia", "impressão geral sobre TODA a hospedagem no hotel", "sentimento global sobre TODOS os aspectos combinados"],
-  "Produto - Modernização": ["grau de atualização das instalações físicas", "estado de reforma do estabelecimento", "contemporaneidade da infraestrutura"],
-  "Produto - All Inclusive": ["modalidade de pensão completa com tudo incluído", "sistema all-inclusive de hospedagem", "pacote com todas refeições e bebidas"],
-  "Produto - Isolamento Acustico": ["qualidade de proteção contra ruídos externos", "eficácia do isolamento sonoro", "capacidade de bloqueio acústico"],
-  "Produto - Tamanho": ["dimensões das acomodações", "espaço físico disponível", "tamanho dos ambientes", "amplitude dos espaços", "área dos quartos e instalações"], // ⭐ NOVO da cliente
-  
-  // Operações (6 keywords) - Conceitos operacionais ⭐ ATUALIZADO: +2 keywords da cliente
-  "Operações - Atendimento": ["qualidade geral do atendimento", "cordialidade da equipe", "prestatividade do staff"],
-  "Operações - Cartão de acesso": ["sistema de chaves eletrônicas", "cartões de entrada", "mecanismo de acesso"],
-  "Operações - Acesso ao quarto": ["facilidade de entrada na acomodação", "sistema de abertura de portas", "controle de acesso"],
-  "Operações - Consumo Extra": ["cobranças adicionais", "taxas extras", "gastos não incluídos na diária"],
-  "Operações - Empréstimo de itens": ["empréstimo de ferro de passar", "disponibilidade de itens para emprestar", "serviço de empréstimo de objetos", "solicitação de itens ao hotel"], // ⭐ NOVO da cliente
-  "Operações - Quarto": ["liberação de quarto", "acesso ao quarto", "demora na entrega do quarto", "quarto pronto", "disponibilização da acomodação"], // ⭐ NOVO da cliente
-  
-  // Corporativo (4 keywords) - Conceitos administrativos ⭐ ATUALIZADO: +1 keyword da cliente
-  "Corporativo - Marketing": ["comunicação institucional", "divulgação do hotel", "estratégias promocionais"],
-  "Corporativo - Reservas": ["sistema de agendamento", "processo de booking", "gestão de reservas"],
-  "Corporativo - Financeiro": ["aspectos monetários", "cobranças e pagamentos", "gestão financeira da estadia"],
-  "Corporativo - Nota Fiscal": ["emissão de nota fiscal", "documento fiscal", "NF não entregue", "falta de nota fiscal", "recibo fiscal"], // ⭐ NOVO da cliente
-  
-  // EG (2 keywords) - Conceito de experiência do hóspede ⭐ ATUALIZADO: +1 keyword da cliente
-  "EG - Abordagem": ["relacionamento com cliente", "experiência de hospitalidade", "jornada do hóspede"],
-  "EG - Exclusive Guest": ["programa exclusive guest", "relacionamento com hóspede VIP", "abordagem pós-recusa", "insistência na venda", "promessas do programa EG"], // ⭐ NOVO da cliente
-};
 
 /**
  * Dicionário de CONTEXTOS CONCEITUAIS para Problems
@@ -107,24 +22,25 @@ const SEMANTIC_CONTEXT_DICT: Record<string, string[]> = {
  */
 const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   // A&B (31 problemas) ⭐ ATUALIZADO: +12 problems da cliente
-  "A&B - Atendimento demora": ["lentidão no serviço de alimentação", "tempo de espera excessivo para refeições", "garçons lentos", "demora nos pedidos", "atendimento demorado no restaurante", "garçons demoram muito", "serviço lento no bar"],
+  "A&B - Atendimento demorado": ["lentidão no serviço de alimentação", "tempo de espera excessivo para refeições", "garçons lentos", "demora nos pedidos", "atendimento demorado no restaurante", "garçons demoram muito", "serviço lento no bar", "demora para servir", "espera longa",],
   "A&B - Atendimento insistente": ["abordagem excessiva da equipe", "falta de discrição no serviço"],
   "A&B - Café da manhã não disponível": ["ausência de serviço matinal", "indisponibilidade de desjejum"],
   "A&B - Falta de higiene": ["condições sanitárias inadequadas na área de alimentação", "ausência de limpeza"],
   "A&B - Falta de produto": ["ausência de itens no cardápio", "falta de opções disponíveis"],
-  "A&B - Má qualidade": ["baixa qualidade gastronômica", "preparo inadequado dos alimentos"],
+  
   "A&B - Não disponível": ["serviço de alimentação indisponível", "restaurante fechado"],
   "A&B - Variedade limitada": ["poucas opções de cardápio", "falta de diversidade gastronômica"],
+  "A&B - Falta de opções": ["menu com poucas opções", "cardápio limitado", "pouca variedade"],
   "A&B - Qualidade da comida": ["sabor inadequado", "preparo insatisfatório das refeições"],
   "A&B - Preço elevado": ["custo alto das refeições", "valor desproporcional"],
-  "A&B - Demora no serviço": ["lentidão no atendimento do restaurante", "tempo excessivo de espera", "garçons demorados"],
-  "A&B - Falta de opções": ["cardápio limitado", "pouca variedade de pratos"],
+  
+  
   "A&B - Atendimento ruim": ["qualidade insatisfatória do serviço", "falta de cordialidade", "garçons mal educados"],
   "A&B - Refeição fria": ["temperatura inadequada da comida", "pratos servidos frios"],
   "A&B - Bebidas limitadas": ["poucas opções de bebidas", "variedade restrita"],
   "A&B - Espaço pequeno": ["área de refeições insuficiente", "restaurante com pouca capacidade"],
   "A&B - Falta de tempero": ["comida sem sabor", "preparo sem temperos adequados"],
-  "A&B - Sujeira": ["falta de limpeza no restaurante", "condições higiênicas precárias"],
+  
   "A&B - Horário restrito": ["horários limitados de funcionamento", "pouca flexibilidade de horários"],
   // ⭐ NOVOS DA CLIENTE (12 problems):
   "Café da Manhã - Variedade limitada": ["poucas opções no café da manhã", "falta de diversidade no breakfast", "café da manhã repetitivo"],
@@ -141,7 +57,7 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Room Service - Demora na entrega dos pedidos": ["room service demorado", "pedido no quarto demorou", "entrega lenta no quarto"],
 
   // Corporativo (7 problemas)
-  "Corporativo - Atendimento demora": ["lentidão em processos administrativos", "tempo excessivo em serviços corporativos"],
+  "Corporativo - Atendimento demorado": ["lentidão em processos administrativos", "tempo excessivo em serviços corporativos"],
   "Corporativo - Cobrança indevida": ["erro em faturamento", "taxas não justificadas"],
   "Corporativo - Informação incorreta": ["dados imprecisos fornecidos", "comunicação equivocada"],
   "Corporativo - Falta de comunicação": ["ausência de informações", "comunicação inadequada"],
@@ -149,10 +65,8 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Corporativo - Erro no sistema": ["falha nos sistemas corporativos", "problemas técnicos administrativos"],
   "Corporativo - Atendimento ruim": ["qualidade insatisfatória em serviços corporativos", "falta de profissionalismo"],
 
-  // EG - Experiência do Hóspede (7 problemas)
-  "EG - Atendimento demora": ["lentidão na resposta às necessidades do hóspede", "tempo excessivo de espera"],
+  // EG - Experiência do Hóspede (6 problemas)
   "EG - Atendimento insistente": ["abordagem excessiva da equipe", "falta de privacidade"],
-  "EG - Falta de comunicacao": ["ausência de informações ao hóspede", "comunicação deficiente"],
   "EG - Experiência ruim": ["impressão negativa geral", "insatisfação com a estadia"],
   "EG - Falta de atenção": ["ausência de cuidado com o hóspede", "negligência no atendimento"],
   "EG - Serviço impessoal": ["atendimento sem personalização", "falta de hospitalidade genuína"],
@@ -167,8 +81,7 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Governança - Toalhas sujas": ["toalhas manchadas", "falta de troca de toalhas"],
   "Governança - Cheiro ruim": ["odor desagradável no quarto", "falta de ventilação"],
   "Governança - Poeira": ["acúmulo de poeira", "limpeza superficial"],
-  "Governança - Banheiro sujo": ["sanitário mal higienizado", "condições precárias de limpeza"],
-  "Governança - Quarto mal arrumado": ["organização inadequada", "arrumação incompleta"],
+  
   "Governança - Falta de amenities": ["ausência de produtos de higiene", "amenities não repostos"],
   "Governança - Lençóis manchados": ["roupa de cama com sujeira", "lençóis não trocados"],
   "Governança - Falta de troca": ["ausência de troca diária", "serviço de arrumação não realizado"],
@@ -187,12 +100,12 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Governança - Janela suja": ["vidros sujos", "janelas mal limpas"],
   "Governança - Varanda suja": ["área externa suja", "varanda mal higienizada"],
   // ⭐ NOVOS DA CLIENTE (6 problems):
-  "Banheiro - Falta de secador": ["secador não disponível", "ausência de secador de cabelo", "falta secador no banheiro"],
-  "Banheiro - Qualidade dos amenities insatisfatória": ["amenities de baixa qualidade", "produtos ruins", "shampoo ruim"],
-  "Banheiro - Falta de toalhas": ["toalhas insuficientes", "falta de toalhas limpas", "ausência de toalhas"],
-  "Quarto - Falta de cobertas": ["cobertas insuficientes", "falta de cobertores", "frio no quarto sem coberta"],
-  "Quarto - Limpeza realizada sem permissão": ["camareira entrou sem avisar", "limpeza invadiu privacidade", "arrumação sem consentimento"],
-  "Academia - Sujidade": ["academia suja", "sala de musculação mal higienizada", "equipamentos de ginástica sujos"],
+  "Governança - Falta de secador": ["secador não disponível", "ausência de secador de cabelo", "falta secador no banheiro"],
+  "Governança - Qualidade dos amenities insatisfatória": ["amenities de baixa qualidade", "produtos ruins", "shampoo ruim"],
+  "Governança - Falta de toalhas": ["toalhas insuficientes", "falta de toalhas limpas", "ausência de toalhas"],
+  "Governança - Falta de cobertas": ["cobertas insuficientes", "falta de cobertores", "frio no quarto sem coberta"],
+  "Governança - Limpeza realizada sem permissão": ["camareira entrou sem avisar", "limpeza invadiu privacidade", "arrumação sem consentimento"],
+  "Governança - Academia Suja": ["academia suja", "sala de musculação mal higienizada", "equipamentos de ginástica sujos"],
 
   // Lazer (15 problemas) - APENAS serviço, disponibilidade e experiência (sem quebrados/falhas) ⭐ ATUALIZADO: +3 problems da cliente
   "Lazer - Falta de opções": ["poucas atividades disponíveis", "variedade limitada de lazer"],
@@ -208,9 +121,9 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Lazer - Sem guarda-vidas": ["falta de segurança na piscina", "ausência de salva-vidas"],
   "Lazer - Barulho excessivo": ["poluição sonora na área de lazer", "falta de tranquilidade"],
   // ⭐ NOVOS DA CLIENTE (3 problems):
-  "Academia - Equipamentos insuficientes": ["poucos aparelhos na academia", "falta de equipamentos de ginástica", "academia mal equipada"],
-  "Academia - Necessidade de atualização": ["academia com equipamentos antigos", "aparelhos desatualizados", "precisa modernizar academia"],
-  "Academia - Espaço limitado": ["academia pequena", "espaço reduzido para treino", "sala de musculação apertada"],
+  "Lazer - Academia com Equipamentos insuficientes": ["poucos aparelhos na academia", "falta de equipamentos de ginástica", "academia mal equipada"],
+  "Lazer - Academia com Necessidade de atualização": ["academia com equipamentos antigos", "aparelhos desatualizados", "precisa modernizar academia"],
+  "Lazer - Academia com Espaço limitado": ["academia pequena", "espaço reduzido para treino", "sala de musculação apertada"],
 
   // Manutenção (56 problemas) - TODOS os problemas com falhas, quebrados, defeitos ⭐ ATUALIZADO: +8 problems da cliente
   "Manutenção - Ar-condicionado com falha": ["climatização não funciona", "ar-condicionado quebrado"],
@@ -263,32 +176,37 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   // Movido de Operações para Manutenção (sistema eletrônico com falha)
   "Manutenção - Cartão de acesso com falha": ["chave eletrônica não funciona", "problemas com cartão"],
   // ⭐ NOVOS DA CLIENTE (8 problems):
-  "Banheiro - Chuveirinho inoperante": ["ducha higiênica quebrada", "chuveirinho não funciona", "bidê não funciona"],
-  "Banheiro - Ducha entupida": ["chuveiro com jato fraco", "ducha entupida", "furos bloqueados no chuveiro"],
-  "Banheiro - Lixeira quebrada": ["lixeira danificada", "cesto de lixo quebrado", "lixeira sem tampa"],
-  "Banheiro - Necessidade de reforma": ["banheiro precisa reforma", "sanitário antigo", "instalações precisam renovação"],
-  "Banheiro - Vazão baixa da água": ["água fraca no chuveiro", "pressão baixa", "pouca água"],
-  "Quarto - Ar condicionado com vazamento": ["ar vazando água", "ar pingando", "climatização com escape de água"],
-  "Quarto - Manutenção não realizada": ["solicitação de reparo não atendida", "manutenção não veio", "chamado ignorado"],
-  "Jardinagem - Melhora nos jardins": ["jardim precisa cuidados", "área verde mal cuidada", "paisagismo precisa melhorar"],
+  "Manutenção - Chuveirinho inoperante": ["ducha higiênica quebrada", "chuveirinho não funciona", "bidê não funciona"],
+  "Manutenção - Ducha entupida": ["chuveiro com jato fraco", "ducha entupida", "furos bloqueados no chuveiro"],
+  "Manutenção - Lixeira quebrada": ["lixeira danificada", "cesto de lixo quebrado", "lixeira sem tampa"],
+  "Manutenção - Necessidade de reforma": ["banheiro precisa reforma", "sanitário antigo", "instalações precisam renovação"],
+  "Manutenção - Vazão baixa da água": ["água fraca no chuveiro", "pressão baixa", "pouca água"],
+  "Manutenção - Ar condicionado com vazamento": ["ar vazando água", "ar pingando", "climatização com escape de água"],
+  "Manutenção - Manutenção não realizada": ["solicitação de reparo não atendida", "manutenção não veio", "chamado ignorado"],
+  "Manutenção - Melhora nos jardins": ["jardim precisa cuidados", "área verde mal cuidada", "paisagismo precisa melhorar"],
 
   // Operações (37 problemas) - APENAS atendimento, processos e serviços (sem equipamentos quebrados) ⭐ ATUALIZADO: +4 problems da cliente
-  "Operações - Atendimento demora": ["lentidão no atendimento operacional", "tempo de espera excessivo"],
+  "Operações - Atendimento demorado": ["lentidão no atendimento operacional", "tempo de espera excessivo"],
   "Operações - Atendimento insistente": ["abordagem excessiva da equipe", "falta de discrição"],
   "Operações - Atendimento ruim": ["qualidade insatisfatória do serviço", "falta de cordialidade"],
   "Operações - Barulho": ["poluição sonora", "falta de silêncio"],
-  "Operações - Check-in demora": ["processo de entrada lento", "fila longa na recepção"],
-  "Operações - Check-out demora": ["processo de saída demorado", "fila no checkout"],
+  
   "Operações - Cobrança indevida": ["erro em faturamento", "taxas incorretas"],
   "Operações - Falta de comunicação": ["ausência de informações", "comunicação deficiente"],
-  "Operações - Falta de privacidade": ["invasão de privacidade", "falta de discrição"],
-  "Operações - Informação incorreta": ["dados imprecisos", "orientação equivocada"],
+  
   "Operações - Quarto não preparado": ["acomodação não arrumada na chegada", "quarto não pronto"],
-  "Operações - Reserva com problema": ["erro na reserva", "booking não reconhecido"],
   "Operações - Segurança inadequada": ["falta de segurança", "vigilância insuficiente"],
-  "Operações - Estacionamento lotado": ["falta de vagas", "estacionamento cheio"],
-  "Operações - Falta de informação": ["ausência de orientações", "informações não fornecidas"],
-  "Operações - Recepção ruim": ["atendimento insatisfatório na recepção", "despreparo da equipe"],
+  
+  
+  // Recepção (2 problemas) - processos de entrada/saída
+  "Recepção - Check-in demorado": ["processo de entrada lento", "fila longa na recepção"],
+  "Recepção - Check-out demorado": ["processo de saída demorado", "fila no checkout"],
+  "Recepção - Atendimento ruim": ["atendimento insatisfatório na recepção", "falta de cordialidade", "equipe despreparada"],
+  "Recepção - Falta de informação": ["ausência de orientações", "informações não fornecidas", "não explicaram procedimento"],
+  "Recepção - Informação incorreta": ["dados imprecisos", "orientação equivocada", "informaram errado"],
+  "Recepção - Estacionamento lotado": ["falta de vagas", "estacionamento cheio", "vaga indisponível"],
+  "Recepção - Reserva com problema": ["erro na reserva", "reserva não encontrada", "booking não reconhecido"],
+  "Recepção - Indisponibilidade de ferro de passar": ["ferro não disponível", "empréstimo de ferro indisponível", "não tem ferro"],
   "Operações - Upgrade negado": ["solicitação de upgrade recusada", "melhoria não concedida"],
   "Operações - Perda de pertences": ["objetos extraviados", "itens perdidos"],
   "Operações - Falta de cortesia": ["ausência de gentileza", "tratamento frio"],
@@ -309,7 +227,7 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   // ⭐ NOVOS DA CLIENTE (4 problems):
   "Operações - Atendimento sem fluência em espanhol": ["funcionário não fala espanhol", "falta atendimento em espanhol", "barreira de idioma"],
   "Operações - Quadro reduzido de funcionários": ["falta de pessoal", "equipe insuficiente", "poucos funcionários"],
-  "Operações - Indisponibilidade de ferro de passar": ["ferro não disponível", "falta ferro para empréstimo", "não tem ferro"],
+  
   "Operações - Demora na liberação do quarto": ["quarto demorou para ficar pronto", "espera longa pelo quarto", "acomodação não liberada no horário"],
 
   // Produto (28 problemas) - Características do produto/hotel ⭐ ATUALIZADO: +4 problems da cliente
@@ -387,15 +305,8 @@ Object.assign(PROBLEM_CONTEXT_DICT, ADDITIONAL_PROBLEMS_EG_CORPORATIVO);
  * Enriquece uma keyword com contexto semântico para gerar embeddings mais precisos
  */
 function enrichKeywordWithContext(keyword: string): string {
-  const contexts = SEMANTIC_CONTEXT_DICT[keyword];
-  
-  if (contexts && contexts.length > 0) {
-    // Retorna: "Palavra-chave original. Contextos: variação1, variação2, variação3"
-    return `${keyword}. Contextos: ${contexts.join(", ")}`;
-  }
-  
-  // Se não tem contextos específicos, retorna a keyword original
-  return keyword;
+  // Usa o enriquecimento centralizado do semantic-enrichment
+  return generateEnrichedKeywordText(keyword);
 }
 
 /**
@@ -475,11 +386,21 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    const problems = data.problems || [];
+    // Fonte AUTORITATIVA de problems: usar exatamente as chaves de PROBLEM_CONTEXT_DICT
+    const problems = Object.keys(PROBLEM_CONTEXT_DICT);
     const departments = data.departments || [];
 
-    console.log(`📊 Processando: ${keywordsArray.length} keywords, ${problems.length} problems`);
-    reportProgress('Iniciando processamento', 5, { keywords: keywordsArray.length, problems: problems.length });
+    // Não filtrar keywords fora do mapeamento: usar fallback automático
+    // Apenas reportar se há keywords sem contexto explícito
+    const beforeCount = keywordsArray.length;
+    const allowedKeywords = new Set(Object.keys(KEYWORD_SEMANTIC_CONTEXT));
+    const missingKeywords = keywordsArray.filter((kw: string) => !allowedKeywords.has(kw));
+    if (missingKeywords.length > 0) {
+      console.log(`⚠️ ${missingKeywords.length} keywords sem mapeamento explícito, usando fallback de enriquecimento. Exemplos:`, missingKeywords.slice(0, 10));
+    }
+
+    console.log(`📊 Processando: ${keywordsArray.length} keywords, ${problems.length} problems (fonte: PROBLEM_CONTEXT_DICT)`);
+    reportProgress('Iniciando processamento', 5, { keywords: keywordsArray.length, problems: problems.length, missing_keywords: missingKeywords.length });
 
     // Calcular versão atual da taxonomia
     const taxonomyVersion = calculateTaxonomyVersion({ keywords: data.keywords, problems, departments });
@@ -529,19 +450,7 @@ export async function POST(request: NextRequest) {
     reportProgress('Gerando embeddings para problems', 50);
 
     // 🔧 CORREÇÃO: Problems podem vir como objetos ou strings
-    const problemsArray: string[] = problems.map((prob: any) => {
-      // Se for objeto, extrair o campo 'label'
-      if (typeof prob === 'object' && prob !== null && 'label' in prob) {
-        return prob.label;
-      }
-      // Se for string, usar diretamente
-      if (typeof prob === 'string') {
-        return prob;
-      }
-      // Fallback: converter para string
-      console.warn('⚠️ Problem em formato inesperado:', prob);
-      return String(prob);
-    });
+    const problemsArray: string[] = problems;
 
     // Enriquecer problems com contexto semântico para embeddings mais precisos
     const problemTexts = problemsArray.map((prob: string) => {
@@ -614,6 +523,8 @@ export async function POST(request: NextRequest) {
 
     // Atualizar documento principal apenas com metadados
     await updateDoc(docRef, {
+      // 🔧 Sincronizar lista de problems no Firebase para evitar divergência
+      problems: problemsArray,
       embeddings_generated_at: new Date(),
       embedding_model: 'text-embedding-3-small',
       embeddings_structure: 'chunked', // Flag para indicar nova estrutura
@@ -630,7 +541,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Atualizar informações de versão da taxonomia
-    await updateTaxonomyVersion({ keywords: data.keywords, problems, departments });
+    await updateTaxonomyVersion({ keywords: data.keywords, problems: problemsArray, departments });
     await markEmbeddingsUpdated(taxonomyVersion.version);
 
     reportProgress('Versões atualizadas', 95);
@@ -649,7 +560,7 @@ export async function POST(request: NextRequest) {
         processing_time_ms: processingTime,
         processing_time_human: `${Math.round(processingTime / 1000)}s`,
         batch_size: BATCH_SIZE,
-        total_api_calls: Math.ceil((keywordsArray.length + problems.length) / BATCH_SIZE)
+        total_api_calls: Math.ceil((keywordsArray.length + problemsArray.length) / BATCH_SIZE)
       },
       next_steps: 'Os embeddings estão salvos. Análises futuras serão muito mais rápidas!'
     });

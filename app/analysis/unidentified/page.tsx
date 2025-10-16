@@ -806,8 +806,8 @@ const EditFeedbackModal = ({ feedback, onSave }: { feedback: UnidentifiedFeedbac
       // Converter problemas editados de volta para formato string com ';' (removendo o ID)
       const problemsWithoutId = editedProblems.map(({ id, ...problem }) => problem)
       const keywords = problemsWithoutId.map(p => p.keyword).join(';')
-      const sectors = problemsWithoutId.map(p => p.sector).join(';')
-      const problems = problemsWithoutId.map(p => p.problem).join(';')
+        const sectors = problemsWithoutId.map(p => p.sector).join(';')
+        const problems = problemsWithoutId.map(p => p.problem).join(';')
       
       // Atualizar feedback local
       const updatedFeedback = {

@@ -237,6 +237,10 @@ class AnalyticsService {
       startDate.setDate(startDate.getDate() - days);
       const startTimestamp = Timestamp.fromDate(startDate);
 
+      // Debug: verificar se há dados na coleção
+      console.log('🔍 DEBUG - Verificando dados de analytics...');
+      console.log('📅 Período:', startDate.toISOString(), 'até', new Date().toISOString());
+
       // Query para acessos
       const accessQuery = query(
         collection(db, "analytics_access"),
@@ -260,6 +264,18 @@ class AnalyticsService {
       const accessData = accessSnapshot.docs.map(doc => doc.data() as UserAccessEvent);
       const performanceData = performanceSnapshot.docs.map(doc => doc.data() as PerformanceMetric);
 
+      console.log('📊 Dados encontrados:', {
+        totalAccessEvents: accessData.length,
+        totalPerformanceEvents: performanceData.length,
+        sampleAccessData: accessData.slice(0, 3).map(a => ({
+          userId: a.userId,
+          userRole: a.userRole,
+          action: a.action,
+          page: a.page,
+          timestamp: a.timestamp.toDate().toISOString()
+        }))
+      });
+
       // Calcular estatísticas
       const stats = this.calculateStats(accessData, performanceData);
       
@@ -267,6 +283,7 @@ class AnalyticsService {
       return stats;
     } catch (error) {
       devPerf('❌ Erro ao obter stats:', error);
+      console.error('❌ Erro detalhado:', error);
       return this.getEmptyStats();
     }
   }
@@ -276,11 +293,29 @@ class AnalyticsService {
     // Usuários únicos
     const uniqueUsers = new Set(accessData.map(a => a.userId)).size;
 
-    // Distribuição por role
-    const userDistribution = accessData.reduce((acc, curr) => {
-      acc[curr.userRole]++;
+    // Distribuição por role - contar usuários únicos por role, não total de acessos
+    const uniqueUsersByRole = accessData.reduce((acc, curr) => {
+      if (!acc[curr.userRole]) {
+        acc[curr.userRole] = new Set();
+      }
+      acc[curr.userRole].add(curr.userId);
       return acc;
-    }, { admin: 0, staff: 0 });
+    }, {} as Record<string, Set<string>>);
+
+    const userDistribution = {
+      admin: uniqueUsersByRole.admin?.size || 0,
+      staff: uniqueUsersByRole.staff?.size || 0
+    };
+
+    // Debug logs para verificar os dados
+    console.log('🔍 DEBUG - Analytics calculateStats:');
+    console.log('📊 Total de eventos de acesso:', accessData.length);
+    console.log('👥 Usuários únicos totais:', uniqueUsers);
+    console.log('🔑 Usuários únicos por role:', {
+      admin: Array.from(uniqueUsersByRole.admin || []),
+      staff: Array.from(uniqueUsersByRole.staff || [])
+    });
+    console.log('📈 Distribuição final:', userDistribution);
 
     // Top páginas
     const pageViews = accessData
@@ -419,4 +454,4 @@ class AnalyticsService {
 }
 
 // Instância singleton
-export const analyticsService = new AnalyticsService(); 
+export const analyticsService = new AnalyticsService();

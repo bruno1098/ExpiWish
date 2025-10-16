@@ -14,7 +14,9 @@
  * Baseado na taxonomia oficial do Firebase (44 keywords, 10 departamentos)
  * Última atualização: 04/10/2025
  */
-export const KEYWORD_DEPARTMENT_MAP: Record<string, string> = {
+import { KEYWORD_SEMANTIC_CONTEXT } from './semantic-enrichment';
+
+const FULL_KEYWORD_DEPARTMENT_MAP: Record<string, string> = {
   // ========== A&B (Alimentos & Bebidas) ==========
   "A&B - Café da manhã": "A&B",
   "A&B - Jantar": "A&B",
@@ -46,8 +48,8 @@ export const KEYWORD_DEPARTMENT_MAP: Record<string, string> = {
   "Recepção - Serviço": "Recepção",
   
   // ========== TI (Tecnologia da Informação) ==========
-  "Tecnologia - TV": "TI",
-  "Tecnologia - Wi-fi": "TI",
+  "TI - TV": "TI",
+  "TI - Wi-fi": "TI",
   
   // ========== LAZER ==========
   "Lazer - Estrutura": "Lazer",
@@ -83,6 +85,13 @@ export const KEYWORD_DEPARTMENT_MAP: Record<string, string> = {
   // ========== EG (Experiência do Hóspede) ==========
   "EG - Abordagem": "EG",
 };
+
+// Exporta apenas as keywords presentes no semantic-enrichment
+export const KEYWORD_DEPARTMENT_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(FULL_KEYWORD_DEPARTMENT_MAP).filter(([label]) =>
+    Object.prototype.hasOwnProperty.call(KEYWORD_SEMANTIC_CONTEXT, label)
+  )
+);
 
 /**
  * Mapeamento reverso: Departamento → Keywords válidas
