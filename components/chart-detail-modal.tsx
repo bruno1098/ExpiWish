@@ -107,33 +107,78 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
     }
   };
 
+  // Novo filtro: somente críticos (1-2⭐)
+  const [onlyCritical, setOnlyCritical] = React.useState(false);
+
   if (!selectedItem) return null;
 
   const { stats } = selectedItem;
   const recent = Array.isArray(stats?.recentFeedbacks) ? stats.recentFeedbacks : [];
-  const totalFeedbacks = typeof stats?.totalOccurrences === "number" ? stats.totalOccurrences : recent.length;
-  const avgRating = typeof stats?.averageRating === "number"
-    ? stats.averageRating
-    : (recent.length ? recent.reduce((acc: number, f: any) => acc + Number(f?.rating ?? 0), 0) / recent.length : 0);
-  const criticalCount = recent.filter((f: any) => Number(f?.rating) <= 2).length;
-  const criticalPct = totalFeedbacks > 0 ? (criticalCount / totalFeedbacks) * 100 : 0;
-  const uniqueHotelsCount = new Set(recent.map((f: any) => f?.hotel || f?.hotel_name || f?.hotelName).filter(Boolean)).size;
-  const uniqueAuthorsCount = new Set(recent.map((f: any) => f?.author || f?.user || f?.nome).filter(Boolean)).size;
-  const usersOrHotelsLabel = selectedItem.type === "hotel" ? "Usuários" : "Hotéis";
-  const usersOrHotelsValue = selectedItem.type === "hotel"
-    ? (stats?.uniqueAuthors ?? uniqueAuthorsCount)
-    : (stats?.topHotels?.length ?? uniqueHotelsCount);
 
-  const ratingDistribution = stats?.ratingDistribution || [1, 2, 3, 4, 5].reduce((acc: any, r) => {
-    acc[r] = recent.filter((f: any) => Number(f?.rating) === r).length;
+  // Derivar linhas base conforme o contexto do item selecionado
+  const selectedRatingValue = selectedItem.type === 'rating'
+    ? (() => { const m = String(selectedItem.value).match(/(\d+)/); return m ? parseInt(m[1], 10) : 0; })()
+    : 0;
+  const baseRowsForStats = (() => {
+    if (selectedItem.type === 'rating' && selectedRatingValue) {
+      return recent.filter((f: any) => Number(f?.rating) === selectedRatingValue);
+    }
+    if (selectedItem.type === 'sector') {
+      const sel = String(selectedItem.value).trim().toLowerCase();
+      return recent.filter((f: any) => {
+        const raw = String(f?.sector || f?.department || f?.departamento || '').trim();
+        if (!raw) return false;
+        const parts = raw.split(/[;,|]/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        return parts.includes(sel);
+      });
+    }
+    if (selectedItem.type === 'problem' || selectedItem.type === 'problem_analysis') {
+      const base = String(selectedItem.value).split('-')[0].trim();
+      return recent.filter((f: any) => String(f?.problem || f?.problem_main || f?.problemMain || '').includes(base));
+    }
+    return recent;
+  })();
+  const filteredRowsForStats = onlyCritical 
+    ? baseRowsForStats.filter((f: any) => Number(f?.rating) <= 2)
+    : baseRowsForStats;
+
+  // Alias utilizado em gráficos/contexto para refletir o filtro aplicado
+  const viewRows = filteredRowsForStats;
+
+  // Métricas recalculadas com base no conjunto filtrado
+  const totalFeedbacks = filteredRowsForStats.length;
+  const avgRating = totalFeedbacks
+    ? filteredRowsForStats.reduce((acc: number, f: any) => acc + Number(f?.rating ?? 0), 0) / totalFeedbacks
+    : 0;
+  const criticalCount = filteredRowsForStats.filter((f: any) => Number(f?.rating) <= 2).length;
+  const criticalPct = totalFeedbacks > 0 ? (criticalCount / totalFeedbacks) * 100 : 0;
+  const uniqueHotelsCount = new Set(filteredRowsForStats.map((f: any) => f?.hotel || f?.hotel_name || f?.hotelName).filter(Boolean)).size;
+  const uniqueAuthorsCount = new Set(filteredRowsForStats.map((f: any) => f?.author || f?.user || f?.nome).filter(Boolean)).size;
+  const usersOrHotelsLabel = selectedItem.type === "hotel" ? "Usuários" : "Hotéis";
+  const usersOrHotelsValue = selectedItem.type === "hotel" ? uniqueAuthorsCount : uniqueHotelsCount;
+
+  const ratingDistribution = [1, 2, 3, 4, 5].reduce((acc: any, r) => {
+    acc[r] = filteredRowsForStats.filter((f: any) => Number(f?.rating) === r).length;
     return acc;
   }, {} as Record<number, number>);
 
-  const sentimentDistribution = stats?.sentimentDistribution || {
-    positive: recent.filter((f: any) => Number(f?.rating) >= 4).length,
-    neutral: recent.filter((f: any) => Number(f?.rating) === 3).length,
-    negative: recent.filter((f: any) => Number(f?.rating) <= 2).length,
+  const sentimentDistribution = {
+    positive: filteredRowsForStats.filter((f: any) => Number(f?.rating) >= 4).length,
+    neutral: filteredRowsForStats.filter((f: any) => Number(f?.rating) === 3).length,
+    negative: filteredRowsForStats.filter((f: any) => Number(f?.rating) <= 2).length,
   };
+
+  // Percentual do total com fallback para totalBase
+  const percentageValue = (() => {
+    if (typeof stats?.percentage === 'number') return stats.percentage;
+    if (typeof stats?.percentage === 'string') {
+      const n = Number(String(stats.percentage).replace('%', '').trim());
+      if (!Number.isNaN(n)) return n;
+    }
+    if (typeof stats?.pct === 'number') return stats.pct;
+    const base = typeof stats?.totalBase === 'number' && stats.totalBase > 0 ? stats.totalBase : totalFeedbacks || 1;
+    return Number(((totalFeedbacks / base) * 100).toFixed(1));
+  })();
 
   function monthLabel(d: any) {
     const dt = new Date(d);
@@ -142,9 +187,9 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
     return `${mm}/${dt.getFullYear()}`;
   }
 
-  const monthlyTrend = stats?.monthlyTrend?.length ? stats.monthlyTrend : (() => {
+  const monthlyTrend = (() => {
     const map = new Map<string, number>();
-    recent.forEach((f: any) => {
+    filteredRowsForStats.forEach((f: any) => {
       const label = monthLabel(f?.date || f?.created_at || f?.createdAt);
       map.set(label, (map.get(label) || 0) + 1);
     });
@@ -155,6 +200,11 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
 
   function tallyFrom(list: any[], getter: (x: any) => string | string[] | undefined) {
     const m = new Map<string, number>();
+    const normalize = (s: any) => String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
     list.forEach((it) => {
       const raw = getter(it);
       const items = Array.isArray(raw)
@@ -162,20 +212,94 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
         : typeof raw === "string"
           ? raw.split(/[;,|]/)
           : [];
-      items.map((s: string) => s?.trim()).filter(Boolean).forEach((k: string) => {
-        m.set(k, (m.get(k) || 0) + 1);
-      });
+      items
+        .map((s: string) => s?.trim())
+        .filter(Boolean)
+        .forEach((k: string) => {
+          if (normalize(k) === 'vazio') return; // ignora placeholders
+          m.set(k, (m.get(k) || 0) + 1);
+        });
     });
     return Array.from(m.entries()).map(([keyword, count]) => ({ keyword, count })).sort((a, b) => b.count - a.count);
   }
 
-  const fallbackTopKeywords = tallyFrom(recent, (f: any) => f?.keywords || f?.keyword);
-  const topKeywords = stats?.topKeywords?.length ? stats.topKeywords : fallbackTopKeywords.slice(0, 10);
-  const fallbackTopProblems = tallyFrom(recent, (f: any) => [f?.problem || f?.problem_main || f?.problemMain].filter(Boolean) as any);
-  const topProblems = stats?.topProblems?.length
-    ? stats.topProblems
-    : fallbackTopProblems.map((x: any) => ({ problem: x.keyword, count: x.count })).slice(0, 10);
-  const fallbackTopHotels = tallyFrom(recent, (f: any) => [f?.hotel || f?.hotel_name || f?.hotelName].filter(Boolean) as any);
+  const fallbackTopKeywords = tallyFrom(filteredRowsForStats, (f: any) => f?.keywords || f?.keyword);
+  const topKeywords = (() => {
+    const base = stats?.topKeywords?.length ? stats.topKeywords : fallbackTopKeywords;
+    const normalize = (s: any) => String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    const notVazio = (s: any) => normalize(s) !== 'vazio';
+    if (selectedItem.type === 'sector') {
+      const dep = normalize(String(selectedItem.value || ''));
+      return base
+        .filter((k: any) => {
+          const raw = String(k?.keyword || '').replace(' – ', ' - ');
+          const [prefix, ...rest] = raw.split('-');
+          const label = rest.join('-').trim();
+          return normalize(prefix) === dep && notVazio(label);
+        })
+        .slice(0, 10);
+    }
+    if (selectedItem.type === 'problem' || selectedItem.type === 'problem_analysis') {
+      const probTarget = normalize(String(selectedItem.value || '').replace(' – ', ' - ').split('-').slice(1).join('-'));
+      return base
+        .filter((k: any) => {
+          const kw = String(k?.keyword || '');
+          return notVazio(kw) && normalize(kw).includes(probTarget);
+        })
+        .slice(0, 10);
+    }
+    return base.filter((k: any) => notVazio(k?.keyword)).slice(0, 10);
+  })();
+  const fallbackTopProblems = tallyFrom(filteredRowsForStats, (f: any) => [f?.problem || f?.problem_main || f?.problemMain].filter(Boolean) as any);
+  const topProblems = (() => {
+    const normalize = (s: any) => String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    // Quando for por departamento, contar apenas problemas associados ao departamento selecionado
+    if (selectedItem.type === 'sector') {
+      const dep = normalize(String(selectedItem.value || ''));
+      const m = new Map<string, number>();
+      viewRows.forEach((f: any) => {
+        let matched = false;
+        if (Array.isArray(f?.allProblems)) {
+          for (const p of f.allProblems) {
+            const d = normalize(String((p?.sector ?? p?.department) || ''));
+            if (d !== dep) continue;
+            const label = String(p?.problem || p?.problem_main || '').trim();
+            if (!label || normalize(label) === 'vazio') continue;
+            m.set(label, (m.get(label) || 0) + 1);
+            matched = true;
+          }
+        }
+        if (!matched && typeof f?.problem === 'string') {
+          const list = f.problem.replace(' – ', ' - ').split(';').map((s: string) => s.trim());
+          for (const s of list) {
+            const parts = s.split('-');
+            const d = normalize(parts[0] || '');
+            const label = parts.slice(1).join('-').trim();
+            if (d !== dep || !label || normalize(label) === 'vazio') continue;
+            m.set(label, (m.get(label) || 0) + 1);
+          }
+        }
+      });
+      return Array.from(m.entries())
+        .map(([problem, count]) => ({ problem, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+    }
+    // Demais contextos: usar estatística existente ou fallback simples
+    return (stats?.topProblems?.length
+      ? stats.topProblems
+      : fallbackTopProblems.map((x: any) => ({ problem: x.keyword, count: x.count }))
+    ).filter((p: any) => normalize(p?.problem || p?.keyword) !== 'vazio').slice(0, 10);
+  })();
+  const fallbackTopHotels = tallyFrom(filteredRowsForStats, (f: any) => [f?.hotel || f?.hotel_name || f?.hotelName].filter(Boolean) as any);
   const topHotels = stats?.topHotels?.length
     ? stats.topHotels
     : fallbackTopHotels.map((x: any) => ({ hotel: x.keyword, count: x.count })).slice(0, 10);
@@ -197,7 +321,13 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
       return recent.filter((f: any) => Number(f?.rating) === ratingSelected);
     }
     if (selectedItem.type === 'sector') {
-      return recent.filter((f: any) => String(f?.sector || f?.department || f?.departamento || '').trim() === String(selectedItem.value).trim());
+      const sel = String(selectedItem.value).trim().toLowerCase();
+      return recent.filter((f: any) => {
+        const raw = String(f?.sector || f?.department || f?.departamento || '').trim();
+        if (!raw) return false;
+        const parts = raw.split(/[;,|]/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+        return parts.includes(sel);
+      });
     }
     if (selectedItem.type === 'problem' || selectedItem.type === 'problem_analysis') {
       // Match por prefixo do problema antes de '-' para cobrir "A&B - Serviço" etc.
@@ -225,7 +355,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
     const depTarget = normalize(department);
     const probTarget = normalize(problem);
     const map = new Map<string, { count: number; sum: number }>();
-    contextRows.forEach((f: any) => {
+    viewRows.forEach((f: any) => {
       let matched = false;
       if (Array.isArray(f?.allProblems) && depTarget && probTarget) {
         for (const p of f.allProblems) {
@@ -261,19 +391,54 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
         detail,
         count: v.count,
         avg: v.count ? Number((v.sum / v.count).toFixed(1)) : 0,
-        pct: contextRows.length ? Number(((v.count / contextRows.length) * 100).toFixed(1)) : 0,
+        pct: viewRows.length ? Number(((v.count / viewRows.length) * 100).toFixed(1)) : 0,
       }))
       .sort((a, b) => b.count - a.count);
   })();
 
   // Top problemas e departamentos no contexto
-  const problemsInContext = tallyFrom(contextRows, (f: any) => [f?.problem || f?.problem_main || f?.problemMain].filter(Boolean) as any);
-  const departmentsInContext = tallyFrom(contextRows, (f: any) => [f?.sector || f?.department || f?.departamento].filter(Boolean) as any);
+  const problemsInContext = (() => {
+    if (selectedItem.type === 'sector') {
+      const normalize = (s: any) => String(s || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+      const dep = normalize(String(selectedItem.value || ''));
+      const m = new Map<string, number>();
+      viewRows.forEach((f: any) => {
+        let matched = false;
+        if (Array.isArray(f?.allProblems)) {
+          for (const p of f.allProblems) {
+            const d = normalize(String((p?.sector ?? p?.department) || ''));
+            if (d !== dep) continue;
+            const label = String(p?.problem || p?.problem_main || '').trim();
+            if (!label || normalize(label) === 'vazio') continue;
+            m.set(label, (m.get(label) || 0) + 1);
+            matched = true;
+          }
+        }
+        if (!matched && typeof f?.problem === 'string') {
+          const list = f.problem.replace(' – ', ' - ').split(';').map((s: string) => s.trim());
+          for (const s of list) {
+            const parts = s.split('-');
+            const d = normalize(parts[0] || '');
+            const label = parts.slice(1).join('-').trim();
+            if (d !== dep || !label || normalize(label) === 'vazio') continue;
+            m.set(label, (m.get(label) || 0) + 1);
+          }
+        }
+      });
+      return Array.from(m.entries()).map(([keyword, count]) => ({ keyword, count })).sort((a, b) => b.count - a.count);
+    }
+    return tallyFrom(viewRows, (f: any) => [f?.problem || f?.problem_main || f?.problemMain].filter(Boolean) as any);
+  })();
+const departmentsInContext = tallyFrom(viewRows, (f: any) => [f?.sector || f?.department || f?.departamento].filter(Boolean) as any);
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-6xl w-[95vw] max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 p-0">
+        <DialogContent className="max-w-7xl w-[98vw] max-h-[95vh] flex flex-col bg-white dark:bg-slate-900 p-0">
           {/* Header Redesenhado */}
           <DialogHeader className="relative p-6 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-700 border-b border-slate-200 dark:border-slate-600">
             <div className="flex items-center justify-between">
@@ -298,7 +463,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
 
           {/* Métricas Principais */}
           <div className="p-6 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
               <div className="text-center p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
                 <div className="flex items-center justify-center mb-2">
                   <Activity className="h-5 w-5 text-blue-500 mr-2" />
@@ -312,7 +477,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
                   <PieChart className="h-5 w-5 text-purple-500 mr-2" />
                   <span className="text-sm font-medium text-slate-600 dark:text-slate-400">% do Total</span>
                 </div>
-                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{typeof stats?.percentage === "number" ? `${stats.percentage}%` : "-"}</div>
+                <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">{`${percentageValue}%`}</div>
               </div>
               
               <div className="text-center p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm">
@@ -345,8 +510,20 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
           </div>
 
           {/* Conteúdo Principal */}
-          <ScrollArea className="p-6 h-[70vh]">
+          <ScrollArea className="p-6 overflow-auto max-h-[calc(95vh-240px)]">
             <div className="space-y-6">
+              {/* Barra de filtros rápidos */}
+              <div className="flex items-center gap-3">
+                <Button 
+                  variant={onlyCritical ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setOnlyCritical(v => !v)}
+                  className="gap-2"
+                >
+                  <TrendingDown className="h-4 w-4" /> Somente críticos
+                </Button>
+                <span className="text-xs text-slate-500 dark:text-slate-400">Filtra avaliações 1-2⭐ no contexto</span>
+              </div>
               {/* Resumo do Item */}
               <Card className="p-6 border border-slate-200 dark:border-slate-700">
                 <h4 className="font-semibold mb-4 flex items-center text-lg text-slate-900 dark:text-slate-100">
@@ -440,7 +617,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
                       </div>
                       Distribuição de Sentimentos
                     </h4>
-                    <div className="h-64 w-full">
+                    <div className="h-80 lg:h-96 w-full overflow-visible">
                       <ModernChart 
                         type="doughnut"
                         data={[
@@ -462,7 +639,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
                       </div>
                       Distribuição de Avaliações
                     </h4>
-                    <div className="h-64 w-full">
+                    <div className="h-80 lg:h-96 w-full overflow-visible">
                       <RatingsChart 
                         data={[
                           { label: '1⭐', value: ratingDistribution[1] || 0 },
@@ -510,12 +687,12 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
                         </div>
                         Principais Problemas em {ratingSelected}⭐
                       </h4>
-                      <div className="h-64 w-full">
+                      <div className="h-80 lg:h-96 w-full overflow-visible">
                         <ModernChart
                           type="horizontalBar"
                           categoryType="problem"
                           data={problemsInContext.slice(0, 8).map((p: any) => ({ label: p.keyword, value: p.count }))}
-                          contextRows={contextRows}
+                          contextRows={viewRows}
                         />
                       </div>
                     </Card>
@@ -526,7 +703,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
                         </div>
                         Departamentos em {ratingSelected}⭐
                       </h4>
-                      <div className="h-64 w-full">
+                      <div className="h-80 lg:h-96 w-full overflow-visible">
                         <ModernChart
                           type="bar"
                           categoryType="department"
@@ -539,47 +716,47 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
 
                 {/* Seções direcionadas por Departamento */}
                 {selectedItem.type === 'sector' && (
-                  <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-                    <Card className="p-6 border border-slate-200 dark:border-slate-700">
-                      <h4 className="font-semibold mb-4 flex items-center text-lg text-slate-900 dark:text-slate-100">
-                        <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg mr-3">
-                          <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                        </div>
-                        Problemas do Departamento
-                      </h4>
-                      <div className="h-64 w-full">
-                        <ModernChart
-                          type="horizontalBar"
-                          categoryType="problem"
-                          data={problemsInContext.slice(0, 8).map((p: any) => ({ label: p.keyword, value: p.count }))}
-                          contextRows={contextRows}
-                        />
-                      </div>
-                    </Card>
-                    {detailsAgg.length > 0 && (
-                      <Card className="p-6 border border-slate-200 dark:border-slate-700">
-                        <h4 className="font-semibold mb-4 flex items-center text-lg text-slate-900 dark:text-slate-100">
-                          <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg mr-3">
-                            <BarChart3 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                          </div>
-                          Detalhes Específicos (problem_detail)
-                        </h4>
-                        <div className="space-y-3">
-                          {detailsAgg.slice(0, 8).map((d) => (
-                            <div key={d.detail} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="px-2 py-1">{d.detail}</Badge>
-                              </div>
-                              <div className="text-sm text-slate-600 dark:text-slate-400">
-                                {d.count} ocorrências · {d.avg.toFixed(1)}⭐ · {d.pct}%
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </Card>
-                    )}
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+        <Card className="p-6 border border-slate-200 dark:border-slate-700 lg:col-span-2">
+          <h4 className="font-semibold mb-4 flex items-center text-lg text-slate-900 dark:text-slate-100">
+            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg mr-3">
+              <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+            </div>
+            Problemas do Departamento
+          </h4>
+          <div className="h-80 lg:h-96 w-full overflow-visible">
+            <ModernChart
+              type="horizontalBar"
+              categoryType="problem"
+              data={problemsInContext.slice(0, 8).map((p: any) => ({ label: p.keyword, value: p.count }))}
+              contextRows={viewRows}
+            />
+          </div>
+        </Card>
+        {detailsAgg.length > 0 && (
+          <Card className="p-6 border border-slate-200 dark:border-slate-700">
+            <h4 className="font-semibold mb-4 flex items-center text-lg text-slate-900 dark:text-slate-100">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg mr-3">
+                <BarChart3 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              Detalhes Específicos (problem_detail)
+            </h4>
+            <div className="space-y-3">
+              {detailsAgg.slice(0, 8).map((d) => (
+                <div key={d.detail} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="px-2 py-1">{d.detail}</Badge>
                   </div>
-                )}
+                  <div className="text-sm text-slate-600 dark:text-slate-400">
+                    {d.count} ocorrências · {d.avg.toFixed(1)}⭐ · {d.pct}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
+    )}
 
                 {/* Tendência Mensal */}
                 {monthlyTrend && monthlyTrend.length > 1 && (
@@ -590,7 +767,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
                       </div>
                       Tendência Mensal
                     </h4>
-                    <div className="h-64 w-full">
+                    <div className="h-80 lg:h-96 w-full overflow-visible">
                       <ModernChart 
                         type="line"
                         data={monthlyTrend.map((item: any) => ({

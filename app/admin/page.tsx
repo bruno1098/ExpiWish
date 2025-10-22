@@ -672,7 +672,7 @@ function AdminDashboardContent() {
         4: filteredFeedbacks.filter(f => f.rating === 4).length,
         5: filteredFeedbacks.filter(f => f.rating === 5).length,
       },
-      percentage: dataToUse ? ((filteredFeedbacks.length / dataToUse.length) * 100).toFixed(1) : 0,
+      percentage: dataToUse ? Number(((filteredFeedbacks.length / dataToUse.length) * 100).toFixed(1)) : 0,
       recentFeedbacks: filteredFeedbacks
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       topKeywords: type !== 'keyword' ? getTopKeywordsForItem(filteredFeedbacks) : [],
@@ -892,7 +892,7 @@ function AdminDashboardContent() {
         4: filteredFeedbacks.filter(f => f.rating === 4).length,
         5: filteredFeedbacks.filter(f => f.rating === 5).length,
       },
-      percentage: ((filteredFeedbacks.length / dataToUse.length) * 100).toFixed(1),
+      percentage: Number(((filteredFeedbacks.length / dataToUse.length) * 100).toFixed(1)),
       recentFeedbacks: filteredFeedbacks
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       topKeywords: getTopKeywordsForItem(filteredFeedbacks),
