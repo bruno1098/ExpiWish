@@ -1503,15 +1503,13 @@ export async function POST(request: NextRequest) {
 
     // Circuit Breaker - verificar se sistema está disponível
     if (!checkCircuitBreaker()) {
-      console.log('⚡ Circuit breaker aberto - usando fallback direto');
-
-      // Ir direto para fallback básico quando circuit breaker está aberto
-      const fallbackResult = createBasicFeedback(finalText, body.rating);
+      const retryAfter = Math.max(0, CIRCUIT_BREAKER_TIMEOUT - (Date.now() - circuitBreaker.lastFailure));
       return NextResponse.json({
-        ...fallbackResult,
-        circuit_breaker_active: true,
-        message: 'Sistema em recuperação - usando análise básica'
-      });
+        error: 'circuit_breaker_open',
+        message: 'IA temporariamente indisponível. Tentaremos novamente.',
+        retry_after_ms: retryAfter,
+        temporary: true
+      }, { status: 503 });
     }
 
     // Rate limiting
@@ -2026,7 +2024,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(compatibleResult);
 
   } catch (error: any) {
-    console.error('❌❌❌ FALLBACK ATIVADO - ERRO CRÍTICO:', {
+    console.error('❌ Erro crítico na análise:', {
       message: error.message,
       code: error.code,
       status: error.status,
@@ -2035,103 +2033,39 @@ export async function POST(request: NextRequest) {
       stack: error.stack?.split('\n').slice(0, 3).join('\n')
     });
 
-    // Se não conseguiu fazer parse do body, tentar novamente
+    // Garantir que conseguimos ler o body para telemetria mínima
     if (!body) {
       try {
         body = await request.json();
         const { texto, comment, text } = body;
         finalText = texto || comment || text || '';
-      } catch (parseError) {
-        // Se falhar completamente, usar valores padrão
-        body = {};
-        finalText = '';
-      }
+      } catch {}
     }
 
-    // Garantir que finalText sempre tenha um valor válido
-    if (!finalText) {
-      finalText = '';
-    }
-
-    // Registrar falha no circuit breaker (apenas para erros críticos)
     const errorType = classifyError(error);
-    if (errorType === 'timeout' || errorType === 'network_error' || errorType === 'unknown_error') {
+
+    // Registrar falha quando o erro é temporário/crítico
+    if (['timeout','network_error','unknown_error','rate_limit','quota_exceeded'].includes(errorType)) {
       recordFailure();
     }
 
-    console.log('🔍 Tipo de erro detectado:', errorType, 'Circuit breaker:', circuitBreaker.state);
-    console.log('📊 Estatísticas do circuito:', {
-      failures: circuitBreaker.failures,
-      lastFailure: circuitBreaker.lastFailure ? new Date(circuitBreaker.lastFailure).toISOString() : 'nunca',
-      state: circuitBreaker.state
-    });
+    const retryAfterMsMap: Record<string, number> = {
+      rate_limit: 15000,
+      quota_exceeded: 60000,
+      timeout: 3000,
+      network_error: 5000,
+      circuit_breaker_open: Math.max(0, CIRCUIT_BREAKER_TIMEOUT - (Date.now() - circuitBreaker.lastFailure)),
+      auth_error: 0,
+      unknown_error: 5000
+    };
 
-    // Sistema de fallback básico com heurísticas simples
-    console.log('🔄 Iniciando fallback básico...');
-
-    // Análise básica com heurísticas simples
-    try {
-      console.log('🔧 Tentando fallback básico...');
-
-      // Extrair rating se disponível no texto
-      const ratingMatch = finalText ? finalText.match(/\b([1-5])\b/) : null;
-      const rating = ratingMatch ? parseInt(ratingMatch[1]) : 3;
-
-      // Criar feedback básico usando adaptador
-      const basicResult = createBasicFeedback(finalText || 'Texto não disponível', rating);
-
-      // Log de performance
-      performanceLogger.logBasicFallback(
-        Date.now() - startTime,
-        basicResult.confidence || 0.3,
-        finalText ? finalText.length : 0,
-        errorType
-      );
-
-      // Log para monitoramento
-      console.log('📊 Fallback básico usado:', {
-        type: 'basic_classification',
-        reason: error.message,
-        text_length: finalText ? finalText.length : 0
-      });
-
-      console.log('✅ Fallback básico aplicado com sucesso');
-      return NextResponse.json(basicResult);
-
-    } catch (basicError: any) {
-      console.error('❌ Erro no fallback básico:', basicError);
-    }
-
-    // NÍVEL 3: Fallback final - estrutura mínima garantida
-    console.log('🚨 Usando fallback final de emergência');
-
-    // Log crítico para monitoramento
-    console.error('📊 Fallback de emergência usado:', {
-      type: 'emergency_fallback',
-      original_error: error.message,
-      error_type: errorType,
-      basic_error: 'Todos os fallbacks falharam',
-      text_preview: finalText ? finalText.substring(0, 50) : 'Texto não disponível',
-      timestamp: new Date().toISOString(),
-      user_agent: request.headers.get('user-agent'),
-      ip: request.headers.get('x-forwarded-for') || 'unknown'
-    });
-
-    const emergencyResult = createEmergencyFeedback(finalText || 'Texto não disponível', error.message);
-
-    // Log de performance
-    performanceLogger.logEmergencyFallback(
-      Date.now() - startTime,
-      finalText ? finalText.length : 0,
-      errorType,
-      request.headers.get('user-agent') || undefined,
-      request.headers.get('x-forwarded-for') || undefined
-    );
+    const retry_after_ms = retryAfterMsMap[errorType] ?? 5000;
 
     return NextResponse.json({
-      ...emergencyResult,
-      processing_error: error.message,
-      fallback_level: 'emergency'
-    });
+      error: errorType,
+      message: 'Análise indisponível no momento. Aguarde e tentaremos novamente.',
+      retry_after_ms,
+      temporary: errorType !== 'auth_error'
+    }, { status: errorType === 'auth_error' ? 401 : (errorType === 'rate_limit' ? 429 : 503) });
   }
 }

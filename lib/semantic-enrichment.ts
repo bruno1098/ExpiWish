@@ -46,7 +46,7 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
       "A&B", "alimentos", "bebidas", "restaurante", "menu", "cardápio",
       "pratos", "tempero", "qualidade", "horário do jantar"
     ],
-    colloquial_variations: [
+    colloquial_variations: [ 
       "janta", "comida da noite", "dinner"
     ],
     examples: [
@@ -122,7 +122,7 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
 
   // ========== GOVERNANÇA (LIMPEZA) ==========
 
-  "Limpeza - Banheiro": {
+  "Governança - Banheiro": {
     synonyms: [
       "higiene do banheiro", "limpeza sanitária", "banheiro limpo", "banheiro sujo"
     ],
@@ -138,7 +138,7 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
-  "Limpeza - Quarto": {
+  "Governança - Quarto": {
     synonyms: [
       "arrumação", "higiene do quarto", "limpeza do quarto", "housekeeping"
     ],
@@ -154,7 +154,7 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
-  "Limpeza - Áreas sociais": {
+  "Governança - Áreas sociais": {
     synonyms: [
       "limpeza de áreas comuns", "higiene de espaços", "áreas sociais limpas"
     ],
@@ -170,7 +170,7 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
-  "Limpeza - Enxoval": {
+  "Governança - Enxoval": {
     synonyms: [
       "roupa de cama", "lençóis", "toalhas", "enxoval"
     ],
@@ -186,7 +186,7 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
-  "Limpeza - Amenities": {
+  "Governança - Amenities": {
     synonyms: [
       "amenidades", "produtos de banho", "itens de cortesia"
     ],
@@ -202,7 +202,7 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
-  "Limpeza - Frigobar": {
+  "Governança - Frigobar": {
     synonyms: [
       "frigobar", "minibar", "geladeira do quarto"
     ],

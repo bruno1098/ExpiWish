@@ -142,9 +142,24 @@ export function AdminProblemsVisualizationOptions({ filteredData, setSelectedIte
   };
 
   const setSelectedItemWithTopHotels = (item: any) => {
-    const feedbacks = item?.feedbacks ?? (Array.isArray(item?.data) ? item.data : filteredData);
-    const topHotels = item?.stats?.topHotels ?? getTopHotelsForItem(feedbacks || []);
-    setSelectedItem({ ...item, stats: { ...item.stats, topHotels } });
+    const feedbacks = item?.stats?.recentFeedbacks ?? item?.feedbacks ?? (Array.isArray(item?.data) ? item.data : filteredData);
+    const recentFeedbacks = feedbacks || [];
+    const topHotels = item?.stats?.topHotels ?? getTopHotelsForItem(recentFeedbacks);
+    const totalBase = (filteredData || []).length;
+    const totalOccurrences = recentFeedbacks.length;
+    const percentage = totalBase ? Number(((totalOccurrences / totalBase) * 100).toFixed(1)) : 0;
+
+    setSelectedItem({ 
+      ...item, 
+      stats: { 
+        ...item.stats, 
+        topHotels,
+        totalBase,
+        totalOccurrences,
+        percentage,
+        recentFeedbacks,
+      }
+    });
   };
 
   return (
@@ -252,7 +267,15 @@ export function AdminProblemsVisualizationOptions({ filteredData, setSelectedIte
         </div>
       )}
 
-      {/* Detalhe de um hotel */}
+ 
+
+
+
+
+
+
+
+ 
       {selectedHotel && (
         <Card className="p-4">
           <CardHeader className="pb-4">
@@ -265,7 +288,7 @@ export function AdminProblemsVisualizationOptions({ filteredData, setSelectedIte
             <CardDescription>Visualização detalhada dos problemas do hotel selecionado.</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Métricas rápidas do hotel */}
+
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-center">
                 <div className="text-xs text-blue-700 dark:text-blue-300">Feedbacks</div>
@@ -289,10 +312,15 @@ export function AdminProblemsVisualizationOptions({ filteredData, setSelectedIte
               </div>
             </div>
 
-            {/* Visualização de problemas do staff para este hotel */}
+       
+
+
+
+
+
             <StaffProblemsVisualization 
               filteredData={selectedHotel.list}
-              setSelectedItem={setSelectedItem}
+              setSelectedItem={setSelectedItemWithTopHotels}
               setChartDetailOpen={setChartDetailOpen}
             />
             <div className="mt-4">

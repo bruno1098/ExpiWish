@@ -692,7 +692,9 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
             <>
               <div className="text-center p-3 bg-white dark:bg-gray-800 rounded">
                 <div className="text-lg font-bold text-red-600">
-                  {(item.totalRating / item.totalProblems).toFixed(1)}★
+                  {item?.totalProblems && item.totalProblems > 0 
+                    ? (item.totalRating / item.totalProblems).toFixed(1) 
+                    : '0.0'}★
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">Rating Médio</div>
               </div>
@@ -706,7 +708,9 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
               </div>
               <div className="text-center p-3 bg-white dark:bg-gray-800 rounded">
                 <div className="text-lg font-bold text-purple-600">
-                  {((item.totalProblems / executiveSummary.totalProblems) * 100).toFixed(1)}%
+                  {executiveSummary?.totalProblems > 0 
+                    ? (((item.totalProblems || 0) / executiveSummary.totalProblems) * 100).toFixed(1) 
+                    : '0.0'}%
                 </div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">% do Total</div>
               </div>
@@ -1086,7 +1090,9 @@ const AdvancedDetailView = ({ item, type, filteredData, executiveSummary }: {
                   departmentData[item.name] = { 
                     problems: item.totalProblems || 0, 
                     comments: (item.allExamples || []).length,
-                    avgRating: item.totalRating ? (item.totalRating / item.totalProblems) : 0,
+                    avgRating: (item.totalProblems && item.totalProblems > 0) 
+                      ? (item.totalRating / item.totalProblems) 
+                      : 0,
                     ratings: (item.allExamples || []).map((ex: any) => ex.rating || 0)
                   };
                 } else {
@@ -3327,6 +3333,7 @@ export function ProblemsVisualizationOptions({
                             
                             setSelectedItem({
                               type: 'problem_analysis',
+                              value: problem.problem,
                               data: {
                                 ...problem,
                                 label: problem.problem,
@@ -3340,6 +3347,17 @@ export function ProblemsVisualizationOptions({
                                 averageRating: avgRating,
                                 sentimentDistribution: sentimentDistribution,
                                 ratingDistribution: ratingDistribution,
+                                recentFeedbacks: (() => {
+                                  try {
+                                    const related = processProblemsData()
+                                      .filter((p: any) => String(p.problem) === String(problem.problem))
+                                      .map((p: any) => p.feedback)
+                                      .filter(Boolean);
+                                    return related.length ? related : Array.isArray(problem.examples) ? problem.examples.map((ex: any) => ({ ...ex, problem: problem.problem })) : [];
+                                  } catch {
+                                    return Array.isArray(problem.examples) ? problem.examples.map((ex: any) => ({ ...ex, problem: problem.problem })) : [];
+                                  }
+                                })(),
                                 // Tendência mensal (garantir array para evitar TypeError)
                                 monthlyTrend: (() => {
                                   const monthlyData: Record<string, number> = {};
@@ -3503,6 +3521,7 @@ export function ProblemsVisualizationOptions({
                       options={{
                         responsive: true,
                         maintainAspectRatio: false,
+                        cutout: '65%',
                         onClick: (_event: any, elements: any) => {
                           if (elements.length > 0) {
                             const index = elements[0].index;
@@ -3514,10 +3533,13 @@ export function ProblemsVisualizationOptions({
                               feedback.sector && feedback.sector.includes(deptData.label)
                             );
                             
-                            // Calcular rating médio do departamento
+                            // Calcular rating médio do departamento (parse seguro)
                             const allRatings = deptFeedbacks
-                              .map(f => f.rating)
-                              .filter(r => r && r > 0);
+                              .map(f => {
+                                const m = String(f?.rating ?? '').match(/[1-5](?:\.\d+)?/);
+                                return m ? Number(m[0]) : 0;
+                              })
+                              .filter((r: number) => r && r > 0);
                             const avgRating = allRatings.length > 0 
                               ? allRatings.reduce((a: number, b: number) => a + b, 0) / allRatings.length 
                               : 0;
@@ -3528,23 +3550,24 @@ export function ProblemsVisualizationOptions({
                             // Calcular distribuição de sentimentos
                             const sentimentDistribution = {
                               positive: allRatings.filter((r: number) => r >= 4).length,
-                              neutral: allRatings.filter((r: number) => r === 3).length,
+                              neutral: allRatings.filter((r: number) => Math.round(r) === 3).length,
                               negative: allRatings.filter((r: number) => r <= 2).length
                             };
                             
                             // Calcular distribuição de ratings
                             const ratingDistribution: Record<number, number> = {
-                              1: allRatings.filter((r: number) => r === 1).length,
-                              2: allRatings.filter((r: number) => r === 2).length,
-                              3: allRatings.filter((r: number) => r === 3).length,
-                              4: allRatings.filter((r: number) => r === 4).length,
-                              5: allRatings.filter((r: number) => r === 5).length
+                              1: allRatings.filter((r: number) => Math.round(r) === 1).length,
+                              2: allRatings.filter((r: number) => Math.round(r) === 2).length,
+                              3: allRatings.filter((r: number) => Math.round(r) === 3).length,
+                              4: allRatings.filter((r: number) => Math.round(r) === 4).length,
+                              5: allRatings.filter((r: number) => Math.round(r) === 5).length
                             };
                             
                             const totalFeedbacks = sortedDepts.reduce((sum, dept) => sum + dept.value, 0);
                             
                             setSelectedItem({
                               type: 'department',
+                              value: deptData.label,
                               data: {
                                 label: deptData.label,
                                 name: deptData.label,
@@ -3558,6 +3581,8 @@ export function ProblemsVisualizationOptions({
                                 uniqueAuthors: uniqueAuthors.size,
                                 sentimentDistribution: sentimentDistribution,
                                 ratingDistribution: ratingDistribution,
+                                recentFeedbacks: deptFeedbacks,
+                                totalBase: totalFeedbacks,
                                 // Tendência mensal para departamento
                                 monthlyTrend: (() => {
                                   const monthlyData: Record<string, number> = {};
@@ -3574,7 +3599,7 @@ export function ProblemsVisualizationOptions({
                                       count
                                     }));
                                 })(),
-                                percentage: ((deptData.value / totalFeedbacks) * 100).toFixed(1)
+                                percentage: Number(((deptData.value / totalFeedbacks) * 100).toFixed(1))
                               }
                             });
                             setChartDetailOpen(true);
@@ -5364,24 +5389,35 @@ export function ProblemsVisualizationOptions({
                 }
                 acc[dept].problems[problem.problem]++;
                 
-                // Palavras-chave
-                if (!acc[dept].keywords[problem.keyword]) {
-                  acc[dept].keywords[problem.keyword] = 0;
+                // Palavras-chave (validando valores)
+                const kwRaw = String(problem.keyword || '').trim();
+                if (kwRaw && kwRaw.toUpperCase() !== 'VAZIO') {
+                  if (!acc[dept].keywords[kwRaw]) {
+                    acc[dept].keywords[kwRaw] = 0;
+                  }
+                  acc[dept].keywords[kwRaw]++;
                 }
-                acc[dept].keywords[problem.keyword]++;
                 
-                acc[dept].ratings.push(problem.rating);
+                // Rating seguro
+                const match = String(problem?.rating ?? '').match(/(\d+(?:\.\d+)?)/);
+                const numericRating = match ? Number(match[1]) : (typeof problem?.rating === 'number' ? problem.rating : 0);
+                acc[dept].ratings.push(numericRating);
                 acc[dept].totalFeedbacks++;
-                acc[dept].examples.push(problem);
+                acc[dept].examples.push({ ...problem, rating: numericRating });
                 
                 return acc;
               }, {});
 
               // Criar cards para cada departamento
               return Object.entries(departmentData).map(([department, data]: [string, any]) => {
-                const avgRating = (data.ratings.reduce((a: number, b: number) => a + b, 0) / data.ratings.length).toFixed(1);
+                const avgRatingNum = data.ratings.length > 0 
+                  ? (data.ratings.reduce((a: number, b: number) => a + b, 0) / data.ratings.length)
+                  : 0;
+                const avgRating = avgRatingNum.toFixed(1);
                 const criticalCount = data.ratings.filter((r: number) => r <= 2).length;
-                const criticalPercentage = ((criticalCount / data.totalFeedbacks) * 100).toFixed(1);
+                const criticalPercentage = data.totalFeedbacks > 0 
+                  ? ((criticalCount / data.totalFeedbacks) * 100).toFixed(1)
+                  : '0.0';
                 
                 // Top 8 problemas do departamento
                 const topProblems = Object.entries(data.problems)
@@ -5425,12 +5461,25 @@ export function ProblemsVisualizationOptions({
                             {/* Botão para ver detalhes gerais do departamento */}
                             <Button
                               onClick={() => {
+                                const totalProblems = data.examples.length;
+                                const totalRating = data.ratings.reduce((sum: number, r: number) => sum + r, 0);
+                                const keywordsArray = Object.keys(data.keywords);
+                                const suggestionsArray = Array.from(new Set((data.examples || []).flatMap((ex: any) => {
+                                  const s1 = ex?.suggestion ? String(ex.suggestion).trim() : '';
+                                  const s2 = ex?.suggestion_summary ? String(ex.suggestion_summary).trim() : '';
+                                  return [s1, s2].filter(Boolean);
+                                })));
+
                                 const departmentDetails = {
                                   name: department,
                                   totalFeedbacks: data.totalFeedbacks,
-                                  averageRating: parseFloat(avgRating),
+                                  totalProblems,
+                                  totalRating,
+                                  averageRating: totalProblems > 0 ? (totalRating / totalProblems) : 0,
                                   criticalCount,
                                   allExamples: data.examples,
+                                  keywordsArray,
+                                  suggestionsArray,
                                   problemDistribution: Object.entries(data.problems).map(([problem, count]) => ({ problem, count })),
                                   keywordDistribution: Object.entries(data.keywords).map(([keyword, count]) => ({ keyword, count }))
                                 };

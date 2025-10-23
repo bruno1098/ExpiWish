@@ -117,6 +117,11 @@ const MODERN_COLORS = {
       background: 'rgba(59, 130, 246, 0.8)',   // Azul para avaliações
       border: 'rgba(59, 130, 246, 1)',
       hover: 'rgba(59, 130, 246, 0.9)'
+    },
+    apartment: {
+      background: 'rgba(99, 102, 241, 0.8)',   // Indigo para apartamentos
+      border: 'rgba(99, 102, 241, 1)',
+      hover: 'rgba(99, 102, 241, 0.9)'
     }
   },
   borders: [
@@ -336,7 +341,7 @@ interface ModernChartProps {
   showValues?: boolean;
   maxItems?: number;
   isSentiment?: boolean;
-  categoryType?: 'department' | 'keyword' | 'language' | 'source' | 'rating' | 'problem';
+  categoryType?: 'department' | 'keyword' | 'language' | 'source' | 'rating' | 'problem' | 'apartment';
   // Linhas de feedback atuais para contextualizar tooltips
   contextRows?: any[];
 }
@@ -538,6 +543,7 @@ export function ModernChart({
         borderSkipped: false,
         hoverBackgroundColor: colors.hover,
         hoverBorderWidth: 3,
+        barThickness: type === 'horizontalBar' ? 22 : undefined,
       },
     ],
   };
@@ -616,6 +622,34 @@ export function ModernChart({
                   if (!items || !items.length) return [];
                   const idx = items[0].dataIndex ?? items[0].index;
                   const label = String(limitedData[idx]?.name || limitedData[idx]?.label || '');
+
+                  // Tooltips ricos para apartamentos
+                  if (categoryType === 'apartment' && Array.isArray(contextRows) && contextRows.length) {
+                    const aptLabelNormalized = label.replace(/^Apt\s+/i, '').trim();
+                    const found = contextRows.find((d: any) => {
+                      const dNorm = String(d.apartamento).replace(/^Apt\s+/i, '').trim();
+                      return dNorm === aptLabelNormalized || `Apt ${dNorm}` === label;
+                    });
+                    if (!found) return [];
+                    const problemTotal = typeof found.problemsTotal === 'number'
+                      ? found.problemsTotal
+                      : (Array.isArray(found.topProblems) ? found.topProblems.reduce((acc: number, p: any) => acc + (p?.count || 0), 0) : 0);
+                    const principal = Array.isArray(found.topProblems) && found.topProblems.length ? found.topProblems[0] : null;
+                    const lines: string[] = [
+                      `Hotel: ${found.mainHotel}`,
+                      `Problemas: ${problemTotal}`,
+                      `Média de estrelas: ${Number(found.averageRating).toFixed(1)}`,
+                      principal ? `Principal problema: ${principal.problem} (${principal.count})` : 'Principal problema: —',
+                    ];
+                    if (Array.isArray(found.topProblems) && found.topProblems.length > 1) {
+                      lines.push('Outros problemas:');
+                      found.topProblems.slice(1, 3).forEach((p: any) => {
+                        lines.push(`${p.problem} • ${p.count}`);
+                      });
+                    }
+                    return lines;
+                  }
+
                   // Apenas para gráficos de problema quando há contexto disponível
                   if (categoryType !== 'problem' || !contextRows || !Array.isArray(contextRows) || contextRows.length === 0) {
                     return [];
@@ -634,6 +668,7 @@ export function ModernChart({
             },
           },
         },
+        layout: { padding: { left: 12, right: 6, top: 6, bottom: 6 } },
         scales: {
           x: {
             ...baseOptions.scales.x,
