@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+// import removido: Accordion não é mais usado nesta página
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Dialog, 
@@ -120,12 +121,13 @@ interface HotelStat {
 interface ApartamentoDetail {
   apartamento: string;
   count: number;
-  averageRating: number; // Mudado para number
+  averageRating: number;
   sentiment: number;
   mainHotel: string;
   hotels: Map<string, number>;
   topProblems: Array<{problem: string; count: number}>;
   ratingDistribution: number[];
+  problemsTotal: number;
 }
 
 // Cores para gráficos
@@ -594,11 +596,25 @@ function AdminDashboardContent() {
         break;
 
       case 'apartamento':
-        const apartamentoLabel = data.name || data.label;
-        filteredFeedbacks = dataToUse.filter((feedback: any) => 
-          feedback.apartamento === apartamentoLabel
-        );
-        value = `Apartamento ${apartamentoLabel}`;
+        const apRaw = String(data.name || data.label || '').trim();
+        let apt = apRaw;
+        let hotelForApt = '';
+        // Suporta rótulo "Hotel – Apt 619" ou "Apt 619"
+        if (apRaw.includes(' - Apt ')) {
+          const [h, a] = apRaw.split(' - Apt ');
+          hotelForApt = h.trim();
+          apt = a.trim();
+        } else if (apRaw.startsWith('Apt ')) {
+          apt = apRaw.replace(/^Apt\s+/, '').trim();
+        }
+        filteredFeedbacks = dataToUse.filter((feedback: any) => {
+          const matchesApt = String(feedback.apartamento) === apt;
+          if (hotelForApt) {
+            return matchesApt && String(feedback.hotel) === hotelForApt;
+          }
+          return matchesApt;
+        });
+        value = hotelForApt ? `${hotelForApt} – Apt ${apt}` : `Apartamento ${apt}`;
         break;
 
       case 'keyword':
@@ -1205,6 +1221,146 @@ function AdminDashboardContent() {
       .sort((a, b) => b.value - a.value);
   };
 
+  // Novo: distribuição por par Hotel – Apartamento (feedbacks)
+  const processHotelApartamentoDistribution = () => {
+    const dataToUse = getCurrentData();
+    if (!dataToUse) return [];
+
+    const pairCounts: Record<string, number> = {};
+
+    (dataToUse || []).forEach((feedback: any) => {
+      const apt = feedback?.apartamento ? String(feedback.apartamento) : null;
+      const hotel = feedback?.hotel ? String(feedback.hotel) : null;
+      if (!apt) return;
+      const hotelLabel = hotel || 'Hotel não especificado';
+      const key = `${hotelLabel}||${apt}`;
+      pairCounts[key] = (pairCounts[key] || 0) + 1;
+    });
+
+    return Object.entries(pairCounts)
+      .map(([key, count]) => {
+        const [hotel, apt] = key.split('||');
+        return { label: `${hotel} - Apt ${apt}`, value: count };
+      })
+      .sort((a, b) => b.value - a.value);
+  };
+
+  // Novo: problemas válidos por par Hotel – Apartamento
+  const processApartamentoProblemsDistributionByHotel = () => {
+    const dataToUse = getCurrentData();
+    if (!dataToUse) return [];
+
+    const pairCounts: Record<string, number> = {};
+
+    (dataToUse || []).forEach((feedback: any) => {
+      const apt = feedback?.apartamento ? String(feedback.apartamento) : null;
+      const hotel = feedback?.hotel ? String(feedback.hotel) : null;
+      if (!apt) return;
+
+      let hasValidProblems = false;
+      if (Array.isArray(feedback?.problems)) {
+        hasValidProblems = feedback.problems.some((p: string) => isValidProblem(p));
+      } else if (typeof feedback?.problem === 'string') {
+        hasValidProblems = feedback.problem
+          .split(';')
+          .map((p: string) => p.trim())
+          .some((p: string) => isValidProblem(p));
+      }
+
+      if (hasValidProblems) {
+        const hotelLabel = hotel || 'Hotel não especificado';
+        const key = `${hotelLabel}||${apt}`;
+        pairCounts[key] = (pairCounts[key] || 0) + 1;
+      }
+    });
+
+    return Object.entries(pairCounts)
+      .map(([key, count]) => {
+        const [hotel, apt] = key.split('||');
+        return { label: `${hotel} - Apt ${apt}`, value: count };
+      })
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15);
+  };
+
+  // Novo: agrupamento por Hotel com lista de Apartamentos e contagem de feedbacks
+  const processHotelsWithApartmentsGrouped = (maxApartmentsPerHotel = 10) => {
+    const dataToUse = getCurrentData();
+    if (!dataToUse) return [];
+
+    const groups: Record<string, Record<string, number>> = {};
+
+    (dataToUse || []).forEach((feedback: any) => {
+      const apt = feedback?.apartamento ? String(feedback.apartamento) : null;
+      const hotel = feedback?.hotel ? String(feedback.hotel) : null;
+      if (!apt) return;
+      const hotelLabel = hotel || 'Hotel não especificado';
+      if (!groups[hotelLabel]) groups[hotelLabel] = {};
+      groups[hotelLabel][apt] = (groups[hotelLabel][apt] || 0) + 1;
+    });
+
+    const result = Object.entries(groups).map(([hotel, aptCounts]) => {
+      const apartamentos = Object.entries(aptCounts)
+        .map(([apt, count]) => ({
+          label: `Apt ${apt}`,
+          value: count
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, maxApartmentsPerHotel);
+
+    const total = Object.values(aptCounts).reduce((acc, n) => acc + n, 0);
+
+      return { hotel, total, apartamentos };
+    });
+
+    return result.sort((a, b) => b.total - a.total);
+  };
+
+  // Novo: agrupamento por Hotel com contagem de problemas válidos por apartamento
+  const processHotelsWithApartmentsProblemsGrouped = (maxApartmentsPerHotel = 10) => {
+    const dataToUse = getCurrentData();
+    if (!dataToUse) return [];
+
+    const groups: Record<string, Record<string, number>> = {};
+
+    (dataToUse || []).forEach((feedback: any) => {
+      const apt = feedback?.apartamento ? String(feedback.apartamento) : null;
+      const hotel = feedback?.hotel ? String(feedback.hotel) : null;
+      if (!apt) return;
+
+      let hasValidProblems = false;
+      if (Array.isArray(feedback?.problems)) {
+        hasValidProblems = feedback.problems.some((p: string) => isValidProblem(p));
+      } else if (typeof feedback?.problem === 'string') {
+        hasValidProblems = feedback.problem
+          .split(';')
+          .map((p: string) => p.trim())
+          .some((p: string) => isValidProblem(p));
+      }
+      if (!hasValidProblems) return;
+
+      const hotelLabel = hotel || 'Hotel não especificado';
+      if (!groups[hotelLabel]) groups[hotelLabel] = {};
+      groups[hotelLabel][apt] = (groups[hotelLabel][apt] || 0) + 1;
+    });
+
+    const result = Object.entries(groups).map(([hotel, aptCounts]) => {
+      const apartamentos = Object.entries(aptCounts)
+        .map(([apt, count]) => ({
+          label: `Apt ${apt}`,
+          value: count
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, maxApartmentsPerHotel);
+
+      const total = Object.values(aptCounts).reduce((acc, n) => acc + n, 0);
+
+      return { hotel, total, apartamentos };
+    });
+
+    return result.sort((a, b) => b.total - a.total);
+  };
+
   const processApartamentoDetailsData = () => {
     const dataToUse = getCurrentData();
     if (!dataToUse) return [];
@@ -1279,15 +1435,18 @@ function AdminDashboardContent() {
         .slice(0, 3)
         .map(([problem, count]) => ({ problem, count }));
 
+      const problemsTotal = Array.from(stat.problems.values()).reduce((acc, n) => acc + n, 0);
+
       return {
         apartamento,
         count: stat.count,
-        averageRating, // Agora retorna number diretamente
+        averageRating,
         sentiment,
         mainHotel,
         hotels: stat.hotels,
         topProblems,
-        ratingDistribution: stat.ratings
+        ratingDistribution: stat.ratings,
+        problemsTotal,
       } as ApartamentoDetail;
     }).sort((a, b) => b.count - a.count);
   };
@@ -3195,21 +3354,41 @@ function AdminDashboardContent() {
                       .map((dept: any, index: number) => {
                         const dataToUse = getCurrentData();
                         const totalFeedbacks = processSectorDistribution().find(s => s.label === dept.label)?.value || 0;
-                        const problemPercentage = totalFeedbacks > 0 ? ((dept.value / totalFeedbacks) * 100).toFixed(1) : '0';
+
+                        // Percentual de feedbacks COM pelo menos um problema (capado em 100%)
+                        const departmentFeedbacks = (dataToUse || []).filter((item: any) => {
+                          if (item.sector && typeof item.sector === 'string') {
+                            const sectors = item.sector.split(';').map((s: string) => s.trim());
+                            const normalizedSectors = sectors.map((s: string) => normalizeDepartmentName(s));
+                            return normalizedSectors.includes(dept.label);
+                          }
+                          return false;
+                        });
+
+                        const feedbacksWithProblemsCount = departmentFeedbacks.filter((item: any) => {
+                          if (item.problem && typeof item.problem === 'string') {
+                            const problems = Array.from<string>(
+                              new Set<string>(
+                                item.problem.split(';').map((p: string) => p.trim())
+                              )
+                            );
+                            return problems.some((p) => isValidProblem(p) && p.toLowerCase() !== 'vazio' && !p.startsWith('+'));
+                          }
+                          return false;
+                        }).length;
+
+                        const problemPercentage = totalFeedbacks > 0
+                          ? Math.min(100, ((feedbacksWithProblemsCount / totalFeedbacks) * 100)).toFixed(1)
+                          : '0';
                         
                         // Buscar principais problemas deste departamento
-                        const departmentProblems = (dataToUse || [])
-                          .filter((item: any) => {
-                            if (item.sector && typeof item.sector === 'string') {
-                              const sectors = item.sector.split(';').map((s: string) => s.trim());
-                              const normalizedSectors = sectors.map((s: string) => normalizeDepartmentName(s));
-                              return normalizedSectors.includes(dept.label);
-                            }
-                            return false;
-                          })
+                        const departmentProblems = departmentFeedbacks
                           .flatMap((item: any) => {
                             if (item.problem && typeof item.problem === 'string') {
-                              return item.problem.split(';').map((p: string) => p.trim()).filter((p: string) => p && p !== 'VAZIO' && p.toLowerCase() !== 'sem problemas');
+                              return (item.problem
+                                .split(';')
+                                .map((p: string) => p.trim()) as string[])
+                                .filter((p: string) => p && isValidProblem(p) && p.toLowerCase() !== 'vazio' && !p.startsWith('+'));
                             }
                             return [];
                           })
@@ -3374,86 +3553,40 @@ function AdminDashboardContent() {
 
           {/* Apartamentos */}
           <TabsContent value="apartamentos" className="space-y-4">
-            {/* Primeira linha - 2 gráficos lado a lado */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Distribuição por apartamento */}
-              <Card className="p-4">
-                <CardHeader>
-                  <CardTitle>Distribuição por Apartamentos</CardTitle>
-                  <CardDescription>
-                    Quantidade de feedbacks por apartamento
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[480px]">
-                    <ApartmentsChart 
-                      data={processApartamentoDistribution().slice(0, 15).map(item => ({ label: item.name, value: item.value }))}
-                      onClick={(item: any) => handleChartClick(item, 'apartamento')}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Problemas por Apartamento */}
-              <Card className="p-4">
-                <CardHeader>
-                  <CardTitle>Problemas por Apartamento</CardTitle>
-                  <CardDescription>
-                    Apartamentos com mais problemas identificados
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[480px]">
-                    <ModernChart 
-                      type="bar"
-                      data={processApartamentoProblemsDistribution().map(item => ({ 
-                        label: `Apt ${item.name}`, 
-                        value: item.value 
-                      }))}
-                      onClick={(item: any) => {
-                        const apartamento = item.label.replace('Apt ', '');
-                        handleChartClick({name: apartamento}, 'apartamento');
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-center mt-2 space-x-4 text-xs">
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-[#ef4444] rounded-full mr-1"></div>
-                      <span>Quantidade de Problemas</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Segunda linha - 1 gráfico grande */}
+            {/* Único card grande agrupando por hotel */}
             <div className="grid grid-cols-1 gap-4">
-              {/* Apartamentos por Hotel */}
               <Card className="p-4">
                 <CardHeader>
-                  <CardTitle>Apartamentos por Hotel</CardTitle>
+                  <CardTitle>Hotéis e Apartamentos</CardTitle>
                   <CardDescription>
-                    Quantidade de apartamentos únicos por hotel
+                    Agrupado por Hotel — apartamentos com mais problemas
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-[480px]">
-                    <ModernChart 
-                      type="bar"
-                      data={processApartamentosPorHotel().map(item => ({ 
-                        label: item.name, 
-                        value: item.value 
-                      }))}
-                      onClick={(item: any) => {
-                        handleChartClick({name: item.label}, 'hotel');
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-center mt-2 space-x-4 text-xs">
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-[#3b82f6] rounded-full mr-1"></div>
-                      <span>Quantidade de Apartamentos</span>
-                    </div>
+                  <div className="space-y-8">
+                    {processHotelsWithApartmentsProblemsGrouped().map(group => (
+                      <div key={group.hotel} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Hotel className="h-4 w-4 text-purple-500" />
+                            <span className="font-semibold">{group.hotel}</span>
+                          </div>
+                          <Badge variant="outline">{group.total} problemas</Badge>
+                        </div>
+                        <div className="h-[280px]">
+                          <ModernChart 
+                            type="horizontalBar"
+                            categoryType="apartment"
+                            data={group.apartamentos}
+                            contextRows={processApartamentoDetailsData()}
+                            onClick={(item: any) => {
+                              const aptLabel = String(item?.label || '').replace(/^Apt\s+/i, '');
+                              handleChartClick({ label: `${group.hotel} - Apt ${aptLabel}` }, 'apartamento');
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>

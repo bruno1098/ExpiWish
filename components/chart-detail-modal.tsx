@@ -56,7 +56,8 @@ const iconMap: Record<string, React.ReactNode> = {
   sentiment: <TrendingUp className="h-5 w-5" />,
   language: <Globe className="h-5 w-5" />,
   sector: <Building2 className="h-5 w-5" />,
-  apartamento: <Building2 className="h-5 w-5" />,
+  departamento: <Building2 className="h-5 w-5" />,
+  department: <Building2 className="h-5 w-5" />,
   general: <BarChart3 className="h-5 w-5" />,
 };
 
@@ -65,6 +66,7 @@ const titleMap: Record<string, string> = {
   problem: "Problema",
   problem_analysis: "Problema",
   sector: "Departamento",
+  department: "Departamento",
   source: "Fonte",
   language: "Idioma",
   rating: "Avaliação",
@@ -110,6 +112,19 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
   // Novo filtro: somente críticos (1-2⭐)
   const [onlyCritical, setOnlyCritical] = React.useState(false);
 
+  // Parse seguro de rating para evitar NaN e normalizar entradas como "4⭐", "4.0", etc.
+  const getSafeRating = (v: any): number => {
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      return Math.max(0, Math.min(5, v));
+    }
+    if (typeof v === 'string') {
+      const m = v.match(/[1-5](?:\.\d+)?/);
+      const n = m ? parseFloat(m[0]) : NaN;
+      return Number.isFinite(n) ? Math.max(0, Math.min(5, n)) : 0;
+    }
+    return 0;
+  };
+
   if (!selectedItem) return null;
 
   const { stats } = selectedItem;
@@ -121,9 +136,9 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
     : 0;
   const baseRowsForStats = (() => {
     if (selectedItem.type === 'rating' && selectedRatingValue) {
-      return recent.filter((f: any) => Number(f?.rating) === selectedRatingValue);
+      return recent.filter((f: any) => Math.round(getSafeRating(f?.rating)) === selectedRatingValue);
     }
-    if (selectedItem.type === 'sector') {
+    if (selectedItem.type === 'sector' || selectedItem.type === 'department') {
       const sel = String(selectedItem.value).trim().toLowerCase();
       return recent.filter((f: any) => {
         const raw = String(f?.sector || f?.department || f?.departamento || '').trim();
@@ -139,7 +154,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
     return recent;
   })();
   const filteredRowsForStats = onlyCritical 
-    ? baseRowsForStats.filter((f: any) => Number(f?.rating) <= 2)
+    ? baseRowsForStats.filter((f: any) => getSafeRating(f?.rating) <= 2)
     : baseRowsForStats;
 
   // Alias utilizado em gráficos/contexto para refletir o filtro aplicado
@@ -148,9 +163,9 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
   // Métricas recalculadas com base no conjunto filtrado
   const totalFeedbacks = filteredRowsForStats.length;
   const avgRating = totalFeedbacks
-    ? filteredRowsForStats.reduce((acc: number, f: any) => acc + Number(f?.rating ?? 0), 0) / totalFeedbacks
+    ? filteredRowsForStats.reduce((acc: number, f: any) => acc + getSafeRating(f?.rating), 0) / totalFeedbacks
     : 0;
-  const criticalCount = filteredRowsForStats.filter((f: any) => Number(f?.rating) <= 2).length;
+  const criticalCount = filteredRowsForStats.filter((f: any) => getSafeRating(f?.rating) <= 2).length;
   const criticalPct = totalFeedbacks > 0 ? (criticalCount / totalFeedbacks) * 100 : 0;
   const uniqueHotelsCount = new Set(filteredRowsForStats.map((f: any) => f?.hotel || f?.hotel_name || f?.hotelName).filter(Boolean)).size;
   const uniqueAuthorsCount = new Set(filteredRowsForStats.map((f: any) => f?.author || f?.user || f?.nome).filter(Boolean)).size;
@@ -158,14 +173,14 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
   const usersOrHotelsValue = selectedItem.type === "hotel" ? uniqueAuthorsCount : uniqueHotelsCount;
 
   const ratingDistribution = [1, 2, 3, 4, 5].reduce((acc: any, r) => {
-    acc[r] = filteredRowsForStats.filter((f: any) => Number(f?.rating) === r).length;
+    acc[r] = filteredRowsForStats.filter((f: any) => Math.round(getSafeRating(f?.rating)) === r).length;
     return acc;
   }, {} as Record<number, number>);
 
   const sentimentDistribution = {
-    positive: filteredRowsForStats.filter((f: any) => Number(f?.rating) >= 4).length,
-    neutral: filteredRowsForStats.filter((f: any) => Number(f?.rating) === 3).length,
-    negative: filteredRowsForStats.filter((f: any) => Number(f?.rating) <= 2).length,
+    positive: filteredRowsForStats.filter((f: any) => getSafeRating(f?.rating) >= 4).length,
+    neutral: filteredRowsForStats.filter((f: any) => Math.round(getSafeRating(f?.rating)) === 3).length,
+    negative: filteredRowsForStats.filter((f: any) => getSafeRating(f?.rating) <= 2).length,
   };
 
   // Percentual do total com fallback para totalBase
@@ -232,7 +247,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
       .replace(/[\u0300-\u036f]/g, '')
       .trim();
     const notVazio = (s: any) => normalize(s) !== 'vazio';
-    if (selectedItem.type === 'sector') {
+    if (selectedItem.type === 'sector' || selectedItem.type === 'department') {
       const dep = normalize(String(selectedItem.value || ''));
       return base
         .filter((k: any) => {
@@ -262,7 +277,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
       .replace(/[\u0300-\u036f]/g, '')
       .trim();
     // Quando for por departamento, contar apenas problemas associados ao departamento selecionado
-    if (selectedItem.type === 'sector') {
+    if (selectedItem.type === 'sector' || selectedItem.type === 'department') {
       const dep = normalize(String(selectedItem.value || ''));
       const m = new Map<string, number>();
       viewRows.forEach((f: any) => {
@@ -318,7 +333,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
   // Filtra o contexto para cálculos específicos (por problema, estrela ou departamento)
   const contextRows = (() => {
     if (selectedItem.type === 'rating' && ratingSelected) {
-      return recent.filter((f: any) => Number(f?.rating) === ratingSelected);
+      return recent.filter((f: any) => Math.round(getSafeRating(f?.rating)) === ratingSelected);
     }
     if (selectedItem.type === 'sector') {
       const sel = String(selectedItem.value).trim().toLowerCase();
@@ -383,7 +398,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
         const raw = String(f?.problem_detail || '').trim();
         if (!raw) return;
         const curr = map.get(raw) || { count: 0, sum: 0 };
-        map.set(raw, { count: curr.count + 1, sum: curr.sum + Number(f?.rating || 0) });
+        map.set(raw, { count: curr.count + 1, sum: curr.sum + getSafeRating(f?.rating) });
       }
     });
     return Array.from(map.entries())
@@ -592,11 +607,11 @@ const departmentsInContext = tallyFrom(viewRows, (f: any) => [f?.sector || f?.de
                   <div className="space-y-4">
                     <div className="text-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                       <div className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-                        {stats.averageRating.toFixed(1)}
+                        {avgRating.toFixed(1)}
                       </div>
                       <div className="text-2xl mb-2">
                         {Array.from({length: 5}, (_, i) => (
-                          <span key={i} className={i < Math.round(stats.averageRating) ? "text-yellow-500" : "text-slate-300"}>
+                          <span key={i} className={i < Math.round(avgRating) ? "text-yellow-500" : "text-slate-300"}>
                             ⭐
                           </span>
                         ))}

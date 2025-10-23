@@ -20,7 +20,7 @@ const BATCH_SIZE = 20; // Processar 20 por vez
  * 
  * Total: 191 problemas organizados por departamento
  */
-const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
+const PROBLEM_CONTEXT_DICT: Record<string, string[]> = { 
   // A&B (31 problemas) ⭐ ATUALIZADO: +12 problems da cliente
   "A&B - Atendimento demorado": ["lentidão no serviço de alimentação", "tempo de espera excessivo para refeições", "garçons lentos", "demora nos pedidos", "atendimento demorado no restaurante", "garçons demoram muito", "serviço lento no bar", "demora para servir", "espera longa",],
   "A&B - Atendimento insistente": ["abordagem excessiva da equipe", "falta de discrição no serviço"],
@@ -53,7 +53,8 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "A&B - Drinks insatisfatórios": ["bebidas ruins", "drinks de baixa qualidade", "coquetéis mal preparados"],
   "A&B - Atendimento pouco acolhedor": ["atendimento frio", "garçom pouco simpático", "falta de hospitalidade no restaurante"],
   "A&B - Utensílios em mau estado": ["talheres sujos", "pratos quebrados", "copos manchados", "utensílios mal conservados"],
-  "A&B - Reposição do mise en place": ["falta reposição de itens", "buffet vazio", "demora na reposição", "mise en place incompleto"],
+  "A&B - Mise en place incompleto": ["mesa sem montagem adequada", "guardanapos faltando", "talheres incompletos", "pratos e copos ausentes", "arrumação de mesa incompleta"],
+  "A&B - Reposição do mise en place": ["falta reposição de itens", "buffet vazio", "demora na reposição"],
   "Room Service - Demora na entrega dos pedidos": ["room service demorado", "pedido no quarto demorou", "entrega lenta no quarto"],
 
   // Corporativo (7 problemas)
@@ -74,13 +75,13 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
 
   // Governança (32 problemas) - APENAS limpeza, higiene e amenities ⭐ ATUALIZADO: +6 problems da cliente
   "Governança - Falta de limpeza": ["condições inadequadas de higiene", "ausência de arrumação"],
-  "Governança - Falta de produto": ["ausência de amenities", "falta de itens de higiene"],
   "Governança - Falta de limpeza no banheiro": ["banheiro sujo", "higienização inadequada do sanitário"],
   "Governança - Falta de limpeza no quarto": ["quarto mal arrumado", "higienização insuficiente"],
   "Governança - Roupa de cama suja": ["lençóis com manchas", "roupa de cama não trocada"],
   "Governança - Toalhas sujas": ["toalhas manchadas", "falta de troca de toalhas"],
   "Governança - Cheiro ruim": ["odor desagradável no quarto", "falta de ventilação"],
   "Governança - Poeira": ["acúmulo de poeira", "limpeza superficial"],
+  "Governança - Mofo": ["presença de fungos", "umidade excessiva causando mofo", "odor de mofo", "manchas de mofo"],
   
   "Governança - Falta de amenities": ["ausência de produtos de higiene", "amenities não repostos"],
   "Governança - Lençóis manchados": ["roupa de cama com sujeira", "lençóis não trocados"],
@@ -138,7 +139,6 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Manutenção - Vazamento": ["escape de água", "canos com vazamento"],
   "Manutenção - Janela com falha": ["janela não abre/fecha", "vidros quebrados"],
   "Manutenção - Banheiro com problemas": ["instalações sanitárias com defeito", "problemas hidráulicos"],
-  "Manutenção - Mofo": ["presença de fungos", "umidade excessiva causando mofo"],
   "Manutenção - Toalhas velhas": ["toalhas desgastadas", "tecidos em mau estado de conservação"],
   "Manutenção - Fechadura quebrada": ["porta não tranca", "sistema de fechamento com defeito"],
   "Manutenção - Iluminação ruim": ["lâmpadas queimadas", "luz insuficiente"],

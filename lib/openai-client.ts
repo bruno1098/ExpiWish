@@ -77,15 +77,20 @@ export async function analyzeWithGPT(
       const errorData = await response.json().catch(() => ({ error: 'Erro desconhecido na resposta' }));
       
       if (response.status === 429) {
-        throw new Error('exceeded your current quota');
+        throw Object.assign(new Error('exceeded your current quota'), { error_type: 'rate_limit', retry_after_ms: errorData.retry_after_ms });
       }
       
-      throw new Error(errorData.error || `Erro HTTP ${response.status}`);
+      throw Object.assign(new Error(errorData.error || `Erro HTTP ${response.status}`), { error_type: errorData.error || `http_${response.status}`, retry_after_ms: errorData.retry_after_ms });
     }
 
     const result = await response.json().catch(() => {
       throw new Error('Resposta inválida da API');
     });
+
+    // Propagar erros do servidor para o fluxo de retry
+    if (result && result.error) {
+      throw Object.assign(new Error(result.error), { error_type: result.error, retry_after_ms: result.retry_after_ms });
+    }
 
     // Validação robusta da resposta
     if (!result || typeof result !== 'object') {
@@ -163,26 +168,13 @@ export async function analyzeWithGPT(
       texto: texto.substring(0, 50) + '...'
     });
     
-    // Se é erro de validação de resposta e já tentou algumas vezes, retornar resultado padrão
-    if (retryCount >= 3 && (
-        error.message.includes('Resposta inválida') ||
-        error.message.includes('responseText não é string') ||
-        error.message.includes('formato inválido')
-      )) {
-      console.warn('Muitas tentativas com erro de formato, retornando resultado padrão');
-      return {
-        rating: 3,
-        keyword: 'Não identificado',
-        sector: 'Não identificado',
-        problem: '',
-        allProblems: []
-      };
-    }
+    // Sem fallback: continuar tentando com backoff, usando dica do servidor quando disponível
+    const retryAfter = typeof error.retry_after_ms === 'number'
+      ? error.retry_after_ms
+      : BASE_DELAY * Math.pow(1.5, retryCount) + Math.random() * 1000;
     
-    if (retryCount < MAX_RETRIES && !error.message.includes('API Key') && !error.message.includes('Limite')) {
-      const delayTime = BASE_DELAY * Math.pow(1.5, retryCount) + Math.random() * 1000;
-      
-      await delay(delayTime);
+    if (retryCount < MAX_RETRIES && !error.message.includes('API Key')) {
+      await delay(retryAfter);
       return analyzeWithGPT(texto, useFineTuned, retryCount + 1);
     }
     

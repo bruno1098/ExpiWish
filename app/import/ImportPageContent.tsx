@@ -961,25 +961,30 @@ function ImportPageContent() {
       chunks.push(data.slice(i, i + chunkSize));
     }
 
-    // Função para retry com backoff exponencial
-    const retryWithBackoff = async (fn: () => Promise<any>, maxRetries = 3, baseDelay = 1000) => {
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Função para retry contínuo com backoff exponencial e respeitando dicas do servidor
+    const retryWithBackoff = async (fn: () => Promise<any>, baseDelay = 1000) => {
+      let attempt = 0;
+      while (true) {
         try {
           return await fn();
         } catch (error: any) {
-          if (attempt === maxRetries) throw error;
-
-          // Verificar se foi cancelado
-          if (error.message?.includes('cancelada') || error.name === 'AbortError') {
+          // Cancelamento explícito
+          if (isCancelled || abortControllerRef.current?.signal.aborted) {
             throw error;
           }
 
           // Incrementar contador de retry
           setRetryCount(prev => prev + 1);
 
-          const delayTime = baseDelay * Math.pow(2, attempt - 1);
-          setCurrentStep(`Erro na tentativa ${attempt}. Tentando novamente em ${delayTime / 1000}s...`);
-          await delay(delayTime);
+          const retryAfter = typeof error.retry_after_ms === 'number'
+            ? error.retry_after_ms
+            : baseDelay * Math.pow(2, attempt);
+
+          const type = error.error_type || 'temporario';
+          setCurrentStep(`Erro (${type}). Aguardando ${Math.ceil(retryAfter/1000)}s e tentando novamente...`);
+          await delay(retryAfter);
+          attempt++;
+          continue;
         }
       }
     };
@@ -1024,7 +1029,7 @@ function ImportPageContent() {
 
               // Tratar erros específicos de taxonomia
               if (errorData.error === 'embeddings_not_generated') {
-                throw new Error('EMBEDDINGS_NOT_GENERATED');
+                throw Object.assign(new Error('EMBEDDINGS_NOT_GENERATED'), { error_type: 'embeddings_not_generated' });
               }
 
               if (errorData.error === 'taxonomy_changed') {
@@ -1032,8 +1037,11 @@ function ImportPageContent() {
                 throw new Error(`TAXONOMY_CHANGED:${JSON.stringify(errorData)}`);
               }
 
+              const errorType = errorData.error || `http_${response.status}`;
+              const retryAfter = typeof errorData.retry_after_ms === 'number' ? errorData.retry_after_ms : undefined;
+
               setErrorCount(prev => prev + 1);
-              throw new Error(`Erro na API: ${response.status}`);
+              throw Object.assign(new Error(`Erro na API: ${response.status}`), { error_type: errorType, retry_after_ms: retryAfter });
             }
 
             const result = await response.json();
@@ -1041,7 +1049,7 @@ function ImportPageContent() {
             if (result.error) {
               // Tratar erros específicos de taxonomia
               if (result.error === 'embeddings_not_generated') {
-                throw new Error('EMBEDDINGS_NOT_GENERATED');
+                throw Object.assign(new Error('EMBEDDINGS_NOT_GENERATED'), { error_type: 'embeddings_not_generated' });
               }
 
               if (result.error === 'taxonomy_changed') {
@@ -1049,7 +1057,7 @@ function ImportPageContent() {
                 throw new Error(`TAXONOMY_CHANGED:${JSON.stringify(result)}`);
               }
 
-              throw new Error(result.error);
+              throw Object.assign(new Error(result.error), { error_type: result.error, retry_after_ms: result.retry_after_ms });
             }
 
             // NOVA: Processar resposta através do adaptador de compatibilidade
@@ -1627,33 +1635,33 @@ function ImportPageContent() {
 
         setCurrentStep("Analisando feedbacks com IA...");
 
-        // Função helper para fazer retry com backoff exponencial
-        const retryWithBackoff = async (fn: Function, maxRetries: number = performanceProfile.MAX_RETRIES): Promise<any> => {
-          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // Função helper para retries contínuos, usando dicas do servidor quando disponíveis
+        const retryWithBackoff = async (fn: Function): Promise<any> => {
+          let attempt = 0;
+          while (true) {
             try {
               const result = await fn();
-              if (attempt > 1) {
-                setRetryCount(prev => prev - 1);
+              if (attempt > 0) {
+                setRetryCount(prev => Math.max(0, prev - 1));
               }
               return result;
             } catch (error: any) {
-              const isLastAttempt = attempt === maxRetries;
-
-              if (attempt === 1) {
-                setRetryCount(prev => prev + 1);
-              }
-
-              if (isLastAttempt || !error.message.includes('HTTP error! status: 5')) {
-                if (isLastAttempt) {
-                  setErrorCount(prev => prev + 1);
-                  setRetryCount(prev => Math.max(0, prev - 1));
-                }
+              // Respeitar cancelamento
+              if (isCancelled || abortControllerRef.current?.signal.aborted) {
                 throw error;
               }
 
-              const delayTime = Math.pow(performanceProfile.RETRY_BACKOFF_MULTIPLIER, attempt - 1) * performanceProfile.RETRY_BASE_DELAY;
-              setCurrentStep(`Resolvendo problemas temporários... (tentativa ${attempt + 1}/${maxRetries})`);
-              await new Promise(resolve => setTimeout(resolve, delayTime));
+              setRetryCount(prev => prev + 1);
+
+              const retryAfter = typeof error.retry_after_ms === 'number'
+                ? error.retry_after_ms
+                : Math.pow(performanceProfile.RETRY_BACKOFF_MULTIPLIER, attempt) * performanceProfile.RETRY_BASE_DELAY;
+
+              const type = error.error_type || 'temporario';
+              setCurrentStep(`Erro (${type}). Aguardando ${Math.ceil(retryAfter/1000)}s e tentando novamente...`);
+              await new Promise(resolve => setTimeout(resolve, retryAfter));
+              attempt++;
+              continue;
             }
           }
         };
@@ -1708,13 +1716,16 @@ function ImportPageContent() {
                   });
 
                   if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errData = await response.json().catch(() => ({}));
+                    const errType = errData.error || `http_${response.status}`;
+                    const retryMs = typeof errData.retry_after_ms === 'number' ? errData.retry_after_ms : undefined;
+                    throw Object.assign(new Error(`HTTP error! status: ${response.status}`), { error_type: errType, retry_after_ms: retryMs });
                   }
 
                   const result = await response.json();
 
                   if (result.error) {
-                    throw new Error(result.error);
+                    throw Object.assign(new Error(result.error), { error_type: result.error, retry_after_ms: result.retry_after_ms });
                   }
 
                   return result;

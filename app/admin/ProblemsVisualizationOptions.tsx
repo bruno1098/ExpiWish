@@ -142,7 +142,7 @@ export function AdminProblemsVisualizationOptions({ filteredData, setSelectedIte
   };
 
   const setSelectedItemWithTopHotels = (item: any) => {
-    const feedbacks = item?.feedbacks ?? (Array.isArray(item?.data) ? item.data : filteredData);
+    const feedbacks = item?.stats?.recentFeedbacks ?? item?.feedbacks ?? (Array.isArray(item?.data) ? item.data : filteredData);
     const recentFeedbacks = feedbacks || [];
     const topHotels = item?.stats?.topHotels ?? getTopHotelsForItem(recentFeedbacks);
     const totalBase = (filteredData || []).length;

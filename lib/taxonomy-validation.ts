@@ -84,7 +84,7 @@ const FULL_KEYWORD_DEPARTMENT_MAP: Record<string, string> = {
   
   // ========== EG (Experiência do Hóspede) ==========
   "EG - Abordagem": "EG",
-};
+}; 
 
 // Exporta apenas as keywords presentes no semantic-enrichment
 export const KEYWORD_DEPARTMENT_MAP: Record<string, string> = Object.fromEntries(
