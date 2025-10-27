@@ -33,7 +33,8 @@ import {
   AlertTriangle,
   Tag, 
   Globe, 
-  BarChart3 
+  BarChart3,
+  Hotel 
 } from "lucide-react";
 import { formatDateBR, filterValidFeedbacks } from "@/lib/utils";
 import { ProblemsVisualizationOptions } from './ProblemsVisualizationOptions';
@@ -414,7 +415,7 @@ function DashboardContent() {
             .map((p: string) => p.trim().toLowerCase())
             .includes(value.trim().toLowerCase());
         case 'source':
-          return (feedback.source || '').trim().toLowerCase() === value.trim().toLowerCase();
+          return normalizeSourceLabel(feedback.source) === normalizeSourceLabel(value);
         case 'language':
           return (feedback.language || '').trim().toLowerCase() === value.trim().toLowerCase();
         case 'sentiment':
@@ -458,7 +459,7 @@ function DashboardContent() {
   // Função para lidar com cliques nos gráficos
   const handleChartClick = (data: any, type: string) => {
     
-    const value = data.name || data.label;
+    let value = data.name || data.label;
     let filteredFeedbacks: any[] = [];
 
     // Implementação específica para cada tipo, igual ao admin
@@ -492,9 +493,9 @@ function DashboardContent() {
 
       case 'source':
         const sourceLabel = data.label || data.name;
-        
+        value = normalizeSourceLabel(sourceLabel);
         filteredFeedbacks = filteredData.filter((feedback: any) => 
-          feedback.source === sourceLabel
+          normalizeSourceLabel(feedback.source) === value
         );
         break;
 
@@ -546,6 +547,29 @@ function DashboardContent() {
         );
         break;
 
+      case 'apartamento':
+        {
+          const apRaw = String((data.name || data.label || '')).trim();
+          let apt = apRaw;
+          let hotelForApt = '';
+          if (apRaw.includes(' - Apt ')) {
+            const [h, a] = apRaw.split(' - Apt ');
+            hotelForApt = h.trim();
+            apt = a.trim();
+          } else if (apRaw.startsWith('Apt ') || apRaw.startsWith('Apto ')) {
+            apt = apRaw.replace(/^Apt[o]?\s+/, '').trim();
+          }
+          filteredFeedbacks = filteredData.filter((feedback: any) => {
+            const matchesApt = String(feedback.apartamento) === apt;
+            if (hotelForApt) {
+              return matchesApt && String(feedback.hotel) === hotelForApt;
+            }
+            return matchesApt;
+          });
+          value = `Apt ${apt}`;
+        }
+        break;
+
       default:
         
         return;
@@ -565,6 +589,7 @@ function DashboardContent() {
         case 'sentiment': return `Sentimento: ${value}`;
         case 'keyword': return `Palavra-chave: ${value}`;
         case 'sector': return `Departamento: ${value}`;
+        case 'apartamento': return `Apartamento: ${value}`;
         default: return `${type}: ${value}`;
       }
     };
@@ -750,17 +775,50 @@ function DashboardContent() {
       .sort((a, b) => b.value - a.value);
   };
 
+  // Normalização de fontes (compatível com ModernChart)
+  const normalizeSourceLabel = (raw?: string): string => {
+    const s = String(raw || '').toLowerCase().trim();
+    if (!s || s === 'não especificado' || s === 'nao especificado' || s === 'desconhecido') return 'Outros';
+    const base = s.replace('.com', '');
+    if (base.includes('google')) return 'Google';
+    if (base.includes('booking')) return 'Booking';
+    if (base.includes('trustyou') || base.includes('trust you')) return 'TrustYou';
+    if (base.includes('tripadvisor') || base.includes('trip advisor')) return 'TripAdvisor';
+    if (base.includes('expedia') || base.includes('hotels')) return 'Expedia';
+    if (base.includes('airbnb')) return 'Airbnb';
+    if (base.includes('facebook')) return 'Facebook';
+    if (base.includes('instagram')) return 'Instagram';
+    if (base.includes('site') || base.includes('website') || base.includes('web')) return 'Site';
+    return 'Outros';
+  };
+
   const processSourceDistribution = (data: any[]) => {
     const sourceCounts: Record<string, number> = {};
     
     data.forEach(feedback => {
-      const source = feedback.source || 'Não especificado';
+      const source = normalizeSourceLabel(feedback.source);
       sourceCounts[source] = (sourceCounts[source] || 0) + 1;
     });
     
-    return Object.entries(sourceCounts)
+    // Ordenar e limitar Top N, agregando o restante em "Outros"
+    const entries = Object.entries(sourceCounts)
       .map(([source, count]) => ({ label: source, value: count }))
       .sort((a, b) => b.value - a.value);
+
+    const MAX_ITEMS = 8;
+    const othersEntry = entries.find(e => e.label === 'Outros');
+    const nonOthers = entries.filter(e => e.label !== 'Outros');
+
+    const top = nonOthers.slice(0, MAX_ITEMS);
+    const remaining = nonOthers.slice(MAX_ITEMS);
+    const othersTotal = (othersEntry?.value || 0) + remaining.reduce((sum, e) => sum + e.value, 0);
+
+    const result = [...top];
+    if (othersTotal > 0) {
+      result.push({ label: 'Outros', value: othersTotal });
+    }
+
+    return result;
   };
 
   const processLanguageDistribution = (data: any[]) => {
@@ -1102,6 +1160,132 @@ function DashboardContent() {
         name: hotel
       }))
       .sort((a, b) => b.value - a.value);
+  };
+
+  const processHotelsWithApartmentsProblemsGrouped = (maxApartmentsPerHotel = 10) => {
+    const groups: Record<string, Record<string, number>> = {};
+
+    (filteredData || []).forEach((feedback: any) => {
+      const apt = feedback?.apartamento ? String(feedback.apartamento) : null;
+      const hotel = feedback?.hotel ? String(feedback.hotel) : null;
+      if (!apt) return;
+
+      let hasValidProblems = false;
+      if (Array.isArray(feedback?.problems)) {
+        hasValidProblems = feedback.problems.some((p: string) => isValidProblem(p));
+      } else if (typeof feedback?.problem === 'string') {
+        hasValidProblems = feedback.problem
+          .split(';')
+          .map((p: string) => p.trim())
+          .some((p: string) => isValidProblem(p));
+      }
+      if (!hasValidProblems) return;
+
+      const hotelLabel = hotel || 'Hotel não especificado';
+      if (!groups[hotelLabel]) groups[hotelLabel] = {};
+      groups[hotelLabel][apt] = (groups[hotelLabel][apt] || 0) + 1;
+    });
+
+    const result = Object.entries(groups).map(([hotel, aptCounts]) => {
+      const apartamentos = Object.entries(aptCounts)
+        .map(([apt, count]) => ({
+          label: `Apt ${apt}`,
+          value: count
+        }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, maxApartmentsPerHotel);
+
+      const total = Object.values(aptCounts).reduce((acc, n) => acc + n, 0);
+
+      return { hotel, total, apartamentos };
+    });
+
+    return result.sort((a, b) => b.total - a.total);
+  };
+
+  const processApartamentoDetailsData = () => {
+    const apartamentoMap = new Map<string, {
+      count: number;
+      totalRating: number;
+      positiveCount: number;
+      problems: Map<string, number>;
+      hotels: Map<string, number>;
+      ratings: number[];
+    }>();
+
+    (filteredData || []).forEach((feedback: any) => {
+      if (!feedback.apartamento) return;
+      const apt = String(feedback.apartamento);
+
+      if (!apartamentoMap.has(apt)) {
+        apartamentoMap.set(apt, {
+          count: 0,
+          totalRating: 0,
+          positiveCount: 0,
+          problems: new Map(),
+          hotels: new Map(),
+          ratings: [0, 0, 0, 0, 0]
+        });
+      }
+
+      const stat = apartamentoMap.get(apt)!;
+      stat.count++;
+
+      if (feedback.rating) {
+        stat.totalRating += feedback.rating;
+        if (feedback.rating >= 1 && feedback.rating <= 5) {
+          stat.ratings[Math.floor(feedback.rating) - 1]++;
+        }
+      }
+
+      if (feedback.sentiment === 'positive') {
+        stat.positiveCount++;
+      }
+
+      if (Array.isArray(feedback?.problems)) {
+        feedback.problems.forEach((problem: string) => {
+          if (isValidProblem(problem)) {
+            stat.problems.set(problem, (stat.problems.get(problem) || 0) + 1);
+          }
+        });
+      } else if (typeof feedback?.problem === 'string') {
+        feedback.problem.split(';').map((p: string) => p.trim()).forEach((p: string) => {
+          if (isValidProblem(p)) {
+            stat.problems.set(p, (stat.problems.get(p) || 0) + 1);
+          }
+        });
+      }
+
+      const hotelName = feedback?.hotel ? String(feedback.hotel) : 'Hotel não especificado';
+      stat.hotels.set(hotelName, (stat.hotels.get(hotelName) || 0) + 1);
+    });
+
+    return Array.from(apartamentoMap.entries()).map(([apartamento, stat]) => {
+      const averageRating = stat.count > 0 ? (stat.totalRating / stat.count) : 0;
+      const sentiment = stat.count > 0 ? Math.round((stat.positiveCount / stat.count) * 100) : 0;
+
+      const topProblems = Array.from(stat.problems.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([problem, count]) => ({ problem, count }));
+
+      const mainHotel = Array.from(stat.hotels.entries())
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Hotel não especificado';
+
+      const problemsTotal = Array.from(stat.problems.values()).reduce((acc, n) => acc + n, 0);
+
+      return {
+        apartamento,
+        count: stat.count,
+        averageRating,
+        sentiment,
+        mainHotel,
+        hotels: stat.hotels,
+        topProblems,
+        ratingDistribution: stat.ratings,
+        problemsTotal
+      };
+    }).sort((a, b) => b.count - a.count);
   };
 
   // Componente para renderizar gráficos no modal
@@ -1717,7 +1901,7 @@ function DashboardContent() {
 
         {/* Departamentos */}
         <TabsContent value="departments" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             {/* Ranking de Problemas por Departamento */}
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
@@ -1780,7 +1964,7 @@ function DashboardContent() {
                     <th className="py-2 px-4 bg-muted border-b text-left">Departamento</th>
                     <th className="py-2 px-4 bg-muted border-b text-center">Total de Problemas</th>
                     <th className="py-2 px-4 bg-muted border-b text-center">Total de Feedbacks</th>
-                    <th className="py-2 px-4 bg-muted border-b text-center">% de Problemas</th>
+
                     <th className="py-2 px-4 bg-muted border-b text-center">Principais Problemas</th>
                     <th className="py-2 px-4 bg-muted border-b text-center">Ações</th>
                   </tr>
@@ -1796,28 +1980,54 @@ function DashboardContent() {
                         }
                         return false;
                       }).length;
-                      
-                      const problemPercentage = departmentFeedbacks > 0 ? ((department.value / departmentFeedbacks) * 100).toFixed(1) : '0';
-                      
-                      // Buscar principais problemas deste departamento
+
+                      // Buscar principais problemas deste departamento (associando problema ao setor correto)
                       const departmentProblems = filteredData
-                        .filter((item: any) => {
-                          if (item.sector && typeof item.sector === 'string') {
-                            return item.sector.split(';').map((s: string) => s.trim()).includes(department.label);
-                          }
-                          return false;
-                        })
                         .flatMap((item: any) => {
-                          if (item.problem && typeof item.problem === 'string') {
-                            return item.problem.split(';').map((p: string) => p.trim()).filter((p: string) => p && p !== 'VAZIO' && p.toLowerCase() !== 'sem problemas');
+                          const normalize = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                          const deptNorm = normalize(department.label);
+
+                          // Preferir dados estruturados quando disponíveis
+                          if (Array.isArray(item.allProblems)) {
+                            return item.allProblems
+                              .filter((p: any) => normalize(p.sector || '') === deptNorm)
+                              .map((p: any) => String(p.problem || '').trim())
+                              .filter((p: string) => p && p.toLowerCase() !== 'vazio' && p.toLowerCase() !== 'sem problemas' && !p.startsWith('+'));
                           }
+
+                          // Fallback para dados antigos concatenados
+                          if (item.problem && typeof item.problem === 'string' && item.sector && typeof item.sector === 'string') {
+                            const sectors = item.sector.split(';').map((s: string) => s.trim()).filter(Boolean);
+                            const sectorsNorm = sectors.map(normalize);
+                            const belongs = sectorsNorm.includes(deptNorm);
+                            if (!belongs) return [];
+
+                            return item.problem
+                              .split(';')
+                              .map((p: string) => p.trim())
+                              .filter((p: string) => p && p.toLowerCase() !== 'vazio' && p.toLowerCase() !== 'sem problemas' && !p.startsWith('+'))
+                              .map((p: string) => {
+                                const [maybeSector, rest] = p.split(' - ');
+                                if (rest) {
+                                  // Só manter se o prefixo do problema bate com o departamento
+                                  return normalize(maybeSector) === deptNorm ? rest.trim() : '';
+                                }
+                                // Sem prefixo; manter apenas se o feedback tiver um único setor (evitar ambiguidade)
+                                if (sectorsNorm.length === 1) return p;
+                                return '';
+                              })
+                              .filter(Boolean);
+                          }
+
                           return [];
                         })
                         .reduce((acc: Record<string, number>, problem: string) => {
+                          if (!problem) return acc;
                           acc[problem] = (acc[problem] || 0) + 1;
                           return acc;
                         }, {} as Record<string, number>);
                       
+                      const totalProblems = (Object.values(departmentProblems) as number[]).reduce((sum, n) => sum + n, 0);
                       const topProblems = Object.entries(departmentProblems)
                         .sort((a, b) => (b[1] as number) - (a[1] as number))
                         .slice(0, 2)
@@ -1827,12 +2037,12 @@ function DashboardContent() {
                         <tr key={department.label} className="hover:bg-muted/50">
                           <td className="py-2 px-4 border-b font-medium">{department.label}</td>
                           <td className="py-2 px-4 border-b text-center">
-                            <Badge variant="destructive">{department.value}</Badge>
+                            <Badge variant="destructive">{totalProblems}</Badge>
                           </td>
                           <td className="py-2 px-4 border-b text-center">
                             <Badge variant="secondary">{departmentFeedbacks}</Badge>
                           </td>
-                          <td className="py-2 px-4 border-b text-center">{problemPercentage}%</td>
+
                           <td className="py-2 px-4 border-b text-sm">
                             {topProblems.length > 0 ? topProblems.join(', ') : 'Nenhum problema identificado'}
                           </td>
@@ -1856,7 +2066,7 @@ function DashboardContent() {
 
         {/* Palavras-chave */}
         <TabsContent value="keywords" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Palavras-chave Mais Frequentes */}
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
@@ -1912,7 +2122,7 @@ function DashboardContent() {
 
         {/* Idiomas */}
         <TabsContent value="languages" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Distribuição por Idioma */}
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
@@ -1989,7 +2199,7 @@ function DashboardContent() {
 
         {/* Fontes dos Comentários */}
         <TabsContent value="sources" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             {/* Volume de Feedbacks por Fonte */}
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
               <div className="flex justify-between items-center mb-4">
@@ -2007,225 +2217,167 @@ function DashboardContent() {
                   Ver Detalhes
                 </Button>
               </div>
-              <div className="h-[480px]">
+              <div className="h-[480px] overflow-visible">
                 <SourcesChart 
                   data={processSourceDistribution(filteredData)}
                   onClick={(item: any, index: number) => {
                     handleChartClick(item, 'source');
                   }}
                   categoryType="source"
+                  contextRows={filteredData}
                 />
               </div>
             </Card>
 
-            {/* Avaliação Média por Fonte */}
+            {/* Distribuição de Sentimentos por Fonte */}
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Avaliação Média por Fonte</h3>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleViewChart(
-                    'source',
-                    'Avaliação Média por Fonte',
-                    processSourceDistribution(filteredData).map((source: any) => {
-                      const feedbacksDaFonte = filteredData.filter((f: any) => f.source === source.label);
-                      const avgRating = feedbacksDaFonte.length > 0 
-                        ? feedbacksDaFonte.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedbacksDaFonte.length 
-                        : 0;
-                      return { label: source.label, value: avgRating };
-                    }),
-                    'bar'
-                  )}
-                >
-                  Ver Detalhes
-                </Button>
-              </div>
-              <div className="h-[480px]">
-                <ModernChart 
-                  type="bar"
-                  data={processSourceDistribution(filteredData).map((source: any) => {
-                    const feedbacksDaFonte = filteredData.filter((f: any) => f.source === source.label);
-                    const avgRating = feedbacksDaFonte.length > 0 
-                      ? feedbacksDaFonte.reduce((sum: number, f: any) => sum + (f.rating || 0), 0) / feedbacksDaFonte.length 
-                      : 0;
-                    return { label: source.label, value: parseFloat(avgRating.toFixed(1)) };
-                  })}
-                  onClick={(item: any, index: number) => {
-                    handleChartClick(item, 'source');
-                  }}
-                  categoryType="source"
-                />
-              </div>
-            </Card>
-          </div>
-
-          {/* Distribuição de Sentimentos por Fonte */}
-          <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
             <h3 className="text-lg font-semibold mb-4">Distribuição de Sentimentos por Fonte</h3>
-            <div className="h-[480px]">
+            <div className="h-[480px] overflow-visible">
               <ModernChart 
                 type="bar"
-                data={processSourceDistribution(filteredData).map((source: any) => {
-                  const feedbacksDaFonte = filteredData.filter((f: any) => f.source === source.label);
-                  const positivos = feedbacksDaFonte.filter((f: any) => f.sentiment === 'positive').length;
-                  const negativos = feedbacksDaFonte.filter((f: any) => f.sentiment === 'negative').length;
-                  const neutros = feedbacksDaFonte.filter((f: any) => f.sentiment === 'neutral').length;
-                  const total = feedbacksDaFonte.length;
-                  const sentimentScore = total > 0 ? ((positivos - negativos) / total * 100) : 0;
-                  return { label: source.label, value: parseFloat(sentimentScore.toFixed(1)) };
-                })}
+                data={processSourceDistribution(filteredData)}
                 onClick={(item: any, index: number) => {
                   handleChartClick(item, 'source');
                 }}
+                isSentiment={true}
                 categoryType="source"
+                contextRows={filteredData}
+                height={480}
               />
             </div>
           </Card>
+          </div>
         </TabsContent>
 
         {/* Apartamentos */}
         <TabsContent value="apartamentos" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-            {/* Distribuição por apartamento */}
+          <div className="grid grid-cols-1 gap-4">
             <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Distribuição por Apartamentos</h3>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleViewChart(
-                    'apartamento',
-                    'Distribuição por Apartamentos',
-                    processApartamentoDistribution().slice(0, 15),
-                    'bar'
-                  )}
-                >
-                  Ver Detalhes
-                </Button>
-              </div>
-              <div className="h-[480px]">
-                <ApartmentsChart 
-                  data={processApartamentoDistribution().slice(0, 15)}
-                  onClick={(item: any, index: number) => {
-                    handleChartClick(item, 'apartamento');
-                  }}
-                />
-              </div>
-            </Card>
-
-            {/* Problemas por Apartamento */}
-            <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Problemas por Apartamento</h3>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleViewChart(
-                    'apartamento',
-                    'Problemas por Apartamento',
-                    processApartamentoProblemsDistribution(),
-                    'bar'
-                  )}
-                >
-                  Ver Detalhes
-                </Button>
-              </div>
-              <div className="h-[480px]">
-                <ModernChart 
-                  type="bar"
-                  data={processApartamentoProblemsDistribution()}
-                  onClick={(item: any, index: number) => {
-                    handleChartClick({name: item.name}, 'apartamento');
-                  }}
-                />
-              </div>
-              <div className="flex justify-center mt-2 space-x-4 text-xs">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-[#EF4444] rounded-full mr-1"></div>
-                  <span>Quantidade de Problemas por Apartamento</span>
+              <CardHeader>
+                <CardTitle>Hotéis e Apartamentos</CardTitle>
+                <CardDescription>
+                  Agrupado por Hotel — apartamentos com mais problemas
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-8">
+                  {processHotelsWithApartmentsProblemsGrouped().map(group => (
+                    <div key={group.hotel} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Hotel className="h-4 w-4 text-purple-500" />
+                          <span className="font-semibold">{group.hotel}</span>
+                        </div>
+                        <Badge variant="outline">{group.total} problemas</Badge>
+                      </div>
+                      <div className="h-[280px]">
+                        <ModernChart 
+                          type="horizontalBar"
+                          categoryType="apartment"
+                          data={group.apartamentos}
+                          contextRows={processApartamentoDetailsData()}
+                          onClick={(item: any) => {
+                            const aptLabel = String(item?.label || '').replace(/^Apt\s+/i, '');
+                            handleChartClick({ label: `Apt ${aptLabel}` }, 'apartamento');
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              </CardContent>
             </Card>
           </div>
 
           {/* Tabela detalhada de apartamentos */}
           <Card className="p-4 hover:shadow-md transition-shadow border-2 hover:border-blue-200 dark:hover:border-blue-800">
-            <h3 className="text-lg font-semibold mb-4">Análise Detalhada por Apartamento</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th className="py-2 px-3 bg-muted border-b text-left">Apartamento</th>
-                    <th className="py-2 px-3 bg-muted border-b text-center">Feedbacks</th>
-                    <th className="py-2 px-3 bg-muted border-b text-center">Avaliação</th>
-                    <th className="py-2 px-3 bg-muted border-b text-center">Sentimento</th>
-                    <th className="py-2 px-3 bg-muted border-b text-left">Problemas Principais</th>
-                    <th className="py-2 px-3 bg-muted border-b text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {processApartamentoDetails().slice(0, 20).map((ap, index) => (
-                    <tr key={index} className={index % 2 === 0 ? "bg-muted/20" : ""}>
-                      <td className="py-2 px-3 border-b font-medium">
-                        <div className="flex items-center">
-                          <Building2 className="h-4 w-4 text-blue-500 mr-2" />
-                          <span className="font-semibold text-lg">{ap.apartamento}</span>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 border-b text-center">
-                        <div className="flex items-center justify-center">
-                          <MessageSquare className="h-4 w-4 text-blue-500 mr-1" />
-                          <span className="font-bold text-lg">{ap.count.toLocaleString()}</span>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 border-b text-center">
-                        <div className="flex items-center justify-center">
-                          <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                          <span className={
-                            ap.averageRating >= 4 ? 'text-green-600 font-bold' : 
-                            ap.averageRating >= 3 ? 'text-yellow-600 font-bold' : 
-                            'text-red-600 font-bold'
-                          }>
-                            {ap.averageRating.toFixed(1)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 border-b text-center">
-                        <div className="flex justify-center">
-                          <Badge 
-                            className={
-                              ap.sentiment >= 70 ? "bg-green-500 text-white hover:bg-green-600" : 
-                              ap.sentiment >= 50 ? "bg-yellow-500 text-white hover:bg-yellow-600" : 
-                              "bg-red-500 text-white hover:bg-red-600"
-                            }
-                          >
-                            {ap.sentiment.toFixed(1)}%
-                          </Badge>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 border-b">
-                        <div className="flex flex-wrap gap-1">
-                          {ap.topProblems.map((problem, idx) => (
-                            <Badge key={idx} variant="outline" className={idx === 0 ? "bg-red-50" : idx === 1 ? "bg-yellow-50" : "bg-blue-50"}>
-                              {problem.problem} ({problem.count})
-                            </Badge>
-                          ))}
-                          {ap.topProblems.length === 0 && (
-                            <span className="text-green-600 text-sm">Sem problemas registrados</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 border-b text-center">
-                        <Button variant="outline" size="sm" onClick={() => handleChartClick({name: ap.apartamento}, 'apartamento')}>
-                          Ver Todos os Feedbacks
-                        </Button>
-                      </td>
+            <CardHeader>
+              <CardTitle>Análise Detalhada por Apartamento</CardTitle>
+              <CardDescription>
+                Métricas e problemas por apartamento
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="py-2 px-3 bg-muted border-b text-left">Apartamento</th>
+                      <th className="py-2 px-3 bg-muted border-b text-center">Feedbacks</th>
+                      <th className="py-2 px-3 bg-muted border-b text-center">Avaliação</th>
+                      <th className="py-2 px-3 bg-muted border-b text-center">Sentimento</th>
+                      <th className="py-2 px-3 bg-muted border-b text-left">Problemas Principais</th>
+                      <th className="py-2 px-3 bg-muted border-b text-center">Ações</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {processApartamentoDetailsData().slice(0, 20).map((ap, index) => (
+                      <tr key={index} className={`hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors ${index % 2 === 0 ? "bg-muted/20" : ""}`}>
+                        <td className="py-2 px-3 border-b font-medium">
+                          <div className="flex items-center">
+                            <Building2 className="h-4 w-4 text-blue-500 mr-2" />
+                            <span className="font-semibold text-lg">{ap.apartamento}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-2 px-3 border-b text-center">
+                          <div className="flex items-center justify-center">
+                            <MessageSquare className="h-4 w-4 text-blue-500 mr-1" />
+                            <span className="font-bold text-lg">{ap.count.toLocaleString()}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 border-b text-center">
+                          <div className="flex items-center justify-center">
+                            <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                            <span className={
+                              ap.averageRating >= 4 ? 'text-green-600 font-bold' : 
+                              ap.averageRating >= 3 ? 'text-yellow-600 font-bold' : 
+                              'text-red-600 font-bold'
+                            }>
+                              {ap.averageRating.toFixed(1)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 border-b text-center">
+                          <div className="flex justify-center">
+                            <Badge 
+                              className={
+                                ap.sentiment >= 70 ? "bg-green-500 text-white hover:bg-green-600" : 
+                                ap.sentiment >= 50 ? "bg-yellow-500 text-white hover:bg-yellow-600" : 
+                                "bg-red-500 text-white hover:bg-red-600"
+                              }
+                            >
+                              {ap.sentiment.toFixed(1)}%
+                            </Badge>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 border-b">
+                          <div className="flex flex-wrap gap-1">
+                            {ap.topProblems.map((problem, idx) => (
+                              <Badge key={idx} variant="outline" className={idx === 0 ? "bg-red-50" : idx === 1 ? "bg-yellow-50" : "bg-blue-50"}>
+                                {problem.problem} ({problem.count})
+                              </Badge>
+                            ))}
+                            {ap.topProblems.length === 0 && (
+                              <span className="text-green-600 text-sm">Sem problemas registrados</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 border-b text-center">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleChartClick({ label: `Apt ${ap.apartamento}` }, 'apartamento')}
+                          >
+                            Ver Todos os Feedbacks
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
           </Card>
         </TabsContent>
 

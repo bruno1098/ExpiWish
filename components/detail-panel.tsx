@@ -54,8 +54,20 @@ interface CommentsDialogProps {
 }
 
 const cleanDataWithSeparator = (value: string): string => {
-  if (!value) return "";
-  return value.replace(/;/g, ", ").trim();
+  if (!value || typeof value !== 'string') return "";
+  // Normaliza separadores repetidos (";;;", "|||", ",,,") para ponto-e-vírgula
+  const normalized = value
+    .replace(/[|]+/g, ';')
+    .replace(/,+/g, ';')
+    .replace(/;+/g, ';');
+  // Divide, remove vazios/placeholder e duplicatas
+  const items = normalized.split(';')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((s) => s.toLowerCase() !== 'vazio' && s.toLowerCase() !== 'sem problemas' && !s.startsWith('+'));
+  if (items.length === 0) return "";
+  const unique = Array.from(new Set(items));
+  return unique.join(', ');
 };
 
 export const CommentsDialog: React.FC<CommentsDialogProps> = ({
