@@ -31,12 +31,13 @@
 - A&B - Room Service
 - A&B - Almoço
 
-#### Governança (5 keywords)
-- Limpeza - Banheiro
-- Limpeza - Quarto
-- Limpeza - Áreas sociais
-- Enxoval
-- Amenities
+#### Governança (6 keywords)
+- Governança - Banheiro
+- Governança - Quarto
+- Governança - Áreas sociais
+- Governança - Enxoval
+- Governança - Amenities
+- Governança - Serviço  // novo: serviço das camareiras/housekeeping
 
 #### Manutenção (10 keywords)
 - Ar-condicionado
@@ -200,6 +201,14 @@ Se houver muitas correções para uma keyword específica, considerar:
 1. Adicionar ao `KEYWORD_DEPARTMENT_MAP` se ainda não estiver
 2. Melhorar prompt do GPT-4 para esse caso específico
 3. Atualizar embeddings com contexto reforçado
+
+## 🧭 Regra de Classificação Específica
+
+- Quando o texto falar de atendimento genérico (sem comida/bebida), preferir `Operações - Atendimento`.
+- Somente puxar `A&B - Serviço` se houver menção explícita a `restaurante`, `café da manhã`, `almoço`, `jantar`, `bar`, `cardápio`, `pedido`, `room service`, `garçom/garçonete/maître`.
+- Elogios ou menções ao serviço das camareiras, arrumação diária, troca de toalhas/lençóis, `housekeeping` devem classificar como `Governança - Serviço`.
+- O termo genérico `serviço` não deve expandir automaticamente para A&B.
+- Regras aplicadas em `lib/semantic-enrichment.ts` (contexto e expansões), `lib/taxonomy-validation.ts` (mapeamento rígido e inferência) e `lib/reranking-service.ts` (penalização/boost por contexto).
 
 ## ✅ Checklist de Validação
 

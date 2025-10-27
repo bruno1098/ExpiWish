@@ -26,12 +26,13 @@ const FULL_KEYWORD_DEPARTMENT_MAP: Record<string, string> = {
   "A&B - Room Service": "A&B",
   
   // ========== GOVERNANÇA (Limpeza/Arrumação) ==========
-  "Limpeza - Banheiro": "Governança",
-  "Limpeza - Quarto": "Governança",
-  "Limpeza - Áreas sociais": "Governança",
-  "Limpeza - Enxoval": "Governança",
-  "Limpeza - Amenities": "Governança",
-  "Limpeza - Frigobar": "Governança",
+  "Governança - Banheiro": "Governança",
+  "Governança - Quarto": "Governança",
+  "Governança - Áreas sociais": "Governança",
+  "Governança - Enxoval": "Governança",
+  "Governança - Amenities": "Governança",
+  "Governança - Frigobar": "Governança",
+  "Governança - Serviço": "Governança",
   
   // ========== MANUTENÇÃO ==========
   "Manutenção - Ar-condicionado": "Manutenção",
@@ -165,7 +166,9 @@ export function inferDepartmentFromKeyword(keywordLabel: string): string | null 
   if (label.includes("limpo") || label.includes("sujo") || 
       label.includes("arrumação") || label.includes("enxoval") ||
       label.includes("toalha") || label.includes("lençol") ||
-      label.includes("amenities") || label.includes("frigobar")) {
+      label.includes("amenities") || label.includes("frigobar") ||
+      label.includes("camareira") || label.includes("housekeeping") ||
+      label.includes("serviço de governança") || label.includes("serviço das camareiras")) {
     return "Governança";
   }
   
