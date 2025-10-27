@@ -680,10 +680,10 @@ grep -r "VALID_KEYWORDS" app/ lib/
 **Encontradas em `lib/dynamic-lists-service.ts`**:
 ```typescript
 // OBSOLETAS (genéricas, duplicadas ou não usadas):
-'Enxoval',                    // Tem "Limpeza - Enxoval"
+'Enxoval',                    // Tem "Governança - Enxoval"
 'Ar-condicionado',            // Tem "Manutenção - Ar-condicionado"
 'Elevador',                   // Tem "Manutenção - Elevador"
-'Frigobar',                   // Tem "Limpeza - Frigobar"
+'Frigobar',                   // Tem "Governança - Frigobar"
 'Infraestrutura',             // Genérico
 'Spa',                        // Tem "Lazer - Spa"
 'Piscina',                    // Tem "Lazer - Piscina"
@@ -698,8 +698,8 @@ grep -r "VALID_KEYWORDS" app/ lib/
 'Reservas',                   // Tem "Corporativo - Reservas"
 'Água',                       // Muito genérico
 'Recreação',                  // Genérico
-'Travesseiro',                // Tem "Limpeza - Enxoval"
-'Colchão',                    // Tem "Limpeza - Enxoval"
+'Travesseiro',                // Tem "Governança - Enxoval"
+'Colchão',                    // Tem "Governança - Enxoval"
 'Espelho'                     // Muito específico
 ```
 

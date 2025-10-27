@@ -72,19 +72,19 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
 
   "A&B - Serviço": {
     synonyms: [
-      "atendimento do restaurante", "serviço A&B", "garçom", "garçonete",
-      "maître", "recepção do restaurante", "preço das refeições", "cardápio"
+      "serviço do restaurante", "serviço de mesa", "garçom", "garçonete",
+      "maître", "tempo de pedido", "entrega de pratos", "room service (comida)", "serviço no bar"
     ],
     related_terms: [
       "A&B", "alimentos", "bebidas", "restaurante", "bar", "café da manhã",
-      "tempo de atendimento", "pedido", "entrega", "conta", "cobrança",
-      "menu", "variedade", "opções", "preço do prato"
+      "almoço", "jantar", "menu", "cardápio", "pedido", "prato",
+      "bebidas", "comida", "conta", "cobrança", "lanche"
     ],
     colloquial_variations: [
-      "pessoal do restaurante", "garçom", "maître", "menu"
+      "garçom", "pessoal do restaurante", "serviço de mesa", "atendimento no restaurante"
     ],
     examples: [
-      "garçom prestativo", "menu claro e preços justos", "atendimento do restaurante excelente"
+      "garçom prestativo", "serviço de mesa rápido", "pedido entregue quente", "room service eficiente"
     ]
   },
 
@@ -215,6 +215,21 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ],
     examples: [
       "frigobar limpo", "bebidas geladas", "itens faltando no minibar"
+    ]
+  },
+
+  "Governança - Serviço": {
+    synonyms: [
+      "serviço de governança", "serviço das camareiras", "arrumação diária", "troca de toalhas", "troca de lençóis", "housekeeping service"
+    ],
+    related_terms: [
+      "camareira", "arrumadeira", "housekeeping", "limpeza do quarto", "organização", "reposição", "frequência", "solicitações", "rapidez", "cordialidade"
+    ],
+    colloquial_variations: [
+      "serviço das camareiras", "arrumação do quarto", "troca de roupa de cama", "troca de toalha"
+    ],
+    examples: [
+      "camareiras muito atenciosas", "arrumação diária impecável", "troca de toalhas rápida", "serviço de governança excelente"
     ]
   },
 
@@ -993,7 +1008,7 @@ function generateAutoSynonyms(term: string): string[] {
     'café da manhã': ['breakfast', 'café', 'desjejum', 'buffet matinal'],
     'almoço': ['lunch', 'refeição do meio-dia'],
     'jantar': ['dinner', 'janta', 'refeição noturna'],
-    'serviço': ['garçom', 'garçonete', 'maître', 'pedido', 'comanda', 'conta', 'cardápio', 'restaurante', 'bar'],
+    'serviço': ['atendimento', 'service', 'staff', 'equipe'],
     'gastronomia': ['culinária', 'cozinha', 'food'],
     'room service': ['serviço de quarto', 'pedido no quarto'],
 
@@ -1188,6 +1203,7 @@ export function expandUserQuery(userText: string): string {
 
     // Governança
     'limpeza': ['higiene', 'arrumação', 'housekeeping'],
+    'camareira': ['housekeeping', 'governança', 'arrumação', 'limpeza'],
     'banheiro': ['sanitário', 'toalete', 'lavabo'],
     'quarto': ['acomodação', 'suíte', 'room'],
     'amenities': ['produtos de banho', 'itens de cortesia'],

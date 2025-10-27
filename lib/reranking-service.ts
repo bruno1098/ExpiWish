@@ -104,7 +104,43 @@ function calculateContextScore(
     score += 0.3 * (matchedWords.length / keywordWords.length);
   }
   
-  // 2. Contexto negativo/positivo
+  // 2. Regras específicas para diferenciar A&B Serviço vs Operações Atendimento
+  const foodTokens = [
+    'restaurante', 'café', 'cafe', 'café da manhã', 'almoço', 'jantar',
+    'cardápio', 'menu', 'pedido', 'comanda', 'garçom', 'garçonete', 'maître',
+    'bar', 'comida', 'prato', 'bebida', 'lanche', 'room service'
+  ];
+  const opsAttTokens = [
+    'atendimento', 'atencioso', 'educado', 'cordial', 'equipe', 'staff', 'serviço',
+    'tempo de resposta', 'demora', 'rápido', 'lento'
+  ];
+  const govServiceTokens = [
+    'camareira', 'arrumação', 'housekeeping', 'troca de toalha', 'troca de lençol',
+    'serviço de governança', 'serviço das camareiras'
+  ];
+  
+  const hasFood = foodTokens.some(t => textLower.includes(t));
+  const hasOpsAtt = opsAttTokens.some(t => textLower.includes(t));
+  const hasGovService = govServiceTokens.some(t => textLower.includes(t));
+  
+  // A&B - Serviço: precisa de termos de comida/bebida
+  if (keywordLower === 'a&b - serviço') {
+    if (hasFood) score += 0.25; // reforço quando há contexto de A&B
+    if (!hasFood && hasOpsAtt) score -= 0.25; // penalizar quando contexto é só atendimento
+  }
+  
+  // Operações - Atendimento: reforçar quando texto fala de atendimento geral
+  if (keywordLower === 'operações - atendimento') {
+    if (hasOpsAtt && !hasFood) score += 0.25;
+    if (hasFood) score -= 0.15; // reduzir quando há forte contexto de A&B
+  }
+  
+  // Governança - Serviço: reforçar quando menciona camareiras/arrumação
+  if (keywordLower === 'governança - serviço') {
+    if (hasGovService) score += 0.30;
+  }
+  
+  // 3. Contexto negativo/positivo
   const isNegative = /não|nunca|péssimo|ruim|horrível|terrível/.test(textLower);
   const isPositive = /ótimo|excelente|maravilhoso|perfeito|adorei/.test(textLower);
   
