@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { updateAnalysisInFirestoreWithUserData } from '@/lib/firestore-service';
 import { authenticateRequest } from '@/lib/server-auth';
 
@@ -10,7 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Token não encontrado' }, { status: 401 });
     }
 
-    const { analysisId, hidden, reason } = await request.json();
+    const { analysisId, hidden, reason, hotelDocId } = await request.json();
 
     if (!analysisId || typeof hidden !== 'boolean') {
       return NextResponse.json({ 
@@ -35,22 +37,35 @@ export async function POST(request: NextRequest) {
       updateData.hiddenReason = null;
     }
 
-    // Verificar se userData existe
-    if (!authResult.userData) {
-      return NextResponse.json({ error: 'Dados do usuário não encontrados' }, { status: 401 });
+    // Tentar atualização direta quando hotelDocId for enviado
+    let updatedDirectly = false;
+    if (hotelDocId && typeof hotelDocId === 'string') {
+      try {
+        const analysisRef = doc(db, 'analyse', hotelDocId, 'feedbacks', analysisId);
+        await updateDoc(analysisRef, updateData);
+        updatedDirectly = true;
+      } catch (e) {
+        console.error('Falha ao atualizar diretamente com hotelDocId, fallback para busca global:', e);
+      }
     }
 
-    // Atualizar no Firestore
-    const result = await updateAnalysisInFirestoreWithUserData(
-      analysisId,
-      updateData,
-      authResult.userData
-    );
+    // Se não atualizou diretamente, verificar userData e usar busca global
+    if (!updatedDirectly) {
+      if (!authResult.userData) {
+        return NextResponse.json({ error: 'Dados do usuário não encontrados' }, { status: 401 });
+      }
 
-    if (!result) {
-      return NextResponse.json({ 
-        error: 'Erro ao atualizar análise' 
-      }, { status: 404 });
+      const result = await updateAnalysisInFirestoreWithUserData(
+        analysisId,
+        updateData,
+        authResult.userData
+      );
+
+      if (!result) {
+        return NextResponse.json({ 
+          error: 'Erro ao atualizar análise' 
+        }, { status: 404 });
+      }
     }
 
     return NextResponse.json({

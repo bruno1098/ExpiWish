@@ -379,7 +379,27 @@ export function ModernChart({
     return () => observer.disconnect();
   }, []);
   // Limitar dados se necessário
-  const limitedData = maxItems ? data.slice(0, maxItems) : data;
+  let limitedData = maxItems ? data.slice(0, maxItems) : data;
+
+  // Pré-processar departamentos: separar rótulos concatenados e agregar contagens
+  if (categoryType === 'department') {
+    const acc = new Map<string, number>();
+    for (const it of limitedData) {
+      const rawLabel = String(it.name || it.label || '').trim();
+      if (!rawLabel) continue;
+      const parts = rawLabel.split(/[;,|]/).map(s => s.trim()).filter(Boolean);
+      const val = Number(it.value) || 0;
+      for (const p of parts) {
+        acc.set(p, (acc.get(p) || 0) + val);
+      }
+    }
+    limitedData = Array.from(acc.entries())
+      .map(([label, value]) => ({ label, name: label, value }))
+      .sort((a, b) => b.value - a.value);
+    if (maxItems) {
+      limitedData = limitedData.slice(0, maxItems);
+    }
+  }
   
   // Detectar automaticamente se é um gráfico de sentimento
   const isAutoSentiment = !isSentiment && limitedData.some(item => {
@@ -390,6 +410,8 @@ export function ModernChart({
   });
   
   const shouldUseSentimentColors = isSentiment || isAutoSentiment;
+  // Máximo dos valores para sugerir escala
+  const maxValue = limitedData.reduce((m, it) => Math.max(m, Number(it?.value) || 0), 0);
   
   // Função para obter cor de sentimento
   const getSentimentColor = (label: string, isBackground = true) => {
@@ -423,148 +445,226 @@ export function ModernChart({
     return first || 'Outros';
   };
 
-  // Função para obter cores por categoria
-  const getCategoryColors = () => {
-    if (shouldUseSentimentColors) {
-      return {
-        background: limitedData.map(item => getSentimentColor(item.name || item.label || '', true)),
-        border: limitedData.map(item => getSentimentColor(item.name || item.label || '', false)),
-        hover: limitedData.map(item => getSentimentColor(item.name || item.label || '', true).replace('0.8', '0.9'))
-      };
-    }
-
-    // Problemas: cores por item com base no setor
-    if (categoryType === 'problem') {
-      const backgrounds = limitedData.map(item => {
-        const sector = extractProblemSector(String(item.name || item.label || ''));
-        return PROBLEM_SECTOR_COLORS[sector] || PROBLEM_SECTOR_COLORS['Outros'];
-      });
-      const borders = limitedData.map(item => {
-        const sector = extractProblemSector(String(item.name || item.label || ''));
-        return PROBLEM_SECTOR_BORDERS[sector] || PROBLEM_SECTOR_BORDERS['Outros'];
-      });
-      return {
-        background: backgrounds,
-        border: borders,
-        hover: backgrounds.map(c => c.replace('0.8', '0.9')),
-      };
-    }
-
-    // Departamentos: cores específicas por área
-    if (categoryType === 'department') {
-      const backgrounds = limitedData.map(item => {
-        const label = String(item.name || item.label || '');
-        const sector = extractProblemSector(label);
-        return PROBLEM_SECTOR_COLORS[sector] || PROBLEM_SECTOR_COLORS['Outros'];
-      });
-      const borders = limitedData.map(item => {
-        const label = String(item.name || item.label || '');
-        const sector = extractProblemSector(label);
-        return PROBLEM_SECTOR_BORDERS[sector] || PROBLEM_SECTOR_BORDERS['Outros'];
-      });
-      return {
-        background: backgrounds,
-        border: borders,
-        hover: backgrounds.map(c => c.replace('0.8', '0.9')),
-      };
-    }
-
-    // Avaliações: cores por estrela
-    if (categoryType === 'rating') {
-      const getRatingFromLabel = (raw: string): number => {
-        const match = raw.match(/(\d+)/);
-        const num = match ? parseInt(match[1], 10) : NaN;
-        if (Number.isNaN(num) || num < 1 || num > 5) return 0;
-        return num as 1|2|3|4|5;
-      };
-      const backgrounds = limitedData.map(item => {
-        const label = String(item.name || item.label || '');
-        const r = getRatingFromLabel(label);
-        return RATING_COLORS[r] || MODERN_COLORS.categories.rating.background;
-      });
-      const borders = limitedData.map(item => {
-        const label = String(item.name || item.label || '');
-        const r = getRatingFromLabel(label);
-        return RATING_BORDER_COLORS[r] || MODERN_COLORS.categories.rating.border;
-      });
-      return {
-        background: backgrounds,
-        border: borders,
-        hover: backgrounds.map(c => c.replace('0.8', '0.9')),
-      };
-    }
-
-    if (categoryType && MODERN_COLORS.categories[categoryType]) {
-      const categoryColors = MODERN_COLORS.categories[categoryType];
-      return {
-        background: type === 'pie' || type === 'doughnut' 
-          ? MODERN_COLORS.primary.slice(0, limitedData.length) // Usar cores diferentes para pizza
-          : categoryColors.background,
-        border: type === 'pie' || type === 'doughnut'
-          ? MODERN_COLORS.borders.slice(0, limitedData.length) // Usar bordas diferentes para pizza
-          : categoryColors.border,
-        hover: type === 'pie' || type === 'doughnut'
-          ? MODERN_COLORS.primary.slice(0, limitedData.length).map(color => color.replace('0.8', '0.9')) // Hover diferentes para pizza
-          : categoryColors.hover
-      };
-    }
-    
-    // Cores padrão
-    return {
-      background: type === 'pie' || type === 'doughnut' 
-        ? MODERN_COLORS.primary.slice(0, limitedData.length)
-        : MODERN_COLORS.primary[0],
-      border: type === 'pie' || type === 'doughnut'
-        ? MODERN_COLORS.borders.slice(0, limitedData.length)
-        : MODERN_COLORS.borders[0],
-      hover: type === 'pie' || type === 'doughnut'
-        ? MODERN_COLORS.primary.slice(0, limitedData.length).map(color => color.replace('0.8', '0.9'))
-        : MODERN_COLORS.primary[0].replace('0.8', '0.9')
-    };
+  // NOVO: normalização de fontes + paleta de cores por marca
+  const normalizeSourceLabel = (raw?: string): string => {
+    const s = String(raw || '').toLowerCase().trim();
+    if (!s || s === 'não especificado' || s === 'nao especificado' || s === 'desconhecido') return 'Outros';
+    const base = s.replace('.com', '');
+    if (base.includes('google')) return 'Google';
+    if (base.includes('booking')) return 'Booking';
+    if (base.includes('trustyou') || base.includes('trust you')) return 'TrustYou';
+    if (base.includes('tripadvisor') || base.includes('trip advisor')) return 'TripAdvisor';
+    if (base.includes('expedia') || base.includes('hotels')) return 'Expedia';
+    if (base.includes('airbnb')) return 'Airbnb';
+    if (base.includes('facebook')) return 'Facebook';
+    if (base.includes('instagram')) return 'Instagram';
+    if (base.includes('site') || base.includes('website') || base.includes('web')) return 'Site';
+    return 'Outros';
   };
-  
+
+  const SOURCE_BRAND_COLORS: Record<string, { bg: string; border: string }> = {
+    Google: { bg: 'rgba(66, 133, 244, 0.8)', border: 'rgba(66, 133, 244, 1)' },
+    Booking: { bg: 'rgba(0, 53, 128, 0.8)', border: 'rgba(0, 53, 128, 1)' },
+    TrustYou: { bg: 'rgba(6, 182, 212, 0.8)', border: 'rgba(6, 182, 212, 1)' },
+    TripAdvisor: { bg: 'rgba(34, 197, 94, 0.8)', border: 'rgba(34, 197, 94, 1)' },
+    Expedia: { bg: 'rgba(245, 158, 11, 0.8)', border: 'rgba(245, 158, 11, 1)' },
+    Airbnb: { bg: 'rgba(236, 72, 153, 0.8)', border: 'rgba(236, 72, 153, 1)' },
+    Facebook: { bg: 'rgba(59, 89, 152, 0.8)', border: 'rgba(59, 89, 152, 1)' },
+    Instagram: { bg: 'rgba(225, 48, 108, 0.8)', border: 'rgba(225, 48, 108, 1)' },
+    Site: { bg: 'rgba(139, 92, 246, 0.8)', border: 'rgba(139, 92, 246, 1)' },
+    Outros: { bg: 'rgba(156, 163, 175, 0.8)', border: 'rgba(156, 163, 175, 1)' },
+  };
+
+  const getSourceColorsForItems = () => {
+    const backgrounds = limitedData.map(item => {
+      const label = normalizeSourceLabel(item.name || item.label || '');
+      return SOURCE_BRAND_COLORS[label]?.bg || MODERN_COLORS.primary[0];
+    });
+    const borders = limitedData.map(item => {
+      const label = normalizeSourceLabel(item.name || item.label || '');
+      return SOURCE_BRAND_COLORS[label]?.border || MODERN_COLORS.borders[0];
+    });
+    return { background: backgrounds, border: borders, hover: backgrounds.map(c => c.replace('0.8', '0.9')) };
+  };
+
+  const getCategoryColors = (): { background: string[]; border: string[]; hover: string[] } => {
+    // Prioridade: usar cores de sentimento quando aplicável
+    if (shouldUseSentimentColors) {
+      const bg = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        return getSentimentColor(label, true);
+      });
+      const bd = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        return getSentimentColor(label, false);
+      });
+      const hv = bg.map(c => c.replace('0.8', '0.9'));
+      return { background: bg, border: bd, hover: hv };
+    }
+
+    // Cores por marca para fontes
+    if (categoryType === 'source') {
+      return getSourceColorsForItems();
+    }
+
+    // Cores por nota específica (1–5)
+    if (categoryType === 'rating') {
+      const bg = limitedData.map(item => {
+        const raw = String(item.name || item.label || '');
+        const n = parseInt(raw.split(' ')[0], 10);
+        return RATING_COLORS[n] || MODERN_COLORS.categories.rating.background;
+      });
+      const bd = limitedData.map(item => {
+        const raw = String(item.name || item.label || '');
+        const n = parseInt(raw.split(' ')[0], 10);
+        return RATING_BORDER_COLORS[n] || MODERN_COLORS.categories.rating.border;
+      });
+      const hv = bg.map(c => c.replace('0.8', '0.9'));
+      return { background: bg, border: bd, hover: hv };
+    }
+
+    // Departamentos: usar paleta por setor
+    if (categoryType === 'department') {
+      const bg = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        const sector = extractProblemSector(label);
+        return PROBLEM_SECTOR_COLORS[sector] || MODERN_COLORS.categories.department.background;
+      });
+      const bd = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        const sector = extractProblemSector(label);
+        return PROBLEM_SECTOR_BORDERS[sector] || MODERN_COLORS.categories.department.border;
+      });
+      const hv = bg.map(c => c.includes('0.85') ? c.replace('0.85', '0.9') : c.replace('0.8', '0.9'));
+      return { background: bg, border: bd, hover: hv };
+    }
+
+    // Problemas: usar cor do departamento (apenas horizontalBar)
+    if (categoryType === 'problem' && type === 'horizontalBar') {
+      const bg = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        const sector = extractProblemSector(label);
+        return PROBLEM_SECTOR_COLORS[sector] || MODERN_COLORS.categories.problem.background;
+      });
+      const bd = limitedData.map(item => {
+        const label = String(item.name || item.label || '');
+        const sector = extractProblemSector(label);
+        return PROBLEM_SECTOR_BORDERS[sector] || MODERN_COLORS.categories.problem.border;
+      });
+      // Ajustar transparência para hover independente da base (0.8 ou 0.85)
+      const hv = bg.map(c => c.includes('0.85') ? c.replace('0.85', '0.9') : c.replace('0.8', '0.9'));
+      return { background: bg, border: bd, hover: hv };
+    }
+
+    // Fallback geral: paleta moderna por item
+    const bg = limitedData.map((_, i) => MODERN_COLORS.primary[i % MODERN_COLORS.primary.length]);
+    const bd = limitedData.map((_, i) => MODERN_COLORS.borders[i % MODERN_COLORS.borders.length]);
+    const hv = bg.map(c => c.replace('0.8', '0.9'));
+    return { background: bg, border: bd, hover: hv };
+  };
+
   const colors = getCategoryColors();
 
   // Preparar dados para Chart.js
-  const chartData = {
-    labels: limitedData.map(item => {
-      const label = item.name || item.label || '';
-      // Exibir labels completos sem truncar
-      return label;
-    }),
-    datasets: [
-      {
-        label: title || 'Dados',
-        data: limitedData.map(item => item.value),
-        backgroundColor: colors.background,
-        borderColor: colors.border,
-        borderWidth: 2,
-        borderRadius: type === 'bar' || type === 'horizontalBar' ? 6 : 0,
-        borderSkipped: false,
-        hoverBackgroundColor: colors.hover,
-        hoverBorderWidth: 3,
-        barThickness: type === 'horizontalBar' ? 22 : undefined,
-      },
-    ],
-  };
+  let chartData: any;
+  const isStackedSourceSentiment = type === 'bar' && isSentiment && categoryType === 'source' && Array.isArray(contextRows) && contextRows.length > 0;
+
+  if (isStackedSourceSentiment) {
+    const labels = limitedData.map(item => String(item.name || item.label || ''));
+    const topSet = new Set(labels.filter(l => l !== 'Outros').map(l => normalizeSourceLabel(l)));
+    const rowsForLabel = (label: string) => {
+      if (!Array.isArray(contextRows)) return [] as any[];
+      if (label === 'Outros') {
+        return contextRows.filter((r: any) => !topSet.has(normalizeSourceLabel(r.source)));
+      }
+      return contextRows.filter((r: any) => normalizeSourceLabel(r.source) === normalizeSourceLabel(label));
+    };
+
+    const positiveCounts = labels.map(l => rowsForLabel(l).filter((r: any) => r.sentiment === 'positive').length);
+    const neutralCounts = labels.map(l => rowsForLabel(l).filter((r: any) => r.sentiment === 'neutral').length);
+    const negativeCounts = labels.map(l => rowsForLabel(l).filter((r: any) => r.sentiment === 'negative').length);
+
+    chartData = {
+      labels,
+      datasets: [
+        {
+          label: 'Positivo',
+          data: positiveCounts,
+          backgroundColor: MODERN_COLORS.sentiment.positivo,
+          borderColor: MODERN_COLORS.sentimentBorders.positivo,
+          borderWidth: 2,
+          borderRadius: 6,
+          stack: 'sentiment',
+        },
+        {
+          label: 'Neutro',
+          data: neutralCounts,
+          backgroundColor: MODERN_COLORS.sentiment.neutro,
+          borderColor: MODERN_COLORS.sentimentBorders.neutro,
+          borderWidth: 2,
+          borderRadius: 6,
+          stack: 'sentiment',
+        },
+        {
+          label: 'Negativo',
+          data: negativeCounts,
+          backgroundColor: MODERN_COLORS.sentiment.negativo,
+          borderColor: MODERN_COLORS.sentimentBorders.negativo,
+          borderWidth: 2,
+          borderRadius: 6,
+          stack: 'sentiment',
+        },
+      ],
+    };
+  } else {
+    chartData = {
+      labels: limitedData.map(item => {
+        const label = item.name || item.label || '';
+        // Exibir labels completos sem truncar
+        return label;
+      }),
+      datasets: [
+        {
+          label: title || 'Dados',
+          data: limitedData.map(item => item.value),
+          backgroundColor: colors.background,
+          borderColor: colors.border,
+          borderWidth: 2,
+          borderRadius: type === 'bar' || type === 'horizontalBar' ? 6 : 0,
+          borderSkipped: false,
+          hoverBackgroundColor: colors.hover,
+          hoverBorderWidth: 3,
+          barThickness: type === 'horizontalBar' ? 22 : undefined,
+        },
+      ],
+    };
+  }
 
   // Configurações específicas por tipo de gráfico
   const getOptions = (): any => {
     const baseOptions = { ...getThemeAwareOptions() };
+    const isStackedSourceSentiment = type === 'bar' && isSentiment && categoryType === 'source' && Array.isArray(contextRows) && contextRows.length > 0;
 
-    // Utilitário para quebrar linhas de labels longos
+    // Utilitário para quebrar linhas de labels longos e limpar separadores
     const wrapLabel = (text: string, max = 24): string[] | string => {
       if (!text || typeof text !== 'string') return text;
-      if (text.length <= max) return text;
-      const words = text.split(' ');
+      // Sanitiza separadores repetidos (";;;", "|||", ",,,") e espaços múltiplos
+      const cleaned = String(text)
+        .replace(/[;|,\/]+/g, ' · ')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/(\s*·\s*){2,}/g, ' · ')
+        .trim();
+      if (cleaned.length <= max) return cleaned;
+      const tokens = cleaned.split(/\s+/);
       const lines: string[] = [];
       let current = '';
-      for (const w of words) {
-        if ((current + (current ? ' ' : '') + w).length > max) {
+      for (const t of tokens) {
+        const candidate = current ? current + ' ' + t : t;
+        if (candidate.length > max) {
           if (current) lines.push(current);
-          current = w;
+          current = t;
         } else {
-          current = current ? current + ' ' + w : w;
+          current = candidate;
         }
       }
       if (current) lines.push(current);
@@ -673,6 +773,8 @@ export function ModernChart({
           x: {
             ...baseOptions.scales.x,
             beginAtZero: true,
+            grace: '10%',
+            suggestedMax: maxValue ? Math.ceil(maxValue * 1.1) : undefined,
           },
           y: {
             ...baseOptions.scales.y,
@@ -701,12 +803,15 @@ export function ModernChart({
     
     if (type === 'pie' || type === 'doughnut') {
       const isDark = isDarkMode();
+      const total = limitedData.reduce((acc, it) => acc + (it.value || 0), 0);
+      const hasMultiple = limitedData.filter(it => (it.value || 0) > 0).length > 1;
       return {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            position: 'right' as const,
+            display: hasMultiple,
+            position: hasMultiple ? 'right' : 'bottom',
             labels: {
               usePointStyle: true,
               padding: 15,
@@ -722,9 +827,23 @@ export function ModernChart({
             ...baseOptions.plugins.tooltip,
             callbacks: {
               label: (context: any) => {
-                const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                const percentage = ((context.parsed / total) * 100).toFixed(1);
-                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                const idx = context.dataIndex ?? context.index;
+                const item = limitedData[idx];
+                const pct = total ? ((item.value / total) * 100).toFixed(1) : '0.0';
+                return `${context.label}: ${item.value} (${pct}%)`;
+              },
+              afterLabel: (context: any) => {
+                if (categoryType !== 'source' || !Array.isArray(contextRows) || !contextRows.length) return [];
+                const idx = context.dataIndex ?? context.index;
+                const item = limitedData[idx];
+                const label = normalizeSourceLabel(item.name || item.label || '');
+                const rows = contextRows.filter((r: any) => normalizeSourceLabel(r.source) === label);
+                const count = rows.length;
+                if (!count) return [];
+                const avg = rows.reduce((s: number, r: any) => s + (r.rating || 0), 0) / count;
+                const pos = rows.filter((r: any) => r.sentiment === 'positive').length;
+                const posPct = ((pos / count) * 100).toFixed(1);
+                return [`Média: ${avg.toFixed(1)}`, `Positivo: ${posPct}%`, `Total: ${count}`];
               },
             },
           },
@@ -777,14 +896,77 @@ export function ModernChart({
         ...baseOptions.plugins,
         legend: {
           ...baseOptions.plugins.legend,
-          display: false,
+          display: isStackedSourceSentiment ? true : false,
+        },
+        tooltip: {
+          ...baseOptions.plugins.tooltip,
+          callbacks: {
+            label: (context: any) => {
+              const idx = context.dataIndex ?? context.index;
+              if (isStackedSourceSentiment) {
+                const sourceLabel = String(chartData.labels[idx] || context.label || '');
+                const datasetLabel = String(context?.dataset?.label || '');
+                const topSet = new Set(limitedData.map(it => String(it.name || it.label || '')).filter(l => l !== 'Outros').map(l => normalizeSourceLabel(l)));
+                const rows = Array.isArray(contextRows)
+                  ? (sourceLabel === 'Outros'
+                      ? contextRows.filter((r: any) => !topSet.has(normalizeSourceLabel(r.source)))
+                      : contextRows.filter((r: any) => normalizeSourceLabel(r.source) === normalizeSourceLabel(sourceLabel)))
+                  : [];
+                const total = rows.length || 0;
+                const key = datasetLabel.toLowerCase();
+                const count = key.includes('pos')
+                  ? rows.filter((r: any) => r.sentiment === 'positive').length
+                  : key.includes('neut')
+                    ? rows.filter((r: any) => r.sentiment === 'neutral').length
+                    : rows.filter((r: any) => r.sentiment === 'negative').length;
+                const pct = total ? ((count / total) * 100).toFixed(1) : '0.0';
+                return `${sourceLabel} — ${datasetLabel}: ${count} (${pct}%)`;
+              }
+              const item = limitedData[idx];
+              return `${context.label}: ${item?.value ?? context.raw}`;
+            },
+            afterLabel: (context: any) => {
+              if (categoryType !== 'source' || !Array.isArray(contextRows) || !contextRows.length) return [];
+              const idx = context.dataIndex ?? context.index;
+              const sourceLabel = String(chartData.labels[idx] || limitedData[idx]?.name || limitedData[idx]?.label || '');
+              const topSet = new Set(limitedData.map(it => String(it.name || it.label || '')).filter(l => l !== 'Outros').map(l => normalizeSourceLabel(l)));
+              const rows = sourceLabel === 'Outros'
+                ? contextRows.filter((r: any) => !topSet.has(normalizeSourceLabel(r.source)))
+                : contextRows.filter((r: any) => normalizeSourceLabel(r.source) === normalizeSourceLabel(sourceLabel));
+              const count = rows.length;
+              if (!count) return [];
+              const avg = rows.reduce((s: number, r: any) => s + (r.rating || 0), 0) / count;
+              const pos = rows.filter((r: any) => r.sentiment === 'positive').length;
+              const posPct = ((pos / count) * 100).toFixed(1);
+              return [`Média: ${avg.toFixed(1)}`, `Positivo: ${posPct}%`, `Total: ${count}`];
+            },
+          },
         },
       },
+      layout: { padding: { left: 12, right: 12, top: 6, bottom: 28 } },
       scales: {
-        ...baseOptions.scales,
+        x: {
+          ...baseOptions.scales.x,
+          grid: { display: false },
+          stacked: isStackedSourceSentiment,
+          ticks: {
+            ...baseOptions.scales.x.ticks,
+            padding: 6,
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: false,
+            callback: (value: any, index: number) => {
+              const raw = String(limitedData[index]?.name || limitedData[index]?.label || value || '');
+              return wrapLabel(raw, 22);
+            },
+          },
+        },
         y: {
           ...baseOptions.scales.y,
           beginAtZero: true,
+          stacked: isStackedSourceSentiment,
+          grace: '10%',
+          suggestedMax: maxValue ? Math.ceil(maxValue * 1.1) : undefined,
         },
       },
       onClick: onClick ? (event: any, elements: any[]) => {
@@ -814,8 +996,8 @@ export function ModernChart({
   };
 
   return (
-    <div className="w-full flex items-center justify-center p-4" style={{ minHeight: `${height + 80}px` }}>
-      <div className="w-full max-w-full" style={{ height: `${height}px` }}>
+    <div className="w-full flex items-center justify-center p-4" style={{ minHeight: `${height + (isSentiment && categoryType === 'source' ? 120 : 80)}px` }}>
+      <div className="w-full max-w-full overflow-visible" style={{ height: `${height}px` }}>
         {renderChart()}
       </div>
     </div>
@@ -927,18 +1109,23 @@ export function ApartmentsChart({ data, onClick, maxItems = 8 }: {
 }
 
 // Componente específico para gráfico de fontes (pizza)
-export function SourcesChart({ data, onClick, categoryType }: {
+export function SourcesChart({ data, onClick, categoryType, contextRows }: {
   data: ChartData[];
   onClick?: (item: ChartData, index: number) => void;
   categoryType?: 'department' | 'keyword' | 'language' | 'source';
+  contextRows?: any[];
 }) {
+  const nonZero = (data || []).filter(d => (d.value || 0) > 0).length;
+  const computedType: 'bar' | 'doughnut' = nonZero <= 2 ? 'bar' : 'doughnut';
   return (
-    <ModernChart
+    <ModernChart 
       data={data}
-      type="pie"
+      type={computedType}
       onClick={onClick}
-      height={400}
-      categoryType={categoryType || "source"}
+      height={480}
+      categoryType={categoryType || 'source'}
+      maxItems={8}
+      contextRows={contextRows}
     />
   );
 }
@@ -1050,6 +1237,16 @@ export function ProblemsDistributionChart({ data, onClick }: {
         return false;
       }
     };
+    const cleanDetailText = (raw?: string): string => {
+      const s = String(raw || '')
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/[;|,\/]+/g, ' · ')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/(\s*·\s*){2,}/g, ' · ')
+        .trim();
+      if (!s || s === '·') return '';
+      return s.length > 120 ? s.slice(0, 117) + '...' : s;
+    };
     const aggregateProblemDetails = (rows: any[], selectedLabel?: string) => {
       const map = new Map<string, { detail: string; count: number; ratingSum: number }>();
       const parts = selectedLabel ? extractLabelParts(selectedLabel) : { department: '', problem: '' };
@@ -1061,7 +1258,8 @@ export function ProblemsDistributionChart({ data, onClick }: {
             const pMain = normalize(p?.problem);
             const pDept = normalize(p?.sector ?? p?.department);
             if (!pMain || !pDept || pDept !== depTarget || !pMain.includes(probTarget)) continue;
-            const det = String(p?.problem_detail ?? '').trim();
+            const detRaw = String(p?.problem_detail ?? '').trim();
+            const det = cleanDetailText(detRaw);
             if (!det) continue;
             const key = normalize(det);
             const rating = parseFloat(String(r?.rating ?? r?.rating_value ?? 0)) || 0;
@@ -1090,7 +1288,6 @@ export function ProblemsDistributionChart({ data, onClick }: {
           if (!matches) continue;
         }
         const det = String(r?.problem_detail ?? '').trim();
-        if (!det) continue;
         const key = normalize(det);
         const rating = parseFloat(String(r?.rating ?? r?.rating_value ?? 0)) || 0;
         const prev = map.get(key);

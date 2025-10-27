@@ -223,7 +223,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
     list.forEach((it) => {
       const raw = getter(it);
       const items = Array.isArray(raw)
-        ? raw
+        ? raw.flatMap((entry: any) => typeof entry === 'string' ? entry.split(/[;,|]/) : [])
         : typeof raw === "string"
           ? raw.split(/[;,|]/)
           : [];
@@ -231,7 +231,7 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
         .map((s: string) => s?.trim())
         .filter(Boolean)
         .forEach((k: string) => {
-          if (normalize(k) === 'vazio') return; // ignora placeholders
+          if (normalize(k) === 'vazio' || normalize(k) === 'sem problemas') return; // ignora placeholders
           m.set(k, (m.get(k) || 0) + 1);
         });
     });
@@ -446,7 +446,29 @@ export const ChartDetailModal: React.FC<ChartDetailModalProps> = ({
       });
       return Array.from(m.entries()).map(([keyword, count]) => ({ keyword, count })).sort((a, b) => b.count - a.count);
     }
-    return tallyFrom(viewRows, (f: any) => [f?.problem || f?.problem_main || f?.problemMain].filter(Boolean) as any);
+    // Quando não for setor, se existir estrutura allProblems, agregamos "Departamento - Problema"
+    const hasAll = viewRows.some((f: any) => Array.isArray(f?.allProblems) && f.allProblems.length > 0);
+    if (hasAll) {
+      const normalize = (s: any) => String(s || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+      const m = new Map<string, number>();
+      viewRows.forEach((f: any) => {
+        (f.allProblems || []).forEach((p: any) => {
+          const dept = String(p?.sector ?? p?.department ?? '').trim();
+          const main = String(p?.problem ?? p?.problem_main ?? '').trim();
+          if (!dept || !main || normalize(main) === 'vazio') return;
+          const label = `${dept} - ${main}`;
+          m.set(label, (m.get(label) || 0) + 1);
+        });
+      });
+      return Array.from(m.entries())
+        .map(([keyword, count]) => ({ keyword, count }))
+        .sort((a, b) => b.count - a.count);
+    }
+     return tallyFrom(viewRows, (f: any) => [f?.problem || f?.problem_main || f?.problemMain].filter(Boolean) as any);
   })();
 const departmentsInContext = tallyFrom(viewRows, (f: any) => [f?.sector || f?.department || f?.departamento].filter(Boolean) as any);
 
@@ -547,7 +569,7 @@ const departmentsInContext = tallyFrom(viewRows, (f: any) => [f?.sector || f?.de
                   </div>
                   Resumo
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-4">
                   <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                     <div className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Críticos vs Total</div>
                     <div className="text-slate-900 dark:text-slate-100 text-lg font-semibold">{criticalCount} de {totalFeedbacks}</div>
@@ -595,7 +617,7 @@ const departmentsInContext = tallyFrom(viewRows, (f: any) => [f?.sector || f?.de
               </Card>
 
               {/* Grid de Análises */}
-              <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+              <div className="space-y-6">
                 {/* Avaliação Detalhada */}
                 <Card className="p-6 border border-slate-200 dark:border-slate-700">
                   <h4 className="font-semibold mb-4 flex items-center text-lg text-slate-900 dark:text-slate-100">
@@ -694,7 +716,7 @@ const departmentsInContext = tallyFrom(viewRows, (f: any) => [f?.sector || f?.de
 
                 {/* Seções direcionadas por Estrelas */}
                 {selectedItem.type === 'rating' && (
-                  <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                  <div className="space-y-6">
                     <Card className="p-6 border border-slate-200 dark:border-slate-700">
                       <h4 className="font-semibold mb-4 flex items-center text-lg text-slate-900 dark:text-slate-100">
                         <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg mr-3">
@@ -731,8 +753,8 @@ const departmentsInContext = tallyFrom(viewRows, (f: any) => [f?.sector || f?.de
 
                 {/* Seções direcionadas por Departamento */}
                 {selectedItem.type === 'sector' && (
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-        <Card className="p-6 border border-slate-200 dark:border-slate-700 lg:col-span-2">
+      <div className="space-y-6">
+        <Card className="p-6 border border-slate-200 dark:border-slate-700">
           <h4 className="font-semibold mb-4 flex items-center text-lg text-slate-900 dark:text-slate-100">
             <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg mr-3">
               <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
