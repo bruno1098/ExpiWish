@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState } from "react"
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react"
 import { onAuthStateChanged, type User } from "firebase/auth"
 import { auth } from "./firebase"
 import { getCurrentUserData, canUserAccess, updateUserLastAccess, markFirstAccess, type UserData } from "./auth-service"
@@ -22,18 +22,39 @@ interface AuthContextType {
   isAuthenticated: boolean
   userData: UserData | null
   loading: boolean
+  refreshUserData: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   userData: null,
   loading: true,
+  refreshUserData: async () => {}
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [userData, setUserData] = useState<UserData | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const refreshUserData = useCallback(async () => {
+    const currentUser = auth.currentUser
+    if (!currentUser) {
+      return
+    }
+
+    try {
+      const updatedData = await getCurrentUserData()
+      setUserData(updatedData)
+
+      if (updatedData) {
+        const hasAccess = await canUserAccess(currentUser, updatedData)
+        setIsAuthenticated(hasAccess)
+      }
+    } catch (error) {
+      devError("Erro ao atualizar dados do usuário manualmente:", error)
+    }
+  }, [])
 
   useEffect(() => {
     devAuth("AuthProvider: Inicializando listener");
@@ -111,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, userData, loading]);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, userData, loading }}>
+    <AuthContext.Provider value={{ isAuthenticated, userData, loading, refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );
@@ -131,11 +152,14 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
       if (!isAuthenticated) {
         devAuth("❌ Usuário não autenticado, redirecionando para /auth/login");
         router.push("/auth/login");
+      } else if (userData?.mustChangePassword && !pathname.startsWith("/auth/change-password")) {
+        devAuth("🔐 Redirecionando para alteração de senha obrigatória");
+        router.push("/auth/change-password?required=true");
       } else {
         devAuth("✅ Usuário pode acessar");
       }
     }
-  }, [isAuthenticated, userData, loading, router, pathname]);
+  }, [isAuthenticated, userData?.mustChangePassword, loading, router, pathname]);
 
   if (loading) {
     return (
@@ -155,12 +179,16 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 export function RequireAdmin({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, userData, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading) {
       if (!isAuthenticated) {
         devAuth("❌ Admin: Usuário não autenticado, redirecionando para /auth/login");
         router.push("/auth/login");
+      } else if (userData?.mustChangePassword && !pathname.startsWith("/auth/change-password")) {
+        devAuth("🔐 Admin: requisição de troca de senha obrigatória");
+        router.push("/auth/change-password?required=true");
       } else if (userData?.role !== 'admin') {
         devAuth("❌ Admin: Usuário não é admin, redirecionando para dashboard");
         router.push("/dashboard");
@@ -168,7 +196,7 @@ export function RequireAdmin({ children }: { children: React.ReactNode }) {
         devAuth("✅ Admin: Usuário pode acessar");
       }
     }
-  }, [isAuthenticated, userData, loading, router]);
+  }, [isAuthenticated, userData?.mustChangePassword, userData?.role, loading, router, pathname]);
 
   if (loading) {
     return (
