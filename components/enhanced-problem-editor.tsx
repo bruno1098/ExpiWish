@@ -11,9 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
-import { Eye, Trash2, Save, X, Plus, Check, Edit3, Search } from 'lucide-react';
+import { Eye, Trash2, Save, X, Plus, Check, Edit3, Search, XCircle } from 'lucide-react';
 import { 
   getDynamicLists, 
   addKeyword, 
@@ -712,6 +713,7 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                 onListsUpdated={reloadLists}
                 currentValue={keyword}
                 onValueChange={setKeyword}
+                disabled
               />
             )}
           </div>
@@ -943,17 +945,27 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                   </div>
                 </SelectContent>
               </Select>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleKeywordInputModeToggle}
-                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
-              >
-                <div className="flex items-center gap-1">
-                  <Plus className="w-3 h-3" />
-                  Personalizar
-                </div>
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      disabled
+                      className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto cursor-not-allowed opacity-60"
+                    >
+                      <div className="flex items-center gap-1">
+                        <Plus className="w-3 h-3" />
+                        Personalizar
+                      </div>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="flex items-center gap-2 text-xs">
+                  <XCircle className="h-3 w-3 text-red-500" />
+                  <span>Recurso em manutenção. Em breve liberado.</span>
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
         </div>
@@ -971,6 +983,7 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                 onListsUpdated={reloadLists}
                 currentValue={sector}
                 onValueChange={setSector}
+                disabled
               />
             )}
           </div>
@@ -1151,17 +1164,27 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                   </div>
                 </SelectContent>
               </Select>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleDepartmentInputModeToggle}
-                className="text-xs text-purple-600 hover:text-purple-800 p-0 h-auto"
-              >
-                <div className="flex items-center gap-1">
-                  <Plus className="w-3 h-3" />
-                  Personalizar
-                </div>
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      disabled
+                      className="text-xs text-purple-600 hover:text-purple-800 p-0 h-auto cursor-not-allowed opacity-60"
+                    >
+                      <div className="flex items-center gap-1">
+                        <Plus className="w-3 h-3" />
+                        Personalizar
+                      </div>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="flex items-center gap-2 text-xs">
+                  <XCircle className="h-3 w-3 text-red-500" />
+                  <span>Recurso em manutenção. Em breve liberado.</span>
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
         </div>
@@ -1179,6 +1202,7 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                 onListsUpdated={reloadLists}
                 currentValue={problemText}
                 onValueChange={setProblemText}
+                disabled
               />
             )}
           </div>
@@ -1341,17 +1365,27 @@ export const EnhancedProblemEditor: React.FC<EnhancedProblemEditorProps> = ({
                   </div>
                 </SelectContent>
               </Select>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleProblemInputModeToggle}
-                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
-              >
-                <div className="flex items-center gap-1">
-                  <Plus className="w-3 h-3" />
-                  Personalizar
-                </div>
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      disabled
+                      className="text-xs text-green-600 hover:text-green-800 p-0 h-auto cursor-not-allowed opacity-60"
+                    >
+                      <div className="flex items-center gap-1">
+                        <Plus className="w-3 h-3" />
+                        Personalizar
+                      </div>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="flex items-center gap-2 text-xs">
+                  <XCircle className="h-3 w-3 text-red-500" />
+                  <span>Recurso em manutenção. Em breve liberado.</span>
+                </TooltipContent>
+              </Tooltip>
               <div className="space-y-1">
                 <label className="text-xs text-gray-600 dark:text-gray-400">Detalhe do Problema (opcional)</label>
                 <Textarea

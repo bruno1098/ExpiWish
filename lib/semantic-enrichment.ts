@@ -176,13 +176,17 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ],
     related_terms: [
       "fronha", "cobertor", "travesseiro", "maciez", "manchas", "rasgos",
-      "cheiro", "troca", "qualidade", "higienização"
+      "cheiro", "troca", "qualidade", "higienização", "textura", "enxoval novo",
+      "enxoval velho", "toalha áspera", "lençol áspero"
     ],
     colloquial_variations: [
-      "lençol", "toalha", "roupa de cama"
+      "lençol", "toalha", "roupa de cama", "toalha ruim", "toalha boa",
+      "lençol ruim", "lençol bom"
     ],
     examples: [
-      "toalhas macias", "lençóis limpos", "enxoval com manchas"
+      "toalhas macias", "lençóis limpos", "enxoval com manchas",
+      "qualidade das toalhas poderia ser melhor", "lençóis de ótima qualidade",
+      "toalha muito áspera e fina"
     ]
   },
 
@@ -220,16 +224,27 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
 
   "Governança - Serviço": {
     synonyms: [
-      "serviço de governança", "serviço das camareiras", "arrumação diária", "troca de toalhas", "troca de lençóis", "housekeeping service"
+      "serviço de governança", "serviço das camareiras", "arrumação diária",
+      "serviço de arrumação", "housekeeping", "housekeeping service"
     ],
     related_terms: [
-      "camareira", "arrumadeira", "housekeeping", "limpeza do quarto", "organização", "reposição", "frequência", "solicitações", "rapidez", "cordialidade"
+      "camareira", "camareiras", "arrumadeira", "equipe de limpeza",
+      "housekeeping", "gentileza", "educação", "rapidez", "agilidade",
+      "frequência", "solicitações", "prontidão", "proatividade",
+      "cordialidade", "simpatia", "profissionalismo"
     ],
     colloquial_variations: [
-      "serviço das camareiras", "arrumação do quarto", "troca de roupa de cama", "troca de toalha"
+      "serviço das camareiras", "camareiras muito boas", "camareiras muito ruins",
+      "camareiras atenciosas", "camareiras mal educadas",
+      "pessoal da limpeza muito atencioso", "pessoal da limpeza mal educado",
+      "serviço de arrumação", "serviço de limpeza do quarto"
     ],
     examples: [
-      "camareiras muito atenciosas", "arrumação diária impecável", "troca de toalhas rápida", "serviço de governança excelente"
+      "camareiras muito atenciosas", "arrumação diária impecável",
+      "pessoal da limpeza extremamente educado e prestativo",
+      "camareiras demoravam muito para atender as solicitações",
+      "serviço de governança excelente",
+      "equipe de governança sempre muito gentil"
     ]
   },
 

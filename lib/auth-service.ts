@@ -116,7 +116,8 @@ export const registerUserSafe = async (
       name,
       hotelId,
       hotelName,
-      role
+      role,
+      mustChangePassword: true
     };
     
     await setDoc(doc(db, "users", user.uid), userData);
@@ -374,7 +375,8 @@ export const registerUser = async (
       name,
       hotelId,
       hotelName,
-      role
+      role,
+      mustChangePassword: true
     };
     
     await setDoc(doc(db, "users", user.uid), userData);
@@ -442,7 +444,8 @@ export const createUserKeepingAdminLoggedIn = async (
         name,
         hotelId,
         hotelName,
-        role
+        role,
+        mustChangePassword: true
       };
 
       await setDoc(doc(db, "users", newUser.uid), userData);
@@ -497,6 +500,30 @@ export const updateUserPassword = async (currentPassword: string, newPassword: s
     
     // Atualizar a senha
     await firebaseUpdatePassword(user, newPassword);
+
+    try {
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const existingData = userSnap.data();
+        const updatePayload: Record<string, any> = {
+          mustChangePassword: false,
+          temporaryLoginSession: null
+        };
+
+        if (existingData?.passwordResetByAdmin) {
+          updatePayload.passwordResetByAdmin = {
+            ...existingData.passwordResetByAdmin,
+            used: true,
+            usedAt: new Date()
+          };
+        }
+
+        await setDoc(userRef, updatePayload, { merge: true });
+      }
+    } catch (firestoreError) {
+      console.error("Erro ao atualizar metadados de senha no Firestore:", firestoreError);
+    }
     
     return;
   } catch (error: any) {
@@ -979,7 +1006,8 @@ export const createUserAsAdmin = async (
       name,
       hotelId,
       hotelName,
-      role
+      role,
+      mustChangePassword: true
     };
     
     await setDoc(doc(db, "users", newUser.uid), userData);

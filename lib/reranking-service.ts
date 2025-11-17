@@ -115,8 +115,11 @@ function calculateContextScore(
     'tempo de resposta', 'demora', 'rápido', 'lento'
   ];
   const govServiceTokens = [
-    'camareira', 'arrumação', 'housekeeping', 'troca de toalha', 'troca de lençol',
-    'serviço de governança', 'serviço das camareiras'
+    'camareira', 'camareiras', 'arrumadeira', 'pessoal da limpeza',
+    'equipe de limpeza', 'housekeeping', 'serviço de governança',
+    'serviço das camareiras', 'serviço de arrumação',
+    'camareiras atenciosas', 'camareiras educadas', 'camareiras simpáticas',
+    'camareiras mal educadas', 'camareiras grossas'
   ];
   
   const hasFood = foodTokens.some(t => textLower.includes(t));

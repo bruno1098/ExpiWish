@@ -50,7 +50,6 @@ import {
   ExternalLink,
   BarChart3
 } from "lucide-react";
-import { formatDateBR } from "@/lib/utils";
 import { ChartDetailModal } from '@/components/chart-detail-modal';
 import { 
   ModernChart,
@@ -66,13 +65,21 @@ import {
   ProblemsDistributionChart
 } from "@/components/modern-charts";
 import DetailProblem from "@/app/admin/components/detail_problem";
-import { 
-  filterValidFeedbacks, 
-  isValidProblem, 
+import {
+  formatDateBR,
+  filterValidFeedbacks,
+  isValidProblem,
   isValidSectorOrKeyword,
   processSectorDistribution as processValidSectorDistribution,
   processKeywordDistribution as processValidKeywordDistribution,
-  processProblemDistribution as processValidProblemDistribution
+  processProblemDistribution as processValidProblemDistribution,
+  getFeedbackKeywords,
+  getFeedbackSectors,
+  extractComplimentsFromFeedback,
+  hasCompliment,
+  buildComplimentPhraseDistribution,
+  buildComplimentSectorDistribution,
+  buildComplimentKeywordDistribution
 } from "@/lib/utils";
 import { AdminProblemsVisualizationOptions } from "./ProblemsVisualizationOptions";
 
@@ -152,7 +159,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 // Componente para renderizar gráficos no modal
-const renderModernChart = (chartType: string, data: any[], onChartClick: (item: any, type: string) => void, type: string) => {
+const renderModernChart = (
+  chartType: string,
+  data: any[],
+  onChartClick: (item: any, type: string) => void,
+  type: string,
+  height?: number
+) => {
   const chartData = data.map(item => ({
     label: item.name || item.label,
     value: item.value,
@@ -164,19 +177,23 @@ const renderModernChart = (chartType: string, data: any[], onChartClick: (item: 
   };
 
   if (chartType === 'bar') {
-    return <ModernChart data={chartData} type="bar" onClick={handleClick} />;
+    return <ModernChart data={chartData} type="bar" onClick={handleClick} height={height} />;
   }
   
   if (chartType === 'pie') {
-    return <ModernChart data={chartData} type="pie" onClick={handleClick} />;
+    return <ModernChart data={chartData} type="pie" onClick={handleClick} height={height} />;
   }
   
   if (chartType === 'horizontalBar') {
-    return <ModernChart data={chartData} type="horizontalBar" onClick={handleClick} />;
+    return <ModernChart data={chartData} type="horizontalBar" onClick={handleClick} height={height} />;
+  }
+
+  if (chartType === 'line') {
+    return <ModernChart data={chartData} type="line" onClick={handleClick} height={height} />;
   }
   
   // Fallback
-  return <ModernChart data={chartData} type="bar" onClick={handleClick} />;
+  return <ModernChart data={chartData} type="bar" onClick={handleClick} height={height} />;
 };
 
 // Componente principal
@@ -231,8 +248,10 @@ function AdminDashboardContent() {
   const [selectedChart, setSelectedChart] = useState<{
     type: string;
     title: string;
-    data: any[];
-    chartType: 'bar' | 'pie' | 'line';
+    chartData: any[];
+    tableData: any[];
+    chartType: 'bar' | 'pie' | 'line' | 'horizontalBar';
+    chartHeight?: number;
   } | null>(null);
 
   // Controlar scroll da página de fundo quando modais estão abertos
@@ -512,12 +531,163 @@ function AdminDashboardContent() {
     return (baseData || []).filter((feedback: any) => !isNotIdentifiedFeedback(feedback));
   };
 
+  const complimentFeedbacks = useMemo(() => {
+    const data = getCurrentData();
+    if (!data || data.length === 0) {
+      return [];
+    }
+    return data.filter((feedback: any) => hasCompliment(feedback));
+  }, [
+    analysisData,
+    filteredData,
+    globalFilteredData,
+    isFilterApplied,
+    dateRange,
+    sentimentFilter,
+    sourceFilter,
+    languageFilter,
+    apartmentFilter,
+    hiddenRatings
+  ]);
+
+  const complimentsByPhrase = useMemo(
+    () => buildComplimentPhraseDistribution(complimentFeedbacks),
+    [complimentFeedbacks]
+  );
+
+  const complimentsBySector = useMemo(
+    () => buildComplimentSectorDistribution(complimentFeedbacks),
+    [complimentFeedbacks]
+  );
+
+  const complimentsByKeyword = useMemo(
+    () => buildComplimentKeywordDistribution(complimentFeedbacks),
+    [complimentFeedbacks]
+  );
+
+  const complimentsBySource = useMemo(
+    () => processSourceDistribution(complimentFeedbacks),
+    [complimentFeedbacks]
+  );
+
+  const complimentsByHotel = useMemo(() => {
+    if (complimentFeedbacks.length === 0) {
+      return [];
+    }
+
+    const counts: Record<string, number> = {};
+
+    complimentFeedbacks.forEach((feedback: any) => {
+      const hotelName = feedback.hotel || 'Não identificado';
+      const compliments = extractComplimentsFromFeedback(feedback);
+      const increment = compliments.length > 0 ? compliments.length : 1;
+      counts[hotelName] = (counts[hotelName] || 0) + increment;
+    });
+
+    return Object.entries(counts)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [complimentFeedbacks]);
+
+  const complimentsRatingDistribution = useMemo(
+    () => processRatingDistribution(complimentFeedbacks),
+    [complimentFeedbacks]
+  );
+
+  const complimentsTrend = useMemo(() => {
+    if (complimentFeedbacks.length === 0) {
+      return { period: 'day', data: [] as Array<{ label: string; value: number }> };
+    }
+
+    const complimentsWithMarker = complimentFeedbacks.map((feedback: any) => ({
+      ...feedback,
+      complimentMarker: 'Elogios'
+    }));
+
+    const { period, data } = getTimePeriodData(complimentsWithMarker, 'complimentMarker');
+    const aggregated = data.map((item: any) => {
+      const total = Object.entries(item).reduce((sum, [key, val]) => {
+        if (key === 'period') return sum;
+        return sum + (typeof val === 'number' ? val : 0);
+      }, 0);
+
+      return {
+        label: item.period,
+        value: total
+      };
+    });
+
+    return { period, data: aggregated };
+  }, [complimentFeedbacks]);
+
+  const recentCompliments = useMemo(
+    () =>
+      [...complimentFeedbacks]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 12),
+    [complimentFeedbacks]
+  );
+
+  const complimentsSummary = useMemo(() => {
+    if (complimentFeedbacks.length === 0) {
+      return {
+        totalFeedbacks: 0,
+        share: 0,
+        totalPhrases: 0,
+        uniquePhrases: 0,
+        averageRating: 0,
+        highlightSector: '—',
+        highlightHotel: '—',
+        topCompliment: '—'
+      };
+    }
+
+    const baseData = getCurrentData();
+    const totalPhrases = complimentFeedbacks.reduce(
+      (sum, feedback) => sum + extractComplimentsFromFeedback(feedback).length,
+      0
+    );
+
+    const averageRating =
+      complimentFeedbacks.reduce((sum, feedback) => sum + (feedback.rating || 0), 0) /
+      complimentFeedbacks.length;
+
+    const share =
+      (baseData?.length || 0) > 0
+        ? (complimentFeedbacks.length / baseData.length) * 100
+        : 0;
+
+    return {
+      totalFeedbacks: complimentFeedbacks.length,
+      share,
+      totalPhrases,
+      uniquePhrases: complimentsByPhrase.length,
+      averageRating,
+      highlightSector: complimentsBySector[0]?.label || '—',
+      highlightHotel: complimentsByHotel[0]?.label || '—',
+      topCompliment: complimentsByPhrase[0]?.label || '—'
+    };
+  }, [
+    complimentFeedbacks,
+    complimentsByPhrase,
+    complimentsBySector,
+    complimentsByHotel,
+    analysisData,
+    filteredData,
+    globalFilteredData,
+    isFilterApplied,
+    dateRange,
+    sentimentFilter,
+    sourceFilter,
+    languageFilter,
+    apartmentFilter,
+    hiddenRatings
+  ]);
+
   // Função para lidar com cliques em gráficos
   const handleChartClick = (data: any, type: string) => {
-    
-    // Usar a mesma função centralizada para garantir consistência
     const dataToUse = getCurrentData();
-      
+
     if (!dataToUse) {
       toast({
         title: "Erro",
@@ -527,19 +697,32 @@ function AdminDashboardContent() {
       return;
     }
 
+    const isComplimentFlow = type.startsWith('compliment');
+    const baseDataset = isComplimentFlow ? complimentFeedbacks : dataToUse;
+
+    if (!baseDataset || baseDataset.length === 0) {
+      toast({
+        title: "Nenhum dado disponível",
+        description: isComplimentFlow
+          ? "Não há elogios disponíveis para este critério."
+          : "Não há feedbacks disponíveis para este critério.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     let filteredFeedbacks: any[] = [];
     let value = "";
 
     switch (type) {
-      case 'rating':
+      case 'rating': {
         const rating = parseInt(data.label);
-        filteredFeedbacks = dataToUse.filter((feedback: any) => 
-          Math.floor(feedback.rating) === rating
-        );
+        filteredFeedbacks = baseDataset.filter((feedback: any) => Math.floor(feedback.rating) === rating);
         value = `${rating} estrela${rating !== 1 ? 's' : ''}`;
         break;
+      }
 
-      case 'problem':
+      case 'problem': {
         const problemLabel = data.label || data.name;
         const norm = (s: string) => s
           .toLowerCase()
@@ -556,7 +739,7 @@ function AdminDashboardContent() {
         const { department, problem } = extractLabelParts(String(problemLabel));
         const depTarget = norm(department);
         const probTarget = norm(problem);
-        filteredFeedbacks = dataToUse.filter((feedback: any) => {
+        filteredFeedbacks = baseDataset.filter((feedback: any) => {
           if (Array.isArray(feedback?.allProblems)) {
             return feedback.allProblems.some((p: any) => {
               const pMain = norm(String(p?.problem || ''));
@@ -578,28 +761,26 @@ function AdminDashboardContent() {
         });
         value = problemLabel;
         break;
+      }
 
-      case 'hotel':
+      case 'hotel': {
         const hotelLabel = data.label || data.name;
-        filteredFeedbacks = dataToUse.filter((feedback: any) => 
-          feedback.hotel === hotelLabel
-        );
+        filteredFeedbacks = baseDataset.filter((feedback: any) => feedback.hotel === hotelLabel);
         value = hotelLabel;
         break;
+      }
 
-      case 'source':
+      case 'source': {
         const sourceLabel = data.label || data.name;
-        filteredFeedbacks = dataToUse.filter((feedback: any) => 
-          feedback.source === sourceLabel
-        );
+        filteredFeedbacks = baseDataset.filter((feedback: any) => feedback.source === sourceLabel);
         value = sourceLabel;
         break;
+      }
 
-      case 'apartamento':
+      case 'apartamento': {
         const apRaw = String(data.name || data.label || '').trim();
         let apt = apRaw;
         let hotelForApt = '';
-        // Suporta rótulo "Hotel – Apt 619" ou "Apt 619"
         if (apRaw.includes(' - Apt ')) {
           const [h, a] = apRaw.split(' - Apt ');
           hotelForApt = h.trim();
@@ -607,7 +788,7 @@ function AdminDashboardContent() {
         } else if (apRaw.startsWith('Apt ')) {
           apt = apRaw.replace(/^Apt\s+/, '').trim();
         }
-        filteredFeedbacks = dataToUse.filter((feedback: any) => {
+        filteredFeedbacks = baseDataset.filter((feedback: any) => {
           const matchesApt = String(feedback.apartamento) === apt;
           if (hotelForApt) {
             return matchesApt && String(feedback.hotel) === hotelForApt;
@@ -616,10 +797,11 @@ function AdminDashboardContent() {
         });
         value = hotelForApt ? `${hotelForApt} – Apt ${apt}` : `Apartamento ${apt}`;
         break;
+      }
 
-      case 'keyword':
+      case 'keyword': {
         const keywordLabel = data.label || data.name;
-        filteredFeedbacks = dataToUse.filter((feedback: any) => {
+        filteredFeedbacks = baseDataset.filter((feedback: any) => {
           if (feedback.keyword && typeof feedback.keyword === 'string') {
             return feedback.keyword.split(';').map((k: string) => k.trim()).includes(keywordLabel);
           }
@@ -627,52 +809,105 @@ function AdminDashboardContent() {
         });
         value = keywordLabel;
         break;
+      }
 
-      case 'sector':
+      case 'sector': {
         const sectorLabel = data.label || data.name;
-        filteredFeedbacks = dataToUse.filter((feedback: any) => {
+        filteredFeedbacks = baseDataset.filter((feedback: any) => {
           if (feedback.sector && typeof feedback.sector === 'string') {
-            // Usar a mesma lógica de divisão por ';' que o processSectorDistribution
             const sectors = feedback.sector.split(';').map((s: string) => s.trim());
-            // Normalizar cada setor e verificar se corresponde ao sectorLabel
-             const normalizedSectors = sectors.map((s: string) => normalizeDepartmentName(s));
+            const normalizedSectors = sectors.map((s: string) => normalizeDepartmentName(s));
             return normalizedSectors.includes(sectorLabel) && sectors.every((s: string) => s !== 'VAZIO');
           }
           if (feedback.department && typeof feedback.department === 'string') {
             const departments = feedback.department.split(';').map((d: string) => d.trim());
-            // Normalizar cada departamento e verificar se corresponde ao sectorLabel
-             const normalizedDepartments = departments.map((d: string) => normalizeDepartmentName(d));
+            const normalizedDepartments = departments.map((d: string) => normalizeDepartmentName(d));
             return normalizedDepartments.includes(sectorLabel) && departments.every((d: string) => d !== 'VAZIO');
           }
           return false;
         });
         value = sectorLabel;
-
         break;
+      }
 
-      case 'language':
+      case 'language': {
         const languageLabel = data.label || data.name;
-        filteredFeedbacks = dataToUse.filter((feedback: any) => 
-          feedback.language === languageLabel
-        );
+        filteredFeedbacks = baseDataset.filter((feedback: any) => feedback.language === languageLabel);
         value = languageLabel;
         break;
+      }
+
+      case 'compliment': {
+        const complimentLabel = data.label || data.name;
+        filteredFeedbacks = baseDataset.filter((feedback: any) =>
+          extractComplimentsFromFeedback(feedback).some(
+            (compliment: string) => compliment.toLowerCase() === complimentLabel.toLowerCase()
+          )
+        );
+        value = complimentLabel;
+        break;
+      }
+
+      case 'complimentSector': {
+        const sectorLabel = data.label || data.name;
+        filteredFeedbacks = baseDataset.filter((feedback: any) =>
+          getFeedbackSectors(feedback).some((sector: string) => sector === sectorLabel)
+        );
+        value = sectorLabel;
+        break;
+      }
+
+      case 'complimentKeyword': {
+        const keywordLabel = data.label || data.name;
+        filteredFeedbacks = baseDataset.filter((feedback: any) =>
+          getFeedbackKeywords(feedback).some((keyword: string) => keyword === keywordLabel)
+        );
+        value = keywordLabel;
+        break;
+      }
+
+      case 'complimentHotel': {
+        const hotelLabel = data.label || data.name;
+        filteredFeedbacks = baseDataset.filter((feedback: any) => feedback.hotel === hotelLabel);
+        value = hotelLabel;
+        break;
+      }
+
+      case 'complimentSource': {
+        const sourceLabel = data.label || data.name;
+        filteredFeedbacks = baseDataset.filter((feedback: any) => feedback.source === sourceLabel);
+        value = sourceLabel;
+        break;
+      }
+
+      case 'complimentRating': {
+        const numericRating = parseInt(String(data.label || data.value).replace(/[^0-9]/g, ''), 10);
+        filteredFeedbacks = baseDataset.filter((feedback: any) => Math.floor(feedback.rating) === numericRating);
+        value = `${numericRating} estrela${numericRating !== 1 ? 's' : ''}`;
+        break;
+      }
+
+      case 'complimentOverview': {
+        filteredFeedbacks = [...baseDataset];
+        value = 'Todos os elogios';
+        break;
+      }
 
       default:
-        
         return;
     }
 
     if (filteredFeedbacks.length === 0) {
       toast({
         title: "Nenhum feedback encontrado",
-        description: `Não há feedbacks disponíveis para ${type === 'rating' ? 'esta avaliação' : 'este critério'}`,
+        description: isComplimentFlow
+          ? "Não há elogios disponíveis para este critério."
+          : `Não há feedbacks disponíveis para ${type === 'rating' ? 'esta avaliação' : 'este critério'}`,
         variant: "destructive",
       });
       return;
     }
 
-    // Calcular estatísticas específicas do item
     const stats = {
       totalOccurrences: filteredFeedbacks.length,
       averageRating: filteredFeedbacks.reduce((sum, f) => sum + (f.rating || 0), 0) / filteredFeedbacks.length || 0,
@@ -688,15 +923,16 @@ function AdminDashboardContent() {
         4: filteredFeedbacks.filter(f => f.rating === 4).length,
         5: filteredFeedbacks.filter(f => f.rating === 5).length,
       },
-      percentage: dataToUse ? Number(((filteredFeedbacks.length / dataToUse.length) * 100).toFixed(1)) : 0,
+      percentage: baseDataset.length > 0 ? Number(((filteredFeedbacks.length / baseDataset.length) * 100).toFixed(1)) : 0,
       recentFeedbacks: filteredFeedbacks
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-      topKeywords: type !== 'keyword' ? getTopKeywordsForItem(filteredFeedbacks) : [],
-      topProblems: type !== 'problem' ? getTopProblemsForItem(filteredFeedbacks) : [],
-      topHotels: type !== 'hotel' ? getTopHotelsForItem(filteredFeedbacks) : [],
-      monthlyTrend: getMonthlyTrendForItem(filteredFeedbacks)
+      topKeywords: ['keyword', 'complimentKeyword'].includes(type) ? [] : getTopKeywordsForItem(filteredFeedbacks),
+      topProblems: type === 'problem' || isComplimentFlow ? [] : getTopProblemsForItem(filteredFeedbacks),
+      topHotels: ['hotel', 'complimentHotel'].includes(type) ? [] : getTopHotelsForItem(filteredFeedbacks),
+      monthlyTrend: getMonthlyTrendForItem(filteredFeedbacks),
+      topCompliments: buildComplimentPhraseDistribution(filteredFeedbacks).slice(0, 5)
     };
-    
+
     setSelectedItem({
       type,
       value,
@@ -820,7 +1056,7 @@ function AdminDashboardContent() {
   };
 
   // Função para determinar o período de agrupamento automaticamente
-  const getTimePeriodData = (data: any[], sourceField: string = 'language') => {
+  function getTimePeriodData(data: any[], sourceField: string = 'language') {
     if (!data || data.length === 0) return { period: 'day', data: [] };
     
     // Encontrar o range de datas
@@ -871,11 +1107,32 @@ function AdminDashboardContent() {
       }));
     
     return { period, data: result };
-  };
+  }
 
   // Função para abrir modal de gráfico grande
-  const handleViewChart = (type: string, title: string, data: any[], chartType: 'bar' | 'pie' | 'line') => {
-    setSelectedChart({ type, title, data, chartType });
+  const handleViewChart = (
+    type: string,
+    title: string,
+    data: any[],
+    chartType: 'bar' | 'pie' | 'line' | 'horizontalBar',
+    options?: { chartLimit?: number; tableData?: any[]; chartHeight?: number }
+  ) => {
+    const chartData = options?.chartLimit ? data.slice(0, options.chartLimit) : data;
+    const tableData = options?.tableData ?? data;
+    const computedHeight = options?.chartHeight ?? (
+      chartType === 'horizontalBar'
+        ? Math.max(440, Math.min(chartData.length * 28, 1200))
+        : undefined
+    );
+
+    setSelectedChart({
+      type,
+      title,
+      chartData,
+      tableData,
+      chartType,
+      chartHeight: computedHeight,
+    });
     setChartModalOpen(true);
   };
 
@@ -928,7 +1185,7 @@ function AdminDashboardContent() {
   };
 
   // Funções de processamento de dados - usando dados centralizados
-  const processRatingDistribution = (data?: any[]) => {
+  function processRatingDistribution(data?: any[]) {
     const dataToUse = data || getCurrentData();
     if (!dataToUse) return [];
     
@@ -944,7 +1201,7 @@ function AdminDashboardContent() {
     
     return Object.entries(ratingCounts)
       .map(([rating, count]) => ({ label: rating + ' estrela' + (rating === '1' ? '' : 's'), value: count }));
-  };
+  }
 
   const processProblemDistribution = (data?: any[]) => {
     const dataToUse = data || getCurrentData();
@@ -998,7 +1255,7 @@ function AdminDashboardContent() {
       .slice(0, 20);
   };
 
-  const processSourceDistribution = (data?: any[]) => {
+  function processSourceDistribution(data?: any[]) {
     const dataToUse = data || getCurrentData();
     if (!dataToUse) return [];
     
@@ -1012,7 +1269,7 @@ function AdminDashboardContent() {
     return Object.entries(sourceCounts)
       .map(([source, count]) => ({ label: source, value: count }))
       .sort((a, b) => b.value - a.value);
-  };
+  }
 
   const processApartamentoDistribution = (data?: any[]) => {
     const dataToUse = data || getCurrentData();
@@ -2747,9 +3004,10 @@ function AdminDashboardContent() {
             <TabsTrigger value="overview">Visão Geral</TabsTrigger>
             <TabsTrigger value="hotels">Hotéis</TabsTrigger>
             <TabsTrigger value="problems">Problemas</TabsTrigger>
+            <TabsTrigger value="compliments">Elogios</TabsTrigger>
+            <TabsTrigger value="ratings">Avaliações</TabsTrigger>
             <TabsTrigger value="departments">Departamentos</TabsTrigger>
             <TabsTrigger value="keywords">Palavras-chave</TabsTrigger>
-            <TabsTrigger value="ratings">Avaliações</TabsTrigger>
             <TabsTrigger value="apartamentos">Apartamentos</TabsTrigger>
             <TabsTrigger value="hoteisApartamentos">Hotéis e Apartamentos</TabsTrigger>
           </TabsList>
@@ -3192,6 +3450,288 @@ function AdminDashboardContent() {
             <DetailProblem rows={getCurrentData()} maxProblems={24} maxDetails={12} />
           </div>
         </Card>
+          </TabsContent>
+
+          {/* Elogios */}
+          <TabsContent value="compliments" className="space-y-4">
+            {complimentFeedbacks.length === 0 ? (
+              <Card className="p-8 text-center border-2 border-dashed">
+                <h3 className="text-xl font-semibold mb-2">Nenhum elogio identificado</h3>
+                <p className="text-muted-foreground">
+                  Ajuste os filtros ou amplie o período para visualizar os elogios mapeados pela IA.
+                </p>
+              </Card>
+            ) : (
+              <>
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-2xl font-semibold">Panorama de Elogios</h3>
+                    <p className="text-muted-foreground">
+                      Indicadores automáticos com base nos feedbacks positivos das redes monitoradas.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleChartClick({ label: 'Elogios', name: 'Elogios' }, 'complimentOverview')}
+                  >
+                    Ver todos os elogios
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                  <Card className="p-4">
+                    <h4 className="text-sm font-medium text-muted-foreground">Feedbacks com elogios</h4>
+                    <div className="text-3xl font-bold mt-2">{complimentsSummary.totalFeedbacks}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {complimentsSummary.share.toFixed(1)}% dos feedbacks atuais
+                    </p>
+                  </Card>
+
+                  <Card className="p-4">
+                    <h4 className="text-sm font-medium text-muted-foreground">Elogios mapeados</h4>
+                    <div className="text-3xl font-bold mt-2">{complimentsSummary.totalPhrases}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {complimentsSummary.uniquePhrases} tipos únicos destacados
+                    </p>
+                  </Card>
+
+                  <Card className="p-4">
+                    <h4 className="text-sm font-medium text-muted-foreground">Hotel mais elogiado</h4>
+                    <div className="text-2xl font-bold mt-2">{complimentsSummary.highlightHotel}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {complimentsByHotel[0]?.value || 0} citações positivas
+                    </p>
+                  </Card>
+
+                  <Card className="p-4">
+                    <h4 className="text-sm font-medium text-muted-foreground">Departamento mais elogiado</h4>
+                    <div className="text-2xl font-bold mt-2">{complimentsSummary.highlightSector}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {complimentsBySector[0]?.value || 0} elogios registrados
+                    </p>
+                  </Card>
+
+                  <Card className="p-4">
+                    <h4 className="text-sm font-medium text-muted-foreground">Avaliação média (elogios)</h4>
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <span className="text-3xl font-bold text-yellow-600">
+                        {complimentsSummary.averageRating.toFixed(1)}
+                      </span>
+                      <span className="text-sm text-muted-foreground">/ 5</span>
+                    </div>
+                    <div className="mt-2 flex gap-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`h-4 w-4 ${complimentsSummary.averageRating >= star ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground'}`}
+                        />
+                      ))}
+                    </div>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <Card className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Principais elogios</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewChart(
+                          'compliment',
+                          'Principais elogios',
+                          complimentsByPhrase,
+                          'horizontalBar',
+                          { chartLimit: 30 }
+                        )}
+                      >
+                        Ver Detalhes
+                      </Button>
+                    </div>
+                    <div className="h-[430px]">
+                      <ModernChart
+                        type="horizontalBar"
+                        data={complimentsByPhrase.slice(0, 12)}
+                        onClick={(item: any) => handleChartClick(item, 'compliment')}
+                      />
+                    </div>
+                  </Card>
+
+                  <Card className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Departamentos mais elogiados</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewChart('complimentSector', 'Departamentos mais elogiados', complimentsBySector, 'bar')}
+                      >
+                        Ver Detalhes
+                      </Button>
+                    </div>
+                    <div className="h-[430px]">
+                      <DepartmentsChart
+                        data={complimentsBySector.slice(0, 12)}
+                        onClick={(item: any) => handleChartClick(item, 'complimentSector')}
+                      />
+                    </div>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <Card className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Palavras-chave elogiadas</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewChart('complimentKeyword', 'Palavras-chave elogiadas', complimentsByKeyword, 'bar')}
+                      >
+                        Ver Detalhes
+                      </Button>
+                    </div>
+                    <div className="h-[430px]">
+                      <KeywordsChart
+                        data={complimentsByKeyword.slice(0, 12)}
+                        onClick={(item: any) => handleChartClick(item, 'complimentKeyword')}
+                      />
+                    </div>
+                  </Card>
+
+                  <Card className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Hotéis com mais elogios</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewChart('complimentHotel', 'Hotéis com mais elogios', complimentsByHotel, 'bar')}
+                      >
+                        Ver Detalhes
+                      </Button>
+                    </div>
+                    <div className="h-[430px]">
+                      <ModernChart
+                        type="horizontalBar"
+                        data={complimentsByHotel.slice(0, 12)}
+                        onClick={(item: any) => handleChartClick(item, 'complimentHotel')}
+                      />
+                    </div>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <Card className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Fontes com mais elogios</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewChart('complimentSource', 'Fontes com mais elogios', complimentsBySource, 'pie')}
+                      >
+                        Ver Detalhes
+                      </Button>
+                    </div>
+                    <div className="h-[430px]">
+                      <ModernChart
+                        type="pie"
+                        data={complimentsBySource}
+                        onClick={(item: any) => handleChartClick(item, 'complimentSource')}
+                      />
+                    </div>
+                  </Card>
+
+                  <Card className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Avaliações dos elogios</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewChart('complimentRating', 'Avaliações dos elogios', complimentsRatingDistribution, 'bar')}
+                      >
+                        Ver Detalhes
+                      </Button>
+                    </div>
+                    <div className="h-[430px]">
+                      <RatingsChart
+                        data={complimentsRatingDistribution}
+                        onClick={(item: any) => handleChartClick(item, 'complimentRating')}
+                      />
+                    </div>
+                  </Card>
+                </div>
+
+                <Card className="p-4">
+                  <h3 className="text-lg font-semibold mb-4">Evolução dos elogios</h3>
+                  <div className="h-[420px]">
+                    <ModernChart type="line" data={complimentsTrend.data} />
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground mt-2">
+                    Agrupamento automático: {complimentsTrend.period === 'day' ? 'por dia' : complimentsTrend.period === 'week' ? 'por semana' : 'por mês'}
+                  </p>
+                </Card>
+
+                <Card className="p-4">
+                  <h3 className="text-lg font-semibold mb-4">Elogios recentes</h3>
+                  <div className="space-y-4 max-h-[460px] overflow-y-auto pr-2">
+                    {recentCompliments.map((feedback: any, index: number) => {
+                      const compliments = extractComplimentsFromFeedback(feedback);
+                      return (
+                        <div
+                          key={`${feedback.id || feedback.date}-${index}`}
+                          className="p-4 border rounded-lg hover:bg-muted/40 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <Star
+                                    key={star}
+                                    className={`h-4 w-4 ${feedback.rating >= star ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground'}`}
+                                  />
+                                ))}
+                              </div>
+                              <Badge variant="outline" className="px-2 py-0.5 text-xs">
+                                {feedback.rating}/5
+                              </Badge>
+                            </div>
+                            <div className="text-right text-xs text-muted-foreground">
+                              <div>{formatDateBR(feedback.date)}</div>
+                              {feedback.hotel && <div>{feedback.hotel}</div>}
+                              {feedback.source && <div>{cleanDataWithSeparator(feedback.source)}</div>}
+                            </div>
+                          </div>
+
+                          {compliments.length > 0 && (
+                            <div className="mt-3 space-y-1">
+                              {compliments.map((compliment: string, complimentIndex: number) => (
+                                <p key={complimentIndex} className="text-sm font-medium">
+                                  • {compliment}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+
+                          <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
+                            {feedback.comment}
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            {feedback.keyword && (
+                              <Badge variant="outline">{cleanDataWithSeparator(feedback.keyword)}</Badge>
+                            )}
+                            {feedback.sector && (
+                              <Badge variant="outline">{cleanDataWithSeparator(feedback.sector)}</Badge>
+                            )}
+                            {feedback.apartamento && (
+                              <Badge variant="outline">Apto {cleanDataWithSeparator(String(feedback.apartamento))}</Badge>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              </>
+            )}
           </TabsContent>
 
           {/* Avaliações */}
@@ -3963,21 +4503,30 @@ function AdminDashboardContent() {
                   <div className="text-white">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        {selectedItem.type === 'hotel' && <Building2 className="h-5 w-5" />}
+                        {['hotel', 'complimentHotel'].includes(selectedItem.type) && <Building2 className="h-5 w-5" />}
                         {selectedItem.type === 'problem' && <AlertCircle className="h-5 w-5" />}
-                        {selectedItem.type === 'rating' && <Star className="h-5 w-5" />}
-                        {selectedItem.type === 'keyword' && <Tag className="h-5 w-5" />}
-                        {selectedItem.type === 'source' && <Globe className="h-5 w-5" />}
-                        {!['hotel', 'problem', 'rating', 'keyword', 'source'].includes(selectedItem.type) && <BarChart3 className="h-5 w-5" />}
+                        {['rating', 'compliment', 'complimentRating', 'complimentOverview'].includes(selectedItem.type) && <Star className="h-5 w-5" />}
+                        {['keyword', 'complimentKeyword'].includes(selectedItem.type) && <Tag className="h-5 w-5" />}
+                        {['source', 'complimentSource'].includes(selectedItem.type) && <Globe className="h-5 w-5" />}
+                        {!['hotel', 'complimentHotel', 'problem', 'rating', 'compliment', 'complimentRating', 'complimentOverview', 'keyword', 'complimentKeyword', 'source', 'complimentSource'].includes(selectedItem.type) && <BarChart3 className="h-5 w-5" />}
                       </div>
                       <div>
                         <h3 className="text-xl font-bold">
-                          {selectedItem.type === 'keyword' ? 'Palavra-chave' : 
+                          {selectedItem.type === 'hotel' ? 'Hotel' :
+                           selectedItem.type === 'complimentHotel' ? 'Hotel elogiado' :
+                           selectedItem.type === 'keyword' ? 'Palavra-chave' : 
+                           selectedItem.type === 'complimentKeyword' ? 'Palavra-chave elogiada' :
                            selectedItem.type === 'problem' ? 'Problema' :
                            selectedItem.type === 'sector' ? 'Departamento' :
+                           selectedItem.type === 'complimentSector' ? 'Departamento elogiado' :
                            selectedItem.type === 'source' ? 'Fonte' :
+                           selectedItem.type === 'complimentSource' ? 'Fonte dos elogios' :
                            selectedItem.type === 'language' ? 'Idioma' :
-                           selectedItem.type === 'rating' ? 'Avaliação' : selectedItem.type}
+                           selectedItem.type === 'rating' ? 'Avaliação' :
+                           selectedItem.type === 'complimentRating' ? 'Avaliação (elogios)' :
+                           selectedItem.type === 'compliment' ? 'Elogio' :
+                           selectedItem.type === 'complimentOverview' ? 'Elogios' :
+                           selectedItem.type}
                         </h3>
                         <p className="text-sm text-blue-100 opacity-90">{selectedItem.value}</p>
                       </div>
@@ -4151,6 +4700,26 @@ function AdminDashboardContent() {
                   </Card>
                 )}
 
+                {/* Elogios Relacionados */}
+                {selectedItem.stats.topCompliments?.length > 0 && (
+                  <Card className="p-6 shadow-lg border-0">
+                    <h4 className="font-semibold mb-4 flex items-center text-lg">
+                      <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg mr-3">
+                        <Star className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      </div>
+                      Principais Elogios Relacionados
+                    </h4>
+                    <div className="space-y-3">
+                      {selectedItem.stats.topCompliments.map((item: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                          <span className="font-medium">{cleanDataWithSeparator(item.label ?? item.compliment)}</span>
+                          <Badge variant="outline" className="px-3 py-1">{item.value ?? item.count}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+
                 {/* Problemas Relacionados */}
                 {selectedItem.stats.topProblems?.length > 0 && (
                   <Card className="p-6 shadow-lg border-0">
@@ -4293,10 +4862,19 @@ function AdminDashboardContent() {
             {selectedChart && (
               <div className="space-y-6">
                 {/* Gráfico Grande */}
-                <div className="h-[500px] bg-muted/10 rounded-lg p-4">
+                <div
+                  className="bg-muted/10 rounded-lg p-4"
+                  style={{ height: selectedChart.chartHeight ?? 500 }}
+                >
                   <div className="w-full h-full">
-                  {renderModernChart(selectedChart.chartType, selectedChart.data, handleChartClick, selectedChart.type)}
-                </div>
+                    {renderModernChart(
+                      selectedChart.chartType,
+                      selectedChart.chartData,
+                      handleChartClick,
+                      selectedChart.type,
+                      selectedChart.chartHeight ?? 500
+                    )}
+                  </div>
                 </div>
 
                 {/* Dados Tabulares */}
@@ -4311,7 +4889,14 @@ function AdminDashboardContent() {
                              selectedChart.type === 'keyword' ? 'Palavra-chave' :
                              selectedChart.type === 'sector' ? 'Departamento' :
                              selectedChart.type === 'problem' ? 'Problema' :
-                             selectedChart.type === 'sentiment' ? 'Sentimento' : 'Item'}
+                             selectedChart.type === 'sentiment' ? 'Sentimento' :
+                             selectedChart.type === 'compliment' ? 'Elogio' :
+                             selectedChart.type === 'complimentSector' ? 'Departamento' :
+                             selectedChart.type === 'complimentKeyword' ? 'Palavra-chave' :
+                             selectedChart.type === 'complimentSource' ? 'Fonte' :
+                             selectedChart.type === 'complimentRating' ? 'Avaliação' :
+                             selectedChart.type === 'complimentHotel' ? 'Hotel' :
+                             'Item'}
                           </th>
                           <th className="py-3 px-4 bg-muted border-b text-center font-semibold">Quantidade</th>
                           <th className="py-3 px-4 bg-muted border-b text-center font-semibold">Percentual</th>
@@ -4319,10 +4904,12 @@ function AdminDashboardContent() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedChart.data.map((item: any, index: number) => {
-                          const total = selectedChart.data.reduce((sum: number, d: any) => sum + (d.value || 0), 0);
-                          const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
-                          const itemName = item.name || item.label;
+                        {(() => {
+                          const tableData = selectedChart.tableData || [];
+                          const total = tableData.reduce((sum: number, d: any) => sum + (d.value || 0), 0);
+                          return tableData.map((item: any, index: number) => {
+                            const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
+                            const itemName = item.name || item.label;
                           
                           return (
                             <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors">
@@ -4345,7 +4932,8 @@ function AdminDashboardContent() {
                               </td>
                             </tr>
                           );
-                        })}
+                          });
+                        })()}
                       </tbody>
                     </table>
                   </div>

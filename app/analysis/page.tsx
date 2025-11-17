@@ -58,7 +58,8 @@ import {
   Clock,
   Brain,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  XCircle
 
 } from "lucide-react"
 import { getAllAnalyses, updateFeedbackInFirestore, saveRecentEdit } from '@/lib/firestore-service'
@@ -4145,14 +4146,24 @@ const ProblemEditor = ({
                   </SelectContent>
                 </Select>
               )}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleKeywordInputModeToggle}
-                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
-              >
-                {!commonKeywords.includes(keyword) && keyword ? '✏️ Editar' : '+ Personalizar'}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      disabled
+                      className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto cursor-not-allowed opacity-60"
+                    >
+                      {!commonKeywords.includes(keyword) && keyword ? '✏️ Editar' : '+ Personalizar'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="flex items-center gap-2 text-xs">
+                  <XCircle className="h-3 w-3 text-red-500" />
+                  <span>Recurso em manutenção. Em breve liberado.</span>
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
         </div>
@@ -4321,14 +4332,24 @@ const ProblemEditor = ({
                   </SelectContent>
                 </Select>
               )}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleProblemInputModeToggle}
-                className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
-              >
-                {!commonProblems.includes(problemText) && problemText ? '✏️ Editar' : '+ Personalizar'}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      disabled
+                      className="text-xs text-green-600 hover:text-green-800 p-0 h-auto cursor-not-allowed opacity-60"
+                    >
+                      {!commonProblems.includes(problemText) && problemText ? '✏️ Editar' : '+ Personalizar'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="flex items-center gap-2 text-xs">
+                  <XCircle className="h-3 w-3 text-red-500" />
+                  <span>Recurso em manutenção. Em breve liberado.</span>
+                </TooltipContent>
+              </Tooltip>
             </div>
           )}
         </div>
