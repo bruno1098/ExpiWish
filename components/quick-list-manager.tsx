@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Pencil, 
   Trash2, 
@@ -24,7 +25,8 @@ import {
   GripVertical,
   Folder,
   List,
-  Search
+  Search,
+  XCircle
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -139,9 +141,10 @@ interface QuickListManagerProps {
   onListsUpdated: () => void;
   currentValue: string;
   onValueChange: (value: string) => void;
+  disabled?: boolean;
 }
 
-export default function QuickListManager({ type, lists, onListsUpdated, currentValue, onValueChange }: QuickListManagerProps) {
+export default function QuickListManager({ type, lists, onListsUpdated, currentValue, onValueChange, disabled = false }: QuickListManagerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -530,17 +533,37 @@ export default function QuickListManager({ type, lists, onListsUpdated, currentV
     }
   };
 
+  const renderManageButton = (isDisabled: boolean) => (
+    <Button 
+      variant="outline" 
+      size="sm" 
+      onClick={isDisabled ? undefined : () => setIsOpen(true)}
+      className={`ml-2 gap-1 h-7 ${isDisabled ? 'cursor-not-allowed opacity-60' : ''}`}
+      disabled={isDisabled}
+      aria-disabled={isDisabled}
+    >
+      <Settings className="h-3 w-3" />
+      Gerenciar
+    </Button>
+  );
+
   return (
     <>
-      <Button 
-        variant="outline" 
-        size="sm" 
-        onClick={() => setIsOpen(true)}
-        className="ml-2 gap-1 h-7"
-      >
-        <Settings className="h-3 w-3" />
-        Gerenciar
-      </Button>
+      {disabled ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              {renderManageButton(true)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="flex items-center gap-2 text-xs">
+            <XCircle className="h-3 w-3 text-red-500" />
+            <span>Recurso em manutenção. Em breve liberado.</span>
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        renderManageButton(false)
+      )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-md max-h-[80vh] overflow-hidden flex flex-col">
