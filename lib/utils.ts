@@ -319,6 +319,104 @@ export function getFeedbackProblems(feedback: any): string[] {
   return [];
 }
 
+export function extractComplimentsFromFeedback(feedback: any): string[] {
+  if (!feedback) return [];
+
+  const normalizeCompliment = (text: string) =>
+    text.replace(/^[-•\s]+/, '').trim();
+
+  const complimentsSource =
+    typeof feedback?.compliments === 'string' && feedback.compliments.trim().length > 0
+      ? feedback.compliments
+      : typeof feedback?.positive_details === 'string'
+        ? feedback.positive_details
+        : '';
+
+  const complimentsList: string[] = complimentsSource
+    ? complimentsSource
+        .split(/[\n;|,]/)
+        .map((item: string) => normalizeCompliment(item))
+        .filter((item: string) => item && item.toLowerCase() !== 'vazio' && item.length > 1)
+    : [];
+
+  const uniqueCompliments: string[] = Array.from(new Set(complimentsList));
+  if (uniqueCompliments.length > 0) {
+    return uniqueCompliments;
+  }
+
+  const rating = typeof feedback?.rating === 'number' ? feedback.rating : 0;
+  const sentiment = typeof feedback?.sentiment === 'string' ? feedback.sentiment.toLowerCase() : '';
+  const problems = getFeedbackProblems(feedback).filter((problem: string) => problem.toLowerCase() !== 'vazio');
+
+  if (problems.length === 0 && (rating >= 4 || sentiment === 'positive')) {
+    return ['Elogio geral'];
+  }
+
+  return [];
+}
+
+export function hasCompliment(feedback: any): boolean {
+  return extractComplimentsFromFeedback(feedback).length > 0;
+}
+
+export function buildComplimentPhraseDistribution(feedbacks: any[]) {
+  const counts: Record<string, number> = {};
+
+  feedbacks.forEach(feedback => {
+    extractComplimentsFromFeedback(feedback).forEach((compliment: string) => {
+      const sanitized = typeof compliment === 'string'
+        ? compliment.replace(/\s+/g, ' ').trim()
+        : '';
+      const label = sanitized.length > 0 ? sanitized : 'Elogio sem descrição';
+      counts[label] = (counts[label] || 0) + 1;
+    });
+  });
+
+  return Object.entries(counts)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+export function buildComplimentSectorDistribution(feedbacks: any[]) {
+  const counts: Record<string, number> = {};
+
+  feedbacks.forEach(feedback => {
+    if (!hasCompliment(feedback)) {
+      return;
+    }
+
+    getFeedbackSectors(feedback).forEach((sector: string) => {
+      if (sector && sector.toLowerCase() !== 'vazio') {
+        counts[sector] = (counts[sector] || 0) + 1;
+      }
+    });
+  });
+
+  return Object.entries(counts)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
+export function buildComplimentKeywordDistribution(feedbacks: any[]) {
+  const counts: Record<string, number> = {};
+
+  feedbacks.forEach(feedback => {
+    if (!hasCompliment(feedback)) {
+      return;
+    }
+
+    getFeedbackKeywords(feedback).forEach((keyword: string) => {
+      if (keyword && keyword.toLowerCase() !== 'vazio') {
+        counts[keyword] = (counts[keyword] || 0) + 1;
+      }
+    });
+  });
+
+  return Object.entries(counts)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+}
+
 // Função para obter o primeiro keyword válido (para compatibilidade)
 export function getFeedbackPrimaryKeyword(feedback: any): string {
   const keywords = getFeedbackKeywords(feedback);

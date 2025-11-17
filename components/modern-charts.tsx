@@ -784,6 +784,7 @@ export function ModernChart({
             // Melhorar legibilidade com quebras de linha e leve padding
             ticks: {
               ...baseOptions.scales.y.ticks,
+              autoSkip: false,
               padding: 6,
               callback: (value: any, index: number) => {
                 const raw = String(limitedData[index]?.name || limitedData[index]?.label || value || '');
