@@ -3,6 +3,14 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/integrations/teste.json',
+        destination: '/api/integrations/teste',
+      },
+    ];
+  },
   images: {
     unoptimized: true,
     domains: ['firebasestorage.googleapis.com'],
