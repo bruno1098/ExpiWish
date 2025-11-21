@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc, deleteDoc, updateDoc, limit } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc, deleteDoc, updateDoc, limit, collectionGroup, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { getCurrentUserData, UserData } from './auth-service';
 
@@ -22,6 +22,72 @@ export interface AnalysisData {
 // Nova estrutura hierárquica: analyse/{hotelId}/feedbacks/{feedbackId}
 const COLLECTION_ANALYSE = 'analyse';
 const SUBCOLLECTION_FEEDBACKS = 'feedbacks';
+const ACTION_PLANS_COLLECTION = 'action-plans';
+const ACTION_PLANS_SUBCOLLECTION = 'plans';
+
+export type ActionPlanType = 'product' | 'service';
+export type ActionPlanStatus = 'not_started' | 'in_progress' | 'completed' | 'delayed';
+
+export interface ActionPlanActor {
+  uid: string;
+  name?: string;
+  email?: string;
+}
+
+export interface ActionPlan {
+  id: string;
+  hotelId: string;
+  hotelSlug: string;
+  hotelName: string;
+  problemId: string;
+  problemLabel: string;
+  type: ActionPlanType;
+  departmentId: string;
+  departmentLabel: string;
+  startDate: string | null;
+  endDate: string | null;
+  status: ActionPlanStatus;
+  description: string;
+  createdBy: ActionPlanActor;
+  lastUpdatedBy?: ActionPlanActor | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateActionPlanInput {
+  hotelId: string;
+  hotelName: string;
+  hotelSlug?: string;
+  problemId: string;
+  problemLabel: string;
+  type: ActionPlanType;
+  departmentId: string;
+  departmentLabel: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  status: ActionPlanStatus;
+  description: string;
+  createdBy: ActionPlanActor;
+}
+
+export interface UpdateActionPlanInput {
+  problemId?: string;
+  problemLabel?: string;
+  type?: ActionPlanType;
+  departmentId?: string;
+  departmentLabel?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  status?: ActionPlanStatus;
+  description?: string;
+  updatedBy?: ActionPlanActor;
+}
+
+export interface FetchActionPlansOptions {
+  hotelId?: string;
+  hotelName?: string;
+  hotelSlug?: string;
+}
 
 // Função para gerar ID numérico de 5 dígitos
 const generateNumericId = (): string => {
@@ -54,6 +120,23 @@ export const generateRobustUniqueId = (prefix?: string) => {
   
   return prefix ? `${prefix}_${robustId}` : robustId;
 };
+
+const generateActionPlanId = () => {
+  const now = new Date();
+  const yy = now.getFullYear().toString().slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const random = Math.floor(100 + Math.random() * 900);
+  return `PLAN-${yy}${mm}${dd}-${random}`;
+};
+
+const getActionPlansCollectionRef = (hotelId: string) =>
+  collection(
+    db,
+    ACTION_PLANS_COLLECTION,
+    normalizeHotelName(hotelId),
+    ACTION_PLANS_SUBCOLLECTION
+  );
 
 // Função para detectar e corrigir IDs duplicados em análises existentes no Firebase
 export const detectAndFixDuplicateIds = async () => {
@@ -1418,4 +1501,481 @@ export const updateAnalysisInFirestoreWithUserData = async (
     console.error('❌ Erro ao atualizar análise no Firebase:', error);
     throw error;
   }
+};
+
+const timestampToIsoString = (value: any): string | null => {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Timestamp) {
+    return value.toDate().toISOString();
+  }
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    return value.toDate().toISOString();
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  return null;
+};
+
+const asActionPlanActor = (payload: any): ActionPlanActor => ({
+  uid: payload?.uid ?? '',
+  name: payload?.name,
+  email: payload?.email,
+});
+
+const mapActionPlanDoc = (
+  docSnap: any,
+  context: { hotelId?: string; hotelName?: string; hotelSlug?: string } = {}
+): ActionPlan => {
+  const data = docSnap.data() || {};
+  const parentHotelId = docSnap?.ref?.parent?.parent?.id;
+  const derivedHotelId = context.hotelId ?? data.hotelId ?? parentHotelId ?? '';
+  const derivedHotelSlug = context.hotelSlug ?? data.hotelSlug ?? parentHotelId ?? '';
+  const derivedHotelName = context.hotelName ?? data.hotelName ?? data.hotel ?? '';
+
+  return {
+    id: docSnap.id,
+    hotelId: derivedHotelId,
+    hotelSlug: derivedHotelSlug,
+    hotelName: derivedHotelName,
+    problemId: data.problemId ?? '',
+    problemLabel: data.problemLabel ?? '',
+    type: data.type ?? 'service',
+    departmentId: data.departmentId ?? '',
+    departmentLabel: data.departmentLabel ?? '',
+    startDate: timestampToIsoString(data.startDate),
+    endDate: timestampToIsoString(data.endDate),
+    status: data.status ?? 'not_started',
+    description: data.description ?? '',
+    createdBy: asActionPlanActor(data.createdBy),
+    lastUpdatedBy: data.lastUpdatedBy ? asActionPlanActor(data.lastUpdatedBy) : null,
+    createdAt: timestampToIsoString(data.createdAt) ?? new Date().toISOString(),
+    updatedAt:
+      timestampToIsoString(data.updatedAt) ??
+      timestampToIsoString(data.createdAt) ??
+      new Date().toISOString(),
+  };
+};
+
+const dateStringToTimestamp = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return Timestamp.fromDate(date);
+};
+
+const sortPlansByCreatedAt = (plans: ActionPlan[]) =>
+  [...plans].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+export const createActionPlan = async (input: CreateActionPlanInput): Promise<ActionPlan> => {
+  const now = Timestamp.now();
+  const planId = generateActionPlanId();
+  const hotelSlug = input.hotelSlug ?? normalizeHotelName(input.hotelName || input.hotelId);
+  const plansCollection = getActionPlansCollectionRef(hotelSlug);
+  const planDocRef = doc(plansCollection, planId);
+
+  await setDoc(planDocRef, {
+    hotelId: input.hotelId,
+    hotelSlug,
+    hotelName: input.hotelName,
+    problemId: input.problemId,
+    problemLabel: input.problemLabel,
+    type: input.type,
+    departmentId: input.departmentId,
+    departmentLabel: input.departmentLabel,
+    startDate: dateStringToTimestamp(input.startDate),
+    endDate: dateStringToTimestamp(input.endDate),
+    status: input.status,
+    description: input.description,
+    createdBy: input.createdBy,
+    lastUpdatedBy: input.createdBy,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const snapshot = await getDoc(planDocRef);
+  return mapActionPlanDoc(snapshot, {
+    hotelId: input.hotelId,
+    hotelSlug,
+    hotelName: input.hotelName,
+  });
+};
+
+export const updateActionPlan = async (
+  hotelSlug: string,
+  id: string,
+  updates: UpdateActionPlanInput
+): Promise<ActionPlan | null> => {
+  const plansCollection = getActionPlansCollectionRef(hotelSlug);
+  const docRef = doc(plansCollection, id);
+  const updatePayload: Record<string, any> = {
+    updatedAt: Timestamp.now(),
+  };
+
+  if (updates.problemId !== undefined) updatePayload.problemId = updates.problemId;
+  if (updates.problemLabel !== undefined) updatePayload.problemLabel = updates.problemLabel;
+  if (updates.type !== undefined) updatePayload.type = updates.type;
+  if (updates.departmentId !== undefined) updatePayload.departmentId = updates.departmentId;
+  if (updates.departmentLabel !== undefined) updatePayload.departmentLabel = updates.departmentLabel;
+  if (updates.status !== undefined) updatePayload.status = updates.status;
+  if (updates.description !== undefined) updatePayload.description = updates.description;
+  if (updates.updatedBy) updatePayload.lastUpdatedBy = updates.updatedBy;
+  if (updates.startDate !== undefined) updatePayload.startDate = dateStringToTimestamp(updates.startDate);
+  if (updates.endDate !== undefined) updatePayload.endDate = dateStringToTimestamp(updates.endDate);
+
+  await updateDoc(docRef, updatePayload);
+
+  const snapshot = await getDoc(docRef);
+  if (!snapshot.exists()) {
+    return null;
+  }
+  return mapActionPlanDoc(snapshot, { hotelSlug });
+};
+
+export const fetchActionPlans = async (
+  options: FetchActionPlansOptions = {}
+): Promise<ActionPlan[]> => {
+  try {
+    if (options.hotelId || options.hotelSlug || options.hotelName) {
+      let hotelName = options.hotelName;
+      let hotelSlug = options.hotelSlug;
+
+      if (!hotelSlug) {
+        if (typeof hotelName === 'string' && hotelName.length > 0) {
+          hotelSlug = normalizeHotelName(hotelName);
+        } else if (options.hotelId) {
+          try {
+            const hotelDoc = await getDoc(doc(db, 'hotels', options.hotelId));
+            if (hotelDoc.exists()) {
+              const data = hotelDoc.data();
+              const resolvedHotelName = (data as any)?.name ?? options.hotelId ?? '';
+              hotelName = resolvedHotelName || hotelName;
+              if (resolvedHotelName) {
+                hotelSlug = normalizeHotelName(resolvedHotelName);
+              }
+            }
+          } catch (error) {
+            console.warn('Não foi possível resolver nome do hotel para planos de ação:', error);
+          }
+        }
+      }
+
+      if (!hotelSlug) {
+        throw new Error('Não foi possível determinar o identificador do hotel para planos de ação.');
+      }
+
+      const plansRef = getActionPlansCollectionRef(hotelSlug);
+      const snapshot = await getDocs(plansRef);
+      const plans = snapshot.docs.map(docSnap =>
+        mapActionPlanDoc(docSnap, {
+          hotelId: options.hotelId ?? (docSnap.data()?.hotelId ?? ''),
+          hotelName,
+          hotelSlug,
+        })
+      );
+      return sortPlansByCreatedAt(plans);
+    }
+
+    const plansGroup = await getDocs(collectionGroup(db, ACTION_PLANS_SUBCOLLECTION));
+    const plans = plansGroup.docs.map(docSnap =>
+      mapActionPlanDoc(docSnap, {
+        hotelSlug: docSnap.ref.parent?.parent?.id,
+        hotelId: docSnap.data()?.hotelId,
+        hotelName: docSnap.data()?.hotelName,
+      })
+    );
+    return sortPlansByCreatedAt(plans);
+  } catch (error) {
+    console.error('Erro ao buscar planos de ação:', error);
+    throw error;
+  }
+};
+
+export const listenActionPlans = (
+  options: FetchActionPlansOptions = {},
+  onUpdate?: (plans: ActionPlan[]) => void,
+  onError?: (error: Error) => void
+) => {
+  try {
+    if (options.hotelId || options.hotelSlug || options.hotelName) {
+      let hotelName = options.hotelName;
+      let hotelSlug = options.hotelSlug;
+
+      if (!hotelSlug && hotelName) {
+        hotelSlug = normalizeHotelName(hotelName);
+      }
+
+      if (!hotelSlug && options.hotelId) {
+        hotelSlug = normalizeHotelName(options.hotelId);
+      }
+
+      if (!hotelName && options.hotelId) {
+        hotelName = options.hotelId;
+      }
+
+      if (!hotelSlug) {
+        throw new Error('Não foi possível determinar o identificador do hotel para planos de ação.');
+      }
+
+      const plansRef = getActionPlansCollectionRef(hotelSlug);
+      return onSnapshot(plansRef, (snapshot) => {
+        const plans = snapshot.docs.map(docSnap =>
+          mapActionPlanDoc(docSnap, {
+            hotelId: options.hotelId ?? (docSnap.data()?.hotelId ?? ''),
+            hotelName: hotelName ?? docSnap.data()?.hotelName,
+            hotelSlug,
+          })
+        );
+        onUpdate?.(sortPlansByCreatedAt(plans));
+      }, (error) => {
+        console.error('Erro no listener de planos de ação:', error);
+        onError?.(error as Error);
+      });
+    }
+
+    const plansGroup = collectionGroup(db, ACTION_PLANS_SUBCOLLECTION);
+    return onSnapshot(plansGroup, (snapshot) => {
+      const plans = snapshot.docs.map(docSnap =>
+        mapActionPlanDoc(docSnap, {
+          hotelSlug: docSnap.ref.parent?.parent?.id,
+          hotelId: docSnap.data()?.hotelId,
+          hotelName: docSnap.data()?.hotelName,
+        })
+      );
+      onUpdate?.(sortPlansByCreatedAt(plans));
+    }, (error) => {
+      console.error('Erro no listener global de planos de ação:', error);
+      onError?.(error as Error);
+    });
+  } catch (error) {
+    console.error('Erro ao iniciar listener de planos de ação:', error);
+    onError?.(error as Error);
+    return () => {};
+  }
+};
+
+export const deleteActionPlan = async (hotelSlug: string, id: string): Promise<void> => {
+  const plansCollection = getActionPlansCollectionRef(hotelSlug);
+  await deleteDoc(doc(plansCollection, id));
+};
+
+export interface ProblemSignalExample {
+  comment: string;
+  date?: string | null;
+  rating?: number | null;
+  sentiment?: string | null;
+  source?: string | null;
+  hotelName?: string | null;
+  department?: string | null;
+}
+
+export interface ProblemSignal {
+  label: string;
+  value: number;
+  hotels: Array<{ hotelId: string; hotelName: string }>;
+  departments: string[];
+  examples: ProblemSignalExample[];
+}
+
+interface FetchProblemSignalsOptions {
+  perHotelLimit?: number;
+  overallLimit?: number;
+  maxHotels?: number;
+  exampleLimit?: number;
+}
+
+export const fetchProblemSignals = async (
+  contexts: Array<{ hotelId: string; hotelName: string }>,
+  options: FetchProblemSignalsOptions = {}
+): Promise<ProblemSignal[]> => {
+  const perHotelLimit = options.perHotelLimit ?? 5;
+  const overallLimit = options.overallLimit ?? 15;
+  const maxHotels = options.maxHotels ?? contexts.length;
+  const exampleLimit = options.exampleLimit ?? 4;
+
+  const uniqueContexts = contexts
+    .filter(context => context && context.hotelId && context.hotelName)
+    .filter((context, index, array) =>
+      array.findIndex(item => item.hotelId === context.hotelId) === index
+    )
+    .slice(0, maxHotels);
+
+  const accumulator = new Map<
+    string,
+    {
+      label: string;
+      value: number;
+      hotels: Map<string, string>;
+      departments: Set<string>;
+      examples: ProblemSignalExample[];
+      exampleKeys: Set<string>;
+    }
+  >();
+
+  const normalizeText = (value: string | undefined | null) =>
+    (value ?? "")
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  for (const context of uniqueContexts) {
+    try {
+      const normalizedHotelId = normalizeHotelName(context.hotelName || context.hotelId);
+      if (!normalizedHotelId) {
+        continue;
+      }
+
+      const analysesRef = collection(db, COLLECTION_ANALYSE, normalizedHotelId, SUBCOLLECTION_FEEDBACKS);
+      let snapshot;
+
+      try {
+        snapshot = await getDocs(query(analysesRef, orderBy('importDate', 'desc'), limit(perHotelLimit)));
+      } catch (orderError) {
+        console.warn('⚠️ Não foi possível ordenar análises por data, usando fallback simples.', orderError);
+        snapshot = await getDocs(analysesRef);
+      }
+
+      const limitedDocs = snapshot.docs.slice(0, perHotelLimit);
+      for (const analysisDoc of limitedDocs) {
+        const data = analysisDoc.data() || {};
+        const analysis = data.analysis || {};
+
+        const distribution = Array.isArray(analysis.problemDistribution)
+          ? analysis.problemDistribution
+          : Array.isArray(analysis.problems)
+            ? analysis.problems
+            : [];
+
+        for (const item of distribution) {
+          const label = typeof item?.problem === 'string'
+            ? item.problem.trim()
+            : typeof item?.label === 'string'
+              ? item.label.trim()
+              : typeof item?.name === 'string'
+                ? item.name.trim()
+                : '';
+
+          if (!label) {
+            continue;
+          }
+
+          const rawCount = Number(item?.count ?? item?.value ?? item?.total ?? 0);
+          if (!Number.isFinite(rawCount) || rawCount <= 0) {
+            continue;
+          }
+
+          const entry = accumulator.get(label) ?? {
+            label,
+            value: 0,
+            hotels: new Map<string, string>(),
+            departments: new Set<string>(),
+            examples: [] as ProblemSignalExample[],
+            exampleKeys: new Set<string>(),
+          };
+
+          entry.value += rawCount;
+          entry.hotels.set(context.hotelId, context.hotelName);
+
+          const department = typeof item?.department === 'string'
+            ? item.department
+            : typeof item?.departmentLabel === 'string'
+              ? item.departmentLabel
+              : typeof item?.sector === 'string'
+                ? item.sector
+                : undefined;
+
+          if (department) {
+            entry.departments.add(department.trim());
+          }
+
+          const feedbackCollections: any[] = Array.isArray(analysis.recentFeedbacks)
+            ? [...analysis.recentFeedbacks]
+            : [];
+
+          const target = normalizeText(label);
+          for (const feedback of feedbackCollections) {
+            if (!feedback || entry.examples.length >= exampleLimit) {
+              break;
+            }
+
+            const feedbackProblem = normalizeText(
+              feedback.problem ??
+                feedback.problem_label ??
+                feedback.problemLabel ??
+                (Array.isArray(feedback.allProblems)
+                  ? feedback.allProblems[0]?.problem
+                  : undefined)
+            );
+
+            if (!feedbackProblem) {
+              continue;
+            }
+
+            const matches =
+              feedbackProblem === target ||
+              feedbackProblem.includes(target) ||
+              target.includes(feedbackProblem);
+
+            if (!matches) {
+              continue;
+            }
+
+            const rawComment = feedback.comment ?? feedback.text ?? feedback.feedback ?? feedback.summary;
+            const comment = typeof rawComment === 'string' ? rawComment.trim() : '';
+            if (!comment) {
+              continue;
+            }
+
+            const commentKey = normalizeText(comment).slice(0, 120);
+            if (entry.exampleKeys.has(commentKey)) {
+              continue;
+            }
+
+            entry.exampleKeys.add(commentKey);
+            entry.examples.push({
+              comment,
+              date: feedback.date ?? feedback.createdAt ?? feedback.created_at ?? null,
+              rating: typeof feedback.rating === 'number' ? feedback.rating : null,
+              sentiment: typeof feedback.sentiment === 'string' ? feedback.sentiment : null,
+              source: typeof feedback.source === 'string' ? feedback.source : null,
+              hotelName: feedback.hotelName ?? feedback.hotel ?? context.hotelName ?? null,
+              department:
+                typeof feedback.sector === 'string'
+                  ? feedback.sector
+                  : typeof feedback.department === 'string'
+                    ? feedback.department
+                    : null,
+            });
+          }
+
+          accumulator.set(label, entry);
+        }
+      }
+    } catch (error) {
+      console.error(`Erro ao carregar distribuição de problemas do hotel ${context.hotelName}:`, error);
+    }
+  }
+
+  const results = Array.from(accumulator.values())
+    .map(entry => ({
+      label: entry.label,
+      value: entry.value,
+      hotels: Array.from(entry.hotels.entries()).map(([hotelId, hotelName]) => ({ hotelId, hotelName })),
+      departments: Array.from(entry.departments.values()),
+      examples: entry.examples.slice(0, exampleLimit),
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, overallLimit);
+
+  return results;
 };

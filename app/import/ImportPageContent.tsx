@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle, Timer, X, Settings, Users } from "lucide-react"
+import { Upload, FileType, CheckCircle2, FolderOpen, Coffee, Zap, Brain, Clock, SparklesIcon, FileIcon, BarChart3, RefreshCw, AlertCircle, Timer, X, Settings, Users, ExternalLink } from "lucide-react"
 import { storeFeedbacks } from "@/lib/feedback"
 import { analyzeWithGPT } from "@/lib/openai-client"
 import { useToast } from "@/components/ui/use-toast"
@@ -29,12 +29,15 @@ import { cn } from "@/lib/utils"
 import { getPerformanceProfile, estimateProcessingTime, formatEstimatedTime } from "@/lib/performance-config"
 import { processAIResponse, type LegacyFeedback } from "@/lib/ai-compatibility-adapter"
 import { toLocalDateString, excelSerialToDate, brazilianDateToISO, getNowBrasilia } from "@/lib/data-utils"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Configurações de processamento - OTIMIZADAS PARA PERFORMANCE
 const BATCH_SIZE = 100;
 const DELAY_BETWEEN_BATCHES = 20;
 const CONCURRENT_REQUESTS = 5;
 const REQUEST_DELAY = 50;
+
+const ENABLE_INTEGRATIONS_PREVIEW = false;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -2491,6 +2494,35 @@ function ImportPageContent() {
             Nossa inteligência artificial transformará seus feedbacks em insights valiosos.
           </p>
 
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <Button
+                      variant="outline"
+                      className="group border-primary/40 text-primary hover:bg-primary/10"
+                      disabled={!ENABLE_INTEGRATIONS_PREVIEW}
+                      onClick={() => {
+                        if (ENABLE_INTEGRATIONS_PREVIEW) {
+                          router.push('/import/integracoes');
+                        }
+                      }}
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                      Ver integrações em tempo real
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!ENABLE_INTEGRATIONS_PREVIEW && (
+                  <TooltipContent side="bottom" align="center">
+                    Novo hub de integrações em construção. Em breve liberaremos o acesso.
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
           {/* Representação da estrutura esperada do Excel */}
           <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl border border-blue-200 dark:border-blue-800">
             <h3 className="text-xl font-semibold text-blue-900 dark:text-blue-100 mb-4">
@@ -2817,8 +2849,8 @@ function ImportPageContent() {
                   <div>
                     <h4 className="font-semibold text-blue-900 mb-2">O que são Embeddings?</h4>
                     <p className="text-blue-800 text-sm leading-relaxed">
-                      Embeddings são "números mágicos" que permitem à IA entender o significado real dos textos.
-                      Eles transformam palavras como "hotel maravilhoso" em números que a IA consegue comparar
+                      Embeddings são &quot;números mágicos&quot; que permitem à IA entender o significado real dos textos.
+                      Eles transformam palavras como &quot;hotel maravilhoso&quot; em números que a IA consegue comparar
                       e classificar com precisão.
                     </p>
                   </div>
@@ -3160,7 +3192,7 @@ function ImportPageContent() {
 
                 <div className="bg-white p-3 rounded border mb-3">
                   <p className="text-sm font-medium text-gray-700 mb-1">Texto do comentário:</p>
-                  <p className="text-sm text-gray-900 italic">"{group.normalizedText}"</p>
+                  <p className="text-sm text-gray-900 italic">&quot;{group.normalizedText}&quot;</p>
                 </div>
 
                 <div className="space-y-2">
