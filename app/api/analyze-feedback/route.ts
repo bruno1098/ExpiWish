@@ -2045,7 +2045,7 @@ export async function POST(request: NextRequest) {
     const errorType = classifyError(error);
 
     // Registrar falha quando o erro é temporário/crítico
-    if (['timeout','network_error','unknown_error','rate_limit','quota_exceeded'].includes(errorType)) {
+    if (['timeout','network_error','unknown_error','rate_limit'].includes(errorType)) {
       recordFailure();
     }
 
@@ -2061,11 +2061,28 @@ export async function POST(request: NextRequest) {
 
     const retry_after_ms = retryAfterMsMap[errorType] ?? 5000;
 
+    const errorMessages: Record<string, string> = {
+      rate_limit: 'Muitas requisições em paralelo. Aguarde alguns segundos e tente novamente.',
+      quota_exceeded: 'Limite de uso da API OpenAI atingido. Cadastre uma nova chave em Configurações para continuar.',
+      auth_error: 'Chave OpenAI inválida. Atualize a chave e tente novamente.',
+      default: 'Análise indisponível no momento. Aguarde e tentaremos novamente.'
+    };
+
+    const responseMessage = errorMessages[errorType] ?? errorMessages.default;
+
+    const statusMap: Record<string, number> = {
+      auth_error: 401,
+      rate_limit: 429,
+      quota_exceeded: 429
+    };
+
+    const status = statusMap[errorType] ?? 503;
+
     return NextResponse.json({
       error: errorType,
-      message: 'Análise indisponível no momento. Aguarde e tentaremos novamente.',
+      message: responseMessage,
       retry_after_ms,
       temporary: errorType !== 'auth_error'
-    }, { status: errorType === 'auth_error' ? 401 : (errorType === 'rate_limit' ? 429 : 503) });
+    }, { status });
   }
 }

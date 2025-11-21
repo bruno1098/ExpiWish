@@ -24,6 +24,7 @@ import {
   UserCheck,
   AlertCircle,
   Ticket,
+  ClipboardList,
 } from "lucide-react"
 
 function Sidebar() {
@@ -60,6 +61,12 @@ function Sidebar() {
     icon: Ticket,
     href: "/tickets",
     color: "text-red-400",
+  },
+  {
+    label: "Planos de Ação",
+    icon: ClipboardList,
+    href: "/action-plans",
+    color: "text-lime-400",
   },
   {
     label: "Histórico",
@@ -120,6 +127,12 @@ function Sidebar() {
       icon: Ticket,
       href: "/tickets",
       color: "text-red-400",
+    },
+    {
+      label: "Planos de Ação",
+      icon: ClipboardList,
+      href: "/action-plans",
+      color: "text-lime-400",
     },
     {
       label: "Configuração",
