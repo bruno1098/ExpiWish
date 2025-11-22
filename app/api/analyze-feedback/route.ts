@@ -63,15 +63,22 @@ setInterval(() => {
  */
 function classifyError(error: any): string {
   const message = error.message?.toLowerCase() || '';
+  const code = (error.code || error.type || '').toString().toLowerCase();
+  const status = String(error.status || error.statusCode || '');
 
-  if (message.includes('rate limit') || message.includes('429')) {
+  if (code.includes('insufficient_quota') || message.includes('quota') || message.includes('billing')) {
+    return 'quota_exceeded';
+  } else if (
+    message.includes('rate limit') ||
+    message.includes('429') ||
+    status === '429' ||
+    code.includes('rate_limit')
+  ) {
     return 'rate_limit';
   } else if (message.includes('timeout') || message.includes('aborted')) {
     return 'timeout';
   } else if (message.includes('api key') || message.includes('401')) {
     return 'auth_error';
-  } else if (message.includes('quota') || message.includes('billing')) {
-    return 'quota_exceeded';
   } else if (message.includes('network') || message.includes('fetch')) {
     return 'network_error';
   } else if (message.includes('embedding') || message.includes('similarity')) {
@@ -665,6 +672,24 @@ function processLLMResponse(
 const STRICT_REASONING = true;
 const ALLOW_PROBLEM_HEURISTICS = false; // desativa heurísticas de preenchimento de problema
 const ALLOW_DEPT_REMAP = false; // desativa remapeamentos pós-IA para evitar heurísticas; IA deve acertar na origem
+
+  const normalizeString = (value?: string) =>
+    (value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  const findDepartmentCandidate = (deptId: string) => {
+    if (!deptId) return undefined;
+    const normalizedTarget = normalizeString(deptId);
+    return candidates.departments.find(dept => {
+      const matchesId = dept.id === deptId;
+      const matchesLabel = dept.label === deptId;
+      const matchesNormalized = normalizeString(dept.id) === normalizedTarget || normalizeString(dept.label) === normalizedTarget;
+      return matchesId || matchesLabel || matchesNormalized;
+    });
+  };
   
   // Helper global para mapear contexto ↔ keyword canônica neutra por departamento
   const deriveNeutralKeyword = (detailText: string, departmentHint?: string): string => {
@@ -762,7 +787,7 @@ const ALLOW_DEPT_REMAP = false; // desativa remapeamentos pós-IA para evitar he
   // Processar cada issue
   for (const issue of response.issues || []) {
     // 🎯 BUSCAR POR LABEL (não por ID!)
-    const department = candidates.departments.find(d => d.id === issue.department_id);
+    const department = findDepartmentCandidate(issue.department_id);
     const keyword = candidates.keywords.find(k => k.label === issue.keyword_label);
     const problem = candidates.problems.find(p => p.label === issue.problem_label);
     
@@ -816,7 +841,7 @@ const ALLOW_DEPT_REMAP = false; // desativa remapeamentos pós-IA para evitar he
     let keywordLabel = 'Não identificado';
     let problemId = 'EMPTY';
     let problemLabel = 'VAZIO';
-    let departmentId = issue.department_id;
+    let departmentId = department?.id || issue.department_id;
     let matchedBy: 'embedding' | 'proposed' | 'exact' | 'direct' = 'direct';
     
     // Helpers para evitar confusão entre problem e keyword e resolver propostas
@@ -2045,7 +2070,8 @@ export async function POST(request: NextRequest) {
     const errorType = classifyError(error);
 
     // Registrar falha quando o erro é temporário/crítico
-    if (['timeout','network_error','unknown_error','rate_limit'].includes(errorType)) {
+    const breakerErrors = ['timeout','network_error','unknown_error'];
+    if (breakerErrors.includes(errorType)) {
       recordFailure();
     }
 
