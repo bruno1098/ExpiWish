@@ -1,7 +1,5 @@
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Configurações base de Performance do Sistema de Análise
-const BASE_PERFORMANCE_CONFIG = {
+// Configurações de Performance do Sistema de Análise
+export const PERFORMANCE_CONFIG = {
   // 🎯 NOVA ABORDAGEM: Análise Direta sem Embeddings
   // Quando true, GPT recebe TODAS as keywords e decide diretamente
   // Quando false, usa embeddings para pre-filtrar candidatos
@@ -33,25 +31,6 @@ const BASE_PERFORMANCE_CONFIG = {
   REQUEST_TIMEOUT: 30000,             // Timeout de requisição (30 segundos)
   ANALYSIS_TIMEOUT: 120000,           // Timeout de análise total (2 minutos)
 };
-
-function applyEnvironmentOverrides(config: typeof BASE_PERFORMANCE_CONFIG) {
-  if (!isProduction) {
-    return config;
-  }
-
-  // Em produção precisamos ser conservadores para não estourar quotas
-  return {
-    ...config,
-    USE_DIRECT_ANALYSIS: false,
-    CONCURRENT_REQUESTS: 2,
-    REQUEST_DELAY: 400,
-    DELAY_BETWEEN_BATCHES: 800,
-    DELAY_BETWEEN_CHUNKS: 800,
-    MAX_REQUESTS_PER_MINUTE: 180,
-  };
-}
-
-export const PERFORMANCE_CONFIG = applyEnvironmentOverrides(BASE_PERFORMANCE_CONFIG);
 
 // Configurações para diferentes tipos de carga
 export const PERFORMANCE_PROFILES = {
