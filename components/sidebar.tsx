@@ -67,6 +67,9 @@ function Sidebar() {
     icon: ClipboardList,
     href: "/action-plans",
     color: "text-lime-400",
+    disabled: true,
+    disabledTooltip: "Módulo em construção",
+    disabledBadgeLabel: "Em construção",
   },
   {
     label: "Histórico",
@@ -133,6 +136,9 @@ function Sidebar() {
       icon: ClipboardList,
       href: "/action-plans",
       color: "text-lime-400",
+      disabled: true,
+      disabledTooltip: "Módulo em construção",
+      disabledBadgeLabel: "Em construção",
     },
     {
       label: "Configuração",
@@ -261,19 +267,34 @@ function Sidebar() {
         </Link>
           
         <div className="space-y-2">
-          {routes.map((route) => (
-            <Link
-              key={route.href}
-              href={route.href}
-              className={cn(
-                  "text-sm group flex p-3 justify-start font-medium cursor-pointer rounded-xl transition-all duration-300 ease-out relative overflow-hidden",
-                pathname === route.href
-                  ? "text-white bg-gradient-to-r from-blue-500/20 to-indigo-500/20 border border-blue-500/30 shadow-lg transform scale-105"
+          {routes.map((route) => {
+            const isDisabled = Boolean(route.disabled)
+            const disabledTooltip = route.disabledTooltip ?? "Recurso em construção"
+            const disabledBadgeLabel = route.disabledBadgeLabel ?? "Em breve"
+            const itemTitle = isDisabled ? disabledTooltip : (collapsed ? route.label : undefined)
+
+            return (
+              <Link
+                key={route.href}
+                href={route.href}
+                aria-disabled={isDisabled}
+                data-disabled={isDisabled || undefined}
+                onClick={(event) => {
+                  if (isDisabled) {
+                    event.preventDefault()
+                    event.stopPropagation()
+                  }
+                }}
+                className={cn(
+                  "text-sm group flex p-3 justify-start font-medium rounded-xl transition-all duration-300 ease-out relative overflow-hidden",
+                  pathname === route.href
+                    ? "text-white bg-gradient-to-r from-blue-500/20 to-indigo-500/20 border border-blue-500/30 shadow-lg transform scale-105"
                     : "text-slate-300 hover:text-white hover:bg-white/10 hover:scale-105",
-                  collapsed ? "justify-center" : "w-full"
-              )}
-                title={collapsed ? route.label : undefined}
-            >
+                  collapsed ? "justify-center" : "w-full",
+                  isDisabled && "cursor-not-allowed opacity-60 hover:scale-100 hover:bg-white/5"
+                )}
+                title={itemTitle}
+              >
                 {/* Background hover effect */}
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-out"></div>
                 
@@ -287,13 +308,21 @@ function Sidebar() {
                     route.color
                   )} />
                   {!collapsed && (
-                    <span className="transition-all duration-300 ease-out font-medium whitespace-nowrap">
-                      {route.label}
-                    </span>
+                    <div className="flex w-full items-center justify-between gap-2">
+                      <span className="transition-all duration-300 ease-out font-medium whitespace-nowrap">
+                        {route.label}
+                      </span>
+                      {isDisabled && (
+                        <span className="text-[10px] uppercase tracking-wide text-amber-200 bg-amber-500/10 border border-amber-400/40 rounded-full px-2 py-0.5 font-semibold">
+                          {disabledBadgeLabel}
+                        </span>
+                      )}
+                    </div>
                   )}
-              </div>
-            </Link>
-          ))}
+                </div>
+              </Link>
+            )
+          })}
           </div>
         </div>
       </div>
