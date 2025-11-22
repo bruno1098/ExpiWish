@@ -248,6 +248,7 @@ function ImportPageContent() {
   const [recoveredErrorCount, setRecoveredErrorCount] = useState(0);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [fatalError, setFatalError] = useState<{ title: string; description: string } | null>(null);
 
   // AbortController para cancelar requisições em andamento
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -1178,6 +1179,7 @@ function ImportPageContent() {
     setRecoveredErrorCount(0);
     setIsCancelled(false);
     setIsProcessing(true);
+    setFatalError(null);
 
     // Criar novo AbortController para esta análise
     abortControllerRef.current = new AbortController();
@@ -1654,13 +1656,37 @@ function ImportPageContent() {
                 throw error;
               }
 
+              const type = error.error_type || 'temporario';
+
+              if (type === 'quota_exceeded' || type === 'auth_error') {
+                const fatalMessage = type === 'quota_exceeded'
+                  ? {
+                      title: 'Limite de uso da IA atingido',
+                      description: 'A chave OpenAI configurada está sem créditos. Entre em contato com o administrador para inserir uma nova chave e tente novamente.'
+                    }
+                  : {
+                      title: 'Chave OpenAI inválida',
+                      description: 'A chave informada foi rejeitada pela OpenAI. Verifique se ela está correta nas Configurações e repita a importação.'
+                    };
+
+                setFatalError(fatalMessage);
+                setCurrentStep('Análise pausada - ação do administrador necessária');
+                setIsProcessing(false);
+                setImporting(false);
+                abortControllerRef.current?.abort();
+
+                throw Object.assign(new Error(type === 'quota_exceeded' ? 'FATAL_QUOTA' : 'FATAL_AUTH'), {
+                  fatal: true,
+                  originalError: error
+                });
+              }
+
               setRetryCount(prev => prev + 1);
 
               const retryAfter = typeof error.retry_after_ms === 'number'
                 ? error.retry_after_ms
                 : Math.pow(performanceProfile.RETRY_BACKOFF_MULTIPLIER, attempt) * performanceProfile.RETRY_BASE_DELAY;
 
-              const type = error.error_type || 'temporario';
               setCurrentStep(`Erro (${type}). Aguardando ${Math.ceil(retryAfter/1000)}s e tentando novamente...`);
               await new Promise(resolve => setTimeout(resolve, retryAfter));
               attempt++;
@@ -1777,6 +1803,10 @@ function ImportPageContent() {
                   throw error;
                 }
 
+                if (error.fatal) {
+                  throw error;
+                }
+
                 console.error(`Erro ao processar feedback após todas as tentativas:`, error);
 
                 return {
@@ -1813,6 +1843,14 @@ function ImportPageContent() {
             // Aguardar todas as requisições do grupo terminarem com tratamento gracioso
             try {
               const groupResults = await Promise.allSettled(promises);
+
+              const fatalRejection = groupResults.find(result =>
+                result.status === 'rejected' && (result.reason?.fatal || result.reason?.message?.startsWith('FATAL_'))
+              ) as PromiseRejectedResult | undefined;
+
+              if (fatalRejection) {
+                throw fatalRejection.reason;
+              }
 
               // Processar resultados, incluindo falhas
               groupResults.forEach((result, index) => {
