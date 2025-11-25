@@ -1,52 +1,94 @@
-import { ActionPlanStatus, ActionPlanType } from "@/lib/firestore-service";
+import { ActionPlanStatus, ActionPlanType } from '@/lib/firestore-service';
 
-export const ACTION_PLAN_STATUS_META: Record<
-  ActionPlanStatus,
-  { label: string; badgeClass: string; dotClass: string }
-> = {
+const DEFAULT_STATUS: ActionPlanStatus = 'not_started';
+
+type StatusMeta = {
+  label: string;
+  badgeClass: string;
+  dotClass: string;
+  boardAccent: string;
+  gradient: string;
+  chartColor: string;
+};
+
+export const ACTION_PLAN_STATUS_META: Record<ActionPlanStatus, StatusMeta> = {
   not_started: {
-    label: "A iniciar",
-    badgeClass:
-      "bg-white text-slate-900 border-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-800",
-    dotClass: "bg-slate-400",
+    label: 'A iniciar',
+    badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
+    dotClass: 'bg-slate-400',
+    boardAccent: 'border-slate-200/80 bg-slate-50/80',
+    gradient: 'from-slate-50 to-white',
+    chartColor: '#94a3b8',
   },
   in_progress: {
-    label: "Em andamento",
-    badgeClass:
-      "bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:border-amber-900",
-    dotClass: "bg-amber-500",
+    label: 'Em andamento',
+    badgeClass: 'bg-sky-100 text-sky-800 border border-sky-200',
+    dotClass: 'bg-sky-500',
+    boardAccent: 'border-sky-200/80 bg-sky-50/70',
+    gradient: 'from-sky-50 to-white',
+    chartColor: '#38bdf8',
   },
   completed: {
-    label: "Concluído",
-    badgeClass:
-      "bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-100 dark:border-emerald-900",
-    dotClass: "bg-emerald-500",
+    label: 'Concluído',
+    badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+    dotClass: 'bg-emerald-500',
+    boardAccent: 'border-emerald-200/80 bg-emerald-50/70',
+    gradient: 'from-emerald-50 to-white',
+    chartColor: '#34d399',
   },
   delayed: {
-    label: "Atrasado",
-    badgeClass:
-      "bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/30 dark:text-rose-100 dark:border-rose-900",
-    dotClass: "bg-rose-500",
+    label: 'Atrasado',
+    badgeClass: 'bg-rose-100 text-rose-800 border border-rose-200',
+    dotClass: 'bg-rose-500',
+    boardAccent: 'border-rose-200/80 bg-rose-50/70',
+    gradient: 'from-rose-50 to-white',
+    chartColor: '#fb7185',
   },
 };
 
-export const ACTION_PLAN_TYPE_LABELS: Record<ActionPlanType, string> = {
-  product: "Produto",
-  service: "Serviço",
+const FALLBACK_STATUS_META: StatusMeta = {
+  label: 'Status indefinido',
+  badgeClass: 'bg-gray-100 text-gray-700 border border-gray-200',
+  dotClass: 'bg-gray-400',
+  boardAccent: 'border-gray-200/80 bg-gray-50/80',
+  gradient: 'from-gray-50 to-white',
+  chartColor: '#9ca3af',
 };
 
-export const STATUS_FILTER_OPTIONS: Array<{
-  value: "all" | ActionPlanStatus;
-  label: string;
-}> = [{ value: "all", label: "Todos" },
-  ...Object.entries(ACTION_PLAN_STATUS_META).map(([value, meta]) => ({
-    value: value as ActionPlanStatus,
-    label: meta.label,
-  }))
-];
+export const normalizeActionPlanStatus = (status?: string | null): ActionPlanStatus => {
+  if (!status) {
+    return DEFAULT_STATUS;
+  }
+  return (ACTION_PLAN_STATUS_META as Record<string, StatusMeta>)[status]
+    ? (status as ActionPlanStatus)
+    : DEFAULT_STATUS;
+};
 
-export const TYPE_FILTER_OPTIONS: Array<{ value: "all" | ActionPlanType; label: string }> = [
-  { value: "all", label: "Todos" },
-  { value: "product", label: ACTION_PLAN_TYPE_LABELS.product },
-  { value: "service", label: ACTION_PLAN_TYPE_LABELS.service },
+export const getActionPlanStatusMeta = (status?: string | null): StatusMeta => {
+  const normalized = normalizeActionPlanStatus(status ?? undefined);
+  return ACTION_PLAN_STATUS_META[normalized] ?? FALLBACK_STATUS_META;
+};
+
+export const ACTION_PLAN_TYPE_META: Record<
+  ActionPlanType,
+  {
+    label: string;
+    description: string;
+  }
+> = {
+  product: {
+    label: 'Produto',
+    description: 'Itens físicos, amenities e estrutura tangível.',
+  },
+  service: {
+    label: 'Serviço',
+    description: 'Atendimento, processos e experiência do hóspede.',
+  },
+};
+
+export const ACTION_PLAN_STATUS_ORDER: ActionPlanStatus[] = [
+  'not_started',
+  'in_progress',
+  'delayed',
+  'completed',
 ];

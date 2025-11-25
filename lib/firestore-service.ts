@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc, deleteDoc, updateDoc, limit, collectionGroup, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, query, orderBy, Timestamp, where, setDoc, deleteDoc, updateDoc, limit, collectionGroup } from 'firebase/firestore';
 import { db } from './firebase';
 import { getCurrentUserData, UserData } from './auth-service';
 
@@ -44,6 +44,8 @@ export interface ActionPlan {
   type: ActionPlanType;
   departmentId: string;
   departmentLabel: string;
+  managerName?: string | null;
+  budget?: string | null;
   startDate: string | null;
   endDate: string | null;
   status: ActionPlanStatus;
@@ -63,6 +65,8 @@ export interface CreateActionPlanInput {
   type: ActionPlanType;
   departmentId: string;
   departmentLabel: string;
+  managerName?: string | null;
+  budget?: string | null;
   startDate?: string | null;
   endDate?: string | null;
   status: ActionPlanStatus;
@@ -76,6 +80,8 @@ export interface UpdateActionPlanInput {
   type?: ActionPlanType;
   departmentId?: string;
   departmentLabel?: string;
+  managerName?: string | null;
+  budget?: string | null;
   startDate?: string | null;
   endDate?: string | null;
   status?: ActionPlanStatus;
@@ -1545,6 +1551,8 @@ const mapActionPlanDoc = (
     type: data.type ?? 'service',
     departmentId: data.departmentId ?? '',
     departmentLabel: data.departmentLabel ?? '',
+    managerName: data.managerName ?? null,
+    budget: data.budget ?? null,
     startDate: timestampToIsoString(data.startDate),
     endDate: timestampToIsoString(data.endDate),
     status: data.status ?? 'not_started',
@@ -1589,6 +1597,8 @@ export const createActionPlan = async (input: CreateActionPlanInput): Promise<Ac
     type: input.type,
     departmentId: input.departmentId,
     departmentLabel: input.departmentLabel,
+    managerName: input.managerName ?? null,
+    budget: input.budget ?? null,
     startDate: dateStringToTimestamp(input.startDate),
     endDate: dateStringToTimestamp(input.endDate),
     status: input.status,
@@ -1623,6 +1633,8 @@ export const updateActionPlan = async (
   if (updates.type !== undefined) updatePayload.type = updates.type;
   if (updates.departmentId !== undefined) updatePayload.departmentId = updates.departmentId;
   if (updates.departmentLabel !== undefined) updatePayload.departmentLabel = updates.departmentLabel;
+  if (updates.managerName !== undefined) updatePayload.managerName = updates.managerName;
+  if (updates.budget !== undefined) updatePayload.budget = updates.budget;
   if (updates.status !== undefined) updatePayload.status = updates.status;
   if (updates.description !== undefined) updatePayload.description = updates.description;
   if (updates.updatedBy) updatePayload.lastUpdatedBy = updates.updatedBy;
@@ -1647,16 +1659,20 @@ export const fetchActionPlans = async (
       let hotelSlug = options.hotelSlug;
 
       if (!hotelSlug) {
-        if (typeof hotelName === 'string' && hotelName.length > 0) {
+        if (hotelName) {
           hotelSlug = normalizeHotelName(hotelName);
         } else if (options.hotelId) {
           try {
             const hotelDoc = await getDoc(doc(db, 'hotels', options.hotelId));
             if (hotelDoc.exists()) {
               const data = hotelDoc.data();
-              const resolvedHotelName = (data as any)?.name ?? options.hotelId ?? '';
-              hotelName = resolvedHotelName || hotelName;
+              const resolvedHotelName =
+                (typeof (data as any)?.name === 'string' && (data as any)?.name.trim().length > 0
+                  ? (data as any).name
+                  : options.hotelId) ?? '';
+
               if (resolvedHotelName) {
+                hotelName = resolvedHotelName;
                 hotelSlug = normalizeHotelName(resolvedHotelName);
               }
             }
@@ -1694,69 +1710,6 @@ export const fetchActionPlans = async (
   } catch (error) {
     console.error('Erro ao buscar planos de ação:', error);
     throw error;
-  }
-};
-
-export const listenActionPlans = (
-  options: FetchActionPlansOptions = {},
-  onUpdate?: (plans: ActionPlan[]) => void,
-  onError?: (error: Error) => void
-) => {
-  try {
-    if (options.hotelId || options.hotelSlug || options.hotelName) {
-      let hotelName = options.hotelName;
-      let hotelSlug = options.hotelSlug;
-
-      if (!hotelSlug && hotelName) {
-        hotelSlug = normalizeHotelName(hotelName);
-      }
-
-      if (!hotelSlug && options.hotelId) {
-        hotelSlug = normalizeHotelName(options.hotelId);
-      }
-
-      if (!hotelName && options.hotelId) {
-        hotelName = options.hotelId;
-      }
-
-      if (!hotelSlug) {
-        throw new Error('Não foi possível determinar o identificador do hotel para planos de ação.');
-      }
-
-      const plansRef = getActionPlansCollectionRef(hotelSlug);
-      return onSnapshot(plansRef, (snapshot) => {
-        const plans = snapshot.docs.map(docSnap =>
-          mapActionPlanDoc(docSnap, {
-            hotelId: options.hotelId ?? (docSnap.data()?.hotelId ?? ''),
-            hotelName: hotelName ?? docSnap.data()?.hotelName,
-            hotelSlug,
-          })
-        );
-        onUpdate?.(sortPlansByCreatedAt(plans));
-      }, (error) => {
-        console.error('Erro no listener de planos de ação:', error);
-        onError?.(error as Error);
-      });
-    }
-
-    const plansGroup = collectionGroup(db, ACTION_PLANS_SUBCOLLECTION);
-    return onSnapshot(plansGroup, (snapshot) => {
-      const plans = snapshot.docs.map(docSnap =>
-        mapActionPlanDoc(docSnap, {
-          hotelSlug: docSnap.ref.parent?.parent?.id,
-          hotelId: docSnap.data()?.hotelId,
-          hotelName: docSnap.data()?.hotelName,
-        })
-      );
-      onUpdate?.(sortPlansByCreatedAt(plans));
-    }, (error) => {
-      console.error('Erro no listener global de planos de ação:', error);
-      onError?.(error as Error);
-    });
-  } catch (error) {
-    console.error('Erro ao iniciar listener de planos de ação:', error);
-    onError?.(error as Error);
-    return () => {};
   }
 };
 
@@ -1942,6 +1895,56 @@ export const fetchProblemSignals = async (
             }
 
             entry.exampleKeys.add(commentKey);
+
+            const resolvedDepartment = (() => {
+              const fallbackDepartment =
+                typeof feedback.sector === 'string'
+                  ? feedback.sector
+                  : typeof feedback.department === 'string'
+                    ? feedback.department
+                    : null;
+
+              if (!Array.isArray(feedback.allProblems) || feedback.allProblems.length === 0) {
+                return fallbackDepartment;
+              }
+
+              const matchingProblem = feedback.allProblems.find((problemItem: any) => {
+                const problemCandidate = normalizeText(
+                  problemItem?.problem ??
+                    problemItem?.problemLabel ??
+                    problemItem?.label ??
+                    problemItem?.name
+                );
+
+                if (!problemCandidate) {
+                  return false;
+                }
+
+                return (
+                  problemCandidate === target ||
+                  problemCandidate.includes(target) ||
+                  target.includes(problemCandidate)
+                );
+              });
+
+              if (matchingProblem) {
+                const departmentFromProblem =
+                  typeof matchingProblem.department === 'string'
+                    ? matchingProblem.department
+                    : typeof matchingProblem.sector === 'string'
+                      ? matchingProblem.sector
+                      : typeof matchingProblem.departmentLabel === 'string'
+                        ? matchingProblem.departmentLabel
+                        : undefined;
+
+                if (departmentFromProblem) {
+                  return departmentFromProblem;
+                }
+              }
+
+              return fallbackDepartment;
+            })();
+
             entry.examples.push({
               comment,
               date: feedback.date ?? feedback.createdAt ?? feedback.created_at ?? null,
@@ -1949,12 +1952,7 @@ export const fetchProblemSignals = async (
               sentiment: typeof feedback.sentiment === 'string' ? feedback.sentiment : null,
               source: typeof feedback.source === 'string' ? feedback.source : null,
               hotelName: feedback.hotelName ?? feedback.hotel ?? context.hotelName ?? null,
-              department:
-                typeof feedback.sector === 'string'
-                  ? feedback.sector
-                  : typeof feedback.department === 'string'
-                    ? feedback.department
-                    : null,
+              department: resolvedDepartment ?? null,
             });
           }
 
