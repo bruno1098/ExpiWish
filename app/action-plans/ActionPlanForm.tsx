@@ -117,15 +117,16 @@ export const ActionPlanForm = ({
     }
   }, [defaultValues, form]);
 
-  const handleProblemChange = (problemId: string) => {
+  const watchedProblemLabel = form.watch('problemLabel');
+  const watchedDepartmentLabel = form.watch('departmentLabel');
+
+  const handleProblemMetadata = (problemId: string) => {
     const selected = problems.find(item => item.id === problemId);
-    form.setValue('problemId', problemId);
     form.setValue('problemLabel', selected?.label ?? '');
   };
 
-  const handleDepartmentChange = (departmentId: string) => {
+  const handleDepartmentMetadata = (departmentId: string) => {
     const selected = departments.find(item => item.id === departmentId);
-    form.setValue('departmentId', departmentId);
     form.setValue('departmentLabel', selected?.label ?? '');
   };
 
@@ -143,19 +144,33 @@ export const ActionPlanForm = ({
           <FormField
             control={form.control}
             name="problemId"
-            render={() => (
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>Problema</FormLabel>
                 <Select
-                  value={form.watch('problemId')}
-                  onValueChange={value => handleProblemChange(value)}
+                  value={field.value ?? ''}
+                  onValueChange={value => {
+                    field.onChange(value);
+                    handleProblemMetadata(value);
+                  }}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione um problema" />
+                      <SelectValue
+                        placeholder={
+                          problems.find(problem => problem.id === field.value)?.label ||
+                          watchedProblemLabel ||
+                          'Selecione um problema'
+                        }
+                      />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent className="max-h-64">
+                    {!problems.some(problem => problem.id === field.value) && field.value && (
+                      <SelectItem value={field.value}>
+                        {watchedProblemLabel || 'Problema atual'}
+                      </SelectItem>
+                    )}
                     {problems.map(problem => (
                       <SelectItem key={problem.id} value={problem.id}>
                         {problem.label}
@@ -199,19 +214,33 @@ export const ActionPlanForm = ({
           <FormField
             control={form.control}
             name="departmentId"
-            render={() => (
+            render={({ field }) => (
               <FormItem>
                 <FormLabel>Departamento</FormLabel>
                 <Select
-                  value={form.watch('departmentId')}
-                  onValueChange={value => handleDepartmentChange(value)}
+                  value={field.value ?? ''}
+                  onValueChange={value => {
+                    field.onChange(value);
+                    handleDepartmentMetadata(value);
+                  }}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione um departamento" />
+                      <SelectValue
+                        placeholder={
+                          departments.find(department => department.id === field.value)?.label ||
+                          watchedDepartmentLabel ||
+                          'Selecione um departamento'
+                        }
+                      />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent className="max-h-64">
+                    {!departments.some(department => department.id === field.value) && field.value && (
+                      <SelectItem value={field.value}>
+                        {watchedDepartmentLabel || 'Departamento atual'}
+                      </SelectItem>
+                    )}
                     {departments.map(department => (
                       <SelectItem key={department.id} value={department.id}>
                         {department.label}

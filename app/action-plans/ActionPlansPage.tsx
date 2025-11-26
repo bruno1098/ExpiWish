@@ -568,7 +568,7 @@ export const ActionPlansPage = () => {
         <ActionPlanBoard plans={plans} onStatusChange={handleStatusChange} onSelect={handleSelectPlan} />
       </div>
 
-      <Card>
+      <Card className="mt-6">
         <CardHeader>
           <CardTitle>Lista detalhada</CardTitle>
         </CardHeader>
@@ -578,11 +578,12 @@ export const ActionPlansPage = () => {
       </Card>
 
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Editar plano de ação</DrawerTitle>
-          </DrawerHeader>
-          <div className="p-4">
+        <DrawerContent className="h-[92vh] max-h-[92vh] sm:mx-auto sm:max-w-5xl">
+          <div className="flex h-full flex-col">
+            <DrawerHeader className="sm:mx-auto sm:max-w-4xl">
+              <DrawerTitle>Editar plano de ação</DrawerTitle>
+            </DrawerHeader>
+            <div className="flex-1 overflow-y-auto p-4 pb-10 sm:mx-auto sm:max-w-4xl">
             {editingPlan ? (
               <div className="space-y-6">
                 <div className="rounded-2xl border bg-muted/30 p-4 shadow-sm">
@@ -654,6 +655,7 @@ export const ActionPlansPage = () => {
             ) : (
               <p className="text-sm text-muted-foreground">Selecione um plano para editar.</p>
             )}
+            </div>
           </div>
         </DrawerContent>
       </Drawer>

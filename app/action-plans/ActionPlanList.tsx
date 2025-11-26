@@ -95,7 +95,7 @@ export const ActionPlanList = ({ plans, onSelect, isLoading = false }: ActionPla
           Nenhum plano encontrado.
         </div>
       ) : (
-        <div className="max-h-[70vh] overflow-y-auto pr-3">
+        <div className="max-h-[90vh] overflow-y-auto pr-3 scroll-smooth">
           <div className="space-y-3">
             {filteredPlans.map(plan => (
               <ActionPlanCard key={plan.id} plan={plan} onClick={onSelect} />
