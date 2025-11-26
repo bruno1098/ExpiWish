@@ -55,6 +55,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Dados do usuário não encontrados' }, { status: 401 });
       }
 
+
+
+
+      
       const result = await updateAnalysisInFirestoreWithUserData(
         analysisId,
         updateData,
