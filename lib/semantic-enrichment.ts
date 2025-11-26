@@ -443,6 +443,23 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     ]
   },
 
+  "Recepção - Empréstimo de itens": {
+    synonyms: [
+      "empréstimo de ferro", "emprestar objetos", "solicitar itens", "itens emprestados"
+    ],
+    related_terms: [
+      "ferro de passar", "cabos", "adaptadores", "berço", "roupões",
+      "ventilador", "carregador", "kit bebê", "registro", "devolução",
+      "recepção", "front desk"
+    ],
+    colloquial_variations: [
+      "pedir ferro", "emprestar ferro", "solicitar itens", "pegar emprestado"
+    ],
+    examples: [
+      "recepção emprestou ferro de passar", "item estava indisponível", "solicitamos secador e trouxeram"
+    ]
+  },
+
   "Recepção - Reservas": {
     synonyms: [
       "booking", "reserva", "pré-reserva", "alteração de reserva", "cancelamento"
@@ -977,7 +994,26 @@ export const KEYWORD_SEMANTIC_CONTEXT: Record<string, {
     "não percebi privilégios no hotel apesar de ser EG",
     "tratativa rápida do EG para esclarecer benefícios"
   ]
-}
+},
+
+  "EG - Exclusive Guest": {
+    synonyms: [
+      "clube Exclusive Guest", "programa EG", "clube de férias Wish", "membership",
+      "programa de férias", "clube de vantagens", "plano Exclusive Guest"
+    ],
+    related_terms: [
+      "Grupo Wish", "acúmulo de pontos", "troca de semanas", "RCI",
+      "destinos nacionais", "destinos internacionais", "benefícios exclusivos",
+      "serviços especiais", "upgrades", "consultor EG", "venda de clube"
+    ],
+    colloquial_variations: [
+      "EG", "clube de férias", "programa Exclusive", "clube Wish"
+    ],
+    examples: [
+      "fiz adesão ao EG para acumular pontos", "consultor do EG explicou sobre RCI",
+      "não consegui usar minhas semanas do Exclusive Guest", "programa EG oferece experiências exclusivas"
+    ]
+  },
 
 };
 

@@ -78,6 +78,7 @@ const ALL_PROBLEMS = [...baseKeys, ...additionalKeys];
 
 const args = process.argv.slice(2);
 const SHOULD_RESET_EMBEDDINGS = args.includes('--reset-embeddings');
+const FORCE_UPDATE = args.includes('--force');
 
 if (ALL_PROBLEMS.length === 0) {
   console.error('❌ Nenhum problem extraído do código. Verifique o arquivo fonte e o formato do dicionário.');
@@ -203,14 +204,14 @@ async function syncProblemsToFirebase() {
       problemsNoCdigoNaoNoFirebase.forEach(p => console.log(`   - ${p}`));
     }
 
-    if (problemsNoFirebaseNaoNoCodigo.length === 0 && problemsNoCdigoNaoNoFirebase.length === 0) {
+    if (!FORCE_UPDATE && problemsNoFirebaseNaoNoCodigo.length === 0 && problemsNoCdigoNaoNoFirebase.length === 0) {
       console.log('   ✅ Nenhuma diferença encontrada! Firebase e código estão sincronizados.');
       console.log('\n✨ Sincronização concluída com sucesso!\n');
       process.exit(0);
     }
 
-    const normalizedKeywords = extractKeywords(currentData.keywords);
-    const normalizedDepartments = normalizeListItems(currentData.departments || []);
+    const normalizedKeywords = Array.from(new Set(extractKeywords(currentData.keywords)));
+    const normalizedDepartments = Array.from(new Set(normalizeListItems(currentData.departments || [])));
     const taxonomyVersion = calculateTaxonomyVersion({
       keywords: normalizedKeywords,
       problems: ALL_PROBLEMS,
