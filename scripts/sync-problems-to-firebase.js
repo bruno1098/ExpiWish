@@ -12,7 +12,16 @@
  */
 
 const { initializeApp } = require('firebase/app');
-const { getFirestore, doc, updateDoc, getDoc } = require('firebase/firestore');
+const {
+  getFirestore,
+  doc,
+  updateDoc,
+  getDoc,
+  deleteField,
+  collection,
+  getDocs,
+  deleteDoc
+} = require('firebase/firestore');
 
 // Configuração do Firebase
 const firebaseConfig = {
@@ -67,14 +76,95 @@ const additionalKeys = extractDictKeys(sourceCode, 'ADDITIONAL_PROBLEMS_EG_CORPO
 
 const ALL_PROBLEMS = [...baseKeys, ...additionalKeys];
 
+const args = process.argv.slice(2);
+const SHOULD_RESET_EMBEDDINGS = args.includes('--reset-embeddings');
+
 if (ALL_PROBLEMS.length === 0) {
   console.error('❌ Nenhum problem extraído do código. Verifique o arquivo fonte e o formato do dicionário.');
   process.exit(1);
 }
 
-/**
- * Função principal
- */
+function normalizeListItems(items = []) {
+  return items
+    .map((item) => {
+      if (typeof item === 'string') {
+        return item.trim();
+      }
+      if (item && typeof item === 'object') {
+        return item.label || item.id || JSON.stringify(item);
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .sort();
+}
+
+function extractKeywords(rawKeywords) {
+  if (!rawKeywords) return [];
+  if (Array.isArray(rawKeywords)) {
+    return normalizeListItems(rawKeywords);
+  }
+  if (typeof rawKeywords === 'object') {
+    const flattened = Object.values(rawKeywords)
+      .flat()
+      .map((kw) => (typeof kw === 'string' ? kw : kw?.label || ''));
+    return normalizeListItems(flattened);
+  }
+  return [];
+}
+
+function generateHash(items = []) {
+  const normalized = normalizeListItems(items);
+  const joined = normalized.join('|');
+  let hash = 0;
+  for (let i = 0; i < joined.length; i++) {
+    hash = ((hash << 5) - hash) + joined.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function calculateTaxonomyVersion(taxonomy) {
+  const keywordsHash = generateHash(taxonomy.keywords);
+  const problemsHash = generateHash(taxonomy.problems);
+  const departmentsHash = generateHash(taxonomy.departments);
+
+  const combinedHash = `${keywordsHash}-${problemsHash}-${departmentsHash}`;
+  let version = 0;
+  for (let i = 0; i < combinedHash.length; i++) {
+    version = ((version << 5) - version) + combinedHash.charCodeAt(i);
+    version |= 0;
+  }
+
+  return {
+    version: Math.abs(version),
+    last_updated: new Date(),
+    keywords_count: taxonomy.keywords.length,
+    problems_count: taxonomy.problems.length,
+    departments_count: taxonomy.departments.length,
+    keywords_hash: keywordsHash,
+    problems_hash: problemsHash,
+    departments_hash: departmentsHash,
+    embeddings_outdated: true
+  };
+}
+
+async function clearEmbeddingChunks() {
+  const chunksRef = collection(db, 'dynamic-lists', 'global-lists', 'embeddings');
+  const snapshot = await getDocs(chunksRef);
+
+  if (snapshot.empty) {
+    return 0;
+  }
+
+  let deleted = 0;
+  for (const chunk of snapshot.docs) {
+    await deleteDoc(chunk.ref);
+    deleted++;
+  }
+  return deleted;
+}
+
 async function syncProblemsToFirebase() {
   try {
     console.log('🚀 Iniciando sincronização de problems para o Firebase...\n');
@@ -119,17 +209,47 @@ async function syncProblemsToFirebase() {
       process.exit(0);
     }
 
+    const normalizedKeywords = extractKeywords(currentData.keywords);
+    const normalizedDepartments = normalizeListItems(currentData.departments || []);
+    const taxonomyVersion = calculateTaxonomyVersion({
+      keywords: normalizedKeywords,
+      problems: ALL_PROBLEMS,
+      departments: normalizedDepartments
+    });
+
     // 3. Atualizar no Firebase
     console.log('\n💾 Atualizando Firebase...');
     
-    await updateDoc(docRef, {
+    const updatePayload = {
       problems: ALL_PROBLEMS,
       problems_updated_at: new Date(),
-      problems_synced_from: 'generate-embeddings/route.ts PROBLEM_CONTEXT_DICT',
-      total_problems: ALL_PROBLEMS.length
-    });
+      problems_synced_from: 'app/api/generate-embeddings/route.ts',
+      total_problems: ALL_PROBLEMS.length,
+      taxonomy_version_info: taxonomyVersion,
+      taxonomy_version: taxonomyVersion.version,
+      last_taxonomy_update: new Date()
+    };
+
+    if (SHOULD_RESET_EMBEDDINGS) {
+      Object.assign(updatePayload, {
+        embeddings_taxonomy_version: null,
+        embeddings_updated_at: null,
+        embeddings_outdated_reason: 'problems_list_changed',
+        problems_with_embeddings: deleteField()
+      });
+    }
+
+    await updateDoc(docRef, updatePayload);
 
     console.log('   ✅ Firebase atualizado com sucesso!');
+
+    if (SHOULD_RESET_EMBEDDINGS) {
+      console.log('\n🧹 Limpando chunks antigos de embeddings...');
+      const deletedChunks = await clearEmbeddingChunks();
+      console.log(`   ✅ ${deletedChunks} chunks removidos (se existiam)`);
+    } else {
+      console.log('\nℹ️ Chunks de embeddings preservados (use --reset-embeddings para limpar).');
+    }
 
     // 4. Validar atualização
     console.log('\n🔍 Validando atualização...');

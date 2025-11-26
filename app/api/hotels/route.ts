@@ -12,6 +12,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nome e ID do hotel são obrigatórios" }, { status: 400 });
     }
     
+    
     // Verificar se já existe um hotel com este ID
     const hotelsRef = collection(db, "hotels");
     const q = query(hotelsRef, where("hotelId", "==", hotelId));

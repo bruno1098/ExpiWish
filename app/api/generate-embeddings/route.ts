@@ -22,7 +22,7 @@ const BATCH_SIZE = 20; // Processar 20 por vez
  */
 const PROBLEM_CONTEXT_DICT: Record<string, string[]> = { 
   // A&B (31 problemas) ⭐ ATUALIZADO: +12 problems da cliente
-  "A&B - Atendimento demorado": ["lentidão no serviço de alimentação", "tempo de espera excessivo para refeições", "garçons lentos", "demora nos pedidos", "atendimento demorado no restaurante", "garçons demoram muito", "serviço lento no bar", "demora para servir", "espera longa",],
+  "A&B - Atendimento demorado": ["lentidão no serviço de alimentação", "tempo de espera excessivo para refeições", "garçons lentos", "demora nos pedidos", "atendimento demorado no restaurante", "garçons demoram muito", "serviço lento no bar", "demora para servir", "espera longa", "room service demorou para entregar"],
   "A&B - Atendimento insistente": ["abordagem excessiva da equipe", "falta de discrição no serviço"],
   "A&B - Café da manhã não disponível": ["ausência de serviço matinal", "indisponibilidade de desjejum"],
   "A&B - Falta de higiene": ["condições sanitárias inadequadas na área de alimentação", "ausência de limpeza"],
@@ -31,7 +31,7 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "A&B - Não disponível": ["serviço de alimentação indisponível", "restaurante fechado"],
   "A&B - Variedade limitada": ["poucas opções de cardápio", "falta de diversidade gastronômica"],
   "A&B - Falta de opções": ["menu com poucas opções", "cardápio limitado", "pouca variedade"],
-  "A&B - Qualidade da comida": ["sabor inadequado", "preparo insatisfatório das refeições"],
+  "A&B - Qualidade da comida": ["sabor inadequado", "preparo insatisfatório das refeições", "falta de tempero", "alimentos sem sabor", "comida sem frescor"],
   "A&B - Preço elevado": ["custo alto das refeições", "valor desproporcional"],
   
   
@@ -39,23 +39,17 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "A&B - Refeição fria": ["temperatura inadequada da comida", "pratos servidos frios"],
   "A&B - Bebidas limitadas": ["poucas opções de bebidas", "variedade restrita"],
   "A&B - Espaço pequeno": ["área de refeições insuficiente", "restaurante com pouca capacidade"],
-  "A&B - Falta de tempero": ["comida sem sabor", "preparo sem temperos adequados"],
   
   "A&B - Horário restrito": ["horários limitados de funcionamento", "pouca flexibilidade de horários"],
   // ⭐ NOVOS DA CLIENTE (12 problems):
-  "Café da Manhã - Variedade limitada": ["poucas opções no café da manhã", "falta de diversidade no breakfast", "café da manhã repetitivo"],
-  "Gastronomia - Variedade limitada": ["cardápio pouco variado", "falta de opções gastronômicas", "menu limitado"],
-  "Almoço - Variedade limitada": ["poucas opções no almoço", "falta de diversidade no lunch", "almoço repetitivo"],
-  "Jantar - Variedade limitada": ["poucas opções no jantar", "falta de diversidade no dinner", "jantar repetitivo"],
-  "Café da Manhã - Qualidade abaixo do esperado": ["café da manhã ruim", "breakfast de baixa qualidade", "desjejum insatisfatório"],
-  "Café da Manhã - Presença de insetos": ["insetos no café da manhã", "moscas na comida", "baratas no buffet", "falta de higiene com pragas"],
-  "A&B - Alimentos sem sabor e frescor": ["comida sem gosto", "alimentos sem frescor", "comida velha", "falta de tempero e qualidade"],
+  "A&B - Café da manhã repetitivo": ["café da manhã repetitivo", "mesmas opções todo dia", "falta de renovação no buffet matinal", "variedade limitada no café da manhã"],
+  "A&B - Almoço repetitivo": ["poucas opções no almoço", "falta de diversidade no lunch", "almoço repetitivo"],
+  "A&B - Jantar repetitivo": ["poucas opções no jantar", "falta de diversidade no dinner", "jantar repetitivo"],
   "A&B - Drinks insatisfatórios": ["bebidas ruins", "drinks de baixa qualidade", "coquetéis mal preparados"],
   "A&B - Atendimento pouco acolhedor": ["atendimento frio", "garçom pouco simpático", "falta de hospitalidade no restaurante"],
   "A&B - Utensílios em mau estado": ["talheres sujos", "pratos quebrados", "copos manchados", "utensílios mal conservados"],
   "A&B - Mise en place incompleto": ["mesa sem montagem adequada", "guardanapos faltando", "talheres incompletos", "pratos e copos ausentes", "arrumação de mesa incompleta"],
   "A&B - Reposição do mise en place": ["falta reposição de itens", "buffet vazio", "demora na reposição"],
-  "Room Service - Demora na entrega dos pedidos": ["room service demorado", "pedido no quarto demorou", "entrega lenta no quarto"],
 
   // Corporativo (7 problemas)
   "Corporativo - Atendimento demorado": ["lentidão em processos administrativos", "tempo excessivo em serviços corporativos"],
@@ -74,17 +68,16 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "EG - Expectativa não atendida": ["promessas não cumpridas", "experiência abaixo do esperado"],
 
   // Governança (32 problemas) - APENAS limpeza, higiene e amenities ⭐ ATUALIZADO: +6 problems da cliente
-  "Governança - Falta de limpeza": ["condições inadequadas de higiene", "ausência de arrumação"],
+  "Governança - Falta de limpeza no hotel": ["condições inadequadas de higiene", "ausência de arrumação"],
   "Governança - Falta de limpeza no banheiro": ["banheiro sujo", "higienização inadequada do sanitário"],
   "Governança - Falta de limpeza no quarto": ["quarto mal arrumado", "higienização insuficiente"],
-  "Governança - Roupa de cama suja": ["lençóis com manchas", "roupa de cama não trocada"],
-  "Governança - Toalhas sujas": ["toalhas manchadas", "falta de troca de toalhas"],
+  "Governança - Roupa de cama suja": ["lençóis com manchas", "roupa de cama não trocada", "cobertor sujo", "colcha suja", "lençol manchado"],
+  "Governança - Toalhas sujas": ["toalhas manchadas", "falta de troca de toalhas", "toalhas velhas", "toalhas desgastadas"],
   "Governança - Cheiro ruim": ["odor desagradável no quarto", "falta de ventilação"],
   "Governança - Poeira": ["acúmulo de poeira", "limpeza superficial"],
   "Governança - Mofo": ["presença de fungos", "umidade excessiva causando mofo", "odor de mofo", "manchas de mofo"],
   
-  "Governança - Falta de amenities": ["ausência de produtos de higiene", "amenities não repostos"],
-  "Governança - Lençóis manchados": ["roupa de cama com sujeira", "lençóis não trocados"],
+  "Governança - Falta de amenities": ["ausência de produtos de higiene", "amenities não repostos", "ferro de passar indisponível", "não emprestaram ferro"],
   "Governança - Falta de troca": ["ausência de troca diária", "serviço de arrumação não realizado"],
   "Governança - Sujeira visível": ["falta de limpeza aparente", "sujeira não removida"],
   "Governança - Banheiro com cabelo": ["cabelos não removidos", "limpeza superficial do banheiro"],
@@ -96,8 +89,6 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Governança - Frigobar sujo": ["frigobar mal higienizado", "interior do frigobar com sujeira"],
   "Governança - Roupão sujo": ["roupão manchado", "roupão não trocado"],
   "Governança - Travesseiro sujo": ["travesseiro com manchas", "fronhas sujas"],
-  "Governança - Cobertor sujo": ["cobertor manchado", "roupa de cama suja"],
-  "Governança - Colcha suja": ["colcha não limpa", "cobertura da cama suja"],
   "Governança - Janela suja": ["vidros sujos", "janelas mal limpas"],
   "Governança - Varanda suja": ["área externa suja", "varanda mal higienizada"],
   // ⭐ NOVOS DA CLIENTE (6 problems):
@@ -131,18 +122,16 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Manutenção - Chuveiro com falha": ["chuveiro não funciona", "problemas com água quente"],
   "Manutenção - Elevador com falha": ["elevador quebrado", "mau funcionamento do elevador"],
   "Manutenção - Equipamento com falha": ["aparelhos não funcionam", "defeitos em equipamentos"],
-  "Manutenção - Falta de manutenção": ["estado de conservação precário", "desgaste visível"],
+  "Manutenção - Falta de manutenção": ["estado de conservação precário", "desgaste visível", "manutenção não realizada", "revisão pendente"],
   "Manutenção - Infiltração": ["vazamento de água", "umidade nas paredes"],
   "Manutenção - Porta com falha": ["porta não fecha", "problemas na fechadura"],
   "Manutenção - Tomada com falha": ["tomadas não funcionam", "problemas elétricos"],
   "Manutenção - TV com falha": ["televisão quebrada", "TV não liga"],
   "Manutenção - Vazamento": ["escape de água", "canos com vazamento"],
   "Manutenção - Janela com falha": ["janela não abre/fecha", "vidros quebrados"],
-  "Manutenção - Banheiro com problemas": ["instalações sanitárias com defeito", "problemas hidráulicos"],
-  "Manutenção - Toalhas velhas": ["toalhas desgastadas", "tecidos em mau estado de conservação"],
   "Manutenção - Fechadura quebrada": ["porta não tranca", "sistema de fechamento com defeito"],
   "Manutenção - Iluminação ruim": ["lâmpadas queimadas", "luz insuficiente"],
-  "Manutenção - Cortina quebrada": ["cortina não funciona", "mecanismo de abertura com defeito"],
+  "Manutenção - Cortina quebrada": ["cortina não funciona", "mecanismo de abertura com defeito", "cortineiro quebrado", "trilho da cortina com problema"],
   "Manutenção - Frigobar com falha": ["frigobar não gela", "refrigeração não funciona"],
   "Manutenção - Descarga com falha": ["descarga não funciona", "problemas no vaso sanitário"],
   "Manutenção - Pia entupida": ["escoamento lento", "pia não drena"],
@@ -151,7 +140,6 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Manutenção - Cama quebrada": ["estrutura da cama com defeito", "colchão com problema"],
   "Manutenção - Cadeira quebrada": ["mobiliário danificado", "assento com defeito"],
   "Manutenção - Mesa quebrada": ["mesa instável", "móvel danificado"],
-  "Manutenção - Cortineiro quebrado": ["suporte de cortina solto", "trilho com defeito"],
   "Manutenção - Espelho quebrado": ["espelho trincado", "vidro danificado"],
   "Manutenção - Pintura ruim": ["paredes descascadas", "pintura desgastada"],
   "Manutenção - Piso danificado": ["chão com problemas", "revestimento solto"],
@@ -167,8 +155,7 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Manutenção - Ralo entupido": ["escoamento bloqueado", "drenagem não funciona"],
   "Manutenção - Umidade": ["excesso de umidade", "ambiente úmido"],
   // Movidos de Lazer para Manutenção (equipamentos quebrados/com falha)
-  "Manutenção - Equipamento de lazer com falha": ["aparelhos quebrados na área de lazer", "equipamentos recreativos não funcionais"],
-  "Manutenção - Falta de manutenção em lazer": ["equipamentos de lazer desgastados", "área recreativa mal conservada"],
+  "Manutenção - Equipamento de lazer com falha": ["aparelhos quebrados na área de lazer", "equipamentos recreativos não funcionais", "falta de manutenção nas áreas de lazer"],
   "Manutenção - Academia com equipamentos ruins": ["aparelhos de ginástica quebrados", "academia mal equipada"],
   "Manutenção - Piscina fria": ["temperatura inadequada da água", "aquecimento da piscina insuficiente"],
   // Movidos de TI para Manutenção (equipamentos tecnológicos quebrados/com falha)
@@ -179,16 +166,15 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Manutenção - Chuveirinho inoperante": ["ducha higiênica quebrada", "chuveirinho não funciona", "bidê não funciona"],
   "Manutenção - Ducha entupida": ["chuveiro com jato fraco", "ducha entupida", "furos bloqueados no chuveiro"],
   "Manutenção - Lixeira quebrada": ["lixeira danificada", "cesto de lixo quebrado", "lixeira sem tampa"],
-  "Manutenção - Necessidade de reforma": ["banheiro precisa reforma", "sanitário antigo", "instalações precisam renovação"],
+  "Manutenção - Necessidade de reforma": ["banheiro precisa reforma", "sanitário antigo", "instalações precisam renovação", "banheiro com problema estrutural"],
   "Manutenção - Vazão baixa da água": ["água fraca no chuveiro", "pressão baixa", "pouca água"],
   "Manutenção - Ar condicionado com vazamento": ["ar vazando água", "ar pingando", "climatização com escape de água"],
-  "Manutenção - Manutenção não realizada": ["solicitação de reparo não atendida", "manutenção não veio", "chamado ignorado"],
   "Manutenção - Melhora nos jardins": ["jardim precisa cuidados", "área verde mal cuidada", "paisagismo precisa melhorar"],
 
   // Operações (37 problemas) - APENAS atendimento, processos e serviços (sem equipamentos quebrados) ⭐ ATUALIZADO: +4 problems da cliente
   "Operações - Atendimento demorado": ["lentidão no atendimento operacional", "tempo de espera excessivo"],
   "Operações - Atendimento insistente": ["abordagem excessiva da equipe", "falta de discrição"],
-  "Operações - Atendimento ruim": ["qualidade insatisfatória do serviço", "falta de cordialidade"],
+  "Operações - Atendimento ruim": ["qualidade insatisfatória do serviço", "falta de cordialidade", "concierge ruim", "concierge desatencioso"],
   "Operações - Barulho": ["poluição sonora", "falta de silêncio"],
   
   "Operações - Cobrança indevida": ["erro em faturamento", "taxas incorretas"],
@@ -206,7 +192,6 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Recepção - Informação incorreta": ["dados imprecisos", "orientação equivocada", "informaram errado"],
   "Recepção - Estacionamento lotado": ["falta de vagas", "estacionamento cheio", "vaga indisponível"],
   "Recepção - Reserva com problema": ["erro na reserva", "reserva não encontrada", "booking não reconhecido"],
-  "Recepção - Indisponibilidade de ferro de passar": ["ferro não disponível", "empréstimo de ferro indisponível", "não tem ferro"],
   "Operações - Upgrade negado": ["solicitação de upgrade recusada", "melhoria não concedida"],
   "Operações - Perda de pertences": ["objetos extraviados", "itens perdidos"],
   "Operações - Falta de cortesia": ["ausência de gentileza", "tratamento frio"],
@@ -214,7 +199,6 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Operações - Falta de organização": ["desorganização operacional", "processos confusos"],
   "Operações - Reclamação ignorada": ["queixa não atendida", "problema não resolvido"],
   "Operações - Horário não cumprido": ["atrasos em serviços", "horários não respeitados"],
-  "Operações - Concierge ruim": ["serviço de concierge insatisfatório", "falta de informações turísticas"],
   "Operações - Bagagem extraviada": ["malas perdidas", "pertences não localizados"],
   "Operações - Serviço impessoal": ["atendimento sem personalização", "falta de hospitalidade"],
   "Operações - Falta de agilidade": ["lentidão operacional", "demora em processos"],
@@ -225,7 +209,7 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "Operações - Burocracia excessiva": ["processos muito complexos", "excesso de procedimentos"],
   "Operações - Atendimento telefônico ruim": ["dificuldade de contato", "telefone não atende"],
   // ⭐ NOVOS DA CLIENTE (4 problems):
-  "Operações - Atendimento sem fluência em espanhol": ["funcionário não fala espanhol", "falta atendimento em espanhol", "barreira de idioma"],
+  "Operações - Atendimento sem fluência em outro idioma": ["funcionário não fala idiomas estrangeiros", "falta atendimento em outro idioma", "barreira linguística", "atendimento sem fluência em espanhol"],
   "Operações - Quadro reduzido de funcionários": ["falta de pessoal", "equipe insuficiente", "poucos funcionários"],
   
   "Operações - Demora na liberação do quarto": ["quarto demorou para ficar pronto", "espera longa pelo quarto", "acomodação não liberada no horário"],
@@ -267,17 +251,15 @@ const PROBLEM_CONTEXT_DICT: Record<string, string[]> = {
   "TI - Wi-fi lento": ["internet lenta", "velocidade baixa de conexão"],
   "TI - Wi-fi instável": ["conexão intermitente", "queda constante de sinal"],
   "TI - Canais limitados": ["poucas opções de canais", "programação limitada"],
-  "TI - App do hotel ruim": ["aplicativo mal desenvolvido", "app não funciona"],
+  "TI - App do hotel ruim": ["aplicativo mal desenvolvido", "app não funciona", "app instável", "aplicativo fecha sozinho", "aplicativo trava"],
   "TI - Senha Wi-fi complicada": ["dificuldade para conectar", "senha muito complexa"],
   "TI - Sinal fraco": ["cobertura wifi insuficiente", "sinal de internet baixo"],
   "TI - Falta de suporte técnico": ["ausência de ajuda para problemas técnicos", "TI não responde"],
   "TI - Sistema lento": ["tecnologia defasada", "equipamentos lentos"],
-  "TI - Aplicativo instável": ["app trava", "sistema não responde"],
   "TI - TV não funciona": ["televisão quebrada", "TV não liga"],
   "TI - Sistema de som com falha": ["qualidade de áudio inadequada", "som não funciona"],
-  "TI - Chromecast com falha": ["streaming não disponível", "dispositivo de mídia com problema"],
   "TI - Controle remoto quebrado": ["controle não funciona", "botões com defeito"],
-  "TI - Smart TV com problemas": ["TV inteligente com problemas", "sistema da TV lento"],
+  "TI - Smart TV com problemas": ["TV inteligente com problemas", "sistema da TV lento", "chromecast com falha", "chromecast não conecta"],
   "TI - Streaming não disponível": ["serviços de streaming bloqueados", "Netflix/YouTube não funciona"],
   // ⭐ NOVO DA CLIENTE (1 problem):
   "TV - TV com funções limitadas": ["TV sem recursos", "televisão básica", "poucos recursos na TV"],
@@ -385,6 +367,18 @@ export async function POST(request: NextRequest) {
         error: 'Estrutura de keywords não reconhecida'
       }, { status: 400 });
     }
+
+    const keywordCounts: Record<string, number> = {};
+    keywordsArray.forEach((kw) => {
+      keywordCounts[kw] = (keywordCounts[kw] || 0) + 1;
+    });
+    const duplicatedKeywords = Object.entries(keywordCounts)
+      .filter(([, count]) => count > 1)
+      .map(([kw, count]) => `${kw} (${count}x)`);
+    if (duplicatedKeywords.length > 0) {
+      console.log('♻️ Keywords duplicadas encontradas e removidas:', duplicatedKeywords);
+    }
+    keywordsArray = Array.from(new Set(keywordsArray));
     
     // Fonte AUTORITATIVA de problems: usar exatamente as chaves de PROBLEM_CONTEXT_DICT
     const problems = Object.keys(PROBLEM_CONTEXT_DICT);
