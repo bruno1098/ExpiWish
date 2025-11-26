@@ -8,6 +8,42 @@ import { KEYWORD_SEMANTIC_CONTEXT, generateEnrichedKeywordText } from '@/lib/sem
 
 const BATCH_SIZE = 20; // Processar 20 por vez
 
+function normalizeStringItems(items: any[]): string[] {
+  return items
+    .map((item) => {
+      if (typeof item === 'string') {
+        return item.trim();
+      }
+      if (item && typeof item === 'object') {
+        return (item.label || item.id || '').trim();
+      }
+      return '';
+    })
+    .filter(Boolean);
+}
+
+function extractKeywordsSource(rawKeywords: any): string[] {
+  if (!rawKeywords) return [];
+  if (Array.isArray(rawKeywords)) {
+    return normalizeStringItems(rawKeywords);
+  }
+  if (typeof rawKeywords === 'object') {
+    const flattened = Object.values(rawKeywords)
+      .flat()
+      .map((kw: any) => (typeof kw === 'string' ? kw : kw?.label || kw?.id || ''));
+    return normalizeStringItems(flattened);
+  }
+  return [];
+}
+
+function extractDepartmentsSource(rawDepartments: any): string[] {
+  if (!rawDepartments) return [];
+  if (Array.isArray(rawDepartments)) {
+    return normalizeStringItems(rawDepartments);
+  }
+  return normalizeStringItems([rawDepartments]);
+}
+
 
 /**
  * Dicionário de CONTEXTOS CONCEITUAIS para Problems
@@ -355,13 +391,9 @@ export async function POST(request: NextRequest) {
     // Processar keywords - pode ser MAP (por departamento) ou ARRAY (flat)
     let keywordsArray: string[] = [];
     
-    if (typeof data.keywords === 'object' && !Array.isArray(data.keywords)) {
-      // MAP por departamento - converter para array flat
-      console.log('📋 Keywords em formato MAP, convertendo para array...');
-      keywordsArray = Object.values(data.keywords).flat() as string[];
-    } else if (Array.isArray(data.keywords)) {
-      // ARRAY flat
-      keywordsArray = data.keywords;
+    if (typeof data.keywords === 'object' || Array.isArray(data.keywords)) {
+      console.log('📋 Normalizando keywords recebidas do Firebase...');
+      keywordsArray = extractKeywordsSource(data.keywords);
     } else {
       return NextResponse.json({
         error: 'Estrutura de keywords não reconhecida'
@@ -382,7 +414,7 @@ export async function POST(request: NextRequest) {
     
     // Fonte AUTORITATIVA de problems: usar exatamente as chaves de PROBLEM_CONTEXT_DICT
     const problems = Object.keys(PROBLEM_CONTEXT_DICT);
-    const departments = data.departments || [];
+    const departments = extractDepartmentsSource(data.departments || []);
 
     // Não filtrar keywords fora do mapeamento: usar fallback automático
     // Apenas reportar se há keywords sem contexto explícito
@@ -397,7 +429,8 @@ export async function POST(request: NextRequest) {
     reportProgress('Iniciando processamento', 5, { keywords: keywordsArray.length, problems: problems.length, missing_keywords: missingKeywords.length });
 
     // Calcular versão atual da taxonomia
-    const taxonomyVersion = calculateTaxonomyVersion({ keywords: data.keywords, problems, departments });
+    const taxonomyVersionInput = { keywords: keywordsArray, problems, departments };
+    const taxonomyVersion = calculateTaxonomyVersion(taxonomyVersionInput);
     console.log('📋 Versão da taxonomia:', taxonomyVersion.version);
 
     const startTime = Date.now();
@@ -535,7 +568,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Atualizar informações de versão da taxonomia
-    await updateTaxonomyVersion({ keywords: data.keywords, problems: problemsArray, departments });
+    await updateTaxonomyVersion({ keywords: keywordsArray, problems: problemsArray, departments });
     await markEmbeddingsUpdated(taxonomyVersion.version);
 
     reportProgress('Versões atualizadas', 95);

@@ -35,16 +35,33 @@ export interface TaxonomyChangeDetection {
 /**
  * Gera hash simples para detectar mudanças
  */
+function normalizeItemForHash(item: any): string {
+  if (typeof item === 'string') {
+    return item.trim();
+  }
+
+  if (item && typeof item === 'object') {
+    const label = item.label || item.id || JSON.stringify(item);
+    const status = item.status || 'active';
+    return `${label}`.trim() + `::${status}`;
+  }
+
+  return String(item ?? '').trim();
+}
+
 function generateHash(items: any[]): string {
-  const sortedItems = items
-    .map(item => `${item.id}:${item.label}:${item.status || 'active'}`)
-    .sort()
-    .join('|');
+  const normalized = items
+    .map(normalizeItemForHash)
+    .filter(Boolean)
+    .sort();
+
+  const unique = Array.from(new Set(normalized));
+  const joined = unique.join('|');
   
   // Hash simples baseado no conteúdo
   let hash = 0;
-  for (let i = 0; i < sortedItems.length; i++) {
-    const char = sortedItems.charCodeAt(i);
+  for (let i = 0; i < joined.length; i++) {
+    const char = joined.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
@@ -59,19 +76,28 @@ export function calculateTaxonomyVersion(taxonomy: any): TaxonomyVersion {
   let keywordsArray: string[] = [];
   
   if (typeof taxonomy.keywords === 'object' && !Array.isArray(taxonomy.keywords)) {
-    // MAP por departamento - converter para array flat
-    keywordsArray = Object.values(taxonomy.keywords).flat() as string[];
+    // MAP por departamento - converter para array flat (strings ou objetos)
+    keywordsArray = Object.values(taxonomy.keywords)
+      .flat()
+      .map((kw: any) => typeof kw === 'string' ? kw : kw?.label || kw?.id || '')
+      .filter(Boolean);
   } else if (Array.isArray(taxonomy.keywords)) {
-    // ARRAY flat
-    keywordsArray = taxonomy.keywords;
+    keywordsArray = taxonomy.keywords.map((kw: any) => typeof kw === 'string' ? kw : kw?.label || kw?.id || '')
+      .filter(Boolean);
   }
+  keywordsArray = Array.from(new Set(keywordsArray));
+
+  const problems = (taxonomy.problems || []).map((prob: any) => typeof prob === 'string' ? prob : prob?.label || prob?.id || '')
+    .filter(Boolean);
+  const departments = (taxonomy.departments || []).map((dept: any) => typeof dept === 'string' ? dept : dept?.label || dept?.id || '')
+    .filter(Boolean);
   
-  const problems = taxonomy.problems || [];
-  const departments = taxonomy.departments || [];
+  const uniqueProblems = Array.from(new Set(problems));
+  const uniqueDepartments = Array.from(new Set(departments));
 
   const keywordsHash = generateHash(keywordsArray);
-  const problemsHash = generateHash(problems);
-  const departmentsHash = generateHash(departments);
+  const problemsHash = generateHash(uniqueProblems);
+  const departmentsHash = generateHash(uniqueDepartments);
 
   // Versão baseada na combinação dos hashes
   const combinedHash = `${keywordsHash}-${problemsHash}-${departmentsHash}`;
@@ -85,8 +111,8 @@ export function calculateTaxonomyVersion(taxonomy: any): TaxonomyVersion {
     version: Math.abs(version),
     last_updated: new Date(),
     keywords_count: keywordsArray.length,
-    problems_count: problems.length,
-    departments_count: departments.length,
+    problems_count: uniqueProblems.length,
+    departments_count: uniqueDepartments.length,
     keywords_hash: keywordsHash,
     problems_hash: problemsHash,
     departments_hash: departmentsHash,
