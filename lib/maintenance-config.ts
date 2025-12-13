@@ -4,7 +4,7 @@
 
 export const MAINTENANCE_CONFIG = {
 
-  MAINTENANCE_MODE: true,
+  MAINTENANCE_MODE: false,
   
   // Mensagens personalizáveis
   TITLE: 'Sistema em Manutenção',
