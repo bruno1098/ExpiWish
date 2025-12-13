@@ -1,7 +1,3 @@
-export function getApiKey() {
-  return typeof window !== 'undefined' ? localStorage.getItem("openai-api-key") : null;
-}
-
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const MAX_RETRIES = 15;
@@ -34,14 +30,6 @@ export async function analyzeWithGPT(
   problem: string;
   allProblems: ProblemAnalysis[];
 }> {
-  
-  const apiKey = getApiKey();
-  
-  if (!apiKey) {
-    console.error("Erro: API Key não configurada.");
-    throw new Error('API Key não configurada. Configure nas Configurações.');
-  }
-
   // Cache separado para fine-tuned vs padrão
   const cacheKey = `${useFineTuned ? 'ft:' : 'std:'}${texto.trim().toLowerCase().slice(0, 100)}`;
   if (analysisCache.has(cacheKey)) {
@@ -68,7 +56,6 @@ export async function analyzeWithGPT(
       },
       body: JSON.stringify({
         texto,
-        apiKey,
         useFineTuned
       })
     });

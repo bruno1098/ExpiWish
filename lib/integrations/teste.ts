@@ -1,3 +1,4 @@
+/* Legacy mock integration retained for reference. Original implementation follows.
 import type { LegacyFeedback } from '@/lib/ai-compatibility-adapter';
 import type { Feedback } from '@/types';
 
@@ -1059,3 +1060,6 @@ export async function runMockIntegration(options: ProcessMockOptions): Promise<M
     errors
   };
 }
+
+*/
+export * from "./external-feedbacks";

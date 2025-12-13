@@ -1,122 +1,115 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { doc, getDoc } from 'firebase/firestore';
+import { authenticateRequest } from '@/lib/server-auth';
+import { db } from '@/lib/firebase';
+import { getOpenAIApiKey } from '@/lib/openai-config';
 import {
-  appendMockFeedback,
-  applyMockIngestionUpdate,
-  getMockExternalFeedbacks,
-  getMockIngestionSnapshot,
-  getReclameAquiMockResponse,
-  getTrustYouMockResponse,
-  runMockIntegration
-} from '@/lib/integrations/teste';
+  getIntegrationDashboardData,
+  processExternalFeedbacksWithAI
+} from '@/lib/integrations/external-feedbacks';
+import type {
+  IntegrationAccessContext,
+  IntegrationUserRole
+} from '@/lib/integrations/external-feedbacks';
 
-interface TestIntegrationRequest {
+interface IntegrationRequestBody {
   apiKey?: string;
-  skipAnalysis?: boolean;
-  action?: 'run' | 'append';
-  newMock?: {
-    provider: 'trustyou' | 'reclameaqui';
-    title?: string;
-    reviewText: string;
-    rating?: number;
-    reviewerName?: string;
-    submittedAt?: string;
-    tags?: string[];
-  };
+  limit?: number;
+  dryRun?: boolean;
 }
 
-export async function GET() {
-  return NextResponse.json({
-    message: 'Endpoint de teste para simular integrações externas (TrustYou/Reclame Aqui).',
-    uso: {
-      metodo: 'POST',
-      endpoint: '/api/integrations/teste',
-      body: {
-        apiKey: 'opcional - usa process.env.OPENAI_API_KEY se não for enviado',
-        skipAnalysis: 'opcional - true para apenas retornar os dados mockados'
-      }
-    },
-    documentacao_referencia: {
-      trustyou: 'https://developer.trustyou.com (acesso restrito)',
-      reclameAquiHugMe: 'https://hugme.com.br (portal do Reclame Aqui para integradores)'
-    },
-    providers: {
-      trustyou: getTrustYouMockResponse(),
-      reclameAqui: getReclameAquiMockResponse()
-    },
-    normalizedSample: getMockExternalFeedbacks(),
-    ingestionSnapshot: getMockIngestionSnapshot(),
-    observacoes: [
-      'O GET não executa a análise interna, apenas retorna a amostra mockada.',
-      'Use o POST para processar os feedbacks com a stack atual e retornar o payload completo no formato interno.'
-    ]
-  });
+export async function GET(request: NextRequest) {
+  try {
+    const authResult = await authenticateRequest(request);
+
+    if (!authResult.authenticated || !authResult.userData) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const scope = await buildIntegrationScope(authResult.userData);
+    const dashboard = await getIntegrationDashboardData(scope);
+    return NextResponse.json(dashboard);
+  } catch (error: any) {
+    return NextResponse.json({
+      error: 'Falha ao consultar integrações externas',
+      message: error?.message || 'Erro desconhecido'
+    }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json().catch(() => ({}))) as TestIntegrationRequest;
-    const action = body.action ?? 'run';
+    const authResult = await authenticateRequest(request);
 
-    if (action === 'append') {
-      if (!body.newMock) {
-        return NextResponse.json({
-          error: 'Corpo inválido: informe newMock para adicionar feedback.'
-        }, { status: 400 });
-      }
-
-      const created = appendMockFeedback({
-        provider: body.newMock.provider,
-        title: body.newMock.title,
-        reviewText: body.newMock.reviewText,
-        rating: body.newMock.rating,
-        reviewerName: body.newMock.reviewerName,
-        submittedAt: body.newMock.submittedAt,
-        tags: body.newMock.tags
-      });
-
-      return NextResponse.json({
-        message: 'Feedback mock adicionado à fila.',
-        created,
-        providers: {
-          trustyou: getTrustYouMockResponse(),
-          reclameAqui: getReclameAquiMockResponse()
-        },
-        normalizedSample: getMockExternalFeedbacks(),
-        ingestionSnapshot: getMockIngestionSnapshot()
-      });
+    if (!authResult.authenticated || !authResult.userData) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const skipAnalysis = body.skipAnalysis ?? false;
-    const apiKey = body.apiKey || process.env.OPENAI_API_KEY;
+    const scope = await buildIntegrationScope(authResult.userData);
 
-    if (!skipAnalysis && !apiKey) {
+    if (scope?.role !== 'admin' && !scope?.hotelId) {
+      return NextResponse.json({ error: 'Nenhum hotel associado ao usuário atual.' }, { status: 403 });
+    }
+
+    const body = (await request.json().catch(() => ({}))) as IntegrationRequestBody;
+    const providedApiKey = body.apiKey?.trim();
+    const envApiKey = getOpenAIApiKey();
+    const apiKey = providedApiKey || envApiKey;
+
+    if (!apiKey) {
       return NextResponse.json({
-        error: 'API key ausente. Informe no body (apiKey) ou configure process.env.OPENAI_API_KEY.',
-        hint: 'Envie { "skipAnalysis": true } para apenas inspecionar o payload mockado.'
+        error: 'API key ausente. Informe no body (apiKey) ou configure lib/openai-config.ts / OPENAI_API_KEY.'
       }, { status: 400 });
     }
 
-    const snapshotBefore = getMockIngestionSnapshot();
+    const limit = typeof body.limit === 'number'
+      ? Math.max(1, Math.min(500, Math.floor(body.limit)))
+      : undefined;
 
-    const result = await runMockIntegration({
+    const result = await processExternalFeedbacksWithAI({
       origin: request.nextUrl.origin,
       apiKey,
-      skipAnalysis,
-      ingestionSnapshot: snapshotBefore
+      limit,
+      dryRun: Boolean(body.dryRun),
+      role: scope?.role ?? 'admin',
+      hotelId: scope?.hotelId ?? null
     });
 
-    const enrichedSnapshot = result.metadata.analysisExecuted
-      ? applyMockIngestionUpdate(result)
-      : snapshotBefore;
-
-    return NextResponse.json({
-      ...result,
-      ingestionSnapshot: enrichedSnapshot
-    });
+    return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json({
-      error: 'Falha ao executar integração mockada',
+      error: 'Falha ao executar integração externa',
       message: error?.message || 'Erro desconhecido'
     }, { status: 500 });
   }
+}
+
+async function buildIntegrationScope(userData: { role?: string | null; hotelId?: string | null }): Promise<IntegrationAccessContext | undefined> {
+  const normalizedRole = ((userData?.role || 'staff').toLowerCase() as IntegrationUserRole) || 'staff';
+
+  if (normalizedRole === 'admin') {
+    return { role: 'admin' };
+  }
+
+  const hotelIdentifier = (userData?.hotelId || '').trim();
+  if (!hotelIdentifier) {
+    return { role: normalizedRole, hotelId: null };
+  }
+
+  let resolvedHotelId = hotelIdentifier;
+
+  try {
+    const hotelDoc = await getDoc(doc(db, 'hotels', hotelIdentifier));
+    if (hotelDoc.exists()) {
+      const hotelData = hotelDoc.data() as { hotelId?: string };
+      resolvedHotelId = hotelData?.hotelId || hotelIdentifier;
+    }
+  } catch (error) {
+    console.error('Falha ao resolver hotel para integração:', error);
+  }
+
+  return {
+    role: normalizedRole,
+    hotelId: resolvedHotelId
+  };
 }

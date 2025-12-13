@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,274 +11,146 @@ import {
   CardTitle
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  type MockExternalFeedback,
-  type MockIngestionRecord,
-  type MockIngestionSnapshot,
-  type MockIntegrationResult,
-  type ReclameAquiCasesResponse,
-  type TrustYouReviewResponse
-} from "@/lib/integrations/teste";
+import type {
+  IntegrationDashboardData,
+  IntegrationPendingItem,
+  IntegrationProcessedItem,
+  ProcessIntegrationResult
+} from "@/lib/integrations/external-feedbacks";
 import SharedDashboardLayout from "../../shared-layout";
-import { Loader2, Plus, RefreshCcw, Zap } from "lucide-react";
-
-interface IntegrationDatasetResponse {
-  providers: {
-    trustyou: TrustYouReviewResponse;
-    reclameAqui: ReclameAquiCasesResponse;
-  };
-  normalizedSample: MockExternalFeedback[];
-  ingestionSnapshot: MockIngestionSnapshot;
-}
-
-interface QueueRow {
-  id: string;
-  provider: "trustyou" | "reclameaqui";
-  externalId: string;
-  receivedAt: string;
-  title: string;
-  reviewer: string;
-  checksum: string;
-  tags: string[];
-}
+import {
+  Activity,
+  ArrowRight,
+  Brain,
+  Cloud,
+  Database,
+  Globe,
+  Loader2,
+  RefreshCcw,
+  Shield,
+  Zap
+} from "lucide-react";
 
 const endpoint = "/api/integrations/teste";
 
-function formatDate(value: string | undefined) {
-  if (!value) return "-";
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "Nunca";
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("pt-BR", { hour12: false });
-}
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : parsed.toLocaleString("pt-BR", { hour12: false });
+};
 
-function providerLabel(provider: QueueRow["provider"]) {
-  return provider === "trustyou" ? "TrustYou" : "Reclame Aqui";
-}
+const formatRowDate = (value: string) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : parsed.toLocaleString("pt-BR", { hour12: false });
+};
 
 export default function IntegracoesPageContent() {
   const { toast } = useToast();
-  const [dataset, setDataset] = useState<IntegrationDatasetResponse | null>(null);
-  const [ingestionSnapshot, setIngestionSnapshot] = useState<MockIngestionSnapshot | null>(null);
-  const [loadingDataset, setLoadingDataset] = useState(true);
+  const [dashboard, setDashboard] = useState<IntegrationDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [addingMock, setAddingMock] = useState(false);
-  const [storedApiKey, setStoredApiKey] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<MockIntegrationResult | null>(null);
-  const [history, setHistory] = useState<Array<{ id: string; executedAt: string; result: MockIntegrationResult }>>([]);
-
+  const [lastResult, setLastResult] = useState<ProcessIntegrationResult | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
 
-  const loadDataset = useCallback(async () => {
+  const loadDashboard = useCallback(async () => {
     try {
-      setLoadingDataset(true);
-      const response = await fetch(endpoint);
+      setLoading(true);
+      const response = await fetch(endpoint, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error("Falha ao carregar os dados de integração");
+        throw new Error(payload?.error || payload?.message || "Não foi possível carregar as integrações.");
       }
-      const payload = (await response.json()) as IntegrationDatasetResponse;
-      setDataset(payload);
-      setIngestionSnapshot(payload.ingestionSnapshot);
+      setDashboard(payload as IntegrationDashboardData);
     } catch (error: any) {
       toast({
-        title: "Não foi possível carregar os dados",
+        title: "Não foi possível carregar as integrações",
         description: error?.message ?? "Tente novamente em instantes.",
         variant: "destructive"
       });
     } finally {
-      setLoadingDataset(false);
+      setLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    loadDataset();
-  }, [loadDataset]);
+    loadDashboard();
+  }, [loadDashboard]);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const key = localStorage.getItem("openai-api-key");
-      setStoredApiKey(key && key.trim() !== "" ? key : null);
+  const pendingRows = dashboard?.pending ?? [];
+  const processedRows = dashboard?.processed ?? [];
+  const totals = dashboard?.totals ?? { pending: 0, processed: 0, failed: 0 };
+  const lastSync = formatDateTime(dashboard?.metadata.lastSyncAt);
+  const sourceBase = dashboard?.source.baseUrl ?? "http://localhost:3000/api/feedbacks";
+
+  const latestHistory = processedRows.slice(0, 5);
+  const pendingPreview = pendingRows.slice(0, 6);
+  const lastExecutionLabel = lastResult ? formatDateTime(lastResult.metadata.processedAt) : "Ainda não executado";
+  const processedHotels = lastResult?.metadata.hotels ?? [];
+  const sandboxInsights = [
+    { label: "Fila ativa", value: `${totals.pending} pendentes`, hint: "Prontos para análise com a Wish IA" },
+    { label: "Processados", value: totals.processed.toString(), hint: "Já enviados ao dashboard" },
+    { label: "Falhas", value: totals.failed.toString(), hint: totals.failed ? "Revise o log recente" : "Nenhuma falha registrada" }
+  ];
+  const heroHighlights = [
+    { label: "Sandbox conectado", value: sourceBase.replace(/^https?:\/\//, ""), icon: Globe },
+    { label: "Última coleta", value: lastSync, icon: Cloud },
+    { label: "Execução manual", value: lastExecutionLabel, icon: Brain }
+  ];
+  const pipelineStages = [
+    {
+      title: "1. Sandbox API",
+      description: "Busca automática dos feedbacks de teste",
+      meta: `${pendingRows.length} itens aguardando`,
+      status: pendingRows.length > 0 ? "active" : "idle"
+    },
+    {
+      title: "2. Wish IA proprietária",
+      description: "Normaliza, classifica e salva no Firestore",
+      meta: lastResult ? `${lastResult.metadata.processed} processados na última execução` : "Aguardando primeira execução",
+      status: lastResult?.metadata.processed ? "active" : "idle"
+    },
+    {
+      title: "3. Dashboards",
+      description: "Disponibiliza no painel de análises e tickets",
+      meta: formatDateTime(dashboard?.metadata.updatedAt) || "Sem registros",
+      status: totals.processed ? "active" : "idle"
     }
-  }, []);
-
-  const pendingRows = useMemo<QueueRow[]>(() => {
-    if (!ingestionSnapshot || !dataset) return [];
-
-    const normalizedIndex = new Map<string, MockExternalFeedback>();
-    dataset.normalizedSample.forEach(item => {
-      normalizedIndex.set(`${item.provider}-${item.externalId}`, item);
-    });
-
-    const rows: QueueRow[] = [];
-    ingestionSnapshot.providers.forEach(providerState => {
-      providerState.queuePreview.forEach((record: MockIngestionRecord) => {
-        if (record.status !== "pending") return;
-        const key = `${providerState.provider}-${record.externalId}`;
-        const normalized = normalizedIndex.get(key);
-
-        rows.push({
-          id: record.id,
-          provider: providerState.provider,
-          externalId: record.externalId,
-          receivedAt: record.firstSeenAt,
-          title:
-            normalized?.title ?? normalized?.reviewText?.slice(0, 80) ?? `Item ${record.externalId}`,
-          reviewer: normalized?.reviewerName ?? "-",
-          checksum: record.checksum,
-          tags: normalized?.tags ?? []
-        });
-      });
-    });
-
-    return rows.sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
-  }, [dataset, ingestionSnapshot]);
-
-  const totals = useMemo(() => {
-    if (!ingestionSnapshot) {
-      return { pending: 0, processed: 0, errored: 0, lastSync: null as string | null };
-    }
-
-    let pending = 0;
-    let processed = 0;
-    let errored = 0;
-    let lastSync: string | null = null;
-
-    ingestionSnapshot.providers.forEach(provider => {
-      provider.queuePreview.forEach(record => {
-        if (record.status === "pending") pending += 1;
-        if (record.status === "errored") errored += 1;
-      });
-      processed += provider.totals.processed;
-
-      if (!lastSync || new Date(provider.lastSuccessfulSync).getTime() > new Date(lastSync).getTime()) {
-        lastSync = provider.lastSuccessfulSync;
-      }
-    });
-
-    return { pending, processed, errored, lastSync };
-  }, [ingestionSnapshot]);
-
-  const appendMock = async () => {
-    try {
-      setAddingMock(true);
-      const provider: QueueRow["provider"] = Math.random() > 0.5 ? "trustyou" : "reclameaqui";
-      const sample = provider === "trustyou"
-        ? {
-            title: "Novo feedback TrustYou",
-            reviewText: "Simulação de review externo para validar o fluxo de ingestão.",
-            reviewerName: "Visitante Mock",
-            rating: 4.2,
-            tags: ["mock", "trustyou"],
-            submittedAt: new Date().toISOString()
-          }
-        : {
-            title: "Novo caso Reclame Aqui",
-            reviewText: "Simulação de reclamação recebida via API oficial para fins de teste.",
-            reviewerName: "Consumidor Mock",
-            rating: 2,
-            tags: ["mock", "reclameaqui"],
-            submittedAt: new Date().toISOString()
-          };
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "append",
-          newMock: {
-            provider,
-            ...sample
-          }
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.error ?? "Não foi possível adicionar o feedback mockado.");
-      }
-
-      const data = (await response.json()) as IntegrationDatasetResponse & {
-        message?: string;
-      };
-      setDataset({
-        providers: data.providers,
-        normalizedSample: data.normalizedSample,
-        ingestionSnapshot: data.ingestionSnapshot
-      });
-      setIngestionSnapshot(data.ingestionSnapshot);
-
-      toast({
-        title: provider === "trustyou" ? "Mock TrustYou adicionado" : "Mock Reclame Aqui adicionado",
-        description: "O item entrou na fila e ficará disponível para processamento.",
-        variant: "default"
-      });
-    } catch (error: any) {
-      toast({
-        title: "Erro ao adicionar mock",
-        description: error?.message ?? "Tente novamente em instantes.",
-        variant: "destructive"
-      });
-    } finally {
-      setAddingMock(false);
-    }
-  };
+  ];
 
   const processPending = async () => {
     try {
-      if (!storedApiKey) {
-        throw new Error("Informe sua OpenAI API Key nas configurações antes de processar os dados.");
-      }
-
       setProcessing(true);
-
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey: storedApiKey,
-          skipAnalysis: false
-        })
+        body: JSON.stringify({})
       });
-
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.message ?? "Falha ao processar os feedbacks");
+        throw new Error(payload?.error || payload?.message || "Falha ao processar os feedbacks.");
       }
-
-      const result = (await response.json()) as MockIntegrationResult;
+      const result = payload as ProcessIntegrationResult;
       setLastResult(result);
-      setHistory(prev => [
-        {
-          id: `job-${Date.now()}`,
-          executedAt: new Date().toISOString(),
-          result
-        },
-        ...prev
-      ]);
 
-      if (result.ingestionSnapshot) {
-        setIngestionSnapshot(result.ingestionSnapshot);
-      }
+      toast({
+        title: result.metadata.processed
+          ? "Processamento concluído"
+          : "Nenhum feedback novo",
+        description: result.metadata.processed
+          ? `${result.metadata.processed} feedbacks analisados com a Wish IA.`
+          : "Assim que novos dados chegarem, eles aparecerão automaticamente."
+      });
 
       requestAnimationFrame(() => {
         resultRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       });
 
-      toast({
-        title: result.metadata.total ? "Processamento concluído" : "Nenhum item pendente",
-        description: result.metadata.total
-          ? `${result.metadata.total} feedbacks analisados com a IA.`
-          : "Não havia novos dados para processar neste momento."
-      });
-
-      await loadDataset();
+      await loadDashboard();
     } catch (error: any) {
       toast({
         title: "Erro ao processar fila",
@@ -290,197 +162,256 @@ export default function IntegracoesPageContent() {
     }
   };
 
-  const latestHistory = useMemo(() => history.slice(0, 3), [history]);
-
   return (
     <SharedDashboardLayout>
-      <div className="mx-auto w-full max-w-5xl space-y-8 px-6 py-8">
-        <div className="space-y-3">
-          <div>
-            <h1 className="text-3xl font-semibold">Integrações externas</h1>
-            <p className="text-muted-foreground">
-              Acompanhe o que chegou das plataformas parceiras e processe os feedbacks com um clique.
-            </p>
+      <div className="mx-auto w-full max-w-[1400px] space-y-10 px-6 py-8 2xl:max-w-[1600px]">
+        <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8 text-white shadow-2xl">
+          <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:gap-10">
+            <div className="flex-1 space-y-5 xl:pr-6">
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-xs font-semibold tracking-widest text-white/80">
+                SANDBOX API
+                <span className="h-1 w-1 rounded-full bg-emerald-400" />
+                Wish IA pipeline
+              </span>
+              <div className="space-y-3">
+                <h1 className="text-4xl font-semibold leading-tight">Integrações externas com telemetria em tempo real</h1>
+                <p className="text-base text-white/80">
+                  Conectamos a API de sandbox, processamos tudo com a Wish IA proprietária e jogamos cada insight direto no dashboard de análises.
+                  Acompanhe a coleta, entenda o que foi classificado e gire uma nova execução manual quando quiser.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  className="flex items-center gap-2 bg-white text-slate-900 hover:bg-white/90"
+                  onClick={processPending}
+                  disabled={processing || loading || pendingRows.length === 0}
+                >
+                  {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  {processing ? "Processando..." : pendingRows.length === 0 ? "Sem pendências" : "Processar com a Wish IA"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="bg-white/10 text-white hover:bg-white/20"
+                  onClick={loadDashboard}
+                  disabled={loading}
+                >
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                  Atualizar dados
+                </Button>
+                <Button variant="link" className="text-white" asChild>
+                  <a href="/analysis" target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-2">
+                    Abrir tela de análises
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+            </div>
+            <div className="w-full rounded-2xl bg-white/10 p-6 xl:max-w-sm 2xl:max-w-md">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">Status do conector</p>
+              <div className="mt-4 space-y-4">
+                {heroHighlights.map(({ label, value, icon: Icon }) => (
+                  <div key={label} className="flex items-start gap-3 rounded-2xl bg-white/5 p-4">
+                    <div className="rounded-xl bg-white/10 p-2">
+                      <Icon className="h-5 w-5 text-emerald-300" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-white/70">{label}</p>
+                      <p className="text-base font-semibold text-white">{value}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-6 text-xs text-white/70">Endpoint atual: {sourceBase}</p>
+            </div>
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Pendentes</CardTitle>
-                <CardDescription>Na fila aguardando análise</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">{totals.pending}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Processados</CardTitle>
-                <CardDescription>Desde a sincronização inicial</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">{totals.processed}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Última coleta</CardTitle>
-                <CardDescription>Horário mais recente de sucesso</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-semibold">{formatDate(totals.lastSync ?? undefined)}</p>
-              </CardContent>
-            </Card>
+        </section>
+
+        <section className="rounded-3xl border bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Fluxo completo</p>
+              <p className="text-sm text-muted-foreground">Da coleta no sandbox até o dashboard de insights.</p>
+            </div>
+            <Badge variant="secondary" className="w-fit">
+              Última atualização: {formatDateTime(dashboard?.metadata.updatedAt)}
+            </Badge>
           </div>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              className="flex items-center gap-2"
-              onClick={processPending}
-              disabled={processing || loadingDataset || pendingRows.length === 0 || !storedApiKey}
-            >
-              {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-              Processar pendentes
-            </Button>
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={appendMock}
-              disabled={addingMock || loadingDataset}
-            >
-              {addingMock ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Adicionar feedback mock
-            </Button>
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {pipelineStages.map(stage => (
+              <div key={stage.title} className="rounded-2xl border bg-slate-50 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{stage.title}</p>
+                  <span className={`text-xs font-medium ${stage.status === "active" ? "text-emerald-600" : "text-slate-400"}`}>
+                    {stage.status === "active" ? "Ativo" : "Stand-by"}
+                  </span>
+                </div>
+                <p className="mt-2 text-base font-semibold text-slate-900">{stage.description}</p>
+                <p className="mt-3 text-sm text-slate-500">{stage.meta}</p>
+              </div>
+            ))}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-2"
-            onClick={loadDataset}
-            disabled={loadingDataset}
-          >
-            {loadingDataset ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-            Atualizar dados
-          </Button>
-        </div>
+        </section>
 
-        {!storedApiKey && (
-          <p className="text-sm text-amber-600">
-            Configure sua OpenAI API Key em Configurações -&gt; Integrações de IA para habilitar o processamento automático.
-          </p>
-        )}
+        <section className="grid gap-6 lg:grid-cols-[1.8fr,1fr] xl:grid-cols-[2.1fr,1fr]">
+          <Card className="rounded-3xl border bg-white/70 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Activity className="h-4 w-4 text-emerald-600" />
+                Feedbacks aguardando Wish IA
+              </CardTitle>
+              <CardDescription>
+                Visualize exemplos reais vindos do sandbox antes de acionar o processamento.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ScrollArea className="max-h-[420px] pr-4 xl:max-h-[520px]">
+                {pendingRows.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    Tudo sincronizado! Assim que novos feedbacks chegarem na API externa, eles aparecem aqui automaticamente.
+                  </div>
+                ) : (
+                  pendingPreview.map((row: IntegrationPendingItem) => (
+                    <div key={row.externalId} className="mb-4 rounded-2xl border bg-white p-4 shadow-sm last:mb-0">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{row.hotelName}</p>
+                          <p className="text-xs text-muted-foreground">{row.hotelId}</p>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          Nota {row.rating.toFixed(1)}
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-600">{row.message}</p>
+                      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Cloud className="h-3.5 w-3.5" />
+                          {row.provider}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Shield className="h-3.5 w-3.5" />
+                          {row.guestName || "Visitante"}
+                        </span>
+                        <span>{formatRowDate(row.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </ScrollArea>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                <p className="text-sm text-muted-foreground">
+                  {pendingRows.length} feedbacks aguardando processamento inteligente.
+                </p>
+                <Button
+                  onClick={processPending}
+                  disabled={processing || loading || pendingRows.length === 0}
+                  className="flex items-center gap-2"
+                >
+                  {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+                  {processing ? "Processando..." : "Rodar Wish IA agora"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">Fila de ingestão</CardTitle>
-            <CardDescription>
-              Itens aguardando processamento. Assim que você rodar a IA, eles serão classificados e arquivados automaticamente.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="max-h-[360px] rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Origem</TableHead>
-                    <TableHead>Recebido em</TableHead>
-                    <TableHead>Título / Resumo</TableHead>
-                    <TableHead>Autor</TableHead>
-                    <TableHead>Checksum</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pendingRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                        Sem pendências no momento. Assim que novos feedbacks chegarem, eles aparecerão aqui.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    pendingRows.map(row => (
-                      <TableRow key={row.id}>
-                        <TableCell className="whitespace-nowrap">
-                          <Badge variant="outline">{providerLabel(row.provider)}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{formatDate(row.receivedAt)}</TableCell>
-                        <TableCell className="max-w-md">
-                          <p className="font-medium">{row.title}</p>
-                          {row.tags.length > 0 && (
-                            <p className="text-xs text-muted-foreground">Tags: {row.tags.join(", ")}</p>
-                          )}
-                        </TableCell>
-                        <TableCell>{row.reviewer}</TableCell>
-                        <TableCell className="max-w-[160px] truncate font-mono text-xs text-muted-foreground">
-                          {row.checksum}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+          <Card className="rounded-3xl border bg-white shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Database className="h-4 w-4 text-emerald-600" />
+                Telemetria da sandbox
+              </CardTitle>
+              <CardDescription>Resumo rápido da coleta e dos envios ao Firestore.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {sandboxInsights.map(insight => (
+                <div key={insight.label} className="rounded-2xl border bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{insight.label}</p>
+                  <p className="text-2xl font-semibold text-slate-900">{insight.value}</p>
+                  <p className="text-sm text-slate-500">{insight.hint}</p>
+                </div>
+              ))}
+              <div className="rounded-2xl bg-slate-900/90 p-4 text-sm text-white">
+                <p className="font-semibold">Pipeline</p>
+                <p className="mt-1 text-white/70">
+                  1) coletamos no endpoint sandbox • 2) analisamos com a Wish IA • 3) salvamos em `analyses` e liberamos nos dashboards.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
 
-        {lastResult && (
+        <section className="grid gap-6 lg:grid-cols-2 xl:gap-8">
           <div ref={resultRef}>
-            <Card className="border-primary/40">
+            <Card className="rounded-3xl border bg-white shadow-sm">
               <CardHeader>
-                <CardTitle className="text-base font-semibold">Última execução da IA</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <Brain className="h-4 w-4 text-emerald-600" />
+                  Última execução manual
+                </CardTitle>
                 <CardDescription>
-                  Processado em {formatDate(lastResult.metadata.processedAt)} - {lastResult.metadata.total} itens
+                  {lastResult ? `Processado em ${formatDateTime(lastResult.metadata.processedAt)}` : "Nenhuma execução registrada ainda"}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-md border bg-muted/30 p-3">
-                    <p className="text-xs uppercase text-muted-foreground">Processados com IA</p>
-                    <p className="text-2xl font-semibold">{lastResult.items.filter(item => item.analysis).length}</p>
+                  <div className="rounded-2xl border bg-slate-50 p-3">
+                    <p className="text-xs uppercase text-slate-500">Processados</p>
+                    <p className="text-2xl font-semibold text-slate-900">{lastResult?.metadata.processed ?? 0}</p>
                   </div>
-                  <div className="rounded-md border bg-muted/30 p-3">
-                    <p className="text-xs uppercase text-muted-foreground">Sem análise necessária</p>
-                    <p className="text-2xl font-semibold">{lastResult.items.filter(item => !item.analysis).length}</p>
+                  <div className="rounded-2xl border bg-slate-50 p-3">
+                    <p className="text-xs uppercase text-slate-500">Ignorados</p>
+                    <p className="text-2xl font-semibold text-slate-900">{lastResult?.metadata.skipped ?? 0}</p>
                   </div>
-                  <div className="rounded-md border bg-muted/30 p-3">
-                    <p className="text-xs uppercase text-muted-foreground">Falhas</p>
-                    <p className="text-2xl font-semibold text-destructive">{lastResult.errors.length}</p>
+                  <div className="rounded-2xl border bg-slate-50 p-3">
+                    <p className="text-xs uppercase text-slate-500">Falhas</p>
+                    <p className="text-2xl font-semibold text-red-500">{lastResult?.metadata.failed ?? 0}</p>
                   </div>
                 </div>
-                {lastResult.items.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Não havia itens pendentes. Continue monitorando - assim que novos feedbacks chegarem, você poderá processá-los aqui.
-                  </p>
+                {processedHotels.length > 0 ? (
+                  <div className="space-y-3">
+                    {processedHotels.map(hotel => (
+                      <div key={hotel.importId} className="flex items-center justify-between rounded-2xl border bg-slate-50 p-3">
+                        <div>
+                          <p className="font-medium text-slate-900">{hotel.hotelName}</p>
+                          <p className="text-xs text-muted-foreground">{hotel.hotelId}</p>
+                        </div>
+                        <Badge variant="outline">{hotel.count} itens</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    Execute o pipeline uma vez para ver o detalhamento por hotel.
+                  </div>
                 )}
               </CardContent>
             </Card>
           </div>
-        )}
 
-        {latestHistory.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold">Histórico recente</CardTitle>
-              <CardDescription>As três últimas execuções do mock</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {latestHistory.map(item => (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-1 rounded-md border bg-muted/30 p-3 md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <p className="font-medium">{formatDate(item.executedAt)}</p>
-                    <p className="text-sm text-muted-foreground">{item.result.metadata.total} itens processados</p>
+          {latestHistory.length > 0 && (
+            <Card className="rounded-3xl border bg-white shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <Shield className="h-4 w-4 text-emerald-600" />
+                  Histórico recente
+                </CardTitle>
+                <CardDescription>Monitoramento das últimas 5 gravações no Firestore.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {latestHistory.map((item: IntegrationProcessedItem, index) => (
+                  <div key={`${item.externalId}-${index}`} className="flex items-center justify-between rounded-2xl border bg-slate-50 p-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{item.hotelName}</p>
+                      <p className="text-xs text-muted-foreground">{formatDateTime(item.processedAt)}</p>
+                    </div>
+                    <Badge variant={item.status === "failed" ? "destructive" : "default"}>
+                      {item.status === "failed" ? "Falhou" : "Processado"}
+                    </Badge>
                   </div>
-                  <Badge variant={item.result.metadata.total ? "default" : "secondary"}>
-                    {item.result.metadata.total ? "Processado" : "Sem novidades"}
-                  </Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </section>
       </div>
     </SharedDashboardLayout>
   );

@@ -256,8 +256,6 @@ function ImportPageContent() {
   // Ref para o input file
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Estados para o AlertDialog de API Key
-  const [showApiKeyAlert, setShowApiKeyAlert] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   // Estados para verificação de duplicatas
@@ -281,7 +279,6 @@ function ImportPageContent() {
   const [showEmbeddingsGenerationModal, setShowEmbeddingsGenerationModal] = useState(false);
   const [generatingEmbeddings, setGeneratingEmbeddings] = useState(false);
   const [embeddingsProgress, setEmbeddingsProgress] = useState(0);
-  const [embeddingsApiKey, setEmbeddingsApiKey] = useState('');
 
   // Estados para modal de taxonomia alterada
   const [showTaxonomyChangedModal, setShowTaxonomyChangedModal] = useState(false);
@@ -314,28 +311,7 @@ function ImportPageContent() {
       }
     };
 
-    const handleApiKeyChanged = () => {
-      // Se há um arquivo pendente e agora há uma API key, processar o arquivo
-      if (pendingFile && checkApiKey()) {
-        setShowApiKeyAlert(false);
-        const fileToProcess = pendingFile;
-        setPendingFile(null);
-
-        // Verificar se precisa de confirmação de nome do arquivo
-        const hotelName = userData?.hotelName || '';
-        if (!validateFileName(fileToProcess.name, hotelName)) {
-          setFileToConfirm(fileToProcess);
-          setShowFileNameConfirmation(true);
-        } else {
-          processFileWithAccountHotel(fileToProcess);
-        }
-      }
-    };
-
     checkTestEnvironment();
-
-    // Listener para mudanças na API key
-    window.addEventListener('apiKeyChanged', handleApiKeyChanged);
 
     // Event listeners globais SIMPLIFICADOS - apenas prevenir comportamento padrão
     const preventDefaultDrop = (e: DragEvent) => {
@@ -357,9 +333,8 @@ function ImportPageContent() {
     return () => {
       document.removeEventListener('dragover', preventDefaultDrop, false);
       document.removeEventListener('drop', preventDefaultDrop, false);
-      window.removeEventListener('apiKeyChanged', handleApiKeyChanged);
     };
-  }, [pendingFile]);
+  }, []);
 
   // Hook para calcular tempo estimado
   useEffect(() => {
@@ -378,12 +353,6 @@ function ImportPageContent() {
       }
     }
   }, [progress, importing, startTime]);
-
-  // Função para verificar se a API key está configurada
-  const checkApiKey = () => {
-    const apiKey = localStorage.getItem('openai-api-key');
-    return apiKey && apiKey.trim() !== '';
-  };
 
   // Função para verificar se embeddings estão disponíveis
   const checkEmbeddingsBeforeImport = async (): Promise<boolean> => {
@@ -410,18 +379,8 @@ function ImportPageContent() {
   // Função para regenerar embeddings quando taxonomia mudou
   const handleRegenerateEmbeddingsAfterTaxonomyChange = async () => {
     console.log('🚀 Iniciando regeneração de embeddings...');
-    if (!embeddingsApiKey.trim()) {
-      console.log('❌ API Key não fornecida');
-      toast({
-        title: "API Key Necessária",
-        description: "Insira uma chave de API válida do OpenAI para regenerar os embeddings.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     try {
-      console.log('✅ API Key válida, iniciando processo...');
       setGeneratingEmbeddings(true);
       setEmbeddingsProgress(0);
 
@@ -445,7 +404,7 @@ function ImportPageContent() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ apiKey: embeddingsApiKey }),
+        body: JSON.stringify({ force: true })
       });
 
       clearInterval(progressInterval);
@@ -499,7 +458,6 @@ function ImportPageContent() {
       setTimeout(() => {
         setGeneratingEmbeddings(false);
         setEmbeddingsProgress(0);
-        setEmbeddingsApiKey('');
         setIsRegeneratingFromTaxonomyChange(false);
       }, 2000);
     }
@@ -507,15 +465,6 @@ function ImportPageContent() {
 
   // Função para gerar embeddings durante a importação
   const handleGenerateEmbeddingsDuringImport = async () => {
-    if (!embeddingsApiKey.trim()) {
-      toast({
-        title: "API Key Necessária",
-        description: "Insira uma chave de API válida do OpenAI.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       setGeneratingEmbeddings(true);
       setEmbeddingsProgress(0);
@@ -540,7 +489,7 @@ function ImportPageContent() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ apiKey: embeddingsApiKey }),
+        body: JSON.stringify({})
       });
 
       clearInterval(progressInterval);
@@ -587,7 +536,6 @@ function ImportPageContent() {
       setTimeout(() => {
         setGeneratingEmbeddings(false);
         setEmbeddingsProgress(0);
-        setEmbeddingsApiKey('');
       }, 2000);
     }
   };
@@ -621,13 +569,6 @@ function ImportPageContent() {
         description: "Você precisa estar autenticado e associado a um hotel para importar dados.",
         variant: "destructive",
       } as ToastProps);
-      return;
-    }
-
-    // Verificar se a API key está configurada antes de processar
-    if (!checkApiKey()) {
-      setPendingFile(files[0]);
-      setShowApiKeyAlert(true);
       return;
     }
 
@@ -667,18 +608,6 @@ function ImportPageContent() {
     }
 
     processFileWithAccountHotel(file);
-  };
-
-  // Funções para lidar com o AlertDialog de API Key
-  const handleGoToSettings = () => {
-    setShowApiKeyAlert(false);
-    setPendingFile(null);
-    router.push('/settings');
-  };
-
-  const handleCancelApiKeyAlert = () => {
-    setShowApiKeyAlert(false);
-    setPendingFile(null);
   };
 
   // Funções para lidar com o modal de confirmação de nome do arquivo
@@ -953,11 +882,7 @@ function ImportPageContent() {
       // Continuar com o processamento normal se a verificação falhar
     }
 
-    // DEPOIS: Obter API Key do localStorage
-    const apiKey = localStorage.getItem('openai-api-key');
-    if (!apiKey) {
-      throw new Error('Chave da API OpenAI não encontrada. Configure nas configurações.');
-    }
+    // API Key agora é resolvida exclusivamente no backend via variáveis de ambiente
 
     // Dividir dados em chunks
     const chunks = [];
@@ -1019,8 +944,7 @@ function ImportPageContent() {
             const response = await fetch('/api/analyze-feedback', {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'Content-Type': 'application/json'
               },
               body: JSON.stringify({
                 texto: row.texto,
@@ -1632,11 +1556,7 @@ function ImportPageContent() {
           // Continuar com o processamento normal se a verificação falhar
         }
 
-        // DEPOIS: Obter a API Key das configurações
-        const apiKey = localStorage.getItem('openai-api-key');
-        if (!apiKey) {
-          throw new Error('API Key não configurada. Configure nas Configurações para usar a análise inteligente.');
-        }
+        // API Key agora é resolvida exclusivamente no backend via variáveis de ambiente
 
         setCurrentStep("Analisando feedbacks com IA...");
 
@@ -1738,8 +1658,7 @@ function ImportPageContent() {
                       'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                      texto: row.texto,
-                      apiKey: apiKey,
+                      texto: row.texto
                     }),
                     signal: abortControllerRef.current?.signal, // Adicionar signal para cancelamento
                   });
@@ -3034,19 +2953,10 @@ function ImportPageContent() {
                       : 'Vamos gerar os embeddings agora para que você possa usar a análise inteligente. Este processo leva 2-3 minutos e depois a importação continuará automaticamente.'
                     }
                   </p>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">
-                      Chave de API OpenAI:
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="sk-proj-..."
-                      value={embeddingsApiKey}
-                      onChange={(e) => setEmbeddingsApiKey(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={generatingEmbeddings}
-                    />
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    A chave OpenAI já está configurada nas variáveis de ambiente seguras do servidor.
+                    Caso algo impeça a geração, verifique a configuração de `OPENAI_API_KEY` no deploy.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -3080,53 +2990,18 @@ function ImportPageContent() {
               <AlertDialogCancel onClick={() => {
                 console.log('❌ Usuário cancelou geração de embeddings');
                 setShowEmbeddingsGenerationModal(false);
-                setEmbeddingsApiKey('');
                 setPendingFile(null);
               }}>
                 Cancelar
               </AlertDialogCancel>
               <AlertDialogAction
                 onClick={taxonomyChangeInfo ? handleRegenerateEmbeddingsAfterTaxonomyChange : handleGenerateEmbeddingsDuringImport}
-                disabled={!embeddingsApiKey.trim()}
               >
                 <Brain className="h-4 w-4 mr-2" />
                 {taxonomyChangeInfo ? 'Regenerar Embeddings' : 'Gerar e Continuar'}
               </AlertDialogAction>
             </AlertDialogFooter>
           )}
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* AlertDialog para API Key não configurada */}
-      <AlertDialog open={showApiKeyAlert} onOpenChange={setShowApiKeyAlert}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-600" />
-              Chave de API Necessária
-            </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-4">
-              <div>
-                Para analisar feedbacks com inteligência artificial, é necessário configurar uma chave de API.
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Você pode configurar sua própria chave nas Configurações ou, se não possuir uma chave,
-                entre em contato com o administrador do sistema para obter acesso.
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-3">
-            <AlertDialogCancel onClick={handleCancelApiKeyAlert} className="sm:order-1">
-              Cancelar
-            </AlertDialogCancel>
-            <Button
-              onClick={handleGoToSettings}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white sm:order-2"
-            >
-              <Settings className="h-4 w-4" />
-              Ir para Configurações
-            </Button>
-          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 

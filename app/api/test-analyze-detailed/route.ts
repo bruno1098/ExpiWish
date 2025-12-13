@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOpenAIApiKey } from '@/lib/openai-config';
 
-const TEST_API_KEY = process.env.OPENAI_API_KEY || '';
+const TEST_API_KEY = getOpenAIApiKey();
 
 /**
  * API de teste DETALHADA para análise de feedback

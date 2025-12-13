@@ -10,9 +10,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { toBrasiliaTimestamp } from '@/lib/timezone-utils';
+import { getOpenAIApiKey } from '@/lib/openai-config';
 
 // API Key fixa para testes
-const TEST_API_KEY = process.env.OPENAI_API_KEY || '';
+const TEST_API_KEY = getOpenAIApiKey();
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
