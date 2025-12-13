@@ -1,5 +1,6 @@
 // Serviço de embeddings para similarity search
 import OpenAI from 'openai';
+import { getOpenAIApiKey } from './openai-config';
 
 // Cache de embeddings para evitar requests desnecessários
 interface CachedEmbedding {
@@ -31,7 +32,7 @@ export async function generateEmbedding(text: string, apiKey?: string): Promise<
   }
 
   // Usar API key do parâmetro ou das variáveis de ambiente
-  const openaiApiKey = apiKey || process.env.OPENAI_API_KEY;
+  const openaiApiKey = apiKey || getOpenAIApiKey();
   if (!openaiApiKey) {
     throw new Error('OpenAI API key not found');
   }
@@ -167,7 +168,7 @@ export async function generateBatchEmbeddings(
     const batch = texts.slice(i, i + batchSize);
     
     // Usar API key do parâmetro ou das variáveis de ambiente
-    const openaiApiKey = apiKey || process.env.OPENAI_API_KEY;
+    const openaiApiKey = apiKey || getOpenAIApiKey();
     if (!openaiApiKey) {
       throw new Error('OpenAI API key not found');
     }

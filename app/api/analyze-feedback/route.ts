@@ -20,6 +20,7 @@ import {
   KEYWORD_DEPARTMENT_MAP 
 } from '@/lib/taxonomy-validation';
 import { KEYWORD_SEMANTIC_CONTEXT } from '@/lib/semantic-enrichment';
+import { getOpenAIApiKey } from '@/lib/openai-config';
 
 // Cache em memória para análises repetidas
 interface AnalysisCache {
@@ -1585,7 +1586,7 @@ export async function POST(request: NextRequest) {
     // API Key
     const apiKey = request.headers.get('authorization')?.replace('Bearer ', '') ||
       body.apiKey ||
-      process.env.OPENAI_API_KEY;
+      getOpenAIApiKey();
 
     if (!apiKey) {
       return NextResponse.json(

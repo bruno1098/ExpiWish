@@ -55,7 +55,6 @@ import {
   EyeOff, 
   CheckCircle2, 
   Info, 
-  Sparkles,
   BookOpen,
   Crown,
   FileUp,
@@ -126,11 +125,6 @@ function ConfigPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // Estados para API Key
-  const [apiKey, setApiKeyState] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isValidKey, setIsValidKey] = useState<boolean | null>(null);
   
   // Estados para o formulário de novo hotel
   const [newHotel, setNewHotel] = useState({
@@ -183,12 +177,6 @@ function ConfigPage() {
     fetchHotels();
     fetchTestEnvironmentStatus(); // Adicionado
     
-    // Carregar API key salva
-    const savedApiKey = localStorage.getItem("openai-api-key")
-    if (savedApiKey) {
-      setApiKeyState(savedApiKey)
-      setIsValidKey(true)
-    }
   }, []);
 
   const handleSyncHotels = async () => {
@@ -418,80 +406,6 @@ function ConfigPage() {
       setIsClearingTestEnv(false);
     }
   };
-
-  // Funções para gerenciar API Key
-  const validateApiKey = (key: string) => {
-    // Validação básica do formato da API key
-    const isValid = key.startsWith('sk-') && key.length > 20
-    setIsValidKey(isValid)
-    return isValid
-  }
-
-  const handleApiKeyChange = (value: string) => {
-    setApiKeyState(value)
-    if (value.length > 0) {
-      validateApiKey(value)
-    } else {
-      setIsValidKey(null)
-    }
-  }
-
-  const handleSaveApiKey = async () => {
-    if (!apiKey.trim()) {
-      toast({
-        title: "Erro de Validação",
-        description: "Por favor, insira uma chave de acesso válida",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!validateApiKey(apiKey)) {
-      toast({
-        title: "Chave de Acesso Inválida",
-        description: "A chave de acesso deve começar com 'sk-' e ter pelo menos 20 caracteres",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsSaving(true)
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      localStorage.setItem("openai-api-key", apiKey)
-      
-      if (window) {
-        window.dispatchEvent(new Event('apiKeyChanged'))
-      }
-      
-      toast({
-        title: "Configuração Salva",
-        description: "Sua chave de acesso foi configurada com sucesso! A IA está pronta para análise.",
-        variant: "default",
-      })
-      
-      setIsValidKey(true)
-    } catch (error) {
-      toast({
-        title: "Erro ao Salvar",
-        description: "Não foi possível salvar sua chave de acesso. Tente novamente.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const clearApiKey = () => {
-    setApiKeyState("")
-    setIsValidKey(null)
-    localStorage.removeItem("openai-api-key")
-    toast({
-      title: "Chave de Acesso Removida",
-      description: "A configuração foi limpa com sucesso",
-    })
-  }
 
   const handleChangePassword = async () => {
     // Validações
@@ -1886,144 +1800,52 @@ function ConfigPage() {
             </CardContent>
           </Card>
 
-          {/* Configuração da API Key */}
-          {isValidKey !== null && (
-            <Card className={`p-4 border-l-4 ${
-              isValidKey 
-                ? "bg-green-50 dark:bg-green-950/30 border-l-green-500 border-green-200 dark:border-green-800" 
-                : "bg-red-50 dark:bg-red-950/30 border-l-red-500 border-red-200 dark:border-red-800"
-            }`}>
+          <Card className="p-8">
+            <div className="space-y-6">
               <div className="flex items-center gap-3">
-                {isValidKey ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                )}
-                <div>
-                  <p className={`font-medium ${
-                    isValidKey ? "text-green-800 dark:text-green-200" : "text-red-800 dark:text-red-200"
-                  }`}>
-                    {isValidKey ? "IA Configurada e Pronta" : "Configuração Necessária"}
-                  </p>
-                  <p className={`text-sm ${
-                    isValidKey ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"
-                  }`}>
-                    {isValidKey 
-                      ? "Sua IA está pronta para analisar feedbacks automaticamente" 
-                      : "Configure uma API Key válida para habilitar a análise inteligente"
-                    }
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3">
                 <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-full">
                   <Key className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <span>Configuração da API</span>
-                  <CardDescription className="mt-1">
-                    Configure sua chave de acesso para análise inteligente
-                  </CardDescription>
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="apiKey" className="text-base font-medium">
-                    Chave de Acesso da IA
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="apiKey"
-                      type={showApiKey ? "text" : "password"}
-                      placeholder="sk-..."
-                      value={apiKey}
-                      onChange={(e) => handleApiKeyChange(e.target.value)}
-                      className={`pr-12 text-sm ${
-                        isValidKey === false ? "border-red-300 focus:border-red-500" : ""
-                      } ${
-                        isValidKey === true ? "border-green-300 focus:border-green-500" : ""
-                      }`}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                    >
-                      {showApiKey ? (
-                        <EyeOff className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </Button>
-                  </div>
-                  
-                  {isValidKey === false && (
-                    <p className="text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      Chave de acesso deve começar com &apos;sk-&apos; e ter pelo menos 20 caracteres
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button 
-                    onClick={handleSaveApiKey} 
-                    disabled={isSaving || !apiKey.trim()}
-                    className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                  >
-                    {isSaving ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                        Salvando...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="h-4 w-4" />
-                        Salvar Configuração
-                      </>
-                    )}
-                  </Button>
-                  
-                  {apiKey && (
-                    <Button 
-                      variant="outline" 
-                      onClick={clearApiKey}
-                      className="flex items-center gap-2"
-                    >
-                      Limpar
-                    </Button>
-                  )}
+                  <h3 className="text-xl font-semibold">Integração com IA</h3>
+                  <p className="text-muted-foreground">
+                    A credencial do OpenAI agora é configurada globalmente na infraestrutura (Vercel/servidores) pela equipe de TI.
+                  </p>
                 </div>
               </div>
-            </CardContent>
+
+              <div className="space-y-4 text-sm text-muted-foreground">
+                <p>
+                  Administradores não precisam mais inserir chaves manualmente. Todas as análises usam a variável de ambiente
+                  <code className="ml-1 rounded bg-muted px-1 py-0.5 text-xs">OPENAI_API_KEY</code> definida durante o deploy. Isso garante consistência,
+                  evita vazamento de credenciais e simplifica rotações.
+                </p>
+                <p>
+                  Caso seja necessário atualizar a chave (ex.: expiração ou rotação de segurança), abra um chamado com o time de infraestrutura para que a
+                  variável seja atualizada e propagada automaticamente para todos os ambientes.
+                </p>
+                <div className="rounded-lg border bg-muted/40 p-4">
+                  <div className="flex items-center gap-2 font-medium">
+                    <Info className="h-4 w-4" />
+                    Observabilidade centralizada
+                  </div>
+                  <p className="mt-2 text-sm">
+                    Quando a chave é gerenciada por ambiente, os logs e alertas ficam concentrados em um único ponto. Isso facilita auditorias e permite
+                    respostas rápidas a incidentes sem depender de ações individuais nos navegadores dos usuários.
+                  </p>
+                </div>
+              </div>
+            </div>
           </Card>
 
-          {/* Informações sobre a API */}
           <Card className="p-6 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
             <div className="flex items-start gap-3">
               <Info className="h-5 w-5 text-blue-600 mt-0.5" />
-              <div className="space-y-3">
-                <h4 className="font-semibold text-blue-900 dark:text-blue-100">
-                  Como obter sua Chave de Acesso
-                </h4>
-                <div className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
-                  <p>Como administrador, você pode obter sua chave de acesso à IA diretamente dos provedores de serviços.</p>
-                  <p>Configure a chave para habilitar a análise inteligente de feedbacks em todo o sistema.</p>
-                </div>
-                <div className="mt-4 p-3 bg-blue-100 dark:bg-blue-900/50 rounded-lg border border-blue-300 dark:border-blue-700">
-                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                    Segurança: Sua chave de acesso é armazenada apenas localmente no seu navegador
-                  </p>
-                </div>
+              <div className="space-y-3 text-sm text-blue-800 dark:text-blue-200">
+              
+                <p>
+                  Em ambientes locais, defina a mesma variável no arquivo <code className="rounded bg-blue-100/80 px-1 py-0.5 text-xs text-blue-900">.env.local</code>.
+                </p>
               </div>
             </div>
           </Card>
