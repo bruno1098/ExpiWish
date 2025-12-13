@@ -11,7 +11,6 @@ import { getAllAnalyses } from "@/lib/firestore-service"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
-import { getApiKey } from "@/lib/openai-client"
 import type { Feedback, Analysis } from "@/types"
 import { filterValidFeedbacks } from "@/lib/utils"
 
@@ -281,11 +280,6 @@ Forneça uma análise em JSON com o seguinte formato:
 Seja específico, prático e focado em recuperação rápida da reputação e satisfação dos clientes.
       `
 
-      const apiKey = getApiKey()
-      if (!apiKey) {
-        throw new Error('API Key do OpenAI não encontrada')
-      }
-
       const response = await fetch('/api/analyze-feedback', {
         method: 'POST',
         headers: {
@@ -293,7 +287,6 @@ Seja específico, prático e focado em recuperação rápida da reputação e sa
         },
         body: JSON.stringify({
           texto: prompt,
-          apiKey,
         })
       })
 

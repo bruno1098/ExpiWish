@@ -12,7 +12,6 @@ import { getAllAnalyses } from "@/lib/firestore-service"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
-import { getApiKey } from "@/lib/openai-client"
 import type { Feedback, Analysis } from "@/types"
 import { filterValidFeedbacks } from "@/lib/utils"
 
@@ -432,11 +431,6 @@ FOQUE EM:
 Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros.
       `
 
-      const apiKey = getApiKey()
-      if (!apiKey) {
-        throw new Error('API Key do OpenAI não encontrada')
-      }
-
       const response = await fetch('/api/analyze-feedback', {
         method: 'POST',
         headers: {
@@ -444,7 +438,6 @@ Seja específico sobre QUAL hotel tem QUAL problema e COMO se compara aos outros
         },
         body: JSON.stringify({
           texto: prompt,
-          apiKey,
         })
       })
 
