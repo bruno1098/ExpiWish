@@ -56,6 +56,7 @@ import {
   Lightbulb,
   History,
   Clock,
+  BedDouble,
   Brain,
   CheckCircle2,
   AlertTriangle,
@@ -461,22 +462,50 @@ const scrollbarStyles = `
 `;
 
 // Função helper para dividir strings por múltiplos delimitadores
-const splitByDelimiter = (str: string): string[] => {
-  if (!str || str.trim() === '') return [];
+const splitByDelimiter = (input: string | string[] | null | undefined): string[] => {
+  if (!input) return [];
+
+  if (Array.isArray(input)) {
+    return input
+      .map(item => (typeof item === 'string' ? item : String(item ?? '')).trim())
+      .filter(item => item !== '' && item !== 'undefined' && item !== 'null' && item.toLowerCase() !== '[object object]');
+  }
+
+  if (typeof input !== 'string') {
+    return [];
+  }
+
+  if (input.trim() === '') return [];
   
   // Primeiro tenta separar por ponto e vírgula, depois por vírgula
   let items: string[] = [];
-  if (str.includes(';')) {
-    items = str.split(';');
-  } else if (str.includes(',')) {
-    items = str.split(',');
+  if (input.includes(';')) {
+    items = input.split(';');
+  } else if (input.includes(',')) {
+    items = input.split(',');
   } else {
-    items = [str];
+    items = [input];
   }
   
   return items
     .map(item => item.trim())
     .filter(item => item !== '' && item !== 'undefined' && item !== 'null');
+};
+
+const normalizeForMatch = (text: string) =>
+  text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const hasWordMatch = (text: string, term: string) => {
+  if (!text || !term) return false;
+  const normalizedText = normalizeForMatch(text);
+  const normalizedTerm = normalizeForMatch(term);
+  const regex = new RegExp(`\\b${escapeRegex(normalizedTerm)}\\b`, 'i');
+  return regex.test(normalizedText);
 };
 
 // Mapa de cores para sentimentos
@@ -1052,6 +1081,129 @@ const KeywordBadge = ({ keyword, sector }: { keyword: string, sector: string }) 
   );
 };
 
+// Tags de contexto para facilitar leitura rápida
+const CONTEXT_TAG_DEFS = {
+  room: {
+    label: "Quarto",
+    badgeClass: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700",
+    keywordHints: ["limpeza - quarto", "manutenção - quarto", "a&b - room service", "enxoval", "cama", "frigobar", "ar-condicionado"],
+    sectorHints: ["manutenção - quarto", "governança", "produto"],
+    commentHints: [
+      "quarto",
+      "suíte",
+      "suite",
+      "cama",
+      "lençol",
+      "travesseiro",
+      "colchão",
+      "armário",
+      "cortina",
+      "cobertor",
+      "edredom",
+      "enxoval"
+    ],
+    requiresCommentMatch: true
+  },
+  bathroom: {
+    label: "Banheiro",
+    badgeClass: "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700",
+    keywordHints: ["limpeza - banheiro", "manutenção - banheiro", "chuveiro", "toalha", "amenities"],
+    sectorHints: ["manutenção - banheiro", "governança"],
+    commentHints: ["banheiro", "chuveiro", "pia", "vaso", "toalha", "box", "lavabo"],
+    requiresCommentMatch: true
+  },
+  kids_staff: {
+    label: "Equipe Kids",
+    badgeClass: "bg-pink-50 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-200 dark:border-pink-700",
+    keywordHints: ["lazer - recreação", "kids club", "atividades infantis"],
+    sectorHints: ["lazer", "programa de vendas"],
+    commentHints: ["tio", "tia", "recreação", "kids", "infantil", "brincadeira", "monitor", "monitora"],
+    requiresCommentMatch: true
+  },
+  corridor: {
+    label: "Corredor",
+    badgeClass: "bg-teal-50 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-200 dark:border-teal-700",
+    keywordHints: ["limpeza - áreas sociais", "manutenção - instalações", "iluminação"],
+    sectorHints: ["manutenção - instalações", "operções", "operações"],
+    commentHints: ["corredor", "corredores", "hall", "passagem", "elevador", "porta", "andar", "área comum", "iluminação"],
+    requiresCommentMatch: true
+  },
+  hotel: {
+    label: "Hotel Geral",
+    badgeClass: "bg-slate-50 text-slate-800 border-slate-200 dark:bg-slate-900/30 dark:text-slate-200 dark:border-slate-700",
+    keywordHints: ["infraestrutura", "atendimento", "processo", "custo-benefício", "recepção"],
+    sectorHints: ["recepção", "qualidade", "operações", "comercial"],
+    commentHints: ["hotel", "estrutura", "recepção", "staff", "equipe", "serviço", "check-in", "check in", "check-out", "check out", "experiência", "hospedagem", "estadia"],
+    requiresCommentMatch: true
+  },
+  attendants: {
+    label: "Atendentes",
+    badgeClass: "bg-indigo-50 text-indigo-800 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-200 dark:border-indigo-700",
+    keywordHints: ["atendimento", "recepção", "cliente"],
+    sectorHints: ["recepção", "qualidade", "operções", "operações"],
+    commentHints: ["atendente", "atendentes", "colaborador", "colaboradores", "recepcionista", "recepcionistas", "funcionário", "funcionários", "staff"],
+    requiresCommentMatch: true
+  }
+} as const
+
+type ContextTagKey = keyof typeof CONTEXT_TAG_DEFS
+
+const detectContextTags = (feedback: Feedback): ContextTagKey[] => {
+  const tags = new Set<ContextTagKey>()
+  const keywords = splitByDelimiter(feedback.keyword || '').map(k => k.toLowerCase())
+  const sectors = splitByDelimiter(feedback.sector || '').map(s => s.toLowerCase())
+  const comment = feedback.comment || ''
+  const problems = splitByDelimiter(feedback.problem || '').map(p => p.toLowerCase());
+  
+  (Object.entries(CONTEXT_TAG_DEFS) as Array<[ContextTagKey, typeof CONTEXT_TAG_DEFS[ContextTagKey]]>).forEach(([key, config]) => {
+    const matchesKeyword = keywords.some(kw => config.keywordHints.some(hint => kw.includes(hint)))
+    const matchesSector = sectors.some(sec => config.sectorHints.some(hint => sec.includes(hint)))
+    const matchesProblem = problems.some(prob => config.keywordHints.some(hint => prob.includes(hint)))
+    const matchesComment = config.commentHints.some(hint => hasWordMatch(comment, hint))
+
+    const requiresCommentOnly = config?.requiresCommentMatch
+    const matches = requiresCommentOnly
+      ? matchesComment
+      : matchesKeyword || matchesSector || matchesProblem || matchesComment
+
+    if (matches) {
+      tags.add(key)
+    }
+  })
+  
+  return Array.from(tags)
+}
+
+const renderContextBadge = (tag: ContextTagKey, key: string) => {
+  if (tag === 'room') {
+    return (
+      <div
+        key={key}
+        className="inline-flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-400 text-white text-[10px] font-semibold shadow-[0_6px_18px_rgba(251,191,36,0.35)] ring-1 ring-white/20"
+      >
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/15 backdrop-blur border border-white/20">
+          <BedDouble className="h-2.5 w-2.5" />
+        </span>
+        <span className="uppercase tracking-[0.25em] text-[10px]">Quarto</span>
+        <span className="w-1 h-1 rounded-full bg-white/80" />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      key={key}
+      className={cn(
+        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium text-slate-600 dark:text-slate-200 bg-white/90 dark:bg-white/5",
+        CONTEXT_TAG_DEFS[tag].badgeClass
+      )}
+    >
+      <Lightbulb className="h-3 w-3 opacity-70" />
+      {CONTEXT_TAG_DEFS[tag].label}
+    </div>
+  )
+}
+
 // Definir uma interface para o tipo de análise
 interface Analysis {
   id: string;
@@ -1150,7 +1302,8 @@ const CommentModal = ({
   currentIndex = 0,
   organizedKeywords = {},
   onNavigate,
-  onKeywordsUpdated
+  onKeywordsUpdated,
+  activeContextFilter = "all"
 }: { 
   feedback: Feedback, 
   onFeedbackUpdated?: (updatedFeedback: Feedback) => void,
@@ -1160,7 +1313,8 @@ const CommentModal = ({
   currentIndex?: number,
   organizedKeywords?: Record<string, string[]>,
   onNavigate?: (index: number) => void,
-  onKeywordsUpdated?: () => void
+  onKeywordsUpdated?: () => void,
+  activeContextFilter?: ContextTagKey | "all"
 }) => {
   const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
@@ -1250,7 +1404,6 @@ const CommentModal = ({
     newData?: any;
   }>>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
-  const [showReasoningModal, setShowReasoningModal] = useState(false)
   const [mounted, setMounted] = useState(false)
   
   // Portal mounting
@@ -1260,13 +1413,13 @@ const CommentModal = ({
 
   // Bloquear scroll do body quando modais estão abertos
   useEffect(() => {
-    if (showReasoningModal || showEditHistory) {
+    if (showEditHistory) {
       document.body.style.overflow = 'hidden'
       return () => {
         document.body.style.overflow = 'unset'
       }
     }
-  }, [showReasoningModal, showEditHistory])
+  }, [showEditHistory])
   
   // 🚀 OTIMIZAÇÃO: Refs para timeout cleanup
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -1366,6 +1519,107 @@ const CommentModal = ({
     source: currentFeedback.source || '',
     apartamento: currentFeedback.apartamento || ''
   }), [currentFeedback.sentiment, currentFeedback.rating, currentFeedback.language, currentFeedback.source, currentFeedback.apartamento])
+
+  const contextTags = useMemo(() => detectContextTags(currentFeedback), [currentFeedback])
+  const visibleContextTags = useMemo(() => {
+    return contextTags.filter(tag => tag === 'room' || (activeContextFilter !== 'all' && activeContextFilter === tag))
+  }, [contextTags, activeContextFilter])
+  const reasoningSteps = useMemo(() => {
+    if (!currentFeedback.reasoning) return []
+    return currentFeedback.reasoning
+      .split(/\n+/)
+      .map(line => line.replace(/^[−•]\s*/, '').trim())
+      .filter(Boolean)
+  }, [currentFeedback.reasoning])
+  type ReasoningDetail = { label: string; description: string; note?: string }
+  type ReasoningStep = { title: string; summary: string; details: ReasoningDetail[] }
+  const formattedReasoningSteps: ReasoningStep[] = useMemo(() => {
+    const normalizeWhitespace = (text: string) => text.replace(/→|->/g, ' ').replace(/\s+/g, ' ').trim()
+    const applyFriendlyLabels = (text: string) => {
+      const replacements = [
+        { pattern: /problem:? ?empty/gi, replacement: 'sem problema' },
+        { pattern: /problem/gi, replacement: 'problema' },
+        { pattern: /keyword/gi, replacement: 'palavra-chave' },
+        { pattern: /issues/gi, replacement: 'pontos analisados' },
+        { pattern: /empty/gi, replacement: 'vazio' },
+      ]
+      return replacements.reduce((acc, { pattern, replacement }) => acc.replace(pattern, replacement), text)
+    }
+    const baseFormat = (text: string) => normalizeWhitespace(applyFriendlyLabels(text))
+    const toTitleCase = (text: string) => {
+      const normalized = baseFormat(text).toLowerCase()
+      if (!normalized) return ''
+      return normalized
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+        .replace(/Ia/gi, 'IA')
+        .replace(/A&b/gi, 'A&B')
+    }
+    const toSentenceCase = (text: string) => {
+      const normalized = baseFormat(text)
+      if (!normalized) return ''
+      const lower = normalized.toLowerCase()
+      const firstChar = lower.charAt(0).toUpperCase()
+      const remaining = lower.slice(1)
+      return `${firstChar}${remaining}`
+        .replace(/ Ia/gi, ' IA')
+        .replace(/ A&b/gi, ' A&B')
+    }
+    const buildDetail = (raw: string): ReasoningDetail | null => {
+      let working = baseFormat(raw)
+      if (!working) return null
+      let note = ''
+      const noteMatch = working.match(/\(([^)]+)\)/)
+      if (noteMatch) {
+        note = toSentenceCase(noteMatch[1])
+        working = working.replace(/\(([^)]+)\)/g, '').trim()
+      }
+      const segments = working.split(/\s*\+\s*/)
+      const label = toTitleCase(segments.shift() || working)
+      const description = segments.length ? toSentenceCase(segments.join(' • ')) : ''
+      return {
+        label,
+        description,
+        note,
+      }
+    }
+
+    return reasoningSteps.map((step) => {
+      const segments = step.split('|').map(segment => baseFormat(segment)).filter(Boolean)
+      let title = segments.shift() || baseFormat(step)
+      let summary = ''
+
+      if (title.includes('-')) {
+        const [headline, ...rest] = title.split(' - ')
+        title = headline
+        summary = rest.join(' - ')
+      }
+
+      const details = segments
+        .map(segment => buildDetail(segment))
+        .filter((detail): detail is ReasoningDetail => Boolean(detail && detail.label))
+
+      if (!details.length) {
+        const fallback = buildDetail(title)
+        if (fallback) {
+          details.push(fallback)
+        }
+      }
+
+      return {
+        title: toTitleCase(title),
+        summary: toSentenceCase(summary),
+        details,
+      }
+    })
+  }, [reasoningSteps])
+  const keywordsPreview = useMemo(() => {
+    return splitByDelimiter(currentFeedback.keyword).slice(0, 3)
+  }, [currentFeedback.keyword])
+  const problemsPreview = useMemo(() => {
+    return splitByDelimiter(currentFeedback.problem || '').slice(0, 3)
+  }, [currentFeedback.problem])
 
   // Inicializar metadados para edição com proteção contra race condition
   useEffect(() => {
@@ -2226,23 +2480,6 @@ const CommentModal = ({
                         return null;
                       })()}
                       
-                      {/* TEMPORÁRIO: Botão sempre visível para debug */}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (currentFeedback.reasoning) {
-                            setShowReasoningModal(true);
-                          } else {
-                            alert('⚠️ Reasoning não está disponível para este feedback!\n\nEste feedback foi importado ANTES da correção.\n\nImporte novos feedbacks para ver o raciocínio da IA.');
-                          }
-                        }}
-                        className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-purple-50 to-pink-50 hover:from-purple-100 hover:to-pink-100 border-purple-200 hover:border-pink-300 text-purple-700 hover:text-pink-800 dark:bg-gradient-to-r dark:from-purple-500/10 dark:to-pink-500/10 dark:hover:from-purple-500/20 dark:hover:to-pink-500/20 dark:border-purple-400/30 dark:hover:border-pink-400/50 dark:text-purple-100 dark:hover:text-pink-100 transition-all duration-300 shadow-sm"
-                      >
-                        <Brain className="h-3.5 w-3.5" />
-                        Raciocínio IA {!currentFeedback.reasoning && '⚠️'}
-                      </Button>
-                      
                       {/* Navegação entre feedbacks */}
                       {allFeedbacks && allFeedbacks.length > 1 && onNavigate && (
                         <div className="flex items-center gap-2">
@@ -2320,6 +2557,18 @@ const CommentModal = ({
                     </span>
                   </div>
                 </div>
+
+                {visibleContextTags.length > 0 && (
+                  <div className="mt-4 w-full">
+                    <div className="text-[10px] uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400 mb-1 flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-slate-400/80" />
+                      Contexto detectado
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {visibleContextTags.map(tag => renderContextBadge(tag, `modal-context-${tag}`))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -2595,6 +2844,143 @@ const CommentModal = ({
                   <span className="text-sm font-medium">Modo Edição Ativo</span>
                 </div>
               )}
+            </div>
+
+            <div className="p-4 bg-white/80 dark:bg-gray-900/30 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
+                  <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em]">Sentimento atribuído</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <SentimentBadge sentiment={currentFeedback.sentiment} />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Score {currentFeedback.rating}/5</span>
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
+                  <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em]">Palavras analisadas</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {keywordsPreview.length > 0 ? (
+                      keywordsPreview.map((kw, index) => (
+                        <Badge key={`kw-preview-${index}`} variant="outline" className="text-[11px] px-2 py-0.5">
+                          {kw.trim() || '—'}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Sem palavras associadas</span>
+                    )}
+                  </div>
+                </div>
+                <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40">
+                  <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-[0.2em]">Problemas avaliados</p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {problemsPreview.length > 0 ? (
+                      problemsPreview.map((problem, index) => (
+                        <Badge key={`problem-preview-${index}`} variant="outline" className="text-[11px] px-2 py-0.5">
+                          {problem.trim() || '—'}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Sem problemas mapeados</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-md">
+                      <Brain className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">Raciocínio resumido</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Etapas usadas para classificar este feedback</p>
+                    </div>
+                  </div>
+                  {currentFeedback.reasoning && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(currentFeedback.reasoning || '')
+                        toast({
+                          title: 'Raciocínio copiado',
+                          description: 'Detalhes do processo copiados para a área de transferência.',
+                        })
+                      }}
+                      className="text-xs h-8 px-3"
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-2" />
+                      Copiar resumo
+                    </Button>
+                  )}
+                </div>
+
+                {formattedReasoningSteps.length > 0 ? (
+                  <ol className="space-y-4">
+                    {formattedReasoningSteps.slice(0, 6).map((step, index) => (
+                      <li
+                        key={`reasoning-step-${index}`}
+                        className="rounded-3xl border border-gray-200/70 dark:border-gray-700/80 bg-white/80 dark:bg-gray-900/40 p-5 shadow-sm"
+                      >
+                        <div className="flex gap-4">
+                          <span className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 text-white text-sm font-semibold shadow-md">
+                            {index + 1}
+                          </span>
+                          <div className="flex-1 space-y-3">
+                            <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                              <div>
+                                <p className="text-[11px] font-semibold tracking-[0.2em] uppercase text-purple-500">Etapa {index + 1}</p>
+                                <p className="text-base font-semibold text-gray-900 dark:text-white leading-relaxed">
+                                  {step.title}
+                                </p>
+                              </div>
+                              {step.summary && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400 max-w-md md:text-right">
+                                  {step.summary}
+                                </p>
+                              )}
+                            </div>
+
+                            {step.details.length > 0 && (
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {step.details.map((detail, detailIndex) => (
+                                  <div
+                                    key={`detail-${index}-${detailIndex}`}
+                                    className="rounded-2xl border border-purple-100 dark:border-purple-900/40 bg-purple-50/60 dark:bg-purple-900/20 p-3"
+                                  >
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300">
+                                      {detail.label}
+                                    </p>
+                                    {detail.description && (
+                                      <p className="text-sm text-gray-700 dark:text-gray-200 mt-1 leading-relaxed">
+                                        {detail.description}
+                                      </p>
+                                    )}
+                                    {detail.note && (
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">
+                                        {detail.note}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                    {formattedReasoningSteps.length > 6 && (
+                      <li className="text-xs text-gray-500 dark:text-gray-400 pl-14">
+                        +{formattedReasoningSteps.length - 6} linhas adicionais registradas
+                      </li>
+                    )}
+                  </ol>
+                ) : (
+                  <div className="p-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/30 text-xs text-gray-600 dark:text-gray-400">
+                    Este feedback não possui o registro detalhado do raciocínio (importado antes da atualização da IA).
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Seção de Elogios e Aspectos Positivos - Aparece SEMPRE quando existir */}
@@ -3064,176 +3450,6 @@ const CommentModal = ({
      
       </DialogContent>
       
-      {/* Modal de Raciocínio da IA */}
-      {showReasoningModal && currentFeedback.reasoning && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300" style={{zIndex: 1000000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0}}>
-          <div className="bg-gradient-to-br from-purple-50 via-white to-pink-50 dark:from-gray-900 dark:via-purple-950 dark:to-gray-900 rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] transform animate-in zoom-in-95 duration-300 border border-purple-200 dark:border-purple-700 flex flex-col">
-            
-            {/* Header com gradiente */}
-            <div className="flex-shrink-0 p-6 border-b border-purple-200 dark:border-purple-700 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
-                    <Brain className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                      Raciocínio da IA
-                    </h3>
-                    <p className="text-sm text-purple-600 dark:text-purple-300">
-                      Como a IA analisou este feedback
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowReasoningModal(false)}
-                  className="h-10 w-10 p-0 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
-                >
-                  <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Conteúdo com scroll */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-              {/* Informações do feedback */}
-              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
-                <div className="flex items-center gap-2 mb-2">
-                  <MessageSquare className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                  <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Feedback Original</h4>
-                </div>
-                <p className="text-sm text-gray-700 dark:text-gray-300 italic">
-                  "{currentFeedback.comment?.substring(0, 200)}{currentFeedback.comment && currentFeedback.comment.length > 200 ? '...' : ''}"
-                </p>
-              </div>
-
-              {/* Decisões da IA */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                  </div>
-                  <h4 className="font-semibold text-gray-900 dark:text-white">Decisões Tomadas</h4>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-700">
-                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2">Departamento(s)</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {currentFeedback.sector?.split(/[;,]/).map((dept, idx) => (
-                        <Badge 
-                          key={idx}
-                          variant="outline" 
-                          className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300"
-                        >
-                          {dept.trim()}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-700">
-                    <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2">Palavra(s)-chave</p>
-                    <div className="flex flex-col gap-1.5">
-                      {currentFeedback.keyword?.split(/[;,]/).map((keyword, idx) => (
-                        <Badge 
-                          key={idx}
-                          variant="outline" 
-                          className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 justify-start"
-                        >
-                          {keyword.trim()}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
-                    <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Problema</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.problem || 'Nenhum'}</p>
-                  </div>
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
-                    <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-1">Sentimento</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{currentFeedback.sentiment}</p>
-                  </div>
-                </div>
-              </div>
-
-            {/* Raciocínio detalhado em tópicos */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-lg p-5 border border-purple-200 dark:border-purple-700 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                  <Lightbulb className="h-4 w-4 text-white" />
-                </div>
-                <h4 className="font-semibold text-gray-900 dark:text-white">Análise Detalhada</h4>
-              </div>
-              <div className="space-y-3">
-                {currentFeedback.reasoning?.split(/\n+/).filter(line => line.trim()).map((paragraph, idx) => {
-                  // Detectar se é um tópico numerado ou com marcador
-                  const isNumberedTopic = /^\d+\./.test(paragraph.trim())
-                  const isBulletTopic = /^[•\-\*]/.test(paragraph.trim())
-                  const isImportantKeyword = /(departamento|palavra-chave|problema|sentimento|razão|justificativa|análise)/i.test(paragraph)
-                  
-                  return (
-                    <div key={idx} className="flex gap-2">
-                      {(isNumberedTopic || isBulletTopic) && (
-                        <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-500 mt-2" />
-                      )}
-                      <p className={cn(
-                        "text-sm leading-relaxed",
-                        isImportantKeyword 
-                          ? "text-gray-900 dark:text-white font-medium" 
-                          : "text-gray-700 dark:text-gray-300"
-                      )}>
-                        {paragraph.trim()}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>              {/* Info adicional */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div className="flex-1">
-                    <h5 className="font-medium text-gray-900 dark:text-white mb-1 text-sm">Sobre este raciocínio</h5>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                      Este é o processo de pensamento da IA ao analisar o feedback. Ela identifica aspectos mencionados, 
-                      escolhe as palavras-chave mais apropriadas e justifica suas decisões baseando-se no contexto do texto.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer com ações */}
-            <div className="flex-shrink-0 p-4 border-t border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(currentFeedback.reasoning || '')
-                  toast({
-                    title: "Copiado!",
-                    description: "Raciocínio copiado para a área de transferência",
-                  })
-                }}
-                className="flex items-center gap-2"
-              >
-                <Copy className="h-4 w-4" />
-                Copiar
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setShowReasoningModal(false)}
-                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-              >
-                Fechar
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
       
       {/* Modal de Histórico dentro do CommentModal */}
       {showEditHistory && (
@@ -3522,339 +3738,6 @@ const CommentModal = ({
       )}
     </Dialog>
     
-    {/* Modais renderizados via Portal para aparecerem acima de tudo */}
-    {mounted && showReasoningModal && currentFeedback.reasoning && createPortal(
-      <div 
-        className="fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-300" 
-        style={{
-          zIndex: 9999999,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          backdropFilter: 'blur(4px)',
-          pointerEvents: 'auto'  // Overlay captura eventos
-        }}
-        onClick={(e) => {
-          // Fechar ao clicar no overlay (fora do modal)
-          if (e.target === e.currentTarget) {
-            setShowReasoningModal(false)
-          }
-        }}
-      >
-        <div 
-          className="bg-gradient-to-br from-purple-50 via-white to-pink-50 dark:from-gray-900 dark:via-purple-950 dark:to-gray-900 rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[85vh] transform animate-in zoom-in-95 duration-300 border border-purple-200 dark:border-purple-700 flex flex-col"
-          style={{ overscrollBehavior: 'contain' }}
-          onClick={(e) => e.stopPropagation()}
-          onWheel={(e) => e.stopPropagation()}  // Permitir scroll no modal, bloquear propagação
-        >
-          
-          {/* Header com gradiente */}
-          <div className="flex-shrink-0 p-6 border-b border-purple-200 dark:border-purple-700 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/50 dark:to-pink-900/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
-                  <Brain className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    Raciocínio da IA
-                  </h3>
-                  <p className="text-sm text-purple-600 dark:text-purple-300">
-                    Como a IA analisou este feedback
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowReasoningModal(false)}
-                className="h-10 w-10 p-0 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Conteúdo com scroll */}
-          <div 
-            className="flex-1 overflow-y-auto p-6 space-y-4" 
-            style={{
-              overflowY: 'auto',
-              maxHeight: 'calc(85vh - 100px)',  // Altura máxima menos header e footer
-              WebkitOverflowScrolling: 'touch'  // Scroll suave em iOS
-            }}
-          >
-            {/* Informações do feedback */}
-            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
-              <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                <h4 className="font-semibold text-gray-900 dark:text-white text-sm">Feedback Original</h4>
-              </div>
-              <p className="text-sm text-gray-700 dark:text-gray-300 italic">
-                "{currentFeedback.comment?.substring(0, 200)}{currentFeedback.comment && currentFeedback.comment.length > 200 ? '...' : ''}"
-              </p>
-            </div>
-
-            {/* Decisões da IA */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                </div>
-                <h4 className="font-semibold text-gray-900 dark:text-white">Decisões Tomadas</h4>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-700">
-                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2">Departamento(s)</p>
-                  <div className="flex flex-col gap-1.5">
-                    {currentFeedback.sector?.split(/[;,]/).map((dept, idx) => (
-                      <Badge 
-                        key={idx}
-                        variant="outline" 
-                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300 justify-start w-fit"
-                      >
-                        {dept.trim()}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 border border-purple-200 dark:border-purple-700">
-                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2">Palavra(s)-chave</p>
-                  <div className="flex flex-col gap-1.5">
-                    {currentFeedback.keyword?.split(/[;,]/).map((keyword, idx) => (
-                      <Badge 
-                        key={idx}
-                        variant="outline" 
-                        className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 text-purple-700 dark:text-purple-300 justify-start w-fit"
-                      >
-                        {keyword.trim()}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
-                  <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Problema</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.problem || 'Nenhum'}</p>
-                </div>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
-                  <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-1">Sentimento</p>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.rating}/5</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Raciocínio detalhado em tópicos */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/10 dark:to-pink-900/10 rounded-lg p-5 border border-purple-200 dark:border-purple-700 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                  <Lightbulb className="h-4 w-4 text-white" />
-                </div>
-                <h4 className="font-semibold text-gray-900 dark:text-white">Análise Detalhada</h4>
-              </div>
-              <div className="space-y-2.5">
-                {(() => {
-                  const text = currentFeedback.reasoning || ''
-                  
-                  // Quebrar o texto de forma mais inteligente
-                  let lines: string[] = []
-                  
-                  // Primeiro, quebra por pipes que são separadores claros
-                  const pipeSegments = text.split(/\s*\|\s*/)
-                  
-                  pipeSegments.forEach(segment => {
-                    // Para cada segmento, quebra por quebras de linha
-                    const lineBreaks = segment.split(/\n+/)
-                    
-                    lineBreaks.forEach(line => {
-                      // Se a linha tem múltiplas frases (ponto + maiúscula), quebra elas também
-                      const sentences = line.split(/(?<=\.\s)(?=[A-Z1-9])/)
-                      lines.push(...sentences)
-                    })
-                  })
-                  
-                  // Filtrar linhas vazias e limpar
-                  lines = lines
-                    .map(l => l.trim())
-                    .filter(l => l.length > 0)
-                  
-                  return lines.map((line, idx) => {
-                    // Detectar tipos de conteúdo para estilização
-                    const hasArrow = /→/.test(line)
-                    const isNumbered = /^\d+\./.test(line)
-                    const hasKeyword = /(departamento|palavra-chave|problema|sentimento|razão|justificativa|análise|escolha|classificação)/i.test(line)
-                    const isImportant = hasArrow || hasKeyword || isNumbered
-                    
-                    return (
-                      <div key={idx} className="flex gap-2.5 items-start">
-                        {/* Bullet point para cada linha */}
-                        <div className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-purple-500 mt-2" />
-                        <p className={cn(
-                          "text-sm leading-relaxed flex-1",
-                          isImportant
-                            ? "text-gray-900 dark:text-white font-medium" 
-                            : "text-gray-700 dark:text-gray-300"
-                        )}>
-                          {line}
-                        </p>
-                      </div>
-                    )
-                  })
-                })()}
-              </div>
-            </div>
-
-            {/* Info adicional */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div className="flex-1">
-                  <h5 className="font-semibold text-gray-900 dark:text-white text-sm mb-1">Sobre este raciocínio</h5>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    Este é o processo de pensamento da IA ao analisar o feedback. Ela identifica aspectos mencionados, escolhe as palavras-chave mais apropriadas e justifica suas decisões baseando-se no contexto do texto.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer com ações */}
-          <div className="flex-shrink-0 p-4 border-t border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                navigator.clipboard.writeText(currentFeedback.reasoning || '')
-                alert('Raciocínio copiado!')
-              }}
-              className="flex items-center gap-2"
-            >
-              <Copy className="h-4 w-4" />
-              Copiar
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setShowReasoningModal(false)}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-            >
-              Fechar
-            </Button>
-          </div>
-        </div>
-      </div>,
-      document.body
-    )}
-    
-    {/* Modal de Histórico via Portal */}
-    {mounted && showEditHistory && createPortal(
-      <div 
-        className="fixed inset-0 flex items-center justify-center p-4 animate-in fade-in duration-300" 
-        style={{
-          zIndex: 9999999,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          backdropFilter: 'blur(4px)',
-          pointerEvents: 'auto'
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            handleBackToDetails()
-          }
-        }}
-      >
-        <div 
-          className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-5xl w-full mx-4 max-h-[85vh] transform animate-in zoom-in-95 duration-300 border border-gray-200 dark:border-gray-700 flex flex-col"
-          style={{ overscrollBehavior: 'contain' }}
-          onClick={(e) => e.stopPropagation()}
-          onWheel={(e) => e.stopPropagation()}
-        >
-          
-          {/* Header compacto */}
-          <div className="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                  <History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Histórico de Edições
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Alterações realizadas neste feedback
-                  </p>
-                </div>
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleBackToDetails}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 dark:hover:bg-blue-900/30"
-                title="Voltar para detalhes"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Voltar
-              </Button>
-            </div>
-          </div>
-          
-          {/* Conteúdo com scroll */}
-          <div 
-            className="flex-1 overflow-y-auto p-4"
-            style={{
-              overflowY: 'auto',
-              maxHeight: 'calc(85vh - 120px)',
-              WebkitOverflowScrolling: 'touch'
-            }}
-          >
-            {editHistory.length === 0 ? (
-              <div className="text-center py-12">
-                <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600 dark:text-gray-400">Nenhuma edição registrada ainda</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {editHistory.map((entry, index) => (
-                  <div key={index} className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <span className="font-medium text-gray-900 dark:text-white">{entry.action}</span>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {entry.timestamp.toLocaleString('pt-BR')} • {entry.user}
-                        </p>
-                      </div>
-                    </div>
-                    {entry.changes && (
-                      <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        {JSON.stringify(entry.changes, null, 2)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {/* Footer */}
-          <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <History className="w-4 h-4" />
-                <span>
-                  {editHistory.length === 1 ? '1 edição' : `${editHistory.length} edições`}
-                </span>
-              </div>
-              <Button 
-                onClick={handleBackToDetails}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Voltar para Detalhes
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>,
-      document.body
-    )}
     </>
   )
 }
@@ -4402,6 +4285,7 @@ function AnalysisPageContent() {
   const [keywordFilter, setKeywordFilter] = useState("all")
   const [problemFilter, setProblemFilter] = useState("all")
   const [importFilter, setImportFilter] = useState("all")
+  const [contextFilter, setContextFilter] = useState<ContextTagKey | "all">("all")
 
   const [searchTerm, setSearchTerm] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
@@ -4959,9 +4843,14 @@ function AnalysisPageContent() {
       if (dateRange.from && feedbackDate < dateRange.from) return false
       if (dateRange.to && feedbackDate > dateRange.to) return false
     }
+
+    if (contextFilter !== "all") {
+      const tags = detectContextTags(feedback)
+      if (!tags.includes(contextFilter)) return false
+    }
     
     return true
-  }, [sentimentFilter, sectorFilter, keywordFilter, problemFilter, importFilter, searchTerm, dateRange])
+  }, [sentimentFilter, sectorFilter, keywordFilter, problemFilter, importFilter, searchTerm, dateRange, contextFilter])
 
   // 🚀 OTIMIZAÇÃO CRÍTICA: Função de sort memoizada
   const sortFunction = useCallback((a: any, b: any) => {
@@ -5027,6 +4916,7 @@ function AnalysisPageContent() {
     setKeywordFilter("all")
     setProblemFilter("all")
     setImportFilter("all")
+    setContextFilter("all")
     setDateRange(undefined)
     setQuickDateFilter("")
     setSearchTerm("")
@@ -5405,6 +5295,27 @@ function AnalysisPageContent() {
                 </Select>
               </div>
 
+              {/* Filtro por contexto (Quarto/Banheiro/etc.) */}
+              <div className="space-y-3">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-amber-500" />
+                  Contexto do Comentário
+                </label>
+                <Select value={contextFilter} onValueChange={(value) => setContextFilter(value as ContextTagKey | "all")}>
+                  <SelectTrigger className="border-gray-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all duration-200 bg-white/80 backdrop-blur-sm">
+                    <SelectValue placeholder="Selecionar contexto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os contextos</SelectItem>
+                    {(Object.entries(CONTEXT_TAG_DEFS) as Array<[ContextTagKey, typeof CONTEXT_TAG_DEFS[ContextTagKey]]>).map(([key, config]) => (
+                      <SelectItem key={key} value={key}>
+                        {config.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Filtros pré-definidos de data */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -5567,6 +5478,15 @@ function AnalysisPageContent() {
                       <X 
                         className="h-3 w-3 cursor-pointer hover:text-red-500" 
                         onClick={() => setProblemFilter('all')}
+                      />
+                    </Badge>
+                  )}
+                  {contextFilter !== "all" && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                      Contexto: {CONTEXT_TAG_DEFS[contextFilter].label}
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-red-500" 
+                        onClick={() => setContextFilter('all')}
                       />
                     </Badge>
                   )}
@@ -5745,6 +5665,8 @@ function AnalysisPageContent() {
                               const realIndex = filteredFeedbacks.findIndex(f => f.id === feedback.id);
                               const commentId = generateCommentId(feedback);
                               const isHighlighted = highlightedCommentId === commentId;
+                              const contextTags = detectContextTags(feedback);
+                              const visibleContextTags = contextTags.filter(tag => tag === 'room' || (contextFilter !== 'all' && contextFilter === tag));
                               
                               return (
                       <div 
@@ -5788,6 +5710,18 @@ function AnalysisPageContent() {
                                 {feedback.comment}
                               </TooltipContent>
                             </Tooltip>
+                            {visibleContextTags.length > 0 && (
+                              <div className="mt-2">
+                                <div className="text-[9px] uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500 mb-0.5">
+                                  Contexto
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {visibleContextTags.map((tag) => (
+                                    renderContextBadge(tag, `${feedback.id}-context-${tag}`)
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                         </div>
                         <div className="col-span-1 py-4 px-2 border-r border-gray-200 dark:border-gray-800 text-center flex items-center justify-center">
                           <div className="flex flex-col items-center justify-center space-y-1">
@@ -5958,6 +5892,7 @@ function AnalysisPageContent() {
                             currentIndex={realIndex >= 0 ? realIndex : 0}
                             organizedKeywords={organizedKeywords}
                             onKeywordsUpdated={refreshDynamicLists}
+                            activeContextFilter={contextFilter}
                             onNavigate={(newIndex) => {
                               // Garantir que o newIndex está dentro dos limites dos feedbacks filtrados
                               if (newIndex >= 0 && newIndex < filteredFeedbacks.length) {

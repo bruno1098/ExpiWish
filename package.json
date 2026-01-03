@@ -11,7 +11,8 @@
     "lint": "next lint",
     "optimize": "NODE_ENV=production node scripts/build-optimize.js",
     "optimize:test": "node scripts/build-optimize.js",
-    "extract-lists": "node scripts/extract-lists.js"
+    "extract-lists": "node scripts/extract-lists.js",
+    "export-taxonomy": "node scripts/export-taxonomy.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
