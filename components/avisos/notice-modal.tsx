@@ -57,14 +57,14 @@ const NoticeModal = ({ open, notice, media, onClose, onNeverShow }: NoticeModalP
 
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) onClose() }}>
-      <DialogContent className="max-w-6xl border-none bg-gradient-to-b from-slate-950 via-slate-900/95 to-slate-900 text-white p-0 overflow-hidden">
-        <div className="relative flex flex-col gap-6 p-6 lg:p-10">
+      <DialogContent className="w-[min(96vw,900px)] max-w-6xl border-none bg-gradient-to-b from-slate-950 via-slate-900/95 to-slate-900 text-white p-0 overflow-hidden md:rounded-[40px] rounded-3xl max-h-[90vh] overflow-y-auto">
+        <div className="relative flex flex-col gap-6 p-4 sm:p-6 lg:p-10">
           <div className="flex flex-col gap-4 text-center">
             <Badge className="self-center w-fit bg-fuchsia-500/20 text-fuchsia-100 border border-fuchsia-400/40">
               <Sparkles className="h-4 w-4 mr-2" /> Aviso Importante
             </Badge>
             <div className="space-y-3">
-              <h2 className="text-3xl lg:text-4xl font-semibold leading-tight text-white">{notice.title}</h2>
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-semibold leading-tight text-white">{notice.title}</h2>
               <p className="text-slate-200 text-base leading-relaxed max-w-3xl mx-auto">{notice.subtitle}</p>
             </div>
           </div>
@@ -72,8 +72,8 @@ const NoticeModal = ({ open, notice, media, onClose, onNeverShow }: NoticeModalP
           <div className="relative mx-auto w-full max-w-4xl">
             <div className="absolute inset-0 blur-3xl bg-fuchsia-500/20 opacity-40" aria-hidden="true" />
             <div className={cn(
-              "relative rounded-[36px] border border-white/15 bg-black/50 shadow-2xl overflow-hidden",
-              showVideo ? "aspect-[16/9]" : "h-[420px]"
+              "relative rounded-[30px] sm:rounded-[36px] border border-white/15 bg-black/50 shadow-2xl overflow-hidden",
+              showVideo ? "aspect-[4/3] sm:aspect-[16/9] h-[260px] sm:h-auto" : "h-[260px] sm:h-[420px]"
             )}>
               {showVideo ? (
                 <video
@@ -97,7 +97,7 @@ const NoticeModal = ({ open, notice, media, onClose, onNeverShow }: NoticeModalP
                       alt={media?.label ?? notice.mediaLabel}
                       fill
                       className="object-cover"
-                      sizes="(max-width: 1024px) 100vw, 800px"
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 80vw, 800px"
                     />
                   ) : (
                     <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-900 to-fuchsia-900" />
