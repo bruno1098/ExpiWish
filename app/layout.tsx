@@ -8,6 +8,7 @@ import { AuthProvider } from '@/lib/auth-context';
 import { AnalyticsTracker } from '@/components/analytics-tracker';
 import { MaintenancePage } from '@/components/maintenance-page';
 import { shouldShowMaintenance } from '@/lib/maintenance-config';
+import { NoticeCenter } from '@/components/avisos/notice-center';
 import './dark-theme.css'
 
 const inter = Inter({ subsets: ['latin'] });
@@ -60,6 +61,7 @@ export default function RootLayout({
         >
           <AuthProvider>
             <AnalyticsTracker />
+            {!isMaintenanceMode && <NoticeCenter />}
             {isMaintenanceMode ? (
               <MaintenancePage />
             ) : (
