@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Ticket,
   ClipboardList,
+  Megaphone,
 } from "lucide-react"
 
 function Sidebar() {
@@ -124,6 +125,12 @@ function Sidebar() {
       icon: Users,
       href: "/admin/usuarios",
       color: "text-blue-400",
+    },
+    {
+      label: "Avisos Globais",
+      icon: Megaphone,
+      href: "/admin/avisos",
+      color: "text-fuchsia-400",
     },
       {
       label: "Tickets da Plataforma",
