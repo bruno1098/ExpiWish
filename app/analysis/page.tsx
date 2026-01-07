@@ -57,6 +57,7 @@ import {
   History,
   Clock,
   BedDouble,
+  ShowerHead,
   Brain,
   CheckCircle2,
   AlertTriangle,
@@ -1107,9 +1108,35 @@ const CONTEXT_TAG_DEFS = {
   bathroom: {
     label: "Banheiro",
     badgeClass: "bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-700",
-    keywordHints: ["limpeza - banheiro", "manutenção - banheiro", "chuveiro", "toalha", "amenities"],
+    keywordHints: [
+      "limpeza - banheiro",
+      "manutenção - banheiro",
+      "chuveiro",
+      "ducha",
+      "banho",
+      "toalha",
+      "amenities",
+      "box",
+      "ralo",
+      "pia",
+      "banheiro"
+    ],
     sectorHints: ["manutenção - banheiro", "governança"],
-    commentHints: ["banheiro", "chuveiro", "pia", "vaso", "toalha", "box", "lavabo"],
+    commentHints: [
+      "banheiro",
+      "banho",
+      "chuveiro",
+      "ducha",
+      "pia",
+      "vaso",
+      "toalha",
+      "box",
+      "lavabo",
+      "ralo",
+      "agua",
+      "água",
+      "quente"
+    ],
     requiresCommentMatch: true
   },
   kids_staff: {
@@ -1185,6 +1212,21 @@ const renderContextBadge = (tag: ContextTagKey, key: string) => {
           <BedDouble className="h-2.5 w-2.5" />
         </span>
         <span className="uppercase tracking-[0.25em] text-[10px]">Quarto</span>
+        <span className="w-1 h-1 rounded-full bg-white/80" />
+      </div>
+    )
+  }
+
+  if (tag === 'bathroom') {
+    return (
+      <div
+        key={key}
+        className="inline-flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 text-white text-[10px] font-semibold shadow-[0_6px_18px_rgba(59,130,246,0.35)] ring-1 ring-white/20"
+      >
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/15 backdrop-blur border border-white/20">
+          <ShowerHead className="h-2.5 w-2.5" />
+        </span>
+        <span className="uppercase tracking-[0.25em] text-[10px]">Banheiro</span>
         <span className="w-1 h-1 rounded-full bg-white/80" />
       </div>
     )
@@ -1522,7 +1564,11 @@ const CommentModal = ({
 
   const contextTags = useMemo(() => detectContextTags(currentFeedback), [currentFeedback])
   const visibleContextTags = useMemo(() => {
-    return contextTags.filter(tag => tag === 'room' || (activeContextFilter !== 'all' && activeContextFilter === tag))
+    return contextTags.filter(tag =>
+      tag === 'room' ||
+      tag === 'bathroom' ||
+      (activeContextFilter !== 'all' && activeContextFilter === tag)
+    )
   }, [contextTags, activeContextFilter])
   const reasoningSteps = useMemo(() => {
     if (!currentFeedback.reasoning) return []
@@ -2755,21 +2801,15 @@ const CommentModal = ({
               <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avaliação</p>
                 {(isEditingMetadata || isEditingUnified) ? (
-                  <Select value={editedMetadata.rating?.toString()} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, rating: parseInt(value) }))}>
-                    <SelectTrigger className="w-full h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[1, 2, 3, 4, 5].map(rating => (
-                        <SelectItem key={rating} value={rating.toString()}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-yellow-500">{ratingIcons[rating]}</span>
-                            <span>{rating}/5</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base text-yellow-500">{ratingIcons[currentFeedback.rating] || "N/A"}</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.rating}/5</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      Nota fixa capturada da Ia  (não editável)
+                    </p>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <span className="text-base text-yellow-500">{ratingIcons[currentFeedback.rating] || "N/A"}</span>
@@ -2786,16 +2826,12 @@ const CommentModal = ({
               <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sentimento</p>
                 {(isEditingMetadata || isEditingUnified) ? (
-                  <Select value={editedMetadata.sentiment} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, sentiment: value }))}>
-                    <SelectTrigger className="w-full h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="positive">Positivo</SelectItem>
-                      <SelectItem value="neutral">Neutro</SelectItem>
-                      <SelectItem value="negative">Negativo</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <SentimentBadge sentiment={currentFeedback.sentiment} />
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      Valor calculado automaticamente pela IA (não editável)
+                    </p>
+                  </div>
                 ) : (
                   <SentimentBadge sentiment={currentFeedback.sentiment} />
                 )}
@@ -5666,7 +5702,11 @@ function AnalysisPageContent() {
                               const commentId = generateCommentId(feedback);
                               const isHighlighted = highlightedCommentId === commentId;
                               const contextTags = detectContextTags(feedback);
-                              const visibleContextTags = contextTags.filter(tag => tag === 'room' || (contextFilter !== 'all' && contextFilter === tag));
+                              const visibleContextTags = contextTags.filter(tag =>
+                                tag === 'room' ||
+                                tag === 'bathroom' ||
+                                (contextFilter !== 'all' && contextFilter === tag)
+                              );
                               
                               return (
                       <div 

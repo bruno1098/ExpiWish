@@ -143,7 +143,7 @@ function Sidebar() {
       icon: ClipboardList,
       href: "/action-plans",
       color: "text-lime-400",
-      disabled: true,
+      disabled: false,
       disabledTooltip: "Módulo em construção",
       disabledBadgeLabel: "Em construção",
     },
