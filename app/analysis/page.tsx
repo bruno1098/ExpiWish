@@ -2755,21 +2755,15 @@ const CommentModal = ({
               <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Avaliação</p>
                 {(isEditingMetadata || isEditingUnified) ? (
-                  <Select value={editedMetadata.rating?.toString()} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, rating: parseInt(value) }))}>
-                    <SelectTrigger className="w-full h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[1, 2, 3, 4, 5].map(rating => (
-                        <SelectItem key={rating} value={rating.toString()}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-yellow-500">{ratingIcons[rating]}</span>
-                            <span>{rating}/5</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base text-yellow-500">{ratingIcons[currentFeedback.rating] || "N/A"}</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{currentFeedback.rating}/5</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      Nota fixa capturada da Ia  (não editável)
+                    </p>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-2">
                     <span className="text-base text-yellow-500">{ratingIcons[currentFeedback.rating] || "N/A"}</span>
@@ -2786,16 +2780,12 @@ const CommentModal = ({
               <div className="flex-1">
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sentimento</p>
                 {(isEditingMetadata || isEditingUnified) ? (
-                  <Select value={editedMetadata.sentiment} onValueChange={(value) => setEditedMetadata(prev => ({ ...prev, sentiment: value }))}>
-                    <SelectTrigger className="w-full h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="positive">Positivo</SelectItem>
-                      <SelectItem value="neutral">Neutro</SelectItem>
-                      <SelectItem value="negative">Negativo</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <SentimentBadge sentiment={currentFeedback.sentiment} />
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      Valor calculado automaticamente pela IA (não editável)
+                    </p>
+                  </div>
                 ) : (
                   <SentimentBadge sentiment={currentFeedback.sentiment} />
                 )}
